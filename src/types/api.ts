@@ -70,6 +70,19 @@ export interface LimitedCollectionWithCursorResponse<T> {
   }
 }
 
+/**
+ * Which band a row came from. Only cross-tenant reads (`/api/me/*`) carry this —
+ * a tenant-scoped endpoint's rows are all from the active tenant, so they don't.
+ */
+export interface CrossTenantRef {
+  tenantId: import('./entities.ts').Id
+  tenantName: string | null
+  kind: import('../utils/businessRegistry.ts').TenantKind | null
+}
+
+/** An entity that carries its band label when it came from a cross-tenant read. */
+export type MaybeCrossTenant<T> = T & Partial<CrossTenantRef>
+
 export interface GigMapPlace {
   id: import('./entities.ts').Id
   city: string | null

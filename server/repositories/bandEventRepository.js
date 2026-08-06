@@ -1,6 +1,7 @@
 // Data-access helpers for band events. Each query takes an `executor` (a pool or
 // transaction client) so callers control transactions. Every query is scoped by
 // tenant_id.
+import { bandEventScopeSql } from './memberEventScope.js'
 
 export async function listBandEvents(executor, tenantId) {
   const { rows } = await executor.query(
@@ -56,21 +57,23 @@ export async function listBandEventsInRange(executor, tenantId, from, to) {
 export async function listBandEventsInRangeForMemberTenants(executor, userId, tenantIds, from, to) {
   const { rows } = await executor.query(
     `SELECT e.* FROM band_events e
-       JOIN tenants t ON t.id = e.tenant_id
       WHERE e.tenant_id = ANY($2) AND e.start_date <= $4 AND e.end_date >= $3
-        AND (
-          t.kind = 'personal'
-          OR EXISTS (
-            SELECT 1
-              FROM band_event_participants bep
-              JOIN band_members bm
-                ON bm.id = bep.band_member_id AND bm.tenant_id = bep.tenant_id
-             WHERE bep.band_event_id = e.id AND bep.tenant_id = e.tenant_id
-               AND bm.user_id = $1
-          )
-        )
+        AND ${bandEventScopeSql('e', '$1')}
       ORDER BY e.start_date ASC, e.id ASC`,
     [userId, tenantIds, from, to],
+  )
+  return rows
+}
+
+// Mirrors listUpcomingBandEvents across every band the caller plays in.
+export async function listUpcomingBandEventsForMemberTenants(executor, userId, tenantIds, today, limit) {
+  const { rows } = await executor.query(
+    `SELECT e.* FROM band_events e
+      WHERE e.tenant_id = ANY($2) AND e.end_date >= $3
+        AND ${bandEventScopeSql('e', '$1')}
+      ORDER BY e.start_date ASC, e.id ASC
+      LIMIT $4`,
+    [userId, tenantIds, today, limit],
   )
   return rows
 }

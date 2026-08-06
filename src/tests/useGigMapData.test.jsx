@@ -2,16 +2,21 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/gigs.ts', () => ({ listGigMapData: vi.fn() }))
-vi.mock('../api/geocode.ts', () => ({ lookupVenueGeocode: vi.fn() }))
+vi.mock('../api/me.ts', () => ({ listMyGigMapData: vi.fn() }))
+vi.mock('../api/geocode.ts', () => ({ lookupVenueGeocode: vi.fn(), lookupGeocode: vi.fn() }))
+vi.mock('../contexts/authContext.ts', () => ({ useAuth: vi.fn() }))
 
 import { listGigMapData } from '../api/gigs.ts'
-import { lookupVenueGeocode } from '../api/geocode.ts'
+import { listMyGigMapData } from '../api/me.ts'
+import { lookupGeocode, lookupVenueGeocode } from '../api/geocode.ts'
+import { useAuth } from '../contexts/authContext.ts'
 import { useGigMapData } from '../hooks/useGigMapData.ts'
 
 // "today" fixed at 2026-05-30; venue/festival arrive as nested objects with city.
 beforeEach(() => {
   vi.clearAllMocks()
   vi.setSystemTime(new Date('2026-05-30T12:00:00Z'))
+  useAuth.mockReturnValue({ user: { id: 1, activeTenantKind: 'band' } })
   lookupVenueGeocode.mockImplementation(async (id) => ({
     status: 'hit',
     coords: { lat: Number(id), lon: 0 },
@@ -102,5 +107,54 @@ describe('useGigMapData', () => {
 
     expect(result.current.loading).toBe(false)
     expect(result.current.markers).toHaveLength(0)
+  })
+
+  // In an artist workspace the map spans every band the musician played in.
+  describe('in an artist workspace', () => {
+    beforeEach(() => {
+      useAuth.mockReturnValue({ user: { id: 1, activeTenantKind: 'personal' } })
+    })
+
+    it('reads the cross-band projection instead of the active tenant\'s', async () => {
+      listMyGigMapData.mockResolvedValue({ items: [
+        { id: 1, event_date: '2026-01-10', event_description: 'A', venue: { id: 11, city: 'Utrecht', country: 'NL', latitude: 52.09, longitude: 5.12 }, festival: null, tenantId: 9, tenantName: 'The Nightowls' },
+      ], meta: { from: '0001-01-01', to: '2026-05-29', returned: 1 } })
+
+      const { result } = renderHook(() => useGigMapData())
+      await waitFor(() => expect(result.current.loading).toBe(false))
+
+      expect(listMyGigMapData).toHaveBeenCalledWith({ from: '0001-01-01', to: '2026-05-29' })
+      expect(listGigMapData).not.toHaveBeenCalled()
+      expect(result.current.markers).toHaveLength(1)
+    })
+
+    // /geocode/venue/:id is scoped to the active tenant and persists what it
+    // finds — neither is valid for a venue owned by another band.
+    it('geocodes the city rather than another band\'s venue row', async () => {
+      listMyGigMapData.mockResolvedValue({ items: [
+        { id: 1, event_date: '2026-01-10', event_description: 'A', venue: { id: 22, city: 'Rotterdam', region: 'ZH', country: 'NL', latitude: null, longitude: null }, festival: null, tenantId: 9 },
+      ], meta: { from: '0001-01-01', to: '2026-05-29', returned: 1 } })
+      lookupGeocode.mockResolvedValue({ status: 'hit', coords: { lat: 51.92, lon: 4.48 } })
+
+      const { result } = renderHook(() => useGigMapData())
+      await waitFor(() => expect(result.current.loading).toBe(false))
+
+      expect(lookupGeocode).toHaveBeenCalledWith({ city: 'Rotterdam', region: 'ZH', country: 'NL' })
+      expect(lookupVenueGeocode).not.toHaveBeenCalled()
+      expect(result.current.markers[0]).toMatchObject({ lat: 51.92, lon: 4.48 })
+    })
+
+    it('still prefers stored coordinates, geocoding nothing', async () => {
+      listMyGigMapData.mockResolvedValue({ items: [
+        { id: 1, event_date: '2026-01-10', event_description: 'A', venue: { id: 21, city: 'Utrecht', country: 'NL', latitude: 52.09, longitude: 5.12 }, festival: null, tenantId: 9 },
+      ], meta: { from: '0001-01-01', to: '2026-05-29', returned: 1 } })
+
+      const { result } = renderHook(() => useGigMapData())
+      await waitFor(() => expect(result.current.loading).toBe(false))
+
+      expect(lookupGeocode).not.toHaveBeenCalled()
+      expect(lookupVenueGeocode).not.toHaveBeenCalled()
+      expect(result.current.markers[0]).toMatchObject({ lat: 52.09, lon: 5.12 })
+    })
   })
 })

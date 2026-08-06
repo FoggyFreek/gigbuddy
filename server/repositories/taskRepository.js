@@ -41,6 +41,41 @@ export async function listTasks(executor, tenantId, { done, assigneeId, limit })
   }
 }
 
+// Cross-tenant artist read (/api/me/tasks). Unlike the event feeds there is no
+// personal-workspace bypass: a task reaches a person only through
+// `assigned_to -> band_members.user_id`, so an unassigned task in the caller's
+// own workspace is no more "mine" than an unassigned task in a band. Tenant ids
+// come from the caller's approved memberships, never from the client.
+export async function listTasksAssignedToUserForMemberTenants(executor, userId, tenantIds, { done, limit }) {
+  const values = [userId, tenantIds]
+  const predicates = ['bm.user_id = $1', 't.tenant_id = ANY($2)']
+
+  if (done !== undefined) {
+    values.push(done)
+    predicates.push(`t.done = $${values.length}`)
+  }
+
+  values.push(limit)
+  const { rows } = await executor.query(
+    `SELECT t.id, t.tenant_id, t.gig_id, t.title, t.done, t.due_date, t.created_at,
+            (COUNT(*) OVER ())::int AS collection_total,
+            g.event_description, g.event_date,
+            t.assigned_to,
+            bm.name AS assigned_to_name
+     FROM gig_tasks t
+     JOIN band_members bm ON bm.id = t.assigned_to AND bm.tenant_id = t.tenant_id
+     LEFT JOIN gigs g ON g.id = t.gig_id AND g.tenant_id = t.tenant_id
+     WHERE ${predicates.join(' AND ')}
+     ORDER BY t.done ASC, t.due_date ASC NULLS LAST, t.created_at ASC, t.id ASC
+     LIMIT $${values.length}`,
+    values,
+  )
+  return {
+    items: rows.map(({ collection_total: _collectionTotal, ...task }) => task),
+    total: rows[0]?.collection_total ?? 0,
+  }
+}
+
 export async function getTaskById(executor, taskId, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM gig_tasks WHERE id = $1 AND tenant_id = $2',

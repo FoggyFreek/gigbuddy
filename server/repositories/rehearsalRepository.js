@@ -1,5 +1,6 @@
 // Data-access helpers for rehearsals. Each query takes an `executor` (a pool or
 // transaction client) so callers control transactions.
+import { rehearsalScopeSql } from './memberEventScope.js'
 
 export async function listRehearsals(executor, tenantId) {
   const { rows } = await executor.query(
@@ -65,23 +66,25 @@ export async function listRehearsalsInRange(executor, tenantId, from, to) {
 export async function listRehearsalsInRangeForMemberTenants(executor, userId, tenantIds, from, to) {
   const { rows } = await executor.query(
     `SELECT r.* FROM rehearsals r
-       JOIN tenants t ON t.id = r.tenant_id
       WHERE r.tenant_id = ANY($2) AND r.proposed_date BETWEEN $3 AND $4
-        AND (
-          t.kind = 'personal'
-          OR EXISTS (
-            SELECT 1
-              FROM rehearsal_participants rp
-              JOIN band_members bm
-                ON bm.id = rp.band_member_id AND bm.tenant_id = rp.tenant_id
-             WHERE rp.rehearsal_id = r.id AND rp.tenant_id = r.tenant_id
-               AND bm.user_id = $1
-          )
-        )
+        AND ${rehearsalScopeSql('r', '$1')}
       ORDER BY r.proposed_date ASC, r.id ASC`,
     [userId, tenantIds, from, to],
   )
   return rows
+}
+
+// Mirrors listNextPlannedRehearsal across every band the caller plays in.
+export async function listNextPlannedRehearsalForMemberTenants(executor, userId, tenantIds) {
+  const { rows } = await executor.query(
+    `SELECT r.* FROM rehearsals r
+      WHERE r.tenant_id = ANY($2) AND r.status = 'planned' AND r.proposed_date >= CURRENT_DATE
+        AND ${rehearsalScopeSql('r', '$1')}
+      ORDER BY r.proposed_date ASC, r.id ASC
+      LIMIT 1`,
+    [userId, tenantIds],
+  )
+  return rows[0] ?? null
 }
 
 export async function fetchRehearsal(executor, rehearsalId, tenantId) {

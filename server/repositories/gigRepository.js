@@ -1,5 +1,6 @@
 // Data-access helpers and shared SQL fragments for gigs. Each query takes an
 // `executor` (a pool or transaction client) so callers control transactions.
+import { gigScopeSql } from './memberEventScope.js'
 
 export const VENUE_JSON_SELECT = `CASE WHEN v.id IS NULL THEN NULL ELSE jsonb_build_object(
   'id', v.id,
@@ -24,6 +25,17 @@ export const FESTIVAL_JSON_SELECT = `CASE WHEN fv.id IS NULL THEN NULL ELSE json
   'postal_code', fv.postal_code,
   'country', fv.country
 ) END AS festival`
+
+// Just enough of a place to plot it: the gig map needs coordinates and a city
+// label, nothing else.
+const MAP_PLACE_JSON = (alias) => `CASE WHEN ${alias}.id IS NULL THEN NULL ELSE jsonb_build_object(
+  'id', ${alias}.id,
+  'city', ${alias}.city,
+  'region', ${alias}.region,
+  'country', ${alias}.country,
+  'latitude', ${alias}.latitude,
+  'longitude', ${alias}.longitude
+) END`
 
 export const VENUE_JOIN = `LEFT JOIN venues v ON v.id = g.venue_id AND v.tenant_id = g.tenant_id`
 export const FESTIVAL_JOIN = `LEFT JOIN venues fv ON fv.id = g.festival_id AND fv.tenant_id = g.tenant_id`
@@ -173,7 +185,7 @@ export async function listPastGigs(executor, tenantId, today, limit, cursor = nu
   return rows
 }
 
-// ---- cross-tenant artist calendar read (/api/me/agenda) ----
+// ---- cross-tenant artist reads (/api/me) ----
 //
 // These are the ONLY gig queries not scoped to a single tenant. The id list is
 // resolved server-side from the caller's approved memberships
@@ -189,20 +201,49 @@ export async function listGigsInRangeForMemberTenants(executor, userId, tenantId
      FROM gigs g
      ${VENUE_JOIN}
      ${FESTIVAL_JOIN}
-     JOIN tenants calendar_tenant ON calendar_tenant.id = g.tenant_id
      WHERE g.tenant_id = ANY($2) AND g.event_date BETWEEN $3 AND $4
-       AND (
-         calendar_tenant.kind = 'personal'
-         OR EXISTS (
-           SELECT 1
-             FROM gig_participants gp
-             JOIN band_members bm
-               ON bm.id = gp.band_member_id AND bm.tenant_id = gp.tenant_id
-            WHERE gp.gig_id = g.id AND gp.tenant_id = g.tenant_id
-              AND bm.user_id = $1
-         )
-       )
+       AND ${gigScopeSql('g', '$1')}
      ORDER BY g.event_date ASC, g.id ASC`,
+    [userId, tenantIds, from, to],
+  )
+  return rows
+}
+
+// Mirrors listUpcomingGigs, including the windowed count that feeds the
+// dashboard's badge.
+export async function listUpcomingGigsForMemberTenants(executor, userId, tenantIds, today, limit) {
+  const { rows } = await executor.query(
+    `SELECT
+       ${GIG_LIST_PROJECTION},
+       (COUNT(*) OVER ())::int AS collection_total
+     FROM gigs g
+     ${VENUE_JOIN}
+     ${FESTIVAL_JOIN}
+     WHERE g.tenant_id = ANY($2) AND g.event_date >= $3
+       AND ${gigScopeSql('g', '$1')}
+     ORDER BY g.event_date ASC, g.id ASC
+     LIMIT $4`,
+    [userId, tenantIds, today, limit],
+  )
+  return {
+    items: rows.map(({ collection_total: _collectionTotal, ...gig }) => gig),
+    total: rows[0]?.collection_total ?? 0,
+  }
+}
+
+// Mirrors listGigMapData, plus the tenant id the service needs to label each
+// row with its band.
+export async function listGigMapDataForMemberTenants(executor, userId, tenantIds, from, to) {
+  const { rows } = await executor.query(
+    `SELECT g.id, g.tenant_id, g.event_date, g.event_description,
+            ${MAP_PLACE_JSON('v')} AS venue,
+            ${MAP_PLACE_JSON('fv')} AS festival
+       FROM gigs g
+       ${VENUE_JOIN}
+       ${FESTIVAL_JOIN}
+      WHERE g.tenant_id = ANY($2) AND g.event_date BETWEEN $3 AND $4
+        AND ${gigScopeSql('g', '$1')}
+      ORDER BY g.event_date ASC, g.id ASC`,
     [userId, tenantIds, from, to],
   )
   return rows
@@ -225,18 +266,10 @@ export async function listGigsInRange(executor, tenantId, from, to) {
 // Minimal projection used by the gig map. It intentionally omits gig detail,
 // task, tag, participant, and availability data.
 export async function listGigMapData(executor, tenantId, from, to) {
-  const placeJson = (alias) => `CASE WHEN ${alias}.id IS NULL THEN NULL ELSE jsonb_build_object(
-    'id', ${alias}.id,
-    'city', ${alias}.city,
-    'region', ${alias}.region,
-    'country', ${alias}.country,
-    'latitude', ${alias}.latitude,
-    'longitude', ${alias}.longitude
-  ) END`
   const { rows } = await executor.query(
     `SELECT g.id, g.event_date, g.event_description,
-            ${placeJson('v')} AS venue,
-            ${placeJson('fv')} AS festival
+            ${MAP_PLACE_JSON('v')} AS venue,
+            ${MAP_PLACE_JSON('fv')} AS festival
        FROM gigs g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}

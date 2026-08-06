@@ -102,9 +102,42 @@ async function addBandEvent(tenantId, { start, end, title = 'Event' }) {
   return event
 }
 
+async function addPersonalWorkspace(ownerUserId, slug, name = 'Alpha Artist') {
+  const { rows: [workspace] } = await pool.query(
+    `INSERT INTO tenants (slug, band_name, display_name, kind, created_by_user_id, owner_user_id)
+     VALUES ($1, $2, $2, 'personal', $3, $3) RETURNING *`,
+    [slug, name, ownerUserId],
+  )
+  await addMembership(ownerUserId, workspace.id, { role: 'tenant_admin' })
+  return workspace
+}
+
+async function addTask(tenantId, { title, userId, gigId = null, dueDate = null, done = false }) {
+  const { rows } = await pool.query(
+    `INSERT INTO gig_tasks (tenant_id, gig_id, title, due_date, done, assigned_to)
+     VALUES ($1, $2, $3, $4, $5,
+       (SELECT id FROM band_members WHERE tenant_id = $1 AND user_id = $6))
+     RETURNING *`,
+    [tenantId, gigId, title, dueDate, done, userId],
+  )
+  return rows[0]
+}
+
+async function addVenue(tenantId, { name, city, country = 'NL', lat = null, lon = null }) {
+  const { rows } = await pool.query(
+    `INSERT INTO venues (tenant_id, name, city, country, latitude, longitude)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [tenantId, name, city, country, lat, lon],
+  )
+  return rows[0]
+}
+
 const WINDOW = { from: '2099-07-01', to: '2099-07-31' }
 const agenda = (userId, q = WINDOW) =>
   asUser(userId)(request(app).get('/api/me/agenda').query(q))
+
+const TODAY = '2099-01-01'
+const hubGet = (userId, path, q) => asUser(userId)(request(app).get(path).query(q))
 
 describe('GET /api/me/agenda', () => {
   it('merges gigs, rehearsals and events where the artist is required, in date order', async () => {
@@ -145,12 +178,7 @@ describe('GET /api/me/agenda', () => {
   })
 
   it('includes the artist\'s own personal-workspace event without a participant row', async () => {
-    const { rows: [workspace] } = await pool.query(
-      `INSERT INTO tenants (slug, band_name, display_name, kind, created_by_user_id, owner_user_id)
-       VALUES ('artist-agenda', 'Alpha Artist', 'Alpha Artist', 'personal', $1, $1) RETURNING *`,
-      [seed.userA.id],
-    )
-    await addMembership(seed.userA.id, workspace.id, { role: 'tenant_admin' })
+    const workspace = await addPersonalWorkspace(seed.userA.id, 'artist-agenda')
     await addBandEvent(workspace.id, {
       start: '2099-07-22', end: '2099-07-23', title: 'Artist appointment',
     })
@@ -265,6 +293,230 @@ describe('GET /api/me/agenda', () => {
     const outsider = await createUser('nobody@test.local')
     const res = await agenda(outsider.id).expect(200)
     expect(res.body).toMatchObject({ items: [], meta: { returned: 0 } })
+  })
+})
+
+// The artist dashboard reads. Same tier and same participation rule as the
+// agenda; each mirrors the envelope of its tenant-scoped sibling so the
+// dashboard can swap one call for the other.
+describe('GET /api/me/gigs/upcoming', () => {
+  const upcoming = (userId, q = { today: TODAY }) => hubGet(userId, '/api/me/gigs/upcoming', q)
+
+  it('merges upcoming gigs the artist plays across bands, soonest first', async () => {
+    const artist = await createUser('artist@test.local')
+    await addMembership(artist.id, seed.tenantA.id)
+    await addMembership(artist.id, seed.tenantB.id)
+    await addGig(seed.tenantB.id, { date: '2099-07-10', name: 'Later' })
+    await addGig(seed.tenantA.id, { date: '2099-07-05', name: 'Sooner' })
+
+    const res = await upcoming(artist.id).expect(200)
+    expect(res.body.items.map((g) => g.event_description)).toEqual(['Sooner', 'Later'])
+    expect(res.body.meta).toEqual({ limit: 10, returned: 2, total: 2 })
+  })
+
+  it('labels each gig with its band and omits the tenant-gated banner', async () => {
+    const gig = await addGig(seed.tenantA.id, { date: '2099-07-05' })
+    await pool.query('UPDATE gigs SET banner_path = $2 WHERE id = $1',
+      [gig.id, 'tenants/1/banners/secret.png'])
+
+    const res = await upcoming(seed.userA.id).expect(200)
+    expect(res.body.items[0]).toMatchObject({
+      tenantId: seed.tenantA.id, tenantName: 'Alpha Band', kind: 'band',
+    })
+    expect(res.body.items[0]).not.toHaveProperty('banner_path')
+  })
+
+  it('omits a gig in the artist\'s band that they are not playing', async () => {
+    const artist = await createUser('artist@test.local')
+    await addMembership(artist.id, seed.tenantA.id)
+    const gig = await addGig(seed.tenantA.id, { date: '2099-07-05' })
+    await pool.query('DELETE FROM gig_participants WHERE gig_id = $1', [gig.id])
+
+    expect((await upcoming(artist.id).expect(200)).body.items).toEqual([])
+  })
+
+  it('includes the artist\'s own workspace gig without a participant row', async () => {
+    const workspace = await addPersonalWorkspace(seed.userA.id, 'artist-gigs')
+    await pool.query(
+      `INSERT INTO gigs (tenant_id, event_description, event_date) VALUES ($1, 'Solo set', '2099-07-05')`,
+      [workspace.id],
+    )
+    const res = await upcoming(seed.userA.id).expect(200)
+    expect(res.body.items.map((g) => g.event_description)).toEqual(['Solo set'])
+  })
+
+  it('never returns a gig from a tenant the caller is not a member of', async () => {
+    await addGig(seed.tenantB.id, { date: '2099-07-05', name: 'Tenant B secret' })
+    expect((await upcoming(seed.userA.id).expect(200)).body.items).toEqual([])
+  })
+
+  it('caps the page at limit while reporting the full total', async () => {
+    await addGig(seed.tenantA.id, { date: '2099-07-05', name: 'One' })
+    await addGig(seed.tenantA.id, { date: '2099-07-06', name: 'Two' })
+    const res = await upcoming(seed.userA.id, { today: TODAY, limit: 1 }).expect(200)
+    expect(res.body.items).toHaveLength(1)
+    expect(res.body.meta).toEqual({ limit: 1, returned: 1, total: 2 })
+  })
+
+  it('400s on a malformed today or limit', async () => {
+    await upcoming(seed.userA.id, { today: 'nope' }).expect(400)
+    await upcoming(seed.userA.id, {}).expect(400)
+    await upcoming(seed.userA.id, { today: TODAY, limit: '0' }).expect(400)
+  })
+})
+
+describe('GET /api/me/rehearsals/next', () => {
+  const next = (userId) => hubGet(userId, '/api/me/rehearsals/next')
+
+  it('returns the soonest planned rehearsal the artist is on, across bands', async () => {
+    const artist = await createUser('artist@test.local')
+    await addMembership(artist.id, seed.tenantA.id)
+    await addMembership(artist.id, seed.tenantB.id)
+    const later = await addRehearsal(seed.tenantA.id, { date: '2099-07-10', title: 'Later' })
+    const sooner = await addRehearsal(seed.tenantB.id, { date: '2099-07-05', title: 'Sooner' })
+    await pool.query('UPDATE rehearsals SET status = \'planned\' WHERE id = ANY($1)',
+      [[later.id, sooner.id]])
+
+    const res = await next(artist.id).expect(200)
+    expect(res.body).toMatchObject({
+      id: sooner.id, location: 'Sooner', tenantId: seed.tenantB.id, tenantName: 'Beta Band',
+    })
+  })
+
+  it('returns null when nothing is planned for the artist', async () => {
+    const rehearsal = await addRehearsal(seed.tenantA.id, { date: '2099-07-05' })
+    await pool.query('UPDATE rehearsals SET status = \'planned\' WHERE id = $1', [rehearsal.id])
+    await pool.query('DELETE FROM rehearsal_participants WHERE rehearsal_id = $1', [rehearsal.id])
+
+    expect((await next(seed.userA.id).expect(200)).body).toBeNull()
+  })
+
+  it('never returns a rehearsal from a tenant the caller is not a member of', async () => {
+    const rehearsal = await addRehearsal(seed.tenantB.id, { date: '2099-07-05', title: 'Tenant B secret' })
+    await pool.query('UPDATE rehearsals SET status = \'planned\' WHERE id = $1', [rehearsal.id])
+    expect((await next(seed.userA.id).expect(200)).body).toBeNull()
+  })
+})
+
+describe('GET /api/me/band-events/upcoming', () => {
+  const upcoming = (userId, q = { today: TODAY }) => hubGet(userId, '/api/me/band-events/upcoming', q)
+
+  it('returns upcoming events the artist is required at, across bands', async () => {
+    const artist = await createUser('artist@test.local')
+    await addMembership(artist.id, seed.tenantA.id)
+    await addMembership(artist.id, seed.tenantB.id)
+    await addBandEvent(seed.tenantB.id, { start: '2099-07-10', end: '2099-07-10', title: 'Later' })
+    await addBandEvent(seed.tenantA.id, { start: '2099-07-05', end: '2099-07-05', title: 'Sooner' })
+
+    const res = await upcoming(artist.id).expect(200)
+    expect(res.body.items.map((e) => e.title)).toEqual(['Sooner', 'Later'])
+    expect(res.body.items[0]).toMatchObject({ tenantId: seed.tenantA.id, tenantName: 'Alpha Band' })
+    expect(res.body.meta).toEqual({ limit: 10, returned: 2 })
+  })
+
+  it('omits an event the artist is not a participant of, and 400s on a bad window', async () => {
+    const event = await addBandEvent(seed.tenantA.id, { start: '2099-07-05', end: '2099-07-05' })
+    await pool.query('DELETE FROM band_event_participants WHERE band_event_id = $1', [event.id])
+    expect((await upcoming(seed.userA.id).expect(200)).body.items).toEqual([])
+
+    await upcoming(seed.userA.id, { today: 'nope' }).expect(400)
+  })
+
+  it('never returns an event from a tenant the caller is not a member of', async () => {
+    await addBandEvent(seed.tenantB.id, { start: '2099-07-05', end: '2099-07-05', title: 'Tenant B secret' })
+    expect((await upcoming(seed.userA.id).expect(200)).body.items).toEqual([])
+  })
+})
+
+describe('GET /api/me/tasks', () => {
+  const tasks = (userId, q) => hubGet(userId, '/api/me/tasks', q)
+
+  it('returns only the tasks assigned to the caller, across bands', async () => {
+    const artist = await createUser('artist@test.local')
+    await addMembership(artist.id, seed.tenantA.id)
+    await addMembership(artist.id, seed.tenantB.id)
+    const gig = await addGig(seed.tenantA.id, { date: '2099-07-05', name: 'A Show' })
+    await addTask(seed.tenantA.id, { title: 'Mine A', userId: artist.id, gigId: gig.id, dueDate: '2099-07-01' })
+    await addTask(seed.tenantB.id, { title: 'Mine B', userId: artist.id, dueDate: '2099-07-02' })
+    // Assigned to the other lead in the same band — same tenant, not the caller.
+    await addTask(seed.tenantA.id, { title: 'Someone else', userId: seed.userA.id })
+    // Assigned to nobody.
+    await addTask(seed.tenantA.id, { title: 'Unassigned', userId: null })
+
+    const res = await tasks(artist.id).expect(200)
+    expect(res.body.items.map((t) => t.title)).toEqual(['Mine A', 'Mine B'])
+    expect(res.body.items[0]).toMatchObject({
+      event_description: 'A Show', tenantId: seed.tenantA.id, tenantName: 'Alpha Band',
+    })
+    expect(res.body.meta).toEqual({ limit: 10, returned: 2, total: 2 })
+  })
+
+  it('filters on done and reports the total behind a capped page', async () => {
+    await addTask(seed.tenantA.id, { title: 'Open one', userId: seed.userA.id, dueDate: '2099-07-01' })
+    await addTask(seed.tenantA.id, { title: 'Open two', userId: seed.userA.id, dueDate: '2099-07-02' })
+    await addTask(seed.tenantA.id, { title: 'Closed', userId: seed.userA.id, done: true })
+
+    const open = await tasks(seed.userA.id, { done: 'false' }).expect(200)
+    expect(open.body.items.map((t) => t.title)).toEqual(['Open one', 'Open two'])
+
+    const capped = await tasks(seed.userA.id, { done: 'false', limit: 1 }).expect(200)
+    expect(capped.body.meta).toEqual({ limit: 1, returned: 1, total: 2 })
+  })
+
+  it('ignores an assignee supplied by the client — the hub is always "mine"', async () => {
+    const { rows: [other] } = await pool.query(
+      `INSERT INTO band_members (tenant_id, name, position, sort_order)
+       VALUES ($1, 'Dep', 'lead', 200) RETURNING *`,
+      [seed.tenantA.id],
+    )
+    await pool.query(
+      `INSERT INTO gig_tasks (tenant_id, title, assigned_to) VALUES ($1, 'Dep task', $2)`,
+      [seed.tenantA.id, other.id],
+    )
+    const res = await tasks(seed.userA.id, { assignee: other.id }).expect(200)
+    expect(res.body.items).toEqual([])
+  })
+
+  it('never returns a task from a tenant the caller is not a member of', async () => {
+    await addTask(seed.tenantB.id, { title: 'Tenant B secret', userId: seed.userB.id })
+    expect((await tasks(seed.userA.id).expect(200)).body.items).toEqual([])
+  })
+
+  it('400s on a malformed done or limit', async () => {
+    await tasks(seed.userA.id, { done: 'maybe' }).expect(400)
+    await tasks(seed.userA.id, { limit: '501' }).expect(400)
+  })
+})
+
+describe('GET /api/me/gigs/map', () => {
+  const MAP_WINDOW = { from: '2000-01-01', to: '2099-12-31' }
+  const map = (userId, q = MAP_WINDOW) => hubGet(userId, '/api/me/gigs/map', q)
+
+  it('returns the minimal place projection for gigs the artist played, across bands', async () => {
+    const artist = await createUser('artist@test.local')
+    await addMembership(artist.id, seed.tenantA.id)
+    await addMembership(artist.id, seed.tenantB.id)
+    const venue = await addVenue(seed.tenantB.id, { name: 'Paradiso', city: 'Amsterdam', lat: 52.3, lon: 4.88 })
+    const gig = await addGig(seed.tenantB.id, { date: '2099-07-05', name: 'Played here' })
+    await pool.query('UPDATE gigs SET venue_id = $2 WHERE id = $1', [gig.id, venue.id])
+
+    const res = await map(artist.id).expect(200)
+    expect(res.body.items).toEqual([expect.objectContaining({
+      id: gig.id,
+      event_description: 'Played here',
+      venue: expect.objectContaining({ city: 'Amsterdam', latitude: 52.3, longitude: 4.88 }),
+      tenantId: seed.tenantB.id,
+      tenantName: 'Beta Band',
+    })])
+    expect(res.body.meta).toEqual({ from: MAP_WINDOW.from, to: MAP_WINDOW.to, returned: 1 })
+  })
+
+  it('never returns a gig from a tenant the caller is not a member of, and 400s on a bad window', async () => {
+    await addGig(seed.tenantB.id, { date: '2099-07-05', name: 'Tenant B secret' })
+    expect((await map(seed.userA.id).expect(200)).body.items).toEqual([])
+
+    await map(seed.userA.id, { from: '2099-12-31', to: '2000-01-01' }).expect(400)
+    await map(seed.userA.id, { from: '2000-01-01' }).expect(400)
   })
 })
 

@@ -16,6 +16,12 @@ interface DashboardCardProps {
   count?: number
   action?: ReactNode
   viewAllTo?: string
+  /**
+   * Handles the "View all" click instead of linking. Used when the target lives
+   * in another tenant, so opening it has to switch the active tenant first.
+   * Takes precedence over `viewAllTo`.
+   */
+  onViewAll?: () => void
   viewAllLabel?: string
   status?: 'ok' | 'error'
   isEmpty?: boolean
@@ -36,6 +42,7 @@ export default function DashboardCard({
   count,
   action,
   viewAllTo,
+  onViewAll,
   viewAllLabel,
   status = 'ok',
   isEmpty = false,
@@ -89,7 +96,17 @@ export default function DashboardCard({
           )}
           <Box sx={{ flexGrow: 1 }} />
           {action}
-          {viewAllTo && (
+          {onViewAll && (
+            <Button
+              onClick={onViewAll}
+              size="small"
+              endIcon={<ChevronRightIcon />}
+              sx={{ textTransform: 'none' }}
+            >
+              {viewAllLabel ?? t($ => $.card.viewAll)}
+            </Button>
+          )}
+          {!onViewAll && viewAllTo && (
             <Button
               component={RouterLink}
               to={viewAllTo}

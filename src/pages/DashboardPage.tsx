@@ -28,6 +28,9 @@ import { SOCIALS } from '../components/profile/profileForm.ts'
 import { useEntitlements } from '../hooks/useEntitlements.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
+import { useCrossTenantNavigate } from '../hooks/useCrossTenantNavigate.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 import { useSetWideContent } from '../contexts/contentWidthContext.ts'
 import { useThemeMode } from '../contexts/themeModeContext.ts'
 import type { ThemeMode } from '../contexts/themeModeContext.ts'
@@ -36,11 +39,21 @@ import { getGig, listUpcomingGigs } from '../api/gigs.ts'
 import { getNextRehearsal } from '../api/rehearsals.ts'
 import { listTasks } from '../api/tasks.ts'
 import { listUpcomingBandEvents } from '../api/bandEvents.ts'
+import {
+  getMyNextRehearsal,
+  listMyTasks,
+  listMyUpcomingBandEvents,
+  listMyUpcomingGigs,
+} from '../api/me.ts'
 import { getProfile } from '../api/profile.ts'
 import { daysUntil, formatDueDate, localDateString } from '../utils/dateFormat.ts'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.ts'
-import type { Achievement, Gig, Rehearsal, BandEvent, Task } from '../types/entities.ts'
-import type { LimitedCollectionResponse, LimitedCollectionWithTotalResponse } from '../types/api.ts'
+import type { Achievement, Gig, Rehearsal, BandEvent, Id, Task } from '../types/entities.ts'
+import type {
+  LimitedCollectionResponse,
+  LimitedCollectionWithTotalResponse,
+  MaybeCrossTenant,
+} from '../types/api.ts'
 
 function logoSrc(logoPath: string | undefined | null) {
   return logoPath ? `/api/files/${logoPath}` : '/share/logo.png'
@@ -96,8 +109,14 @@ interface SectionData<T> {
   total: number
 }
 
+// In an artist workspace every row can come from a different band, so each
+// carries its own tenant label; in a band they are all the active tenant's.
+type DashGig = MaybeCrossTenant<Gig>
+type DashRehearsal = MaybeCrossTenant<Rehearsal>
+type DashBandEvent = MaybeCrossTenant<BandEvent>
+
 // Local view field: whole-day distance from today (negative = overdue), null when undated.
-type DashTask = Task & { __daysUntil: number | null }
+type DashTask = MaybeCrossTenant<Task> & { __daysUntil: number | null }
 
 interface TasksSection {
   status: 'ok' | 'error'
@@ -107,18 +126,24 @@ interface TasksSection {
 }
 
 interface Sections {
-  nextGig: { status: 'ok' | 'error'; data: Gig | null }
-  nextBandEvent: { status: 'ok' | 'error'; data: BandEvent | null }
-  nextRehearsal: { status: 'ok' | 'error'; data: Rehearsal | null }
-  shows: SectionData<Gig>
+  nextGig: { status: 'ok' | 'error'; data: DashGig | null }
+  nextBandEvent: { status: 'ok' | 'error'; data: DashBandEvent | null }
+  nextRehearsal: { status: 'ok' | 'error'; data: DashRehearsal | null }
+  shows: SectionData<DashGig>
   tasks: TasksSection
   achievements: SectionData<Achievement> & { latestUnlockedAt: string | null; recentKeys: string[] }
 }
 
+type DashboardResults = [
+  PromiseSettledResult<LimitedCollectionWithTotalResponse<DashGig>>,
+  PromiseSettledResult<DashRehearsal | null>,
+  PromiseSettledResult<LimitedCollectionWithTotalResponse<MaybeCrossTenant<Task>>>,
+  PromiseSettledResult<LimitedCollectionResponse<DashBandEvent>>,
+  PromiseSettledResult<Achievement[]>,
+]
+
 // Build the whole view-model in the effect (not in render) so render stays pure.
-function buildSections(
-  results: [PromiseSettledResult<LimitedCollectionWithTotalResponse<Gig>>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<LimitedCollectionWithTotalResponse<Task>>, PromiseSettledResult<LimitedCollectionResponse<BandEvent>>, PromiseSettledResult<Achievement[]>],
-): Sections {
+function buildSections(results: DashboardResults): Sections {
   const [gigsR, rehR, taskR, bandEventsR, achievementsR] = results
 
   const gigsSettled = settleCollection(gigsR)
@@ -193,6 +218,9 @@ export default function DashboardPage() {
   const isCompact = useCompactLayout()
   const { has } = useEntitlements()
   const { canWritePlanning } = usePermissions()
+  const { supports } = useTenantKind()
+  const crossBand = supports(TENANT_CAPABILITIES.ARTIST_CALENDAR)
+  const openInTenant = useCrossTenantNavigate()
   const [loading, setLoading] = useState(true)
   const [sections, setSections] = useState<Sections | null>(null)
   const [memoryGigs, setMemoryGigs] = useState<Gig[]>([])
@@ -250,18 +278,27 @@ export default function DashboardPage() {
     try {
       setLoading(true)
       const today = localDateString()
-      const results = await Promise.allSettled([
+      // Same five feeds either way — an artist workspace sources them from every
+      // band the musician plays in instead of one active tenant. Achievements
+      // stay tenant-local: the catalogue is a function of the tenant's kind.
+      const results = await Promise.allSettled(crossBand ? [
+        listMyUpcomingGigs(6, today),
+        getMyNextRehearsal(),
+        listMyTasks({ limit: MAX_ROWS, done: false }),
+        listMyUpcomingBandEvents(1, today),
+        listAchievements(),
+      ] : [
         listUpcomingGigs(6, today),
         getNextRehearsal(),
         listTasks({ limit: MAX_ROWS, assignee: 'me', done: false }),
         listUpcomingBandEvents(1, today),
         listAchievements(),
       ])
-      setSections(buildSections(results as [PromiseSettledResult<LimitedCollectionWithTotalResponse<Gig>>, PromiseSettledResult<Rehearsal | null>, PromiseSettledResult<LimitedCollectionWithTotalResponse<Task>>, PromiseSettledResult<LimitedCollectionResponse<BandEvent>>, PromiseSettledResult<Achievement[]>]))
+      setSections(buildSections(results as DashboardResults))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [crossBand])
 
   useEffect(() => { load() }, [load])
 
@@ -275,6 +312,33 @@ export default function DashboardPage() {
 
   const { nextGig, nextBandEvent, nextRehearsal, shows, tasks, achievements } = sections
   const activeSocials = SOCIALS.filter(({ field, prefix }) => prefix && profile?.[field])
+
+  // In an artist workspace a row can belong to another band, so opening it means
+  // switching the active tenant first — every detail page is tenant-scoped.
+  const openRow = (tenantId: Id | null | undefined, path: string) => {
+    if (crossBand) {
+      void openInTenant(tenantId, path)
+      return
+    }
+    navigate(path)
+  }
+
+  // Which band a row came from. Never rendered in a band workspace, where every
+  // row belongs to the one you're looking at.
+  const bandName = (row: { tenantName?: string | null }) =>
+    (crossBand ? row.tenantName : null) || null
+
+  // Spans both grid columns so it sits under the date/detail pair rather than
+  // squeezing into one of them.
+  const renderBandRow = (row: { tenantName?: string | null }) => {
+    const name = bandName(row)
+    if (!name) return null
+    return (
+      <Typography variant="caption" sx={{ gridColumn: '1 / -1', color: 'text.secondary' }}>
+        {name}
+      </Typography>
+    )
+  }
 
   // Shared with the tasks page: today / tomorrow / "in N days" within the coming
   // week, else an absolute short date (also the label for overdue rows, which
@@ -305,13 +369,16 @@ export default function DashboardPage() {
           return (
             <ListItemButton
               key={String(task.id)}
-              onClick={() => navigate(task.gig_id ? `/gigs/${task.gig_id}?tab=tasks` : '/tasks')}
+              onClick={() => openRow(
+                task.tenantId,
+                task.gig_id ? `/gigs/${task.gig_id}?tab=tasks` : '/tasks',
+              )}
               disableGutters
               sx={{ borderRadius: 1, px: 1, gap: 1, alignItems: 'baseline' }}
             >
               <ListItemText
                 primary={task.title}
-                secondary={task.event_description || undefined}
+                secondary={[task.event_description, bandName(task)].filter(Boolean).join(' — ') || undefined}
                 slotProps={{
                   primary: { variant: 'body2', sx: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } },
                   secondary: { variant: 'caption' },
@@ -391,6 +458,9 @@ export default function DashboardPage() {
             title={t($ => $.nextGig.title)}
             icon={EventIcon}
             viewAllTo={nextGig.data ? `/gigs/${nextGig.data.id}` : undefined}
+            onViewAll={crossBand && nextGig.data
+              ? () => openRow(nextGig.data!.tenantId, `/gigs/${nextGig.data!.id}`)
+              : undefined}
             viewAllLabel={t($ => $.card.viewDetails)}
             status={nextGig.status}
             isEmpty={!nextGig.data}
@@ -399,7 +469,7 @@ export default function DashboardPage() {
           >
             {nextGig.data && (
               <Box
-                onClick={() => navigate(`/gigs/${nextGig.data!.id}`)}
+                onClick={() => openRow(nextGig.data!.tenantId, `/gigs/${nextGig.data!.id}`)}
                 sx={{ cursor: 'pointer', py: 0.5, display: 'flex', alignItems: 'center', gap: 2 }}
               >
                 <Box
@@ -428,6 +498,7 @@ export default function DashboardPage() {
                       return [venueHeadline(place), venueCity(place)].filter(Boolean).join(', ')
                     })()}
                   </Typography>
+                  {renderBandRow(nextGig.data)}
                 </Box>
                 {nextGig.data.banner_path && (
                   <Box
@@ -454,6 +525,9 @@ export default function DashboardPage() {
             title={t($ => $.nextRehearsal.title)}
             icon={MusicNoteIcon}
             viewAllTo={nextRehearsal.data ? `/rehearsals/${nextRehearsal.data.id}` : '/rehearsals'}
+            onViewAll={crossBand && nextRehearsal.data
+              ? () => openRow(nextRehearsal.data!.tenantId, `/rehearsals/${nextRehearsal.data!.id}`)
+              : undefined}
             viewAllLabel={nextRehearsal.data ? t($ => $.card.viewDetails) : undefined}
             status={nextRehearsal.status}
             isEmpty={!nextRehearsal.data}
@@ -462,7 +536,7 @@ export default function DashboardPage() {
           >
             {nextRehearsal.data && (
               <Box
-                onClick={() => navigate(`/rehearsals/${nextRehearsal.data!.id}`)}
+                onClick={() => openRow(nextRehearsal.data!.tenantId, `/rehearsals/${nextRehearsal.data!.id}`)}
                 sx={{ cursor: 'pointer', py: 0.5 }}
               >
                 <Box
@@ -489,6 +563,7 @@ export default function DashboardPage() {
                       {[nextRehearsal.data.start_time, nextRehearsal.data.end_time].filter(Boolean).map(t => t!.slice(0, 5)).join(' – ')}
                     </Typography>
                   )}
+                  {renderBandRow(nextRehearsal.data)}
                 </Box>
               </Box>
             )}
@@ -500,6 +575,9 @@ export default function DashboardPage() {
             title={t($ => $.nextBandEvent.title)}
             icon={EventIcon}
             viewAllTo={nextBandEvent.data ? `/events/${nextBandEvent.data.id}` : undefined}
+            onViewAll={crossBand && nextBandEvent.data
+              ? () => openRow(nextBandEvent.data!.tenantId, `/events/${nextBandEvent.data!.id}`)
+              : undefined}
             viewAllLabel={t($ => $.card.viewDetails)}
             status={nextBandEvent.status}
             isEmpty={!nextBandEvent.data}
@@ -508,7 +586,7 @@ export default function DashboardPage() {
           >
             {nextBandEvent.data && (
               <Box
-                onClick={() => navigate(`/events/${nextBandEvent.data!.id}`)}
+                onClick={() => openRow(nextBandEvent.data!.tenantId, `/events/${nextBandEvent.data!.id}`)}
                 sx={{ cursor: 'pointer', py: 0.5, display: 'flex', alignItems: 'center', gap: 2 }}
               >
                 <Box
@@ -534,6 +612,7 @@ export default function DashboardPage() {
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                     {nextBandEvent.data.location}
                   </Typography>
+                  {renderBandRow(nextBandEvent.data)}
                 </Box>
                 {(() => {
                   const isDark = theme.palette.mode === 'dark'
@@ -582,7 +661,7 @@ export default function DashboardPage() {
                   <React.Fragment key={String(g.id)}>
                     {i > 0 && <Divider sx={{ width: '50%', mx: 'auto' }} />}
                     <ListItemButton
-                      onClick={() => navigate(`/gigs/${g.id}`)}
+                      onClick={() => openRow(g.tenantId, `/gigs/${g.id}`)}
                       disableGutters
                       sx={{ borderRadius: 1, px: 1 }}
                     >
@@ -609,6 +688,7 @@ export default function DashboardPage() {
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 'light' }}>
                           {[venueHeadline(place), venueCity(place)].filter(Boolean).join(', ')}
                         </Typography>
+                        {renderBandRow(g)}
                       </Box>
                     </ListItemButton>
                   </React.Fragment>

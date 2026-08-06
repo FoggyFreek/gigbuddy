@@ -7,13 +7,52 @@
 import { Router } from 'express'
 import pool from '../db/index.js'
 import { sendError } from './routeHelpers.js'
-import { listMyAgenda } from '../services/meService.js'
+import {
+  getMyNextRehearsal,
+  listMyAgenda,
+  listMyGigMapData,
+  listMyTasks,
+  listMyUpcomingBandEvents,
+  listMyUpcomingGigs,
+} from '../services/meService.js'
 
 const router = Router()
 
 // Everything I'm booked for in a day window, across every band.
 router.get('/agenda', async (req, res) => {
   const result = await listMyAgenda(pool, req.user.id, req.memberTenants, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+// The artist dashboard's feeds: the same tiles a band sees, sourced from every
+// band the caller plays in instead of one active tenant.
+router.get('/gigs/upcoming', async (req, res) => {
+  const result = await listMyUpcomingGigs(pool, req.user.id, req.memberTenants, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.get('/gigs/map', async (req, res) => {
+  const result = await listMyGigMapData(pool, req.user.id, req.memberTenants, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.get('/rehearsals/next', async (req, res) => {
+  const result = await getMyNextRehearsal(pool, req.user.id, req.memberTenants)
+  res.json(result.rehearsal)
+})
+
+router.get('/band-events/upcoming', async (req, res) => {
+  const result = await listMyUpcomingBandEvents(pool, req.user.id, req.memberTenants, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+// Always the caller's own tasks — no assignee filter, see meService.
+router.get('/tasks', async (req, res) => {
+  const result = await listMyTasks(pool, req.user.id, req.memberTenants, req.query)
   if (result.error) return sendError(res, result.error)
   res.json(result)
 })
