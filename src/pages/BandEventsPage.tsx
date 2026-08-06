@@ -9,6 +9,8 @@ import BandEventsTable, { type BandEventsTab } from '../components/BandEventsTab
 import BandEventFormModal from '../components/BandEventFormModal.tsx'
 import SplitView from '../components/SplitView.tsx'
 import { listPastBandEvents, listUpcomingBandEvents } from '../api/bandEvents.ts'
+import { listMyPastBandEvents, listMyUpcomingBandEvents } from '../api/me.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
 import { bandEventShareUrl } from '../utils/shareUtils.ts'
 import { isPastDate, localDateString } from '../utils/dateFormat.ts'
 import type { ListCollectionCursor } from '../types/api.ts'
@@ -18,6 +20,7 @@ const TAB_PAGE_SIZE = 100
 
 export default function BandEventsPage() {
   const { t } = useTranslation(['bandEvents', 'common'])
+  const { isPersonal } = useTenantKind()
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -42,13 +45,17 @@ export default function BandEventsPage() {
       setError(null)
       const today = localDateString()
       if (tab === 'upcoming') {
-        const result = await listUpcomingBandEvents(TAB_PAGE_SIZE, today)
+        const result = await (isPersonal
+          ? listMyUpcomingBandEvents(TAB_PAGE_SIZE, today)
+          : listUpcomingBandEvents(TAB_PAGE_SIZE, today))
         if (requestIdRef.current !== requestId) return
         setEvents(result.items)
         setPastCursor(null)
         setPastHasMore(false)
       } else {
-        const result = await listPastBandEvents(TAB_PAGE_SIZE, today)
+        const result = await (isPersonal
+          ? listMyPastBandEvents(TAB_PAGE_SIZE, today)
+          : listPastBandEvents(TAB_PAGE_SIZE, today))
         if (requestIdRef.current !== requestId) return
         setEvents(result.items)
         setPastCursor(result.meta.nextCursor)
@@ -59,7 +66,7 @@ export default function BandEventsPage() {
     } finally {
       if (requestIdRef.current === requestId) setLoading(false)
     }
-  }, [])
+  }, [isPersonal])
 
   useEffect(() => {
     if (deferInitialTabLoadRef.current) return
@@ -102,7 +109,9 @@ export default function BandEventsPage() {
     const requestId = requestIdRef.current
     try {
       setLoadingMore(true)
-      const result = await listPastBandEvents(TAB_PAGE_SIZE, localDateString(), pastCursor)
+      const result = await (isPersonal
+        ? listMyPastBandEvents(TAB_PAGE_SIZE, localDateString(), pastCursor)
+        : listPastBandEvents(TAB_PAGE_SIZE, localDateString(), pastCursor))
       if (requestIdRef.current !== requestId || activeTabRef.current !== 'past') return
       setEvents((previous) => [...previous, ...result.items])
       setPastCursor(result.meta.nextCursor)
@@ -145,6 +154,7 @@ export default function BandEventsPage() {
         hasMore={pastHasMore}
         loadingMore={loadingMore}
         onLoadMore={handleLoadMorePast}
+        showBand={isPersonal}
       />
 
       {modal && <BandEventFormModal mode="create" onClose={handleClose} />}

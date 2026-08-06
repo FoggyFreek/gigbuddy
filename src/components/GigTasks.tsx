@@ -35,6 +35,7 @@ interface GigTasksProps {
   // the server), so the done checkbox stays live for tasks assigned to them.
   canWrite?: boolean
   currentBandMemberId?: Id | null
+  onToggleTask?: (task: Task, done: boolean) => Promise<Task>
 }
 
 function toDateInputValue(val: string | null | undefined): string {
@@ -86,6 +87,7 @@ export default function GigTasks({
   members = [],
   canWrite = true,
   currentBandMemberId = null,
+  onToggleTask,
 }: Readonly<GigTasksProps>) {
   const { t, i18n } = useTranslation(['gigs', 'common'])
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
@@ -148,7 +150,9 @@ export default function GigTasks({
   }
 
   async function handleToggle(task: Task) {
-    const updated = await updateTask(gigId, task.id!, { done: !task.done })
+    const updated = onToggleTask
+      ? await onToggleTask(task, !task.done)
+      : await updateTask(gigId, task.id!, { done: !task.done })
     setTasks((prev) => prev.map((t) => (t.id === task.id ? (updated as Task) : t)))
   }
 

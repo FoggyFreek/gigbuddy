@@ -196,7 +196,7 @@ export async function listGigs(db, tenantId, viewer = null) {
 // the span rules (server/domain/availabilitySpan.js) applied to a span of one,
 // over the same redacted matrix the availability grid reads — a linked member
 // busy in another band shows up here too. One query for the whole batch.
-async function enrichGigsWithAvailability(db, tenantId, gigs, viewer = null) {
+export async function enrichGigsWithAvailability(db, tenantId, gigs, viewer = null) {
   if (!gigs.length) return []
 
   const dates = gigs.map((g) => toDateStr(g.event_date)).filter(Boolean)

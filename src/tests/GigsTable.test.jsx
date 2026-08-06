@@ -57,6 +57,17 @@ describe('GigsTable', () => {
     expect(screen.queryByText('Status')).not.toBeInTheDocument()
   })
 
+  it('adds source Band identity while retaining Availability in personal mode', () => {
+    wrap(<GigsTable
+      gigs={[{ ...GIGS[0], tenantId: 9, tenantName: 'Other Band', tenantAvatarPath: null }]}
+      showBand
+      onRowClick={() => {}}
+    />)
+    expect(screen.getByText('Band')).toBeInTheDocument()
+    expect(screen.getByText('Availability')).toBeInTheDocument()
+    expect(screen.getByText('Other Band')).toBeInTheDocument()
+  })
+
   it('renders Upcoming/Past tabs and reports tab changes', async () => {
     const user = userEvent.setup()
     const onTabChange = vi.fn()

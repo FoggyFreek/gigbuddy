@@ -52,8 +52,14 @@ describe('BandEventsTable', () => {
     expect(screen.getByText('Date')).toBeInTheDocument()
     expect(screen.getByText('Title')).toBeInTheDocument()
     expect(screen.getByText('Time')).toBeInTheDocument()
-    expect(screen.getByText('Band')).toBeInTheDocument()
+    expect(screen.getByText('Availability')).toBeInTheDocument()
     expect(screen.getByText('Location')).toBeInTheDocument()
+  })
+
+  it('adds a source Band column only for the personal aggregate view', () => {
+    wrap(<BandEventsTable events={[]} showBand onRowClick={() => {}} />)
+    expect(screen.getByText('Band')).toBeInTheDocument()
+    expect(screen.getByText('Availability')).toBeInTheDocument()
   })
 
   it('renders member availability as initial circles', () => {

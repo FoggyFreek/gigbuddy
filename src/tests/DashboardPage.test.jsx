@@ -415,24 +415,24 @@ describe('DashboardPage in an artist workspace', () => {
     expect(screen.getByText('Tour Stop — Quartet Blue')).toBeInTheDocument()
   })
 
-  it('switches to the row\'s band before opening its detail page', async () => {
+  it('opens an ordinary event detail without leaving the artist workspace', async () => {
     const user = userEvent.setup()
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
 
     await user.click(screen.getByText('Jazz Night'))
-    await waitFor(() => expect(switchTenant).toHaveBeenCalledWith(9))
+    expect(switchTenant).not.toHaveBeenCalled()
     expect(await screen.findByText('gig-detail-2')).toBeInTheDocument()
   })
 
-  it('stays put when the tenant switch fails rather than opening a page that would 404', async () => {
+  it('uses intentional tenant switching for a gig-linked task and stays put when it fails', async () => {
     switchTenant.mockRejectedValue(new Error('nope'))
     const user = userEvent.setup()
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
 
-    await user.click(screen.getByText('Jazz Night'))
-    await waitFor(() => expect(switchTenant).toHaveBeenCalledWith(9))
-    expect(screen.queryByText('gig-detail-2')).not.toBeInTheDocument()
+    await user.click(screen.getByText('Send invoice'))
+    await waitFor(() => expect(switchTenant).toHaveBeenCalledWith(4))
+    expect(screen.queryByText('gig-detail-3')).not.toBeInTheDocument()
   })
 })

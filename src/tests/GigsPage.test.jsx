@@ -21,6 +21,13 @@ vi.mock('../api/gigs.ts', () => ({
   setGigContactPrimary: vi.fn().mockResolvedValue({}),
   removeGigContact: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock('../api/me.ts', () => ({
+  listMyUpcomingGigs: vi.fn(),
+  listMyPastGigs: vi.fn(),
+  searchMyGigs: vi.fn(),
+  getMyGig: vi.fn(),
+  setMyTaskDone: vi.fn(),
+}))
 vi.mock('../api/venues.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   listVenueContacts: vi.fn().mockResolvedValue([]),
@@ -53,6 +60,7 @@ vi.mock('../components/BannerMosaicDialog.tsx', () => ({
 import GigsPage from '../pages/GigsPage.tsx'
 import GigDetailPage from '../pages/GigDetailPage.tsx'
 import { deleteGig, getGig, listGigs, listPastGigs, listUpcomingGigs, searchGigs } from '../api/gigs.ts'
+import { listMyUpcomingGigs } from '../api/me.ts'
 import theme from '../theme.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 import { ProfileContext } from '../contexts/profileContext.ts'
@@ -71,11 +79,11 @@ const integrationProfile = (configured = true) => ({
   setIntegrationConfigured: vi.fn(),
 })
 
-function wrap(ui, { initialEntries = ['/'], integrationsConfigured = true } = {}) {
+function wrap(ui, { initialEntries = ['/'], integrationsConfigured = true, auth = writerAuth } = {}) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <ThemeProvider theme={theme}>
-        <AuthContext.Provider value={writerAuth}>
+        <AuthContext.Provider value={auth}>
           <ProfileContext.Provider value={integrationProfile(integrationsConfigured)}>
             <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
           </ProfileContext.Provider>
@@ -127,6 +135,8 @@ describe('GigsPage', () => {
     listPastGigs.mockResolvedValue(pastCollection([]))
     searchGigs.mockReset()
     searchGigs.mockResolvedValue([])
+    listMyUpcomingGigs.mockReset()
+    listMyUpcomingGigs.mockResolvedValue(limitedCollection([]))
   })
 
   it('renders header, Add button, and loaded gigs without fetching the full unscoped gig list', async () => {
@@ -139,6 +149,18 @@ describe('GigsPage', () => {
     // the legacy bare listGigs() (used only by Tour Share/Export/Banner
     // Mosaic) must stay untouched until one of those is actually opened.
     expect(listGigs).not.toHaveBeenCalled()
+  })
+
+  it('uses the aggregate upcoming API and renders source-band identity in a personal workspace', async () => {
+    listMyUpcomingGigs.mockResolvedValue(limitedCollection([{
+      ...GIGS[0], tenantId: 9, tenantName: 'Other Band', tenantAvatarPath: null,
+    }]))
+    wrap(<GigsPage />, {
+      auth: { user: { isSuperAdmin: true, activeTenantId: 1, activeTenantKind: 'personal' } },
+    })
+    await screen.findByText('Other Band')
+    expect(listMyUpcomingGigs).toHaveBeenCalledWith(100, expect.any(String))
+    expect(listUpcomingGigs).not.toHaveBeenCalled()
   })
 
   it('hides Bandsintown actions when Bandsintown is not configured', async () => {

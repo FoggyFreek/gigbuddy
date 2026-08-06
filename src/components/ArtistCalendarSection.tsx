@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Fab from '@mui/material/Fab'
@@ -19,7 +20,6 @@ import BandEventFormModal from './BandEventFormModal.tsx'
 import { buildCalendarCells } from './calendar/calendarGrid.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
-import { useCrossTenantNavigate } from '../hooks/useCrossTenantNavigate.ts'
 import { listMyAgenda, type AgendaItem, type AgendaItemType } from '../api/me.ts'
 import {
   createMyAvailability,
@@ -70,7 +70,7 @@ interface ArtistCalendarSectionProps {
 export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<ArtistCalendarSectionProps>) {
   const { t, i18n } = useTranslation('availability')
   const { user } = useAuth()
-  const openInTenant = useCrossTenantNavigate()
+  const navigate = useNavigate()
   const isCompact = useCompactLayout()
   const today = useMemo(() => new Date(), [])
   const [viewYear, setViewYear] = useState(today.getFullYear())
@@ -150,12 +150,10 @@ export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<A
   async function openItem(type: AgendaItemType, id: Id) {
     const item = findAgendaItem(type, id)
     if (!item) return
-    // In this tenant the split view can show the detail beside the calendar;
-    // elsewhere the hop lands on the band's own detail page.
     const path = user?.activeTenantId === item.tenantId
       ? `/availability/${ITEM_PATH[type].slice(1)}/${item.id}`
       : `${ITEM_PATH[type]}/${item.id}`
-    await openInTenant(item.tenantId, path)
+    navigate(path)
   }
 
   function handleDayClick(date: string, shiftKey: boolean, target: EventTarget | null) {

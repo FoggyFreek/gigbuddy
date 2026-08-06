@@ -231,6 +231,68 @@ export async function listUpcomingGigsForMemberTenants(executor, userId, tenantI
   }
 }
 
+export async function listPastGigsForMemberTenants(executor, userId, tenantIds, today, limit, cursor = null) {
+  const params = [userId, tenantIds, today]
+  let cursorClause = ''
+  if (cursor) {
+    params.push(cursor.date, cursor.id)
+    cursorClause = `AND (g.event_date, g.id) < ($${params.length - 1}, $${params.length})`
+  }
+  params.push(limit)
+  const { rows } = await executor.query(
+    `SELECT ${GIG_LIST_PROJECTION}
+       FROM gigs g
+       ${VENUE_JOIN}
+       ${FESTIVAL_JOIN}
+      WHERE g.tenant_id = ANY($2) AND g.event_date < $3 ${cursorClause}
+        AND ${gigScopeSql('g', '$1')}
+      ORDER BY g.event_date DESC, g.id DESC
+      LIMIT $${params.length}`,
+    params,
+  )
+  return rows
+}
+
+export async function searchGigsForMemberTenants(executor, userId, tenantIds, { like, limit }) {
+  const { rows } = await executor.query(
+    `SELECT g.id, g.tenant_id, g.event_date, g.event_description, g.status,
+            g.venue_id, g.festival_id,
+            ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}
+       FROM gigs g
+       ${VENUE_JOIN}
+       ${FESTIVAL_JOIN}
+      WHERE g.tenant_id = ANY($2)
+        AND ${gigScopeSql('g', '$1')}
+        AND (
+          g.event_description ILIKE $3 OR v.name ILIKE $3 OR v.city ILIKE $3
+          OR fv.name ILIKE $3 OR fv.city ILIKE $3
+          OR EXISTS (
+            SELECT 1 FROM gig_tag_links search_link
+            JOIN gig_tags search_tag ON search_tag.id = search_link.tag_id
+              AND search_tag.tenant_id = search_link.tenant_id
+            WHERE search_link.gig_id = g.id
+              AND search_link.tenant_id = g.tenant_id
+              AND search_tag.name ILIKE $3
+          )
+        )
+      ORDER BY CASE WHEN g.event_description ILIKE $3 THEN 0 ELSE 1 END,
+               g.event_date DESC, g.id DESC
+      LIMIT $4`,
+    [userId, tenantIds, like, limit],
+  )
+  return rows
+}
+
+export async function findGigTenantForMember(executor, userId, tenantIds, gigId) {
+  const { rows } = await executor.query(
+    `SELECT g.tenant_id FROM gigs g
+      WHERE g.id = $3 AND g.tenant_id = ANY($2)
+        AND ${gigScopeSql('g', '$1')}`,
+    [userId, tenantIds, gigId],
+  )
+  return rows[0]?.tenant_id ?? null
+}
+
 // Mirrors listGigMapData, plus the tenant id the service needs to label each
 // row with its band.
 export async function listGigMapDataForMemberTenants(executor, userId, tenantIds, from, to) {

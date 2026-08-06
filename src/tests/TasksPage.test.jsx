@@ -10,6 +10,10 @@ vi.mock('../api/tasks.ts', () => ({
   updateTask: vi.fn(),
   deleteTask: vi.fn(),
 }))
+vi.mock('../api/me.ts', () => ({
+  listMyTasks: vi.fn(),
+  setMyTaskDone: vi.fn(),
+}))
 vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn(() => Promise.resolve([])),
 }))
@@ -24,6 +28,7 @@ vi.mock('react-router-dom', async (orig) => ({
 
 import TasksPage from '../pages/TasksPage.tsx'
 import { listTasks, createTask, updateTask, deleteTask } from '../api/tasks.ts'
+import { listMyTasks, setMyTaskDone } from '../api/me.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
@@ -70,6 +75,8 @@ describe('TasksPage', () => {
     createTask.mockResolvedValue({ id: 99 })
     updateTask.mockResolvedValue({})
     deleteTask.mockResolvedValue(undefined)
+    listMyTasks.mockResolvedValue(collection([]))
+    setMyTaskDone.mockResolvedValue({})
     useAuth.mockReturnValue({ user: { id: 1, bandMemberId: 1 } })
     usePermissions.mockReturnValue({ canWritePlanning: true })
   })
@@ -80,6 +87,30 @@ describe('TasksPage', () => {
     expect(listTasks).toHaveBeenCalledWith({ limit: 50 })
     expect(screen.getByText('Confirm rider')).toBeInTheDocument()
     expect(screen.getByText('Buy strings')).toBeInTheDocument()
+  })
+
+  it('uses the personal aggregate API, completes cross-band tasks, and switches on gig open', async () => {
+    const switchTenant = vi.fn().mockResolvedValue({})
+    const crossTask = {
+      ...TASKS[0], tenantId: 9, tenantName: 'Other Band', tenantAvatarPath: null,
+    }
+    useAuth.mockReturnValue({
+      user: { id: 1, activeTenantId: 1, activeTenantKind: 'personal' },
+      switchTenant,
+    })
+    listMyTasks.mockResolvedValue(collection([crossTask]))
+    const user = userEvent.setup()
+
+    wrap(<TasksPage />)
+    await screen.findByText('Send invoice')
+    expect(listMyTasks).toHaveBeenCalledWith({ limit: 50 })
+    expect(listTasks).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('checkbox'))
+    await waitFor(() => expect(setMyTaskDone).toHaveBeenCalledWith(10, true))
+    await user.click(screen.getByRole('button', { name: /open gig/i }))
+    await waitFor(() => expect(switchTenant).toHaveBeenCalledWith(9))
+    expect(navigate).toHaveBeenCalledWith('/gigs/1?tab=tasks')
   })
 
   it('keeps a finished gig task visible and disabled while that gig has open tasks', async () => {

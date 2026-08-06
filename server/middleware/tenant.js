@@ -70,7 +70,7 @@ export async function resolveMemberTenantIds(req, res, next) {
         kind: r.kind,
         displayName: r.display_name,
         slug: r.slug,
-        logoPath: r.logo_path,
+        avatarPath: r.avatar_path,
         role: r.role,
       }))
       next()

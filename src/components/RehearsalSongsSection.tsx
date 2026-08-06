@@ -19,9 +19,10 @@ interface RehearsalSongsSectionProps {
   onAddSong: (song: Song) => void
   onRemoveSong: (songId: Id | undefined) => void
   canWrite?: boolean
+  plainText?: boolean
 }
 
-export default function RehearsalSongsSection({ songs, onAddSong, onRemoveSong, canWrite = true }: Readonly<RehearsalSongsSectionProps>) {
+export default function RehearsalSongsSection({ songs, onAddSong, onRemoveSong, canWrite = true, plainText = false }: Readonly<RehearsalSongsSectionProps>) {
   const { t } = useTranslation('rehearsals')
   return (
     <Grid size={12}>
@@ -63,16 +64,18 @@ export default function RehearsalSongsSection({ songs, onAddSong, onRemoveSong, 
                   </Typography>
                 )}
               </Box>
-              <Tooltip title={t($ => $.songs.openSong)}>
-                <IconButton
-                  size="small"
-                  component={RouterLink}
-                  to={`/songs/${s.song_id}`}
-                  aria-label={t($ => $.songs.openSongAria, { title: s.title })}
-                >
-                  <OpenInNewIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
+              {!plainText && (
+                <Tooltip title={t($ => $.songs.openSong)}>
+                  <IconButton
+                    size="small"
+                    component={RouterLink}
+                    to={`/songs/${s.song_id}`}
+                    aria-label={t($ => $.songs.openSongAria, { title: s.title })}
+                  >
+                    <OpenInNewIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
               {canWrite && (
                 <IconButton
                   size="small"

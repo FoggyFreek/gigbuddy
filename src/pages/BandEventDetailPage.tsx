@@ -32,6 +32,10 @@ import PastEventAlert from '../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
+import { getMyBandEvent } from '../api/me.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { useAuth } from '../contexts/authContext.ts'
+import { SourceTenantSwitch } from '../components/SourceTenantIdentity.tsx'
 
 const REQUIRED_FIELDS = ['title', 'start_date']
 
@@ -57,6 +61,8 @@ export default function BandEventDetailPage() {
   const { id } = useParams()
   const bandEventId = Number(id)
   const { canWritePlanning } = usePermissions()
+  const { isPersonal } = useTenantKind()
+  const { user } = useAuth()
   const navigate = useNavigate()
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
   const insideSplitView = !!outletCtx.insideSplitView
@@ -79,6 +85,9 @@ export default function BandEventDetailPage() {
   // those dates change. Absent in a personal workspace.
   const [availability, setAvailability] = useState<Pick<BandEvent, 'members_availability' | 'availability_days'>>({})
   const [members, setMembers] = useState<Member[]>([])
+  const [event, setEvent] = useState<BandEventDetail | null>(null)
+  const isCrossBand = isPersonal && event?.tenantId !== user?.activeTenantId
+  const detailCanWrite = canWritePlanning && !isCrossBand
 
   const setEventAvailability = useCallback((event: BandEvent) => {
     setAvailability({
@@ -88,8 +97,8 @@ export default function BandEventDetailPage() {
   }, [])
 
   const refreshAvailability = useCallback(async () => {
-    setEventAvailability(await getBandEvent(bandEventId))
-  }, [bandEventId, setEventAvailability])
+    setEventAvailability(await (isPersonal ? getMyBandEvent(bandEventId) : getBandEvent(bandEventId)))
+  }, [bandEventId, setEventAvailability, isPersonal])
 
   const saveFn = useCallback(
     async (patch: Partial<BandEventForm>) => { await updateBandEvent(bandEventId, patch) },
@@ -110,9 +119,10 @@ export default function BandEventDetailPage() {
   )
 
   useEffect(() => {
-    getBandEvent(bandEventId)
+    ;(isPersonal ? getMyBandEvent(bandEventId) : getBandEvent(bandEventId))
       .then((ev) => {
         const detail = ev as BandEventDetail
+        setEvent(detail)
         onBandEventDetailLoaded?.(detail)
         setForm({
           title: detail.title || '',
@@ -127,14 +137,14 @@ export default function BandEventDetailPage() {
       })
       .catch(() => onBandEventDetailLoadError?.())
       .finally(() => setLoading(false))
-  }, [bandEventId, onBandEventDetailLoaded, onBandEventDetailLoadError, setEventAvailability])
+  }, [bandEventId, onBandEventDetailLoaded, onBandEventDetailLoadError, setEventAvailability, isPersonal])
 
   useEffect(() => {
-    listMembers().then(setMembers).catch(() => {})
-  }, [])
+    if (!isPersonal) listMembers().then(setMembers).catch(() => {})
+  }, [isPersonal])
 
   function handleChange(field: string, value: string | boolean | null) {
-    if (!canWritePlanning) return
+    if (!detailCanWrite) return
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
     if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
@@ -179,8 +189,16 @@ export default function BandEventDetailPage() {
         )}
       </Box>
 
+      {isCrossBand && event && (
+        <SourceTenantSwitch
+          tenantId={event.tenantId}
+          tenantName={event.tenantName}
+          tenantAvatarPath={event.tenantAvatarPath}
+        />
+      )}
+
       {!loading && <PastEventAlert date={form.end_date || form.start_date} />}
-      <PlanningReadOnlyAlert canWrite={canWritePlanning} />
+      <PlanningReadOnlyAlert canWrite={detailCanWrite} />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -192,7 +210,7 @@ export default function BandEventDetailPage() {
             form={form}
             onChange={handleChange}
             errors={{ ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors }}
-            readOnly={!canWritePlanning}
+            readOnly={!detailCanWrite}
           />
         </Grid>
       )}
@@ -206,20 +224,20 @@ export default function BandEventDetailPage() {
             members={availability.members_availability}
             days={availability.availability_days}
             candidateMembers={candidateMembers}
-            canWrite={canWritePlanning}
+            canWrite={detailCanWrite}
             onAddMember={handleAddMember}
             onRemoveMember={handleRemoveMember}
           />
         </Box>
       )}
 
-      {canWritePlanning && (
+      {detailCanWrite && (
         <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
           <SaveStatusLabel status={saveStatus} />
         </Box>
       )}
 
-      {canWritePlanning && (
+      {detailCanWrite && (
         <Box sx={{ mt: 4 }}>
           <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
             {t($ => $.actions.delete, { ns: 'common' })}

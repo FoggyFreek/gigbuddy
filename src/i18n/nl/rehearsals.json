@@ -8,6 +8,7 @@
     "colDate": "Datum",
     "colTime": "Tijd",
     "colLocation": "Locatie",
+    "colBand": "Band",
     "colVotes": "Stemmen",
     "filterRehearsals": "Repetities filteren",
     "allStatuses": "Alle statussen",

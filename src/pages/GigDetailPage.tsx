@@ -19,8 +19,74 @@ import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import { deleteGig } from '../api/gigs.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Gig, Id } from '../types/entities.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { useAuth } from '../contexts/authContext.ts'
+import { getMyGig, type MyGig } from '../api/me.ts'
+import CrossTenantGigDetail, { CrossTenantGigLoading } from '../components/CrossTenantGigDetail.tsx'
 
 export default function GigDetailPage() {
+  const { isPersonal } = useTenantKind()
+  return isPersonal ? <PersonalGigDetailPage /> : <TenantGigDetailPage />
+}
+
+function PersonalGigDetailPage() {
+  const { t } = useTranslation(['gigs', 'common'])
+  const { id } = useParams()
+  const gigId = Number(id)
+  const { user } = useAuth()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
+  const insideSplitView = !!outletCtx.insideSplitView
+  const [gig, setGig] = useState<MyGig | null>(null)
+
+  useEffect(() => {
+    const ac = new AbortController()
+    getMyGig(gigId, { signal: ac.signal })
+      .then((loaded) => {
+        setGig(loaded)
+        ;(outletCtx.onGigDetailLoaded as ((gig: Gig) => void) | undefined)?.(loaded)
+      })
+      .catch(() => {
+        if (!ac.signal.aborted) {
+          ;(outletCtx.onGigDetailLoadError as (() => void) | undefined)?.()
+        }
+      })
+    return () => ac.abort()
+  }, [gigId, outletCtx.onGigDetailLoaded, outletCtx.onGigDetailLoadError])
+
+  if (gig?.id !== gigId) return <CrossTenantGigLoading />
+  if (gig.tenantId === user?.activeTenantId) return <TenantGigDetailPage />
+
+  const initialTab = searchParams.get('tab') === 'tasks' ? 'tasks' : 'event'
+  const handleBack = () => {
+    if (typeof outletCtx.onClose === 'function') outletCtx.onClose()
+    else navigate(-1)
+  }
+
+  return (
+    <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+        {!insideSplitView && (
+          <IconButton onClick={handleBack} aria-label={t($ => $.aria.back, { ns: 'common' })}>
+            <ArrowBackIcon />
+          </IconButton>
+        )}
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>{gig.event_description || t($ => $.page.titleFallback)}</Typography>
+        <Box sx={{ flexGrow: 1 }} />
+        {insideSplitView && (
+          <IconButton onClick={handleBack} aria-label={t($ => $.aria.close, { ns: 'common' })}>
+            <CloseIcon />
+          </IconButton>
+        )}
+      </Box>
+      <PastEventAlert date={gig.event_date} />
+      <CrossTenantGigDetail gig={gig} initialTab={initialTab} />
+    </Box>
+  )
+}
+
+function TenantGigDetailPage() {
   const { t } = useTranslation(['gigs', 'common'])
   const { id } = useParams()
   const gigId = Number(id)

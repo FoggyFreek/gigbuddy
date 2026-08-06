@@ -22,6 +22,9 @@ import { useAuth } from '../contexts/authContext.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { listTasks, updateTask } from '../api/tasks.ts'
+import { listMyTasks, setMyTaskDone } from '../api/me.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { useCrossTenantNavigate } from '../hooks/useCrossTenantNavigate.ts'
 import type { Id, Task } from '../types/entities.ts'
 
 const FILTER_SX = { height: 31 } as const
@@ -39,6 +42,8 @@ export default function TasksPage() {
   const { t } = useTranslation('tasks')
   const { user } = useAuth()
   const { canWritePlanning } = usePermissions()
+  const { isPersonal } = useTenantKind()
+  const openInTenant = useCrossTenantNavigate()
   const navigate = useNavigate()
   const isCompact = useCompactLayout()
   const [tasks, setTasks] = useState<Task[]>([])
@@ -56,28 +61,40 @@ export default function TasksPage() {
     try {
       if (!silent) setLoading(true)
       setError(null)
-      const response = await listTasks({ limit: taskLimit })
+      const response = await (isPersonal
+        ? listMyTasks({ limit: taskLimit })
+        : listTasks({ limit: taskLimit }))
       setTasks(response.items)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       if (!silent) setLoading(false)
     }
-  }, [taskLimit])
+  }, [taskLimit, isPersonal])
 
   useEffect(() => { load() }, [load])
 
   const canToggleDone = useCallback(
-    (task: Task) =>
-      canWritePlanning || (task.assigned_to != null && task.assigned_to === user?.bandMemberId),
-    [canWritePlanning, user?.bandMemberId],
+    (task: Task) => isPersonal
+      ? task.tenantId === user?.activeTenantId || task.tenantId != null
+      : canWritePlanning || (task.assigned_to != null && task.assigned_to === user?.bandMemberId),
+    [isPersonal, user?.activeTenantId, canWritePlanning, user?.bandMemberId],
+  )
+
+  const canEditTask = useCallback(
+    (task: Task) => !isPersonal || task.tenantId === user?.activeTenantId,
+    [isPersonal, user?.activeTenantId],
   )
 
   async function handleToggle(task: Task) {
     if (task.id === undefined) return
     setTasks((prev) => prev.map((x) => (x.id === task.id ? { ...x, done: !x.done } : x)))
     try {
-      await updateTask(task.id, { done: !task.done })
+      if (isPersonal && task.tenantId !== user?.activeTenantId) {
+        await setMyTaskDone(task.id, !task.done)
+      } else {
+        await updateTask(task.id, { done: !task.done })
+      }
     } finally {
       load(true)
     }
@@ -104,7 +121,7 @@ export default function TasksPage() {
   }
 
   const memberTasks = tasks
-    .filter((task) => !myTasksOnly || !user?.bandMemberId || task.assigned_to === user.bandMemberId)
+    .filter((task) => isPersonal || !myTasksOnly || !user?.bandMemberId || task.assigned_to === user.bandMemberId)
   const gigsWithOpenTasks = new Set(
     memberTasks
       .filter((task) => !task.done && task.gig_id != null)
@@ -138,7 +155,7 @@ export default function TasksPage() {
               open={Boolean(filterAnchor)}
               onClose={closeCompactMenus}
             >
-              {user?.bandMemberId && (
+              {!isPersonal && user?.bandMemberId && (
                 <MenuItem selected={myTasksOnly} onClick={() => setMyTasksOnly((v) => !v)}>
                   {t($ => $.myTasks)}
                 </MenuItem>
@@ -175,7 +192,7 @@ export default function TasksPage() {
           </>
         ) : (
           <>
-            {user?.bandMemberId && (
+            {!isPersonal && user?.bandMemberId && (
               <ToggleButton
                 value="myTasks"
                 selected={myTasksOnly}
@@ -236,7 +253,18 @@ export default function TasksPage() {
           onToggleDone={handleToggle}
           canToggleDone={canToggleDone}
           onOpenGig={(gigId: Id) => navigate(`/gigs/${gigId}?tab=tasks`)}
+          onOpenGigTask={(gigId: Id, task: Task) => {
+            if (isPersonal && task.tenantId !== user?.activeTenantId) {
+              void openInTenant(task.tenantId, `/gigs/${gigId}?tab=tasks`)
+            } else navigate(`/gigs/${gigId}?tab=tasks`)
+          }}
+          onOpenTask={(task) => {
+            if (isPersonal && task.tenantId !== user?.activeTenantId) {
+              void openInTenant(task.tenantId, '/tasks')
+            }
+          }}
           onEditTask={canWritePlanning ? openEdit : undefined}
+          canEditTask={canEditTask}
         />
       )}
 

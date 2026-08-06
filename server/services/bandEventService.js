@@ -37,7 +37,7 @@ const INVALID_CURSOR = 'cursorDate and cursorId must be provided together and va
 //
 // Personal workspaces have no band availability at all, so they get the rows
 // untouched rather than an empty column.
-async function enrichEventsWithAvailability(db, tenantId, scope, events) {
+export async function enrichEventsWithAvailability(db, tenantId, scope, events) {
   const { tenantKind, viewer = null, withDays = false } = scope
   if (!events.length) return events
   if (!tenantKindSupports(tenantKind, TENANT_CAPABILITIES.BAND_AVAILABILITY)) return events

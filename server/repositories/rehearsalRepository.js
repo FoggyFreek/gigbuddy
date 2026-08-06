@@ -87,6 +87,47 @@ export async function listNextPlannedRehearsalForMemberTenants(executor, userId,
   return rows[0] ?? null
 }
 
+export async function listUpcomingRehearsalsForMemberTenants(executor, userId, tenantIds, today, limit) {
+  const { rows } = await executor.query(
+    `SELECT r.* FROM rehearsals r
+      WHERE r.tenant_id = ANY($2) AND r.proposed_date >= $3
+        AND ${rehearsalScopeSql('r', '$1')}
+      ORDER BY r.proposed_date ASC, r.id ASC
+      LIMIT $4`,
+    [userId, tenantIds, today, limit],
+  )
+  return rows
+}
+
+export async function listPastRehearsalsForMemberTenants(executor, userId, tenantIds, today, limit, cursor = null) {
+  const params = [userId, tenantIds, today]
+  let cursorClause = ''
+  if (cursor) {
+    params.push(cursor.date, cursor.id)
+    cursorClause = `AND (r.proposed_date, r.id) < ($${params.length - 1}, $${params.length})`
+  }
+  params.push(limit)
+  const { rows } = await executor.query(
+    `SELECT r.* FROM rehearsals r
+      WHERE r.tenant_id = ANY($2) AND r.proposed_date < $3 ${cursorClause}
+        AND ${rehearsalScopeSql('r', '$1')}
+      ORDER BY r.proposed_date DESC, r.id DESC
+      LIMIT $${params.length}`,
+    params,
+  )
+  return rows
+}
+
+export async function findRehearsalTenantForMember(executor, userId, tenantIds, rehearsalId) {
+  const { rows } = await executor.query(
+    `SELECT r.tenant_id FROM rehearsals r
+      WHERE r.id = $3 AND r.tenant_id = ANY($2)
+        AND ${rehearsalScopeSql('r', '$1')}`,
+    [userId, tenantIds, rehearsalId],
+  )
+  return rows[0]?.tenant_id ?? null
+}
+
 export async function fetchRehearsal(executor, rehearsalId, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM rehearsals WHERE id = $1 AND tenant_id = $2',

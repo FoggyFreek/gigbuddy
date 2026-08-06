@@ -4,7 +4,9 @@ import type {
   CrossTenantRef,
   GigMapGig,
   LimitedCollectionResponse,
+  LimitedCollectionWithCursorResponse,
   LimitedCollectionWithTotalResponse,
+  ListCollectionCursor,
   MaybeCrossTenant,
   WindowedCollectionResponse,
 } from '../types/api.ts'
@@ -44,6 +46,21 @@ export const listMyUpcomingGigs = (limit: number, today: string) =>
     `/api/me/gigs/upcoming?${new URLSearchParams({ limit: String(limit), today })}`,
   )
 
+export const listMyPastGigs = (limit: number, today: string, cursor?: ListCollectionCursor) => {
+  const params = new URLSearchParams({ limit: String(limit), today })
+  if (cursor) {
+    params.set('cursorDate', cursor.date)
+    params.set('cursorId', String(cursor.id))
+  }
+  return request<LimitedCollectionWithCursorResponse<MyGig>>(`/api/me/gigs/past?${params}`)
+}
+
+export const searchMyGigs = (q: string) =>
+  request<MyGig[]>(`/api/me/gigs/search?${new URLSearchParams({ q })}`)
+
+export const getMyGig = (id: Id, opts?: RequestInit) =>
+  request<MyGig>(`/api/me/gigs/${id}`, opts)
+
 export const listMyGigMapData = ({ from, to }: { from: string; to: string }) =>
   request<WindowedCollectionResponse<MyGigMapGig>>(
     `/api/me/gigs/map?${new URLSearchParams({ from, to })}`,
@@ -51,10 +68,41 @@ export const listMyGigMapData = ({ from, to }: { from: string; to: string }) =>
 
 export const getMyNextRehearsal = () => request<MyRehearsal | null>('/api/me/rehearsals/next')
 
+export const listMyUpcomingRehearsals = (limit: number, today: string) =>
+  request<LimitedCollectionResponse<MyRehearsal>>(
+    `/api/me/rehearsals/upcoming?${new URLSearchParams({ limit: String(limit), today })}`,
+  )
+
+export const listMyPastRehearsals = (limit: number, today: string, cursor?: ListCollectionCursor) => {
+  const params = new URLSearchParams({ limit: String(limit), today })
+  if (cursor) {
+    params.set('cursorDate', cursor.date)
+    params.set('cursorId', String(cursor.id))
+  }
+  return request<LimitedCollectionWithCursorResponse<MyRehearsal>>(`/api/me/rehearsals/past?${params}`)
+}
+
+export const getMyRehearsal = (id: Id) => request<MyRehearsal>(`/api/me/rehearsals/${id}`)
+export const setMyRehearsalVote = (id: Id, vote: string | null) =>
+  request<MyRehearsal>(`/api/me/rehearsals/${id}/vote`, {
+    method: 'PATCH', body: JSON.stringify({ vote }),
+  })
+
 export const listMyUpcomingBandEvents = (limit: number, today: string) =>
   request<LimitedCollectionResponse<MyBandEvent>>(
     `/api/me/band-events/upcoming?${new URLSearchParams({ limit: String(limit), today })}`,
   )
+
+export const listMyPastBandEvents = (limit: number, today: string, cursor?: ListCollectionCursor) => {
+  const params = new URLSearchParams({ limit: String(limit), today })
+  if (cursor) {
+    params.set('cursorDate', cursor.date)
+    params.set('cursorId', String(cursor.id))
+  }
+  return request<LimitedCollectionWithCursorResponse<MyBandEvent>>(`/api/me/band-events/past?${params}`)
+}
+
+export const getMyBandEvent = (id: Id) => request<MyBandEvent>(`/api/me/band-events/${id}`)
 
 // No `assignee` — on the hub "mine" is the only scope, so the server never
 // offers one.
@@ -64,3 +112,8 @@ export const listMyTasks = ({ limit, done }: { limit?: number; done?: boolean } 
   if (done !== undefined) params.set('done', String(done))
   return request<LimitedCollectionWithTotalResponse<MyTask>>(`/api/me/tasks?${params}`)
 }
+
+export const setMyTaskDone = (id: Id, done: boolean) =>
+  request<MyTask>(`/api/me/tasks/${id}/done`, {
+    method: 'PATCH', body: JSON.stringify({ done }),
+  })

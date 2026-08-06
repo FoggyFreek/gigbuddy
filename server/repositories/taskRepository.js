@@ -41,14 +41,9 @@ export async function listTasks(executor, tenantId, { done, assigneeId, limit })
   }
 }
 
-// Cross-tenant artist read (/api/me/tasks). Unlike the event feeds there is no
-// personal-workspace bypass: a task reaches a person only through
-// `assigned_to -> band_members.user_id`, so an unassigned task in the caller's
-// own workspace is no more "mine" than an unassigned task in a band. Tenant ids
-// come from the caller's approved memberships, never from the client.
 export async function listTasksAssignedToUserForMemberTenants(executor, userId, tenantIds, { done, limit }) {
   const values = [userId, tenantIds]
-  const predicates = ['bm.user_id = $1', 't.tenant_id = ANY($2)']
+  const predicates = ["(source_tenant.kind = 'personal' OR bm.user_id = $1)", 't.tenant_id = ANY($2)']
 
   if (done !== undefined) {
     values.push(done)
@@ -63,7 +58,8 @@ export async function listTasksAssignedToUserForMemberTenants(executor, userId, 
             t.assigned_to,
             bm.name AS assigned_to_name
      FROM gig_tasks t
-     JOIN band_members bm ON bm.id = t.assigned_to AND bm.tenant_id = t.tenant_id
+     JOIN tenants source_tenant ON source_tenant.id = t.tenant_id
+     LEFT JOIN band_members bm ON bm.id = t.assigned_to AND bm.tenant_id = t.tenant_id
      LEFT JOIN gigs g ON g.id = t.gig_id AND g.tenant_id = t.tenant_id
      WHERE ${predicates.join(' AND ')}
      ORDER BY t.done ASC, t.due_date ASC NULLS LAST, t.created_at ASC, t.id ASC
@@ -74,6 +70,17 @@ export async function listTasksAssignedToUserForMemberTenants(executor, userId, 
     items: rows.map(({ collection_total: _collectionTotal, ...task }) => task),
     total: rows[0]?.collection_total ?? 0,
   }
+}
+
+export async function findAssignedTaskTenantForMember(executor, userId, tenantIds, taskId) {
+  const { rows } = await executor.query(
+    `SELECT t.tenant_id, t.gig_id
+       FROM gig_tasks t
+       JOIN band_members bm ON bm.id = t.assigned_to AND bm.tenant_id = t.tenant_id
+      WHERE t.id = $3 AND t.tenant_id = ANY($2) AND bm.user_id = $1`,
+    [userId, tenantIds, taskId],
+  )
+  return rows[0] ?? null
 }
 
 export async function getTaskById(executor, taskId, tenantId) {

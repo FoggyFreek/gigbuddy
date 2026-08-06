@@ -78,6 +78,35 @@ export async function listUpcomingBandEventsForMemberTenants(executor, userId, t
   return rows
 }
 
+export async function listPastBandEventsForMemberTenants(executor, userId, tenantIds, today, limit, cursor = null) {
+  const params = [userId, tenantIds, today]
+  let cursorClause = ''
+  if (cursor) {
+    params.push(cursor.date, cursor.id)
+    cursorClause = `AND (e.end_date, e.id) < ($${params.length - 1}, $${params.length})`
+  }
+  params.push(limit)
+  const { rows } = await executor.query(
+    `SELECT e.* FROM band_events e
+      WHERE e.tenant_id = ANY($2) AND e.end_date < $3 ${cursorClause}
+        AND ${bandEventScopeSql('e', '$1')}
+      ORDER BY e.end_date DESC, e.id DESC
+      LIMIT $${params.length}`,
+    params,
+  )
+  return rows
+}
+
+export async function findBandEventTenantForMember(executor, userId, tenantIds, eventId) {
+  const { rows } = await executor.query(
+    `SELECT e.tenant_id FROM band_events e
+      WHERE e.id = $3 AND e.tenant_id = ANY($2)
+        AND ${bandEventScopeSql('e', '$1')}`,
+    [userId, tenantIds, eventId],
+  )
+  return rows[0]?.tenant_id ?? null
+}
+
 export async function fetchBandEvent(executor, eventId, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM band_events WHERE id = $1 AND tenant_id = $2',

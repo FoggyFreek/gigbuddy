@@ -186,13 +186,14 @@ export async function updateJoinPolicy(executor, tenantId, joinPolicy) {
 // memberships: the client never names the tenants it wants.
 export async function listApprovedMemberTenants(executor, userId) {
   const { rows } = await executor.query(
-    `SELECT t.id, t.kind, t.slug, t.display_name, t.logo_path, m.role
+    `SELECT t.id, t.kind, t.slug, t.display_name, t.avatar_path, m.role
        FROM memberships m
        JOIN tenants t ON t.id = m.tenant_id
       WHERE m.user_id = $1
         AND m.status = 'approved'
         AND t.archived_at IS NULL
         AND t.deletion_status IS NULL
+        AND (t.kind = 'band' OR t.owner_user_id = $1)
       ORDER BY t.kind DESC, t.display_name ASC, t.id ASC`,
     [userId],
   )

@@ -313,15 +313,18 @@ export default function DashboardPage() {
   const { nextGig, nextBandEvent, nextRehearsal, shows, tasks, achievements } = sections
   const activeSocials = SOCIALS.filter(({ field, prefix }) => prefix && profile?.[field])
 
-  // In an artist workspace a row can belong to another band, so opening it means
-  // switching the active tenant first — every detail page is tenant-scoped.
-  const openRow = (tenantId: Id | null | undefined, path: string) => {
+  const openTask = (tenantId: Id | null | undefined, path: string) => {
     if (crossBand) {
       void openInTenant(tenantId, path)
       return
     }
     navigate(path)
   }
+
+  // Aggregate event details have their own /api/me reads and stay inside the
+  // artist workspace. Tasks intentionally switch because standalone tasks have
+  // no detail route and gig tasks open the source band's editable task tab.
+  const openRow = (_tenantId: Id | null | undefined, path: string) => navigate(path)
 
   // Which band a row came from. Never rendered in a band workspace, where every
   // row belongs to the one you're looking at.
@@ -369,7 +372,7 @@ export default function DashboardPage() {
           return (
             <ListItemButton
               key={String(task.id)}
-              onClick={() => openRow(
+              onClick={() => openTask(
                 task.tenantId,
                 task.gig_id ? `/gigs/${task.gig_id}?tab=tasks` : '/tasks',
               )}

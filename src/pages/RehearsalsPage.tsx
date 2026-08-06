@@ -17,12 +17,14 @@ import RehearsalsTable, { type RehearsalsTab } from '../components/RehearsalsTab
 import RehearsalFormModal from '../components/RehearsalFormModal.tsx'
 import SplitView from '../components/SplitView.tsx'
 import { listPastRehearsals, listUpcomingRehearsals, setVote } from '../api/rehearsals.ts'
+import { listMyPastRehearsals, listMyUpcomingRehearsals, setMyRehearsalVote } from '../api/me.ts'
 import { rehearsalShareUrl } from '../utils/shareUtils.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { isPastDate, localDateString } from '../utils/dateFormat.ts'
 import type { ListCollectionCursor } from '../types/api.ts'
 import type { Rehearsal, Id } from '../types/entities.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
 
 const REHEARSAL_STATUSES = ['planned', 'option'] as const
 const TAB_PAGE_SIZE = 100
@@ -41,6 +43,7 @@ export default function RehearsalsPage() {
   const { t } = useTranslation(['rehearsals', 'common'])
   const { user } = useAuth()
   const { canWritePlanning } = usePermissions()
+  const { isPersonal } = useTenantKind()
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -69,13 +72,17 @@ export default function RehearsalsPage() {
       setError(null)
       const today = localDateString()
       if (tab === 'upcoming') {
-        const result = await listUpcomingRehearsals(TAB_PAGE_SIZE, today)
+        const result = await (isPersonal
+          ? listMyUpcomingRehearsals(TAB_PAGE_SIZE, today)
+          : listUpcomingRehearsals(TAB_PAGE_SIZE, today))
         if (requestIdRef.current !== requestId) return
         setRehearsals(result.items)
         setPastCursor(null)
         setPastHasMore(false)
       } else {
-        const result = await listPastRehearsals(TAB_PAGE_SIZE, today)
+        const result = await (isPersonal
+          ? listMyPastRehearsals(TAB_PAGE_SIZE, today)
+          : listPastRehearsals(TAB_PAGE_SIZE, today))
         if (requestIdRef.current !== requestId) return
         setRehearsals(result.items)
         setPastCursor(result.meta.nextCursor)
@@ -86,7 +93,7 @@ export default function RehearsalsPage() {
     } finally {
       if (requestIdRef.current === requestId) setLoading(false)
     }
-  }, [])
+  }, [isPersonal])
 
   useEffect(() => {
     if (deferInitialTabLoadRef.current) return
@@ -117,7 +124,8 @@ export default function RehearsalsPage() {
 
   async function handleVote(rehearsalId: Id | undefined, memberId: Id | undefined, vote: string | null) {
     if (rehearsalId === undefined || memberId === undefined || vote === null) return
-    await setVote(rehearsalId, memberId, vote)
+    if (isPersonal) await setMyRehearsalVote(rehearsalId, vote)
+    else await setVote(rehearsalId, memberId, vote)
     setRehearsals((previous) => applyVoteToRehearsals(previous, rehearsalId, memberId, vote))
   }
 
@@ -137,7 +145,9 @@ export default function RehearsalsPage() {
     const requestId = requestIdRef.current
     try {
       setLoadingMore(true)
-      const result = await listPastRehearsals(TAB_PAGE_SIZE, localDateString(), pastCursor)
+      const result = await (isPersonal
+        ? listMyPastRehearsals(TAB_PAGE_SIZE, localDateString(), pastCursor)
+        : listPastRehearsals(TAB_PAGE_SIZE, localDateString(), pastCursor))
       if (requestIdRef.current !== requestId || activeTabRef.current !== 'past') return
       setRehearsals((previous) => [...previous, ...result.items])
       setPastCursor(result.meta.nextCursor)
@@ -224,6 +234,7 @@ export default function RehearsalsPage() {
         hasMore={pastHasMore}
         loadingMore={loadingMore}
         onLoadMore={handleLoadMorePast}
+        showBand={isPersonal}
       />
 
       {modal && <RehearsalFormModal mode="create" onClose={handleClose} />}

@@ -13,6 +13,8 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import PersonIcon from '@mui/icons-material/Person'
 import MasonryLayout from './shared/MasonryLayout.tsx'
+import { tenantAvatarUrl } from '../utils/tenantAvatarUrl.ts'
+import Avatar from '@mui/material/Avatar'
 import { formatDueDate } from '../utils/dateFormat.ts'
 import type { Id, Task } from '../types/entities.ts'
 
@@ -40,15 +42,18 @@ interface TaskRowProps {
   onToggleDone: (task: Task) => void
   canToggleDone: (task: Task) => boolean
   onEditTask?: (task: Task) => void
+  onOpenTask?: (task: Task) => void
+  canEditTask?: (task: Task) => boolean
 }
 
-function TaskRow({ task, onToggleDone, canToggleDone, onEditTask }: Readonly<TaskRowProps>) {
+function TaskRow({ task, onToggleDone, canToggleDone, onEditTask, onOpenTask, canEditTask }: Readonly<TaskRowProps>) {
   const { i18n } = useTranslation('tasks')
   const overdue = isOverdue(task)
   const dueLabel = task.due_date
     ? formatDueDate(task.due_date, i18n.resolvedLanguage ?? 'en')
     : null
-  const editable = !!onEditTask && !task.done
+  const editable = !!onEditTask && !task.done && (canEditTask?.(task) ?? true)
+  const openable = !editable && !!onOpenTask
 
   return (
     <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, p: 1.5 }}>
@@ -63,8 +68,8 @@ function TaskRow({ task, onToggleDone, canToggleDone, onEditTask }: Readonly<Tas
         sx={{ flexShrink: 0, p: 0.25, mt: 0.1 }}
       />
       <Box
-        onClick={() => { if (editable) onEditTask?.(task) }}
-        sx={{ flex: 1, minWidth: 0, cursor: editable ? 'pointer' : 'default' }}
+        onClick={() => { if (editable) onEditTask?.(task); else if (openable) onOpenTask?.(task) }}
+        sx={{ flex: 1, minWidth: 0, cursor: editable || openable ? 'pointer' : 'default' }}
       >
         <Typography
           variant="body2"
@@ -110,9 +115,22 @@ const CARD_SX = { boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)' } as const
 type StandaloneTaskCardProps = TaskRowProps
 
 function StandaloneTaskCard(props: Readonly<StandaloneTaskCardProps>) {
+  const { task } = props
   return (
     <Card variant="outlined" data-card sx={CARD_SX}>
       <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+        {task.tenantId != null && (
+          <Box sx={{ p: 1.25, display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'action.hover' }}>
+            <Avatar
+              src={tenantAvatarUrl(task.tenantId, task.tenantAvatarPath)}
+              alt={task.tenantName ?? ''}
+              sx={{ width: 26, height: 26, fontSize: 13 }}
+            >
+              {task.tenantName?.trim().charAt(0).toUpperCase() || '?'}
+            </Avatar>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>{task.tenantName || '—'}</Typography>
+          </Box>
+        )}
         <TaskRow {...props} />
       </CardContent>
     </Card>
@@ -125,16 +143,30 @@ interface GigTaskCardProps {
   onToggleDone: (task: Task) => void
   canToggleDone: (task: Task) => boolean
   onOpenGig: (gigId: Id) => void
+  onOpenGigTask?: (gigId: Id, task: Task) => void
   onEditTask?: (task: Task) => void
+  canEditTask?: (task: Task) => boolean
 }
 
-function GigTaskCard({ gigId, tasks, onToggleDone, canToggleDone, onOpenGig, onEditTask }: Readonly<GigTaskCardProps>) {
+function GigTaskCard({ gigId, tasks, onToggleDone, canToggleDone, onOpenGig, onOpenGigTask, onEditTask, canEditTask }: Readonly<GigTaskCardProps>) {
   const { t } = useTranslation('tasks')
   const gig = tasks[0]
 
   return (
     <Card variant="outlined" data-card sx={CARD_SX}>
       <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+        {gig.tenantId != null && (
+          <Box sx={{ p: 1.25, display: 'flex', alignItems: 'center', gap: 1, bgcolor: 'action.hover' }}>
+            <Avatar
+              src={tenantAvatarUrl(gig.tenantId, gig.tenantAvatarPath)}
+              alt={gig.tenantName ?? ''}
+              sx={{ width: 26, height: 26, fontSize: 13 }}
+            >
+              {gig.tenantName?.trim().charAt(0).toUpperCase() || '?'}
+            </Avatar>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>{gig.tenantName || '—'}</Typography>
+          </Box>
+        )}
         <Box sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 1 }}>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
@@ -150,7 +182,7 @@ function GigTaskCard({ gigId, tasks, onToggleDone, canToggleDone, onOpenGig, onE
             <IconButton
               size="small"
               aria-label={t($ => $.openGig)}
-              onClick={() => onOpenGig(gigId)}
+              onClick={() => onOpenGigTask ? onOpenGigTask(gigId, gig) : onOpenGig(gigId)}
             >
               <OpenInNewIcon fontSize="small" />
             </IconButton>
@@ -165,6 +197,7 @@ function GigTaskCard({ gigId, tasks, onToggleDone, canToggleDone, onOpenGig, onE
               onToggleDone={onToggleDone}
               canToggleDone={canToggleDone}
               onEditTask={onEditTask}
+              canEditTask={canEditTask}
             />
           ))}
         </Stack>
@@ -194,7 +227,7 @@ function groupTasks(tasks: Task[]): TaskCardGroup[] {
       return
     }
 
-    const key = String(task.gig_id)
+    const key = `${String(task.tenantId ?? 'active')}:${String(task.gig_id)}`
     const existing = gigGroups.get(key)
     if (existing) {
       existing.tasks.push(task)
@@ -219,10 +252,13 @@ interface TasksTableProps {
   onToggleDone: (task: Task) => void
   canToggleDone: (task: Task) => boolean
   onOpenGig: (gigId: Id) => void
+  onOpenGigTask?: (gigId: Id, task: Task) => void
   onEditTask?: (task: Task) => void
+  onOpenTask?: (task: Task) => void
+  canEditTask?: (task: Task) => boolean
 }
 
-export default function TasksTable({ tasks, onToggleDone, canToggleDone, onOpenGig, onEditTask }: Readonly<TasksTableProps>) {
+export default function TasksTable({ tasks, onToggleDone, canToggleDone, onOpenGig, onOpenGigTask, onEditTask, onOpenTask, canEditTask }: Readonly<TasksTableProps>) {
   const { t } = useTranslation('tasks')
 
   if (tasks.length === 0) {
@@ -245,7 +281,9 @@ export default function TasksTable({ tasks, onToggleDone, canToggleDone, onOpenG
           onToggleDone={onToggleDone}
           canToggleDone={canToggleDone}
           onOpenGig={onOpenGig}
+          onOpenGigTask={onOpenGigTask}
           onEditTask={onEditTask}
+          canEditTask={canEditTask}
         />
       ) : (
         <StandaloneTaskCard
@@ -254,6 +292,8 @@ export default function TasksTable({ tasks, onToggleDone, canToggleDone, onOpenG
           onToggleDone={onToggleDone}
           canToggleDone={canToggleDone}
           onEditTask={onEditTask}
+          onOpenTask={onOpenTask}
+          canEditTask={canEditTask}
         />
       ))}
     </MasonryLayout>

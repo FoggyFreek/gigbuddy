@@ -8,6 +8,7 @@
     "colDate": "Date",
     "colTime": "Time",
     "colLocation": "Location",
+    "colBand": "Band",
     "colVotes": "Votes",
     "filterRehearsals": "Filter rehearsals",
     "allStatuses": "All statuses",

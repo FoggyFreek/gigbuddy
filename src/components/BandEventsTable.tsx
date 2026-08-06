@@ -21,10 +21,11 @@ import Tooltip from '@mui/material/Tooltip'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import MemberAvatarStack from './MemberAvatarStack.tsx'
 import type { BandEvent, Id } from '../types/entities.ts'
+import SourceTenantIdentity from './SourceTenantIdentity.tsx'
 
 type BandEventWithTime = BandEvent & { start_time?: string; end_time?: string }
 
-const COLUMN_COUNT = 6
+const BASE_COLUMN_COUNT = 6
 
 function formatDate(val: string | undefined) {
   if (!val) return '—'
@@ -63,6 +64,7 @@ interface BandEventRowProps {
   active?: boolean
   onClick?: () => void
   onShare?: (event: BandEventWithTime) => void
+  showBand?: boolean
 }
 
 interface BandEventsTableProps {
@@ -76,9 +78,10 @@ interface BandEventsTableProps {
   hasMore?: boolean
   loadingMore?: boolean
   onLoadMore?: () => void
+  showBand?: boolean
 }
 
-function EventCard({ event, active, onClick, onShare }: Readonly<BandEventRowProps>) {
+function EventCard({ event, active, onClick, onShare, showBand = false }: Readonly<BandEventRowProps>) {
   const { t } = useTranslation('bandEvents')
   return (
     <Box
@@ -115,13 +118,23 @@ function EventCard({ event, active, onClick, onShare }: Readonly<BandEventRowPro
         {[event.title, event.location].filter(Boolean).join(' · ') || '—'}
       </Typography>
       <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+        {showBand && (
+          <Box sx={{ mr: 1 }}>
+            <SourceTenantIdentity
+              tenantId={event.tenantId}
+              tenantName={event.tenantName}
+              tenantAvatarPath={event.tenantAvatarPath}
+              withName
+            />
+          </Box>
+        )}
         <MemberAvatarStack members={event.members_availability} />
       </Box>
     </Box>
   )
 }
 
-function DesktopRow({ event, active, onClick, onShare }: Readonly<BandEventRowProps>) {
+function DesktopRow({ event, active, onClick, onShare, showBand = false }: Readonly<BandEventRowProps>) {
   const { t } = useTranslation('bandEvents')
   return (
     <TableRow
@@ -136,6 +149,15 @@ function DesktopRow({ event, active, onClick, onShare }: Readonly<BandEventRowPr
       <TableCell>{formatDateRange(event.start_date, event.end_date)}</TableCell>
       <TableCell>{event.title}</TableCell>
       <TableCell>{formatTimeRange(event.start_time, event.end_time)}</TableCell>
+      {showBand && (
+        <TableCell>
+          <SourceTenantIdentity
+            tenantId={event.tenantId}
+            tenantName={event.tenantName}
+            tenantAvatarPath={event.tenantAvatarPath}
+          />
+        </TableCell>
+      )}
       <TableCell>
         <MemberAvatarStack members={event.members_availability} />
       </TableCell>
@@ -155,7 +177,7 @@ function DesktopRow({ event, active, onClick, onShare }: Readonly<BandEventRowPr
   )
 }
 
-function DesktopHead() {
+function DesktopHead({ showBand = false }: Readonly<{ showBand?: boolean }>) {
   const { t } = useTranslation('bandEvents')
   return (
     <TableHead>
@@ -163,6 +185,7 @@ function DesktopHead() {
         <TableCell>{t($ => $.table.colDate)}</TableCell>
         <TableCell>{t($ => $.table.colTitle)}</TableCell>
         <TableCell>{t($ => $.table.colTime)}</TableCell>
+        {showBand && <TableCell>{t($ => $.table.colBand)}</TableCell>}
         <TableCell>{t($ => $.table.colAvailability)}</TableCell>
         <TableCell>{t($ => $.table.colLocation)}</TableCell>
         <TableCell />
@@ -182,6 +205,7 @@ export default function BandEventsTable({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  showBand = false,
 }: Readonly<BandEventsTableProps>) {
   const { t } = useTranslation('bandEvents')
   const isCompact = useCompactLayout()
@@ -233,7 +257,7 @@ export default function BandEventsTable({
       )
     } else {
       content = events.map((e) => (
-        <EventCard key={String(e.id)} event={e} active={e.id === selectedId} onClick={() => onRowClick?.(e)} onShare={onShare} />
+        <EventCard key={String(e.id)} event={e} active={e.id === selectedId} onClick={() => onRowClick?.(e)} onShare={onShare} showBand={showBand} />
       ))
     }
 
@@ -253,24 +277,24 @@ export default function BandEventsTable({
       {tabs}
       <TableContainer component={Paper} variant="outlined">
         <Table size="small">
-          <DesktopHead />
+          <DesktopHead showBand={showBand} />
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={BASE_COLUMN_COUNT + (showBand ? 1 : 0)} align="center" sx={{ py: 4 }}>
                   <CircularProgress size={24} />
                 </TableCell>
               </TableRow>
             )}
             {!loading && events.length === 0 && (
               <TableRow>
-                <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
+                <TableCell colSpan={BASE_COLUMN_COUNT + (showBand ? 1 : 0)} align="center" sx={{ color: 'text.secondary', py: 4 }}>
                   {emptyMessage}
                 </TableCell>
               </TableRow>
             )}
             {!loading && events.map((e) => (
-              <DesktopRow key={String(e.id)} event={e} active={e.id === selectedId} onClick={() => onRowClick?.(e)} onShare={onShare} />
+              <DesktopRow key={String(e.id)} event={e} active={e.id === selectedId} onClick={() => onRowClick?.(e)} onShare={onShare} showBand={showBand} />
             ))}
           </TableBody>
         </Table>

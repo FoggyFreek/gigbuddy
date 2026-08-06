@@ -520,6 +520,127 @@ describe('GET /api/me/gigs/map', () => {
   })
 })
 
+describe('/api/me planning details and self-actions', () => {
+  it('preserves past-gig cursor ordering and scopes cross-tenant search', async () => {
+    const older = await addGig(seed.tenantA.id, { date: '2098-01-01', name: 'Needle older' })
+    const newer = await addGig(seed.tenantA.id, { date: '2098-02-01', name: 'Needle newer' })
+    await addGig(seed.tenantB.id, { date: '2098-03-01', name: 'Needle foreign' })
+
+    const first = await hubGet(seed.userA.id, '/api/me/gigs/past', { today: TODAY, limit: 1 }).expect(200)
+    expect(first.body.items.map((gig) => gig.id)).toEqual([newer.id])
+    const second = await hubGet(seed.userA.id, '/api/me/gigs/past', {
+      today: TODAY,
+      limit: 1,
+      cursorDate: first.body.meta.nextCursor.date,
+      cursorId: first.body.meta.nextCursor.id,
+    }).expect(200)
+    expect(second.body.items.map((gig) => gig.id)).toEqual([older.id])
+
+    const search = await hubGet(seed.userA.id, '/api/me/gigs/search', { q: 'Needle' }).expect(200)
+    expect(search.body.map((gig) => gig.event_description)).toEqual(['Needle newer', 'Needle older'])
+  })
+
+  it('returns a restricted gig detail and 404s when participation is missing', async () => {
+    const artist = await createUser('detail-artist@test.local')
+    await addMembership(artist.id, seed.tenantA.id)
+    const gig = await addGig(seed.tenantA.id, { date: '2099-07-05', name: 'Restricted show' })
+    await pool.query('UPDATE gigs SET banner_path = $2 WHERE id = $1', [gig.id, 'tenants/1/gigs/banner.png'])
+    await addTask(seed.tenantA.id, { title: 'Mine', userId: artist.id, gigId: gig.id })
+    await addTask(seed.tenantA.id, { title: 'Not mine', userId: seed.userA.id, gigId: gig.id })
+    await pool.query(
+      `INSERT INTO gig_attachments (gig_id, tenant_id, object_key, original_filename, content_type, file_size)
+       VALUES ($1, $2, 'tenants/1/attachments/secret.pdf', 'rider.pdf', 'application/pdf', 10)`,
+      [gig.id, seed.tenantA.id],
+    )
+
+    const res = await hubGet(artist.id, `/api/me/gigs/${gig.id}`).expect(200)
+    expect(res.body).not.toHaveProperty('banner_path')
+    expect(res.body).not.toHaveProperty('participants')
+    expect(res.body.tasks.map((task) => task.title)).toEqual(['Mine'])
+    expect(res.body.attachments[0]).toMatchObject({ original_filename: 'rider.pdf' })
+    expect(res.body.attachments[0]).not.toHaveProperty('object_key')
+
+    await pool.query('DELETE FROM gig_participants WHERE gig_id = $1 AND band_member_id = $2', [
+      gig.id,
+      (await pool.query('SELECT id FROM band_members WHERE tenant_id = $1 AND user_id = $2',
+        [seed.tenantA.id, artist.id])).rows[0].id,
+    ])
+    await hubGet(artist.id, `/api/me/gigs/${gig.id}`).expect(404)
+    await hubGet(seed.userB.id, `/api/me/gigs/${gig.id}`).expect(404)
+  })
+
+  it('keeps rehearsal voting on the reader self path and fires its notification', async () => {
+    const artist = await createUser('vote-artist@test.local')
+    await addMembership(artist.id, seed.tenantA.id, { role: 'tenant_admin' })
+    const rehearsal = await addRehearsal(seed.tenantA.id, { date: '2099-07-05', title: 'Vote here' })
+    const { rows: [member] } = await pool.query(
+      'SELECT id FROM band_members WHERE tenant_id = $1 AND user_id = $2',
+      [seed.tenantA.id, artist.id],
+    )
+    await pool.query(
+      `UPDATE rehearsal_participants SET vote = NULL
+        WHERE tenant_id = $1 AND rehearsal_id = $2 AND band_member_id = $3`,
+      [seed.tenantA.id, rehearsal.id, member.id],
+    )
+
+    const detail = await hubGet(artist.id, `/api/me/rehearsals/${rehearsal.id}`).expect(200)
+    expect(detail.body).toMatchObject({ tenantId: seed.tenantA.id, viewerBandMemberId: member.id })
+
+    await asUser(artist.id)(request(app).patch(`/api/me/rehearsals/${rehearsal.id}/vote`)
+      .send({ vote: 'no', status: 'planned' })).expect(400)
+    await asUser(artist.id)(request(app).patch(`/api/me/rehearsals/${rehearsal.id}/vote`)
+      .send({ vote: 'no', band_member_id: 999999 })).expect(400)
+
+    const voted = await asUser(artist.id)(request(app).patch(`/api/me/rehearsals/${rehearsal.id}/vote`)
+      .send({ vote: 'no' })).expect(200)
+    expect(voted.body.participants.find((participant) => participant.band_member_id === member.id).vote).toBe('no')
+    const notification = await pool.query(
+      `SELECT type FROM notifications WHERE tenant_id = $1 AND source_type = 'rehearsal' AND source_id = $2`,
+      [seed.tenantA.id, rehearsal.id],
+    )
+    expect(notification.rows.map((row) => row.type)).toContain('option-member-unavailable')
+
+    const foreign = await addRehearsal(seed.tenantB.id, { date: '2099-07-06', title: 'Foreign' })
+    await asUser(artist.id)(request(app).patch(`/api/me/rehearsals/${foreign.id}/vote`)
+      .send({ vote: 'yes' })).expect(404)
+  })
+
+  it('only completes the caller assigned band task and rejects field escalation', async () => {
+    const artist = await createUser('task-artist@test.local')
+    await addMembership(artist.id, seed.tenantA.id, { role: 'tenant_admin' })
+    const mine = await addTask(seed.tenantA.id, { title: 'Mine', userId: artist.id })
+    const other = await addTask(seed.tenantA.id, { title: 'Other', userId: seed.userA.id })
+    const unassigned = await addTask(seed.tenantA.id, { title: 'Nobody', userId: null })
+
+    await asUser(artist.id)(request(app).patch(`/api/me/tasks/${mine.id}/done`)
+      .send({ done: true, title: 'Escalated' })).expect(400)
+    await asUser(artist.id)(request(app).patch(`/api/me/tasks/${other.id}/done`)
+      .send({ done: true })).expect(404)
+    await asUser(artist.id)(request(app).patch(`/api/me/tasks/${unassigned.id}/done`)
+      .send({ done: true })).expect(404)
+    await asUser(artist.id)(request(app).patch(`/api/me/tasks/${mine.id}/done`)
+      .send({ done: 'yes' })).expect(400)
+
+    const completed = await asUser(artist.id)(request(app).patch(`/api/me/tasks/${mine.id}/done`)
+      .send({ done: true })).expect(200)
+    expect(completed.body).toMatchObject({ id: mine.id, done: true, tenantId: seed.tenantA.id })
+  })
+
+  it('includes every task in the owned personal workspace but not someone else\'s personal tenant', async () => {
+    const own = await addPersonalWorkspace(seed.userA.id, 'my-planning')
+    await pool.query(`INSERT INTO gig_tasks (tenant_id, title) VALUES ($1, 'Unassigned personal')`, [own.id])
+
+    const foreignOwner = await createUser('foreign-owner@test.local')
+    const foreign = await addPersonalWorkspace(foreignOwner.id, 'foreign-planning')
+    await addMembership(seed.userA.id, foreign.id)
+    await pool.query(`INSERT INTO gig_tasks (tenant_id, title) VALUES ($1, 'Foreign personal')`, [foreign.id])
+
+    const res = await hubGet(seed.userA.id, '/api/me/tasks').expect(200)
+    expect(res.body.items.map((task) => task.title)).toContain('Unassigned personal')
+    expect(res.body.items.map((task) => task.title)).not.toContain('Foreign personal')
+  })
+})
+
 describe('the cross-tenant agenda tier', () => {
   it('rejects unauthenticated callers', async () => {
     await request(app).get('/api/me/agenda').query(WINDOW)

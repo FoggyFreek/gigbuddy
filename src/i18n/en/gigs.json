@@ -29,6 +29,7 @@
     "colVenueCity": "Venue / City",
     "colTime": "Time",
     "colBand": "Band",
+    "colAvailability": "Availability",
     "colOpenTasks": "Open tasks",
     "emptyUpcoming": "No upcoming gigs.",
     "emptyPast": "No past gigs.",

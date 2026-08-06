@@ -77,6 +77,7 @@ export interface LimitedCollectionWithCursorResponse<T> {
 export interface CrossTenantRef {
   tenantId: import('./entities.ts').Id
   tenantName: string | null
+  tenantAvatarPath: string | null
   kind: import('../utils/businessRegistry.ts').TenantKind | null
 }
 

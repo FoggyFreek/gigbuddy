@@ -30,6 +30,9 @@ import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
 import { useAuth } from '../contexts/authContext.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Rehearsal, Member, Song, Id } from '../types/entities.ts'
+import { getMyRehearsal, setMyRehearsalVote } from '../api/me.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { SourceTenantSwitch } from '../components/SourceTenantIdentity.tsx'
 
 interface RehearsalDetailOutletContext {
   insideSplitView?: boolean
@@ -57,6 +60,7 @@ export default function RehearsalDetailPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { canWritePlanning } = usePermissions()
+  const { isPersonal } = useTenantKind()
   const outletCtx = (useOutletContext<RehearsalDetailOutletContext>() || {}) as RehearsalDetailOutletContext
   const insideSplitView = !!outletCtx.insideSplitView
   const onRehearsalDetailLoaded = outletCtx.onRehearsalDetailLoaded
@@ -68,6 +72,8 @@ export default function RehearsalDetailPage() {
   const [rehearsal, setRehearsal] = useState<Rehearsal | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [addMemberId, setAddMemberId] = useState('')
+  const isCrossBand = isPersonal && rehearsal?.tenantId !== user?.activeTenantId
+  const detailCanWrite = canWritePlanning && !isCrossBand
 
   const saveFn = useCallback(
     async (patch: Partial<RehearsalForm>) => { await updateRehearsal(rehearsalId, patch) },
@@ -80,11 +86,11 @@ export default function RehearsalDetailPage() {
   )
 
   useEffect(() => {
-    listMembers().then(setMembers).catch(() => {})
-  }, [])
+    if (!isPersonal) listMembers().then(setMembers).catch(() => {})
+  }, [isPersonal])
 
   const refresh = useCallback(async () => {
-    const r = await getRehearsal(rehearsalId)
+    const r = await (isPersonal ? getMyRehearsal(rehearsalId) : getRehearsal(rehearsalId))
     setRehearsal(r as Rehearsal)
     setForm({
       proposed_date: toDateInput((r as Rehearsal).proposed_date),
@@ -93,10 +99,10 @@ export default function RehearsalDetailPage() {
       location: (r as Rehearsal).location || '',
       notes: (r as Rehearsal).notes || '',
     })
-  }, [rehearsalId])
+  }, [rehearsalId, isPersonal])
 
   useEffect(() => {
-    getRehearsal(rehearsalId)
+    ;(isPersonal ? getMyRehearsal(rehearsalId) : getRehearsal(rehearsalId))
       .then((r) => {
         const rehearsalData = r as Rehearsal
         setRehearsal(rehearsalData)
@@ -111,10 +117,10 @@ export default function RehearsalDetailPage() {
       })
       .catch(() => onRehearsalDetailLoadError?.())
       .finally(() => setLoading(false))
-  }, [rehearsalId, onRehearsalDetailLoaded, onRehearsalDetailLoadError])
+  }, [rehearsalId, onRehearsalDetailLoaded, onRehearsalDetailLoadError, isPersonal])
 
   function handleChange(field: string, value: string | null) {
-    if (!canWritePlanning) return
+    if (!detailCanWrite) return
     setForm((prev) => ({ ...prev, [field]: value ?? '' }))
     if (hasRequiredErrors({ ...form, [field]: value } as Record<string, unknown>, REQUIRED_FIELDS)) return
     schedule({ [field]: value || null } as Partial<RehearsalForm>)
@@ -122,7 +128,8 @@ export default function RehearsalDetailPage() {
 
   async function handleVote(memberId: Id | undefined, vote: string | null) {
     if (memberId === undefined || vote === null) return
-    await setVote(rehearsalId, memberId, vote)
+    if (isCrossBand) await setMyRehearsalVote(rehearsalId, vote)
+    else await setVote(rehearsalId, memberId, vote)
     await refresh()
   }
 
@@ -192,8 +199,16 @@ export default function RehearsalDetailPage() {
         )}
       </Box>
 
+      {isCrossBand && rehearsal && (
+        <SourceTenantSwitch
+          tenantId={rehearsal.tenantId}
+          tenantName={rehearsal.tenantName}
+          tenantAvatarPath={rehearsal.tenantAvatarPath}
+        />
+      )}
+
       {!loading && <PastEventAlert date={rehearsal?.proposed_date} />}
-      <PlanningReadOnlyAlert canWrite={canWritePlanning} />
+      <PlanningReadOnlyAlert canWrite={detailCanWrite} />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -205,7 +220,7 @@ export default function RehearsalDetailPage() {
             form={form}
             onChange={handleChange}
             errors={getRequiredErrors(form as unknown as Record<string, unknown>, REQUIRED_FIELDS)}
-            readOnly={!canWritePlanning}
+            readOnly={!detailCanWrite}
           />
           {rehearsal && (
             <>
@@ -219,14 +234,15 @@ export default function RehearsalDetailPage() {
                 onAddParticipant={handleAddParticipant}
                 onPromote={handlePromote}
                 onDemote={handleDemote}
-                canWrite={canWritePlanning}
-                currentMemberId={user?.bandMemberId ?? null}
+                canWrite={detailCanWrite}
+                currentMemberId={rehearsal.viewerBandMemberId ?? user?.bandMemberId ?? null}
               />
               <RehearsalSongsSection
                 songs={rehearsal.songs ?? []}
                 onAddSong={handleAddSong}
                 onRemoveSong={handleRemoveSong}
-                canWrite={canWritePlanning}
+                canWrite={detailCanWrite}
+                plainText={isCrossBand}
               />
               <Grid size={12}>
                 <Divider sx={{ my: 1 }} />
@@ -237,7 +253,7 @@ export default function RehearsalDetailPage() {
                   minRows={3}
                   value={form.notes}
                   onChange={(e) => handleChange('notes', e.target.value)}
-                  slotProps={{ htmlInput: { readOnly: !canWritePlanning } }}
+                  slotProps={{ htmlInput: { readOnly: !detailCanWrite } }}
                 />
               </Grid>
             </>
@@ -245,13 +261,13 @@ export default function RehearsalDetailPage() {
         </Grid>
       )}
 
-      {canWritePlanning && (
+      {detailCanWrite && (
         <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
           <SaveStatusLabel status={saveStatus} />
         </Box>
       )}
 
-      {canWritePlanning && (
+      {detailCanWrite && (
         <Box sx={{ mt: 4 }}>
           <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
             {t($ => $.actions.delete, { ns: 'common' })}

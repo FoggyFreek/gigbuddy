@@ -21,6 +21,7 @@ import BannerMosaicDialog from '../components/BannerMosaicDialog.tsx'
 import BandsintownImportDialog from '../components/BandsintownImportDialog.tsx'
 import BandsintownApiImportDialog from '../components/BandsintownApiImportDialog.tsx'
 import { listGigs, listPastGigs, listUpcomingGigs, searchGigs } from '../api/gigs.ts'
+import { listMyPastGigs, listMyUpcomingGigs, searchMyGigs } from '../api/me.ts'
 import { getProfile } from '../api/profile.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { downloadBandsintownCsv } from '../utils/bandsintownExport.ts'
@@ -29,6 +30,7 @@ import { isPastDate, localDateString } from '../utils/dateFormat.ts'
 import type { ListCollectionCursor } from '../types/api.ts'
 import type { Gig } from '../types/entities.ts'
 import { useProfile } from '../contexts/profileContext.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
 
 // Bounded page size for the Upcoming/Past tabs — matches the server's
 // MAX_LIST_LIMIT. Past gigs paginate further via a keyset cursor ("load more").
@@ -39,6 +41,7 @@ export default function GigsPage() {
   const { t } = useTranslation(['gigs', 'common'])
   const { canWritePlanning } = usePermissions()
   const { isIntegrationConfigured } = useProfile()
+  const { isPersonal } = useTenantKind()
   const bandsintownConfigured = isIntegrationConfigured('bandsintown')
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
@@ -113,13 +116,17 @@ export default function GigsPage() {
       setTabLoading(true)
       const today = localDateString()
       if (tab === 'upcoming') {
-        const res = await listUpcomingGigs(TAB_PAGE_SIZE, today)
+        const res = await (isPersonal
+          ? listMyUpcomingGigs(TAB_PAGE_SIZE, today)
+          : listUpcomingGigs(TAB_PAGE_SIZE, today))
         if (tabRequestIdRef.current !== requestId) return
         setTabGigs(res.items)
         setPastCursor(null)
         setPastHasMore(false)
       } else {
-        const res = await listPastGigs(TAB_PAGE_SIZE, today)
+        const res = await (isPersonal
+          ? listMyPastGigs(TAB_PAGE_SIZE, today)
+          : listPastGigs(TAB_PAGE_SIZE, today))
         if (tabRequestIdRef.current !== requestId) return
         setTabGigs(res.items)
         setPastCursor(res.meta.nextCursor)
@@ -130,7 +137,7 @@ export default function GigsPage() {
     } finally {
       if (tabRequestIdRef.current === requestId) setTabLoading(false)
     }
-  }, [])
+  }, [isPersonal])
 
   useEffect(() => {
     if (allGigsRequested) load()
@@ -183,12 +190,12 @@ export default function GigsPage() {
     }
     let cancelled = false
     setSearchLoading(true)
-    searchGigs(q)
+    ;(isPersonal ? searchMyGigs(q) : searchGigs(q))
       .then((rows) => { if (!cancelled) setSearchResults(rows) })
       .catch(() => { if (!cancelled) setSearchResults([]) })
       .finally(() => { if (!cancelled) setSearchLoading(false) })
     return () => { cancelled = true }
-  }, [search])
+  }, [search, isPersonal])
 
   useEffect(() => {
     if (!bandsintownConfigured) return
@@ -210,7 +217,9 @@ export default function GigsPage() {
     try {
       setLoadingMore(true)
       const today = localDateString()
-      const res = await listPastGigs(TAB_PAGE_SIZE, today, pastCursor)
+      const res = await (isPersonal
+        ? listMyPastGigs(TAB_PAGE_SIZE, today, pastCursor)
+        : listPastGigs(TAB_PAGE_SIZE, today, pastCursor))
       setTabGigs((prev) => [...prev, ...res.items])
       setPastCursor(res.meta.nextCursor)
       setPastHasMore(res.meta.nextCursor !== null)
@@ -396,6 +405,7 @@ export default function GigsPage() {
         hasMore={pastHasMore}
         loadingMore={loadingMore}
         onLoadMore={handleLoadMorePast}
+        showBand={isPersonal}
       />
 
       {modal && (

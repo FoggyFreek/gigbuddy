@@ -85,7 +85,7 @@ beforeEach(() => {
 })
 
 describe('ArtistCalendarSection', () => {
-  it('renders required bookings with the band name and opens them in their tenant', async () => {
+  it('renders required bookings with the band name and opens them inside the artist workspace', async () => {
     const user = userEvent.setup()
     listMyAgenda.mockResolvedValue({
       items: [
@@ -106,7 +106,7 @@ describe('ArtistCalendarSection', () => {
     expect(screen.getByText('Rehearsal — Other Band')).toBeInTheDocument()
     await user.click(screen.getByText('Photo shoot — Other Band'))
 
-    await waitFor(() => expect(switchTenant).toHaveBeenCalledWith(2))
+    expect(switchTenant).not.toHaveBeenCalled()
     expect(await screen.findByText('other event detail')).toBeInTheDocument()
   })
 
