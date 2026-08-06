@@ -10,8 +10,8 @@ import WhatsAppIcon from '@mui/icons-material/WhatsApp'
 import ImageIcon from '@mui/icons-material/Image'
 import { useTranslation } from 'react-i18next'
 import GigShareDialog from './GigShareDialog.tsx'
-import { gigShareUrl } from '../utils/shareUtils.ts'
-import type { Gig } from '../types/entities.ts'
+import { gigShareUrl } from '../../utils/shareUtils.ts'
+import type { Gig } from '../../types/entities.ts'
 
 interface GigShareMenuProps {
   gig?: Gig

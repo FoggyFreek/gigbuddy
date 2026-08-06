@@ -17,10 +17,19 @@ vi.mock('../api/profile.ts', () => ({
   getProfile: vi.fn(),
   updateProfile: vi.fn(),
   // Read by the reused Mollie/Shopify integration cards on the integrations step.
+  // The cards hand the whole get/set/clear trio to SecretKeySection while
+  // rendering, so the writers must exist even though these tests never save.
   getMollieKey: vi.fn(),
+  setMollieKey: vi.fn(),
+  clearMollieKey: vi.fn(),
   getShopifySecret: vi.fn(),
+  setShopifySecret: vi.fn(),
+  clearShopifySecret: vi.fn(),
   getShopifyDomain: vi.fn(),
+  setShopifyDomain: vi.fn(),
   getShopifyClientId: vi.fn(),
+  setShopifyClientId: vi.fn(),
+  clearShopifyClientId: vi.fn(),
 }))
 vi.mock('../api/accounts.ts', () => ({
   listAccounts: vi.fn(),

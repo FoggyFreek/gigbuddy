@@ -31,6 +31,7 @@ import type { ListCollectionCursor } from '../types/api.ts'
 import type { Gig } from '../types/entities.ts'
 import { useProfile } from '../contexts/profileContext.ts'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 
 // Bounded page size for the Upcoming/Past tabs — matches the server's
 // MAX_LIST_LIMIT. Past gigs paginate further via a keyset cursor ("load more").
@@ -41,7 +42,8 @@ export default function GigsPage() {
   const { t } = useTranslation(['gigs', 'common'])
   const { canWritePlanning } = usePermissions()
   const { isIntegrationConfigured } = useProfile()
-  const { isPersonal } = useTenantKind()
+  const { isPersonal, supports } = useTenantKind()
+  const hasBandShare = supports(TENANT_CAPABILITIES.BAND_SHARE)
   const bandsintownConfigured = isIntegrationConfigured('bandsintown')
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
@@ -345,35 +347,39 @@ export default function GigsPage() {
             </MenuItem>
           )}
         </Menu>
-        <Tooltip title={t($ => $.toolbar.shareTourDates)}>
-          <IconButton onClick={(e) => { requestAllGigs(); setTourMenuAnchor(e.currentTarget) }}>
-            <ShareIcon />
-          </IconButton>
-        </Tooltip>
-        <Menu
-          anchorEl={tourMenuAnchor}
-          open={!!tourMenuAnchor}
-          onClose={() => setTourMenuAnchor(null)}
-        >
-          <MenuItem
-            disabled={loading || filteredForCardShare.length === 0}
-            onClick={() => { setTourMenuAnchor(null); setTourShareOpen(true) }}
-            dense
-          >
-            <Button variant="contained" size="small" fullWidth>
-              {t($ => $.toolbar.createTourCard)}
-            </Button>
-          </MenuItem>
-          <MenuItem
-            disabled={loading || filteredForCardShare.length === 0}
-            onClick={() => { setTourMenuAnchor(null); setMosaicOpen(true) }}
-            dense
-          >
-            <Button variant="contained" size="small" fullWidth>
-              {t($ => $.toolbar.bannerMosaic)}
-            </Button>
-          </MenuItem>
-        </Menu>
+        {hasBandShare && (
+          <>
+            <Tooltip title={t($ => $.toolbar.shareTourDates)}>
+              <IconButton onClick={(e) => { requestAllGigs(); setTourMenuAnchor(e.currentTarget) }}>
+                <ShareIcon />
+              </IconButton>
+            </Tooltip>
+            <Menu
+              anchorEl={tourMenuAnchor}
+              open={!!tourMenuAnchor}
+              onClose={() => setTourMenuAnchor(null)}
+            >
+              <MenuItem
+                disabled={loading || filteredForCardShare.length === 0}
+                onClick={() => { setTourMenuAnchor(null); setTourShareOpen(true) }}
+                dense
+              >
+                <Button variant="contained" size="small" fullWidth>
+                  {t($ => $.toolbar.createTourCard)}
+                </Button>
+              </MenuItem>
+              <MenuItem
+                disabled={loading || filteredForCardShare.length === 0}
+                onClick={() => { setTourMenuAnchor(null); setMosaicOpen(true) }}
+                dense
+              >
+                <Button variant="contained" size="small" fullWidth>
+                  {t($ => $.toolbar.bannerMosaic)}
+                </Button>
+              </MenuItem>
+            </Menu>
+          </>
+        )}
         {canWritePlanning && (
           <Button
             variant="contained"
@@ -415,11 +421,13 @@ export default function GigsPage() {
         />
       )}
 
-      <TourShareDialog
-        open={tourShareOpen}
-        onClose={() => setTourShareOpen(false)}
-        gigs={filteredForCardShare}
-      />
+      {hasBandShare && (
+        <TourShareDialog
+          open={tourShareOpen}
+          onClose={() => setTourShareOpen(false)}
+          gigs={filteredForCardShare}
+        />
+      )}
 
       <TourExportDialog
         open={tourExportOpen}
@@ -427,11 +435,13 @@ export default function GigsPage() {
         gigs={filteredForExport}
       />
 
-      <BannerMosaicDialog
-        open={mosaicOpen}
-        onClose={() => setMosaicOpen(false)}
-        gigs={filteredForCardShare}
-      />
+      {hasBandShare && (
+        <BannerMosaicDialog
+          open={mosaicOpen}
+          onClose={() => setMosaicOpen(false)}
+          gigs={filteredForCardShare}
+        />
+      )}
 
       {bandsintownConfigured && bandsintownApiImportOpen && (
         <BandsintownApiImportDialog

@@ -11,7 +11,7 @@ export async function fetchUserById(executor, userId) {
 export async function listMembershipsForMe(executor, userId) {
   const { rows } = await executor.query(
     `SELECT m.tenant_id, m.role, m.status, t.slug AS tenant_slug, t.kind AS tenant_kind,
-            t.band_name AS tenant_name, t.display_name
+            t.band_name AS tenant_name, t.display_name, t.avatar_path
      FROM memberships m
      JOIN tenants t ON t.id = m.tenant_id
      WHERE m.user_id = $1

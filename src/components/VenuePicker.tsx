@@ -45,9 +45,11 @@ interface VenuePickerProps {
   disabled?: boolean
   label?: string
   categoryFilter?: 'venue' | 'festival'
+  // Drops the open-in-new shortcut for venues for artist scoped tenants.
+  hideOpenAction?: boolean
 }
 
-export default function VenuePicker({ value, onChange, onSelect, excludeIds = [], disabled, label, categoryFilter }: Readonly<VenuePickerProps>) {
+export default function VenuePicker({ value, onChange, onSelect, excludeIds = [], disabled, label, categoryFilter, hideOpenAction = false }: Readonly<VenuePickerProps>) {
   const { t } = useTranslation('common')
   const navigate = useNavigate()
   const [createPrefill, setCreatePrefill] = useState<{ name: string; category: string } | null>(null)
@@ -170,7 +172,7 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
           )
         }}
         renderInput={(params) => {
-          const extra = effectiveValue?.id ? (
+          const extra = effectiveValue?.id && !hideOpenAction ? (
             <InputAdornment position="end" sx={{ m: 0, mr: -1 }}>
               <Tooltip title={t($ => $.venuePicker.openVenue)}>
                 <IconButton

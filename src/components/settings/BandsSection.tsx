@@ -6,11 +6,11 @@ import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
-import ListItemText from '@mui/material/ListItemText'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
+import SourceTenantIdentity from '../SourceTenantIdentity.tsx'
 import { useAuth } from '../../contexts/authContext.ts'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 import { redeemInvite } from '../../api/invites.ts'
@@ -86,10 +86,19 @@ export default function BandsSection() {
                 />
               }
             >
-              <ListItemText
-                primary={m.displayName ?? m.tenantName}
-                secondary={m.status === 'pending' ? t($ => $.bands.awaitingApproval) : null}
-              />
+              <Box sx={{ minWidth: 0 }}>
+                <SourceTenantIdentity
+                  tenantId={m.tenantId}
+                  tenantName={m.displayName ?? m.tenantName}
+                  tenantAvatarPath={m.tenantAvatarPath}
+                  withName
+                />
+                {m.status === 'pending' && (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {t($ => $.bands.awaitingApproval)}
+                  </Typography>
+                )}
+              </Box>
             </ListItem>
           ))}
         </List>

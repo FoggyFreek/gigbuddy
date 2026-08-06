@@ -163,6 +163,19 @@ describe('GigsPage', () => {
     expect(listUpcomingGigs).not.toHaveBeenCalled()
   })
 
+  it('hides band sharing actions in a personal workspace', async () => {
+    listMyUpcomingGigs.mockResolvedValue(limitedCollection([GIGS[0]]))
+    wrap(<GigsPage />, {
+      auth: { user: { isSuperAdmin: true, activeTenantId: 1, activeTenantKind: 'personal' } },
+    })
+
+    await screen.findByText('Jazz Night')
+    expect(screen.queryByRole('button', { name: /share tour dates/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /create tour card/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /banner mosaic/i })).not.toBeInTheDocument()
+    expect(listGigs).not.toHaveBeenCalled()
+  })
+
   it('hides Bandsintown actions when Bandsintown is not configured', async () => {
     const user = userEvent.setup()
     wrap(<GigsPage />, { integrationsConfigured: false })

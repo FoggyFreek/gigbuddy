@@ -92,6 +92,20 @@ describe('active subscriptions', () => {
     })
   })
 
+  it('artist_gold grants every feature except the band-only link page', async () => {
+    const { tenantId, userId } = await ownTenantA()
+    await billing.createSubscription({ userId, planSlug: 'artist_gold' })
+    const resolved = await resolve(tenantId)
+    expect(resolved.locked).toBe(false)
+    expect(resolved.planSlug).toBe('artist_gold')
+    for (const key of FEATURE_KEYS) {
+      expect(resolved.entitlements.features[key]).toBe(key !== 'linkpage')
+    }
+    expect(resolved.entitlements.limits).toEqual({
+      storage_mb: 250, members: 1, bands: 0, linkpage_pages: 0, linkpage_stats_days: 30,
+    })
+  })
+
   it('stays unlocked for 2 days past period end, then locks', async () => {
     const { tenantId, userId } = await ownTenantA()
     const sub = await billing.createSubscription({

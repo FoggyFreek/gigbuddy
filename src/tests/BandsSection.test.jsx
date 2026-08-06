@@ -29,8 +29,22 @@ const USER = {
   activeTenantKind: 'personal',
   memberships: [
     { tenantId: 3, displayName: 'Alpha User', kind: 'personal', status: 'approved', role: 'tenant_admin' },
-    { tenantId: 1, displayName: 'Band A', kind: 'band', status: 'approved', role: 'member' },
-    { tenantId: 2, displayName: 'Band B', kind: 'band', status: 'pending', role: 'member' },
+    {
+      tenantId: 1,
+      displayName: 'Band A',
+      tenantAvatarPath: 'tenants/1/avatar/band-a.png',
+      kind: 'band',
+      status: 'approved',
+      role: 'member',
+    },
+    {
+      tenantId: 2,
+      displayName: 'Band B',
+      tenantAvatarPath: 'tenants/2/avatar/band-b.png',
+      kind: 'band',
+      status: 'pending',
+      role: 'member',
+    },
   ],
 }
 
@@ -90,6 +104,18 @@ describe('BandsSection', () => {
     expect(screen.getByText('Band A')).toBeInTheDocument()
     expect(screen.getByText('Band B')).toBeInTheDocument()
     expect(screen.queryByText('Alpha User')).not.toBeInTheDocument()
+  })
+
+  it('shows each band avatar in front of its name', () => {
+    wrap()
+    expect(screen.getByRole('img', { name: 'Band A' })).toHaveAttribute(
+      'src',
+      '/api/notifications/tenant-avatar/1',
+    )
+    expect(screen.getByRole('img', { name: 'Band B' })).toHaveAttribute(
+      'src',
+      '/api/notifications/tenant-avatar/2',
+    )
   })
 
   it('marks a pending membership as awaiting the band', () => {

@@ -18,8 +18,8 @@ import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import PersonIcon from '@mui/icons-material/Person'
-import { createTask, deleteTask, updateTask } from '../api/gigs.ts'
-import type { Id, Member, Task } from '../types/entities.ts'
+import { createTask, deleteTask, updateTask } from '../../api/gigs.ts'
+import type { Id, Member, Task } from '../../types/entities.ts'
 
 interface DueDateAdornmentProps {
   label: string

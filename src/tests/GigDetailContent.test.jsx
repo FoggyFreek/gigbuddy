@@ -5,7 +5,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import GigDetailContent from '../components/GigDetailContent.tsx'
+import GigDetailContent from '../components/gigdetails/GigDetailContent.tsx'
 import theme from '../theme.ts'
 
 vi.mock('../api/availability.ts', () => ({
@@ -56,6 +56,16 @@ vi.mock('../api/gigs.ts', () => ({
   searchGigTags: vi.fn().mockResolvedValue([{ id: 7, name: 'Summer Tour' }]),
   setGigTags: vi.fn().mockImplementation(async (_id, tags) =>
     tags.map((name, index) => ({ id: index + 1, name }))),
+  createTask: vi.fn().mockResolvedValue({}),
+  updateTask: vi.fn().mockResolvedValue({}),
+  deleteTask: vi.fn().mockResolvedValue(undefined),
+  uploadGigAttachment: vi.fn().mockResolvedValue({}),
+  deleteGigAttachment: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('../api/me.ts', () => ({
+  getMyGig: vi.fn(),
+  setMyTaskDone: vi.fn(),
 }))
 
 vi.mock('../api/invoices.ts', () => ({
@@ -95,8 +105,11 @@ vi.mock('../components/map/GigLocationMap.tsx', () => ({
   ),
 }))
 
-import { getGig, getGigMerchSummary, setGigTags, updateGig } from '../api/gigs.ts'
+import { getGig, getGigMerchSummary, setGigTags, updateGig, updateTask } from '../api/gigs.ts'
 import { createInvoice, draftFromGig, listInvoicesByGig } from '../api/invoices.ts'
+import { getAvailabilityOn } from '../api/availability.ts'
+import { listMembers } from '../api/bandMembers.ts'
+import { getMyGig, setMyTaskDone } from '../api/me.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 import { geocodePlace } from '../utils/geocode.ts'
 
@@ -747,5 +760,168 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
 
     await waitFor(() => expect(listInvoicesByGig).toHaveBeenCalled())
     expect(screen.queryByRole('button', { name: /create invoice/i })).not.toBeInTheDocument()
+  })
+})
+
+// source="me" reads through the cross-tenant hub instead of the active tenant.
+// A gig owned by another band is read-only and loses the Terms and Availability
+// tabs; a gig owned by the personal workspace itself behaves like any other.
+describe('GigDetailContent — personal workspace (source="me")', () => {
+  const ARTIST_USER = {
+    id: 9,
+    activeTenantId: 1,
+    activeTenantKind: 'personal',
+    activeTenantRole: 'tenant_admin',
+    permissions: ['app.view', 'planning.write', 'finance.view', 'finance.manage'],
+    bandMemberId: 3,
+  }
+
+  const CROSS_BAND_GIG = {
+    id: 1,
+    tenantId: 9,
+    tenantName: 'Other Band',
+    tenantAvatarPath: null,
+    event_date: '2026-08-12',
+    event_description: 'Festival set',
+    venue: { id: 11, name: 'Bimhuis', category: 'venue', city: 'Amsterdam' },
+    event_link: '',
+    start_time: '20:00:00',
+    end_time: '23:00:00',
+    // Not 'option', so the availability tab would render GigAvailabilityPanel
+    // (and fetch tenant-scoped availability) if it were mounted at all.
+    status: 'confirmed',
+    booking_fee_cents: 15000,
+    admission: 'free',
+    ticket_link: null,
+    notes: 'Bring own PA',
+    has_pa_system: false,
+    has_drumkit: false,
+    has_stage_lights: false,
+    viewerBandMemberId: 22,
+    tasks: [{ id: 5, title: 'Bring charts', assigned_to: 22, done: false }],
+    attachments: [{ id: 6, original_filename: 'rider.pdf', file_size: 10 }],
+    tags: [],
+  }
+
+  const OWN_GIG = { ...CROSS_BAND_GIG, tenantId: 1, tenantName: 'Solo', viewerBandMemberId: null }
+
+  function wrapAsArtist(ui) {
+    return render(
+      <MemoryRouter>
+        <AuthContext.Provider
+          value={{
+            user: ARTIST_USER,
+            setUser: () => {},
+            logout: async () => {},
+            switchTenant: async () => undefined,
+            refreshUser: async () => undefined,
+          }}
+        >
+          <ThemeProvider theme={theme}>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+          </ThemeProvider>
+        </AuthContext.Provider>
+      </MemoryRouter>
+    )
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getMyGig.mockResolvedValue(CROSS_BAND_GIG)
+    setMyTaskDone.mockImplementation(async (id, done) => ({ ...CROSS_BAND_GIG.tasks[0], id, done }))
+    getGigMerchSummary.mockResolvedValue({ unitsSold: 0, netCents: 0, grossCents: 0 })
+    listInvoicesByGig.mockResolvedValue([])
+    listMembers.mockResolvedValue([])
+    getAvailabilityOn.mockResolvedValue({ bandWide: null, members: [] })
+  })
+
+  it("shows only Event and Tasks for another band's gig", async () => {
+    wrapAsArtist(<GigDetailContent gigId={1} source="me" />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    expect(screen.getByRole('button', { name: 'Event' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tasks' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Terms' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Availability' })).not.toBeInTheDocument()
+
+    // The panels are unmounted, not merely hidden, so their fields are gone too.
+    expect(screen.queryByLabelText(/paid admission/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/guaranteed fee/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/member availability/i)).not.toBeInTheDocument()
+  })
+
+  it('gives the event-banner slot to the source band', async () => {
+    wrapAsArtist(<GigDetailContent gigId={1} source="me" />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    // The gig banner is stripped cross-tenant, so the source band stands in for
+    // it. The artist's own blurred banner behind it is untouched.
+    expect(screen.getByTestId('source-tenant-switch')).toBeInTheDocument()
+    expect(screen.getByText('Other Band')).toBeInTheDocument()
+    expect(screen.queryByText(/no event banner/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /add event banner/i })).not.toBeInTheDocument()
+  })
+
+  it('reads through /api/me and never calls a tenant-scoped endpoint', async () => {
+    wrapAsArtist(<GigDetailContent gigId={1} source="me" />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    expect(getMyGig.mock.calls[0][0]).toBe(1)
+    expect(getGig).not.toHaveBeenCalled()
+    expect(listMembers).not.toHaveBeenCalled()
+    expect(getGigMerchSummary).not.toHaveBeenCalled()
+    expect(listInvoicesByGig).not.toHaveBeenCalled()
+    expect(getAvailabilityOn).not.toHaveBeenCalled()
+  })
+
+  it('renders the event fields read-only and saves nothing', async () => {
+    const user = userEvent.setup()
+    wrapAsArtist(<GigDetailContent gigId={1} source="me" />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    expect(screen.getByLabelText(/event description/i)).toHaveAttribute('readonly')
+    expect(screen.getByText(/you have read-only access/i)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/event description/i), 'x')
+    expect(updateGig).not.toHaveBeenCalled()
+  })
+
+  it('lists attachments as plain text and drops the open-venue shortcut', async () => {
+    wrapAsArtist(<GigDetailContent gigId={1} source="me" />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    // object_key is stripped from the cross-tenant payload, so there is nothing
+    // to link to; /venues/:id is tenant-scoped and would 404 from here.
+    expect(screen.getByText('rider.pdf')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'rider.pdf' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('OpenInNewIcon')).not.toBeInTheDocument()
+  })
+
+  it('completes the viewer\'s own task through /api/me', async () => {
+    const user = userEvent.setup()
+    wrapAsArtist(<GigDetailContent gigId={1} source="me" />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    await openTab(user, 'Tasks')
+    await user.click(screen.getByRole('checkbox'))
+
+    await waitFor(() => expect(setMyTaskDone).toHaveBeenCalledWith(5, true))
+    expect(updateTask).not.toHaveBeenCalled()
+  })
+
+  it('keeps all four tabs and stays editable for the workspace\'s own gig', async () => {
+    const user = userEvent.setup()
+    getMyGig.mockResolvedValue(OWN_GIG)
+    wrapAsArtist(<GigDetailContent gigId={1} source="me" />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    expect(screen.getByRole('button', { name: 'Terms' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Availability' })).toBeInTheDocument()
+    expect(screen.queryByTestId('source-tenant-switch')).not.toBeInTheDocument()
+    expect(listMembers).toHaveBeenCalled()
+
+    await openTab(user, 'Terms')
+    await user.type(screen.getByLabelText(/merchandise cut/i), '15')
+    await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, { merchandise_cut: 15 }))
   })
 })

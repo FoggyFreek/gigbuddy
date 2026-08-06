@@ -62,6 +62,11 @@ vi.mock('../api/profile.ts', () => ({
   deleteLink: vi.fn().mockResolvedValue(null),
 }))
 
+vi.mock('../api/linkpage.ts', () => ({
+  getLinkpageStatus: vi.fn().mockResolvedValue({ configured: true, publicUrl: 'https://link.test/alpha' }),
+  createLinkpageHandoff: vi.fn(),
+}))
+
 vi.mock('../utils/compressImage.ts', () => ({
   compressLogo: vi.fn().mockImplementation((file) => {
     if (file.type === 'image/gif') throw new Error('File type not allowed')
@@ -72,6 +77,7 @@ vi.mock('../utils/compressImage.ts', () => ({
 }))
 
 import { createLink, deleteLink, getProfile, updateProfile, uploadLogo } from '../api/profile.ts'
+import { getLinkpageStatus } from '../api/linkpage.ts'
 import { compressLogo } from '../utils/compressImage.ts'
 
 function wrap(ui, { user, bandsintown = true } = {}) {
@@ -123,6 +129,7 @@ describe('ProfilePage', () => {
     compressLogo.mockClear()
     createLink.mockClear()
     deleteLink.mockClear()
+    getLinkpageStatus.mockClear()
   })
 
   it('fetches and renders profile data', async () => {
@@ -251,6 +258,34 @@ describe('ProfilePage', () => {
     expect(screen.queryByText(/Bandsintown artist name/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/Bandsintown artist ID/i)).not.toBeInTheDocument()
     expect(screen.getAllByAltText('Profile logo')).not.toHaveLength(0)
+  })
+
+  it('offers the link-page editor to a band admin', async () => {
+    wrap(<ProfilePage />, {
+      user: {
+        isSuperAdmin: false,
+        activeTenantRole: 'tenant_admin',
+        activeTenantKind: 'band',
+        permissions: ['app.view', 'planning.write'],
+      },
+    })
+    expect(await screen.findByRole('button', { name: /edit link page/i })).toBeInTheDocument()
+  })
+
+  it('omits the link-page editor in a personal workspace — link pages are built for bands', async () => {
+    wrap(<ProfilePage />, {
+      user: {
+        isSuperAdmin: false,
+        activeTenantRole: 'tenant_admin',
+        activeTenantKind: 'personal',
+        permissions: ['app.view', 'planning.write'],
+      },
+    })
+    await waitFor(() => expect(getProfile).toHaveBeenCalled())
+
+    expect(screen.queryByRole('button', { name: /edit link page/i })).not.toBeInTheDocument()
+    // Gated before render, so the workspace never even asks for link-page status.
+    expect(getLinkpageStatus).not.toHaveBeenCalled()
   })
 
   it('keeps Bandsintown profile fields but hides the API fetch when the integration is not configured', async () => {

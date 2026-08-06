@@ -13,8 +13,8 @@ import { alpha } from '@mui/material/styles'
 import AddIcon from '@mui/icons-material/Add'
 import CloseIcon from '@mui/icons-material/Close'
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined'
-import { searchGigTags, setGigTags } from '../api/gigs.ts'
-import type { GigTag, Id } from '../types/entities.ts'
+import { searchGigTags, setGigTags } from '../../api/gigs.ts'
+import type { GigTag, Id } from '../../types/entities.ts'
 
 interface Props {
   gigId: Id

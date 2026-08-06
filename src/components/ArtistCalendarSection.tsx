@@ -18,7 +18,6 @@ import AvailabilityCalendar from './AvailabilityCalendar.tsx'
 import AvailabilitySlotDialog from './AvailabilitySlotDialog.tsx'
 import BandEventFormModal from './BandEventFormModal.tsx'
 import { buildCalendarCells } from './calendar/calendarGrid.ts'
-import { useAuth } from '../contexts/authContext.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { listMyAgenda, type AgendaItem, type AgendaItemType } from '../api/me.ts'
 import {
@@ -69,7 +68,6 @@ interface ArtistCalendarSectionProps {
 
 export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<ArtistCalendarSectionProps>) {
   const { t, i18n } = useTranslation('availability')
-  const { user } = useAuth()
   const navigate = useNavigate()
   const isCompact = useCompactLayout()
   const today = useMemo(() => new Date(), [])
@@ -144,16 +142,8 @@ export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<A
     location: item.location ?? undefined,
   })), [agenda])
 
-  const findAgendaItem = (type: AgendaItemType, id: Id) =>
-    agenda.find((item) => item.type === type && String(item.id) === String(id))
-
-  async function openItem(type: AgendaItemType, id: Id) {
-    const item = findAgendaItem(type, id)
-    if (!item) return
-    const path = user?.activeTenantId === item.tenantId
-      ? `/availability/${ITEM_PATH[type].slice(1)}/${item.id}`
-      : `${ITEM_PATH[type]}/${item.id}`
-    navigate(path)
+  function openItem(type: AgendaItemType, id: Id) {
+    navigate(`/availability${ITEM_PATH[type]}/${id}`)
   }
 
   function handleDayClick(date: string, shiftKey: boolean, target: EventTarget | null) {
@@ -224,9 +214,9 @@ export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<A
         selectionStart={selectionStart ?? undefined}
         onDayClick={handleDayClick}
         onSlotClick={(slot) => setSlotDialog({ slot })}
-        onGigClick={(gig) => { void openItem('gig', gig.id!) }}
-        onRehearsalClick={(rehearsal) => { void openItem('rehearsal', rehearsal.id!) }}
-        onBandEventClick={(event) => { void openItem('band_event', event.id!) }}
+        onGigClick={(gig) => openItem('gig', gig.id!)}
+        onRehearsalClick={(rehearsal) => openItem('rehearsal', rehearsal.id!)}
+        onBandEventClick={(event) => openItem('band_event', event.id!)}
         onPrev={() => {
           if (viewMonth === 1) { setViewYear((year) => year - 1); setViewMonth(12) }
           else setViewMonth((month) => month - 1)
@@ -247,7 +237,7 @@ export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<A
           </Typography>
           <List dense disablePadding>
             {dayItems.map((item) => (
-              <ListItemButton key={`${item.type}-${item.id}`} onClick={() => { void openItem(item.type, item.id) }}>
+              <ListItemButton key={`${item.type}-${item.id}`} onClick={() => openItem(item.type, item.id)}>
                 <ListItemText primary={item.description ?? item.title} secondary={item.location} />
               </ListItemButton>
             ))}

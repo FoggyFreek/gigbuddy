@@ -3,8 +3,8 @@ import Chip from '@mui/material/Chip'
 import Stack from '@mui/material/Stack'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
-import { getAvailabilityOn } from '../api/availability.ts'
-import type { AvailabilitySummary } from '../types/entities.ts'
+import { getAvailabilityOn } from '../../api/availability.ts'
+import type { AvailabilitySummary } from '../../types/entities.ts'
 
 export type AvailabilityData = AvailabilitySummary
 

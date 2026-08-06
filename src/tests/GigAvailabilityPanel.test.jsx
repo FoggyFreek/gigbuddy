@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
-import GigAvailabilityPanel from '../components/GigAvailabilityPanel.tsx'
+import GigAvailabilityPanel from '../components/gigdetails/GigAvailabilityPanel.tsx'
 import theme from '../theme.ts'
 
 vi.mock('../api/availability.ts', () => ({

@@ -1,0 +1,640 @@
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
+import Box from '@mui/material/Box'
+import CircularProgress from '@mui/material/CircularProgress'
+import IconButton from '@mui/material/IconButton'
+import Paper from '@mui/material/Paper'
+import Snackbar from '@mui/material/Snackbar'
+import Stack from '@mui/material/Stack'
+import Tooltip from '@mui/material/Tooltip'
+import Typography from '@mui/material/Typography'
+import { alpha } from '@mui/material/styles'
+import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate'
+import ChecklistIcon from '@mui/icons-material/Checklist'
+import DeleteIcon from '@mui/icons-material/Delete'
+import FestivalIcon from '@mui/icons-material/Festival'
+import HandshakeIcon from '@mui/icons-material/Handshake'
+import ImageIcon from '@mui/icons-material/Image'
+import PeopleIcon from '@mui/icons-material/People'
+import type { SvgIconComponent } from '@mui/icons-material'
+import { useTranslation } from 'react-i18next'
+import GigStatusIcon from '../GigStatusIcon.tsx'
+import GigTagEditor from './GigTagEditor.tsx'
+import ImageCropDialog from '../ImageCropDialog.tsx'
+import PlanningReadOnlyAlert from '../PlanningReadOnlyAlert.tsx'
+import { SourceTenantSwitch } from '../SourceTenantIdentity.tsx'
+import GigAvailability from './GigAvailability.tsx'
+import GigEventDetails from './GigEventDetails.tsx'
+import GigTasksSection from './GigTasksSection.tsx'
+import GigTerms from './GigTerms.tsx'
+import type { GigDetail, GigDetailForm, GigDetailTabKey } from './types.ts'
+import useDebouncedSave from '../../hooks/useDebouncedSave.ts'
+import { useAuth } from '../../contexts/authContext.ts'
+import { addGigParticipant, deleteGigBanner, getGig, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../../api/gigs.ts'
+import { getBannerPath } from '../../api/profile.ts'
+import { getMyGig, setMyTaskDone } from '../../api/me.ts'
+import { listMembers } from '../../api/bandMembers.ts'
+import { compressBanner } from '../../utils/compressImage.ts'
+import { toDateInput, toTimeInput } from '../../utils/eventFormUtils.ts'
+import { getRequiredErrors, hasRequiredErrors } from '../../utils/requiredFields.ts'
+import type { Id, GigTag, Member, Venue, Task } from '../../types/entities.ts'
+
+const REQUIRED_FIELDS = ['event_date', 'event_description']
+
+export type TabKey = GigDetailTabKey
+
+// The detail body is split across four tabs, selected from the floating pill
+// that overlaps the banner. Panels stay mounted (toggled via `display`) so
+// auto-saving children (tasks/attachments) and form state survive tab switches.
+const TABS: { key: TabKey; Icon: SvgIconComponent }[] = [
+  { key: 'event', Icon: FestivalIcon },
+  { key: 'terms', Icon: HandshakeIcon },
+  { key: 'availability', Icon: PeopleIcon },
+  { key: 'tasks', Icon: ChecklistIcon },
+]
+
+export interface GigDetailHandle {
+  flush: () => Promise<void>
+  saveStatus: string
+}
+
+interface GigDetailContentProps {
+  gigId: Id
+  onBannerUpdate?: (gigId: Id, patch: Record<string, unknown>) => void
+  onGigLoaded?: (gig: GigDetail) => void
+  onGigLoadError?: () => void
+  // Readers (no planning.write) see the gig read-only: fields disabled, no
+  // banner/participant/contact/attachment/task-edit affordances. They keep the
+  // one self-action — ticking their own assigned task done (see GigTasks).
+  canWrite?: boolean
+  // Tab to open on first mount (e.g. arriving from the tasks list → 'tasks').
+  initialTab?: TabKey
+  // 'me' reads through the cross-tenant hub (/api/me) instead of the active
+  // tenant's /api/gigs — set by the page when the active tenant is personal, so
+  // gigs from the musician's other bands resolve at all. A gig that turns out to
+  // belong to another band is then read-only and drops the Terms and
+  // Availability tabs, whose data is band-scoped and unreachable from here.
+  source?: 'tenant' | 'me'
+}
+
+function feeToDisplay(cents: number | null | undefined): string {
+  if (cents == null || cents === 0 && cents !== 0) return ''
+  if (cents == null) return ''
+  return (cents / 100).toFixed(2)
+}
+
+function feeToCents(str: string): number | null {
+  const n = Number.parseFloat(str)
+  if (Number.isNaN(n)) return null
+  return Math.round(n * 100)
+}
+
+// A percentage form field (merchandise cut / percentage of sales) → the value to
+// send. Empty/blank clears the field (null); otherwise the parsed number.
+function pctToValue(str: string): number | null {
+  if (str.trim() === '') return null
+  const n = Number.parseFloat(str)
+  return Number.isNaN(n) ? null : n
+}
+
+const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded, onGigLoadError, canWrite = true, initialTab = 'event', source = 'tenant' }, ref) {
+  const { t } = useTranslation(['gigs', 'common'])
+  const { user } = useAuth()
+  const currentBandMemberId = user?.bandMemberId ?? null
+  const [form, setForm] = useState<GigDetailForm>({
+    event_date: '',
+    event_description: '',
+    venue_id: null,
+    festival_id: null,
+    event_link: '',
+    start_time: '',
+    end_time: '',
+    status: 'option',
+    booking_fee: '',
+    admission: 'free',
+    ticket_link: '',
+    merchandise_cut: '',
+    percentage_of_sales: '',
+    notes: '',
+    has_pa_system: false,
+    has_drumkit: false,
+    has_stage_lights: false,
+  })
+  const [loading, setLoading] = useState(true)
+  const [initialTasks, setInitialTasks] = useState<Task[]>([])
+  const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
+  const [selectedFestival, setSelectedFestival] = useState<Venue | null>(null)
+  const [gig, setGig] = useState<GigDetail | null>(null)
+  const [members, setMembers] = useState<Member[]>([])
+  const [addMemberId, setAddMemberId] = useState<Id | ''>('')
+  const [bannerPath, setBannerPath] = useState<string | null>(null)
+  const [tags, setTags] = useState<GigTag[]>([])
+  const [bandBannerPath, setBandBannerPath] = useState<string | null>(null)
+  const [bannerBusy, setBannerBusy] = useState(false)
+  const [bannerError, setBannerError] = useState<string | null>(null)
+  const [cropOpen, setCropOpen] = useState(false)
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab)
+  const bannerInputRef = useRef<HTMLInputElement | null>(null)
+
+  const saveFn = useCallback(
+    async (patch: Record<string, unknown>) => { await updateGig(gigId, patch) },
+    [gigId]
+  )
+  const { schedule, flush, status: saveStatus } = useDebouncedSave(
+    saveFn,
+    600,
+    (patch) => onBannerUpdate?.(gigId, patch)
+  )
+
+  useImperativeHandle(ref, () => ({ flush, saveStatus }), [flush, saveStatus])
+
+  const applyGig = useCallback((g: GigDetail) => {
+    setGig(g)
+    onGigLoaded?.(g)
+    setBannerPath(g.banner_path || null)
+    setTags(g.tags || [])
+    setSelectedVenue(g.venue || null)
+    setSelectedFestival(g.festival || null)
+    setForm({
+      event_date: toDateInput(g.event_date instanceof Date ? g.event_date.toISOString().slice(0, 10) : g.event_date),
+      event_description: g.event_description || '',
+      venue_id: g.venue?.id ?? null,
+      festival_id: g.festival?.id ?? null,
+      event_link: g.event_link || '',
+      start_time: toTimeInput(g.start_time),
+      end_time: toTimeInput(g.end_time),
+      status: g.status || 'option',
+      booking_fee: feeToDisplay(g.booking_fee_cents),
+      admission: g.admission ?? 'free',
+      ticket_link: g.ticket_link ?? '',
+      merchandise_cut: g.merchandise_cut == null ? '' : String(g.merchandise_cut),
+      percentage_of_sales: g.percentage_of_sales == null ? '' : String(g.percentage_of_sales),
+      notes: g.notes || '',
+      has_pa_system: !!g.has_pa_system,
+      has_drumkit: !!g.has_drumkit,
+      has_stage_lights: !!g.has_stage_lights,
+    })
+    setInitialTasks((g.tasks as Task[]) || [])
+  }, [onGigLoaded])
+
+  const fetchGig = useCallback(
+    (id: Id, opts?: RequestInit) => (source === 'me' ? getMyGig(id, opts) : getGig(id, opts)),
+    [source]
+  )
+
+  const refresh = useCallback(async () => {
+    const g = await fetchGig(gigId)
+    applyGig(g)
+  }, [gigId, applyGig, fetchGig])
+
+  // A gig the personal workspace doesn't own: served read-only by /api/me, with
+  // no band roster, availability, contacts, merch or invoices reachable.
+  const isCrossBand = source === 'me' && gig != null && gig.tenantId !== user?.activeTenantId
+  const editable = canWrite && !isCrossBand
+
+  useEffect(() => {
+    const ac = new AbortController()
+    setLoading(true)
+    getBannerPath().then(setBandBannerPath).catch(() => {})
+    fetchGig(gigId, { signal: ac.signal })
+      .then(applyGig)
+      .catch((err: Error) => { if (!ac.signal.aborted) { console.error(err); onGigLoadError?.() } })
+      .finally(() => { if (!ac.signal.aborted) setLoading(false) })
+    return () => ac.abort()
+  }, [gigId, applyGig, onGigLoadError, fetchGig])
+
+  // The roster is the active tenant's, so it only means anything for a gig that
+  // tenant owns — hence the wait for the gig rather than a fetch on mount.
+  useEffect(() => {
+    if (gig == null || isCrossBand) return
+    listMembers().then(setMembers).catch(() => {})
+  }, [gig, isCrossBand])
+
+  const participantIds = useMemo(
+    () => new Set((gig?.participants ?? []).map((p) => p.band_member_id)),
+    [gig]
+  )
+  const candidateMembers = members.filter((m) => !participantIds.has(m.id))
+
+  async function handleVote(memberId: Id, vote: string | null) {
+    await setGigVote(gigId, memberId, vote ?? '')
+    await refresh()
+  }
+
+  async function handleRemoveParticipant(memberId: Id) {
+    await removeGigParticipant(gigId, memberId)
+    await refresh()
+  }
+
+  async function handleAddParticipant() {
+    if (!addMemberId) return
+    await addGigParticipant(gigId, Number(addMemberId))
+    setAddMemberId('')
+    await refresh()
+  }
+
+  // The only write a cross-band viewer gets: ticking their own assigned task.
+  // /api/gigs is out of reach, so it goes through the hub instead.
+  async function completeOwnTaskCrossBand(task: Task, done: boolean): Promise<Task> {
+    if (task.id == null) return task
+    return setMyTaskDone(task.id, done)
+  }
+
+  function handleChange(field: string, value: unknown) {
+    if (!editable) return
+    if (field === 'admission' && value === 'free') {
+      setForm((prev) => ({ ...prev, admission: 'free', ticket_link: '', percentage_of_sales: '' }))
+      if (hasRequiredErrors(form, REQUIRED_FIELDS)) return
+      schedule({ admission: 'free', ticket_link: null, percentage_of_sales: null })
+      return
+    }
+    setForm((prev) => ({ ...prev, [field]: value }))
+    if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
+    const patch: Record<string, unknown> = { [field]: value }
+    if (field === 'booking_fee') {
+      patch.booking_fee_cents = feeToCents(value as string)
+      delete patch.booking_fee
+    }
+    if (field === 'merchandise_cut' || field === 'percentage_of_sales') {
+      patch[field] = pctToValue(value as string)
+    }
+    schedule(patch)
+  }
+
+  function handleBannerFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    e.target.value = ''
+    setBannerError(null)
+    const url = URL.createObjectURL(file)
+    setCropImageSrc(url)
+    setCropOpen(true)
+  }
+
+  async function handleCropConfirm(blob: Blob) {
+    setCropOpen(false)
+    if (cropImageSrc) URL.revokeObjectURL(cropImageSrc)
+    setCropImageSrc(null)
+    setBannerBusy(true)
+    try {
+      const blobAsFile = blob instanceof File ? blob : new File([blob], 'banner.png', { type: blob.type || 'image/png' })
+      const compressed = await compressBanner(blobAsFile)
+      const result = await uploadGigBanner(gigId, compressed)
+      setBannerPath(result.banner_path ?? null)
+      onBannerUpdate?.(gigId, { banner_path: result.banner_path })
+    } catch (err) {
+      setBannerError((err as Error).message || t($ => $.detail.banner.uploadFailed))
+    } finally {
+      setBannerBusy(false)
+    }
+  }
+
+  function handleCropCancel() {
+    setCropOpen(false)
+    if (cropImageSrc) URL.revokeObjectURL(cropImageSrc)
+    setCropImageSrc(null)
+  }
+
+  async function handleBannerDelete() {
+    setBannerBusy(true)
+    setBannerError(null)
+    try {
+      await deleteGigBanner(gigId)
+      setBannerPath(null)
+      onBannerUpdate?.(gigId, { banner_path: null })
+    } catch (err) {
+      setBannerError((err as Error).message || t($ => $.detail.banner.deleteFailed))
+    } finally {
+      setBannerBusy(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+        <CircularProgress />
+      </Box>
+    )
+  }
+
+  const requiredErrors = getRequiredErrors(form, REQUIRED_FIELDS)
+  const visibleTabs = isCrossBand ? TABS.filter(({ key }) => key === 'event' || key === 'tasks') : TABS
+  // Derived, not synced: an initialTab (or a stale selection) pointing at a tab
+  // this gig doesn't have falls back to the event tab without a render-phase set.
+  const shownTab = visibleTabs.some(({ key }) => key === activeTab) ? activeTab : 'event'
+
+  return (
+    <>
+      {/* ── Header: band banner background + event banner centered ──────── */}
+      <Box sx={{ position: 'relative' }}>
+      <Box
+        sx={(theme) => ({
+          position: 'relative',
+          height: { xs: 220, sm: 300 },
+          mb: 0,
+          borderRadius: 1,
+          overflow: 'hidden',
+          // Gradient fallback when no band banner is set.
+          ...(bandBannerPath
+            ? {}
+            : {
+                background:
+                  theme.palette.mode === 'dark'
+                    ? `linear-gradient(160deg, ${alpha(theme.palette.primary.dark, 0.55)}, ${alpha(theme.palette.primary.main, 0.35)})`
+                    : `linear-gradient(160deg, ${alpha(theme.palette.primary.dark, 0.82)}, ${alpha(theme.palette.primary.main, 0.65)})`,
+              }),
+        })}
+      >
+        {/* Band banner as a slightly blurred layer behind everything. The
+            negative inset hides the soft, semi-transparent edges the blur
+            would otherwise reveal inside the clipped box. */}
+        {bandBannerPath && (
+          <Box
+            aria-hidden
+            sx={{
+              position: 'absolute',
+              inset: -8,
+              backgroundImage: `url(/api/files/${bandBannerPath})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center top',
+              filter: 'blur(2px)',
+            }}
+          />
+        )}
+
+        {/* Bottom fade on the band banner: solid black at the very bottom,
+            transparent at the 25% mark, darkening the banner into the page below. */}
+        {bandBannerPath && (
+          <Box
+            sx={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: '55%',
+              pointerEvents: 'none',
+              background: 'linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%)',
+            }}
+          />
+        )}
+
+        <GigTagEditor
+          gigId={gigId}
+          tags={tags}
+          canWrite={editable}
+          onChange={(nextTags) => {
+            setTags(nextTags)
+            setGig((current) => current ? { ...current, tags: nextTags } : current)
+            onBannerUpdate?.(gigId, { tags: nextTags })
+          }}
+        />
+
+        {/* Event banner centered, or placeholder when unset. The bottom inset
+            reserves the strip the tab pill overlaps so it never covers the
+            event banner. Cross-band the source band takes this slot: the gig
+            banner is stripped from the payload, so there is nothing to show
+            here and nothing to add. */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 32,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {isCrossBand ? (
+            <SourceTenantSwitch
+              tenantId={gig?.tenantId}
+              tenantName={gig?.tenantName}
+              tenantAvatarPath={gig?.tenantAvatarPath}
+              size={96}
+              sx={{ mb: 0, color: 'common.white', textShadow: '0 1px 4px #000' }}
+            />
+          ) : bannerPath ? (
+            <Box
+              component="img"
+              src={`/api/files/${bannerPath}`}
+              alt={t($ => $.detail.banner.alt)}
+              sx={{ maxWidth: '70%', maxHeight: '80%', objectFit: 'contain', display: 'block' }}
+            />
+          ) : (
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 0.5,
+                px: 3,
+                py: 2,
+                borderRadius: 1,
+                border: '2px dashed',
+                borderColor: 'rgba(255,255,255,0.6)',
+                color: 'rgba(255,255,255,0.85)',
+                bgcolor: 'rgba(0,0,0,0.25)',
+              }}
+            >
+              <ImageIcon sx={{ fontSize: 36 }} />
+              <Typography variant="caption">{t($ => $.detail.banner.none)}</Typography>
+            </Box>
+          )}
+        </Box>
+
+        {bannerBusy && (
+          <Box
+            sx={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              bgcolor: 'rgba(0,0,0,0.4)',
+            }}
+          >
+            <CircularProgress size={28} sx={{ color: '#fff' }} />
+          </Box>
+        )}
+
+        {/* Edit controls */}
+        {editable && (
+          <Stack direction="row" spacing={1} sx={{ position: 'absolute', top: 8, right: 8 }}>
+            <input
+              ref={bannerInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              style={{ display: 'none' }}
+              onChange={handleBannerFileChange}
+            />
+            <Tooltip title={bannerPath ? t($ => $.detail.banner.change) : t($ => $.detail.banner.add)}>
+              <span>
+                <IconButton
+                  size="small"
+                  onClick={() => bannerInputRef.current?.click()}
+                  disabled={bannerBusy}
+                  sx={{
+                    bgcolor: 'rgba(0,0,0,0.5)',
+                    color: '#fff',
+                    '&:hover': { bgcolor: 'rgba(0,0,0,0.72)' },
+                    '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.3)', color: 'rgba(255,255,255,0.5)' },
+                  }}
+                >
+                  <AddPhotoAlternateIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+            {bannerPath && (
+              <Tooltip title={t($ => $.detail.banner.remove)}>
+                <span>
+                  <IconButton
+                    size="small"
+                    onClick={handleBannerDelete}
+                    disabled={bannerBusy}
+                    sx={{
+                      bgcolor: 'rgba(0,0,0,0.5)',
+                      color: '#fff',
+                      '&:hover': { bgcolor: 'rgba(0,0,0,0.72)' },
+                      '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.3)', color: 'rgba(255,255,255,0.5)' },
+                    }}
+                  >
+                    <DeleteIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+          </Stack>
+        )}
+      </Box>
+
+      {/* Current status icon, just below the banner on the left. */}
+      <Box sx={{ position: 'absolute', left: 16, bottom: 0, transform: 'translateY(50%)', zIndex: 3 }}>
+        <GigStatusIcon status={form.status} size={36} />
+      </Box>
+      </Box>
+
+      {/* ── Floating tab pill: rounded box overlapping the banner by ~50% of
+          its own height, splitting the detail body into four sections. ──── */}
+      <Box
+        sx={{
+          position: 'relative',
+          zIndex: 2,
+          display: 'flex',
+          justifyContent: 'center',
+          mt: -3.25,
+          mb: 3,
+        }}
+      >
+        <Paper elevation={6} sx={{ display: 'inline-flex', gap: 0.5, p: 0.75, borderRadius: 999 }}>
+          {visibleTabs.map(({ key, Icon }) => {
+            const selected = shownTab === key
+            const label = t($ => $.detail.tabs[key])
+            return (
+              <Tooltip key={key} title={label}>
+                <IconButton
+                  aria-label={label}
+                  aria-pressed={selected}
+                  onClick={() => setActiveTab(key)}
+                  color={selected ? 'primary' : 'default'}
+                  sx={{
+                    bgcolor: selected ? 'action.selected' : 'transparent',
+                    '&:hover': { bgcolor: selected ? 'action.selected' : 'action.hover' },
+                  }}
+                >
+                  <Icon />
+                </IconButton>
+              </Tooltip>
+            )
+          })}
+        </Paper>
+      </Box>
+
+      {/* ── Event ──────────────────────────────────────────────────────── */}
+      <PlanningReadOnlyAlert canWrite={editable} />
+
+      <Box sx={{ display: shownTab === 'event' ? 'block' : 'none' }}>
+        <GigEventDetails
+          active={shownTab === 'event'}
+          editable={editable}
+          form={form}
+          requiredErrors={requiredErrors}
+          selectedVenue={selectedVenue}
+          selectedFestival={selectedFestival}
+          hideVenueOpenAction={isCrossBand}
+          onChange={handleChange}
+          onVenueChange={(venue) => {
+            setSelectedVenue(venue)
+            handleChange('venue_id', venue?.id ?? null)
+          }}
+          onFestivalChange={(festival) => {
+            setSelectedFestival(festival)
+            handleChange('festival_id', festival?.id ?? null)
+          }}
+        />
+      </Box>
+
+      {!isCrossBand && (
+        <GigTerms
+          active={shownTab === 'terms'}
+          editable={editable}
+          gigId={gigId}
+          gigLoaded={gig != null}
+          form={form}
+          selectedVenue={selectedVenue}
+          selectedFestival={selectedFestival}
+          onChange={handleChange}
+        />
+      )}
+
+      {!isCrossBand && (
+        <GigAvailability
+          active={shownTab === 'availability'}
+          editable={editable}
+          gigId={gigId}
+          eventDate={form.event_date}
+          status={form.status}
+          participants={gig?.participants ?? []}
+          candidateMembers={candidateMembers}
+          addMemberId={addMemberId}
+          venueId={selectedVenue?.id}
+          festivalId={selectedFestival?.id}
+          flush={flush}
+          onAddMemberChange={setAddMemberId}
+          onAddParticipant={handleAddParticipant}
+          onRemoveParticipant={handleRemoveParticipant}
+          onVote={handleVote}
+        />
+      )}
+
+      <GigTasksSection
+        active={shownTab === 'tasks'}
+        editable={editable}
+        gigId={gigId}
+        initialTasks={initialTasks}
+        initialAttachments={gig?.attachments ?? []}
+        members={members}
+        notes={form.notes}
+        currentBandMemberId={isCrossBand ? (gig?.viewerBandMemberId ?? null) : currentBandMemberId}
+        plainTextAttachments={isCrossBand}
+        onChangeNotes={(notes) => handleChange('notes', notes)}
+        onToggleTask={isCrossBand ? completeOwnTaskCrossBand : undefined}
+      />
+      <ImageCropDialog
+        open={cropOpen}
+        imageSrc={cropImageSrc}
+        onConfirm={handleCropConfirm}
+        onCancel={handleCropCancel}
+      />
+      <Snackbar
+        open={!!bannerError}
+        message={bannerError || ''}
+        autoHideDuration={4000}
+        onClose={() => setBannerError(null)}
+      />
+    </>
+  )
+})
+
+export default GigDetailContent

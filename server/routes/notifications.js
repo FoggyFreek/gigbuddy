@@ -32,8 +32,8 @@ router.put('/prefs', async (req, res) => {
   res.json(result.prefs)
 })
 
-// Streams a tenant profile picture for any tenant the caller holds an approved membership
-// in. The generic /api/files route only authorizes against the active tenant,
+// Streams a tenant profile picture for any tenant membership exposed by /auth/me
+// (pending or approved). The generic /api/files route only authorizes against the active tenant,
 // which would 404 the other bands' profile pictures shown in the bell.
 router.get('/tenant-avatar/:tenantId', async (req, res) => {
   const tenantId = requireParam(req, res, 'tenantId'); if (tenantId === null) return

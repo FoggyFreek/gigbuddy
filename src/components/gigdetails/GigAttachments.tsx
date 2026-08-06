@@ -15,9 +15,9 @@ import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import AttachFileIcon from '@mui/icons-material/AttachFile'
 import DeleteIcon from '@mui/icons-material/Delete'
-import { deleteGigAttachment, uploadGigAttachment } from '../api/gigs.ts'
-import { formatBytes } from '../utils/formatBytes.ts'
-import type { Id, PurchaseAttachment } from '../types/entities.ts'
+import { deleteGigAttachment, uploadGigAttachment } from '../../api/gigs.ts'
+import { formatBytes } from '../../utils/formatBytes.ts'
+import type { Id, PurchaseAttachment } from '../../types/entities.ts'
 
 const MAX_BYTES = 1 * 1024 * 1024
 const ACCEPT = '.pdf,.xls,.xlsx,.doc,.docx,.txt'
@@ -26,9 +26,11 @@ interface GigAttachmentsProps {
   gigId: Id
   initialAttachments?: PurchaseAttachment[]
   canWrite?: boolean
+  // Cross-tenant reads strip `object_key`, so there is no file to link to;
+  plainText?: boolean
 }
 
-export default function GigAttachments({ gigId, initialAttachments = [], canWrite = true }: Readonly<GigAttachmentsProps>) {
+export default function GigAttachments({ gigId, initialAttachments = [], canWrite = true, plainText = false }: Readonly<GigAttachmentsProps>) {
   const { t } = useTranslation(['gigs', 'common'])
   const [attachments, setAttachments] = useState<PurchaseAttachment[]>(initialAttachments)
   const [uploading, setUploading] = useState(false)
@@ -99,14 +101,20 @@ export default function GigAttachments({ gigId, initialAttachments = [], canWrit
         >
           <AttachFileIcon fontSize="small" color="action" />
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Link
-              href={`/api/files/${a.object_key}`}
-              underline="hover"
-              color="text.primary"
-              sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14 }}
-            >
-              {a.original_filename}
-            </Link>
+            {plainText ? (
+              <Typography sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14 }}>
+                {a.original_filename}
+              </Typography>
+            ) : (
+              <Link
+                href={`/api/files/${a.object_key}`}
+                underline="hover"
+                color="text.primary"
+                sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14 }}
+              >
+                {a.original_filename}
+              </Link>
+            )}
             <Typography variant="caption" color="text.secondary">
               {formatBytes(a.file_size ?? 0)}
             </Typography>

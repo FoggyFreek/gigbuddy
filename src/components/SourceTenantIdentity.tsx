@@ -1,9 +1,10 @@
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import Paper from '@mui/material/Paper'
+import IconButton from '@mui/material/IconButton'
+import SyncIcon from '@mui/icons-material/Sync'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
+import type { SxProps, Theme } from '@mui/material/styles'
 import { useAuth } from '../contexts/authContext.ts'
 import type { Id } from '../types/entities.ts'
 import { useTranslation } from 'react-i18next'
@@ -37,32 +38,60 @@ export function SourceTenantSwitch({
   tenantId,
   tenantName,
   tenantAvatarPath,
-}: Readonly<SourceTenantIdentityProps>) {
+  sx,
+  size = 48,
+}: Readonly<SourceTenantIdentityProps & { sx?: SxProps<Theme>; size?: number }>) {
   const { switchTenant } = useAuth()
   const { t } = useTranslation('common')
   const initial = tenantName?.trim().charAt(0).toUpperCase() || '?'
   return (
-    <Paper
-      variant="outlined"
-      sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1.25, mb: 2 }}
+    <Box
+      sx={[
+        {
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 0.5,
+          mb: 2,
+        },
+        ...(Array.isArray(sx) ? sx : [sx]),
+      ]}
       data-testid="source-tenant-switch"
     >
-      <Avatar
-        src={tenantAvatarUrl(tenantId, tenantAvatarPath)}
-        alt={tenantName ?? ''}
-        sx={{ width: 36, height: 36 }}
-      >
-        {initial}
-      </Avatar>
-      <Typography sx={{ flex: 1, fontWeight: 600 }}>{tenantName || '—'}</Typography>
-      <Button
-        variant="outlined"
-        size="small"
-        disabled={tenantId == null}
-        onClick={() => { if (tenantId != null) void switchTenant(tenantId) }}
-      >
-        {t($ => $.actions.switchToBand)}
-      </Button>
-    </Paper>
+      <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+        <Avatar
+          src={tenantAvatarUrl(tenantId, tenantAvatarPath)}
+          alt={tenantName ?? ''}
+          sx={{ width: size, height: size, fontSize: size / 2.5 }}
+        >
+          {initial}
+        </Avatar>
+        <Tooltip title={t($ => $.actions.switchToBand)}>
+          <span style={{ position: 'absolute', right: -6, bottom: -6 }}>
+            <IconButton
+              size="small"
+              aria-label={t($ => $.actions.switchToBand)}
+              disabled={tenantId == null}
+              onClick={() => { if (tenantId != null) void switchTenant(tenantId) }}
+              sx={{
+                p: 0.5,
+                bgcolor: 'background.paper',
+                border: 1,
+                borderColor: 'divider',
+                '&:hover': { bgcolor: 'background.paper' },
+                '& .MuiSvgIcon-root': {
+                  fontSize: 16,
+                  transition: theme => theme.transitions.create('transform'),
+                },
+                '&:hover .MuiSvgIcon-root': { transform: 'rotate(30deg)' },
+              }}
+            >
+              <SyncIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Box>
+      <Typography sx={{ fontWeight: 600, textAlign: 'center' }}>{tenantName || '—'}</Typography>
+    </Box>
   )
 }

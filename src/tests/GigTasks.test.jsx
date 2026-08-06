@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
-import GigTasks from '../components/GigTasks.tsx'
+import GigTasks from '../components/gigdetails/GigTasks.tsx'
 import theme from '../theme.ts'
 
 vi.mock('../api/gigs.ts', () => ({

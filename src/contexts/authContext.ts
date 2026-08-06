@@ -9,6 +9,7 @@ export interface UserMembership {
   tenantName?: string
   displayName?: string
   tenantSlug?: string
+  tenantAvatarPath?: string | null
   kind?: TenantKind
   role?: string
   status?: string

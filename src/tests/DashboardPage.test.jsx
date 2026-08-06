@@ -361,8 +361,8 @@ describe('DashboardPage', () => {
 // active tenant, so every row can belong to a different band.
 describe('DashboardPage in an artist workspace', () => {
   const ARTIST_GIGS = [
-    { id: 2, event_date: '2026-06-15', event_description: 'Jazz Night', venue: { id: 12, name: 'Cafe X', city: 'Amsterdam' }, festival: null, status: 'confirmed', tenantId: 9, tenantName: 'The Nightowls', kind: 'band' },
-    { id: 3, event_date: '2026-07-01', event_description: 'Summer Festival', venue: null, festival: { id: 13, name: 'Park Fest', city: 'Rotterdam' }, status: 'announced', tenantId: 4, tenantName: 'Quartet Blue', kind: 'band' },
+    { id: 2, event_date: '2026-06-15', event_description: 'Jazz Night', venue: { id: 12, name: 'Cafe X', city: 'Amsterdam' }, festival: null, status: 'confirmed', tenantId: 9, tenantName: 'The Nightowls', tenantAvatarPath: 'tenants/9/avatar/nightowls.png', kind: 'band' },
+    { id: 3, event_date: '2026-07-01', event_description: 'Summer Festival', venue: null, festival: { id: 13, name: 'Park Fest', city: 'Rotterdam' }, status: 'announced', tenantId: 4, tenantName: 'Quartet Blue', tenantAvatarPath: 'tenants/4/avatar/quartet.png', kind: 'band' },
   ]
   const ARTIST_TASKS = [
     { id: 50, gig_id: 3, title: 'Send invoice', done: false, due_date: null, event_description: 'Tour Stop', tenantId: 4, tenantName: 'Quartet Blue', kind: 'band' },
@@ -378,8 +378,10 @@ describe('DashboardPage in an artist workspace', () => {
     })
     resolveAll()
     listMyUpcomingGigs.mockResolvedValue(collection(ARTIST_GIGS, 6))
-    getMyNextRehearsal.mockResolvedValue({ id: 20, proposed_date: '2026-06-01', location: 'Studio A', status: 'planned', tenantId: 9, tenantName: 'The Nightowls', kind: 'band' })
-    listMyUpcomingBandEvents.mockResolvedValue(collection([], 1))
+    getMyNextRehearsal.mockResolvedValue({ id: 20, proposed_date: '2026-06-01', location: 'Studio A', status: 'planned', tenantId: 9, tenantName: 'The Nightowls', tenantAvatarPath: 'tenants/9/avatar/nightowls.png', kind: 'band' })
+    listMyUpcomingBandEvents.mockResolvedValue(collection([
+      { id: 30, start_date: '2026-06-08', title: 'Photo shoot', location: 'Studio B', tenantId: 7, tenantName: 'Brass Dept', tenantAvatarPath: 'tenants/7/avatar/brass.png', kind: 'band' },
+    ], 1))
     listMyTasks.mockResolvedValue(collection(ARTIST_TASKS, 5))
   })
   afterEach(() => {
@@ -405,13 +407,21 @@ describe('DashboardPage in an artist workspace', () => {
     expect(listGigs).not.toHaveBeenCalled()
   })
 
-  it('labels each row with the band it belongs to', async () => {
+  it('identifies event rows with source-band avatars and keeps task labels unchanged', async () => {
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
-    // Next gig and next rehearsal both come from The Nightowls.
-    expect(screen.getAllByText('The Nightowls')).toHaveLength(2)
-    // The upcoming-shows row, plus the task's "<gig> — <band>" secondary line.
-    expect(screen.getByText('Quartet Blue')).toBeInTheDocument()
+
+    expect(screen.getAllByRole('img', { name: 'The Nightowls' })).toHaveLength(2)
+    expect(screen.getByRole('img', { name: 'Quartet Blue' })).toHaveAttribute(
+      'src',
+      '/api/notifications/tenant-avatar/4',
+    )
+    expect(screen.getByRole('img', { name: 'Brass Dept' })).toHaveAttribute(
+      'src',
+      '/api/notifications/tenant-avatar/7',
+    )
+    expect(screen.queryByText('The Nightowls')).not.toBeInTheDocument()
+    expect(screen.queryByText('Brass Dept')).not.toBeInTheDocument()
     expect(screen.getByText('Tour Stop — Quartet Blue')).toBeInTheDocument()
   })
 

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
-import GigParticipantsSection from '../components/GigParticipantsSection.tsx'
+import GigParticipantsSection from '../components/gigdetails/GigParticipantsSection.tsx'
 import theme from '../theme.ts'
 
 const PARTICIPANTS = [

@@ -88,12 +88,14 @@ export const DEFAULT_PLANS = Object.freeze([
         song_files: true,
         chordpro: true,
         public_promotion: true,
-        linkpage: true,
+        // Link pages are a band surface (BAND_LINKPAGE capability) and this
+        // plan owns no band, so the feature would never be reachable.
+        linkpage: false,
         calendar_sync: true,
       },
-      // Storage and link pages sit below band gold; `members: 1` matches a
-      // workspace of one. Pricing-sheet knobs, not architecture.
-      limits: { storage_mb: 250, members: 1, bands: 0, linkpage_pages: 5, linkpage_stats_days: 90 },
+      // Storage sits below band gold; `members: 1` matches a workspace of one.
+      // Pricing-sheet knobs, not architecture.
+      limits: { storage_mb: 250, members: 1, bands: 0, linkpage_pages: 0, linkpage_stats_days: 30 },
     },
   },
 ])

@@ -9,6 +9,7 @@ import {
   listAnnouncedUpcomingGigs,
 } from '../repositories/linkpageRepository.js'
 import { signPayload, verifyPayload, linkpageConfigured, linkpageEditorUrl } from '../security/linkpageTokens.js'
+import { TENANT_CAPABILITIES, tenantKindSupports } from '../../shared/tenantCapabilities.js'
 import { resolveTenantEntitlements } from './entitlementService.js'
 import { FEATURES, LIMITS } from '../auth/entitlements.js'
 import { notFound, serviceError } from './serviceErrors.js'
@@ -58,7 +59,9 @@ async function linkpageEntitlements(db, tenantId) {
 export async function buildExport(db, slug) {
   if (!linkpageConfigured()) return NOT_CONFIGURED
   const tenant = await getTenantBySlug(db, slug)
-  if (!tenant) return NOT_FOUND
+  // Link pages are a band surface. A personal workspace's slug is treated as
+  // unknown here, the same as the editor mount refusing the capability.
+  if (!tenant || !tenantKindSupports(tenant.kind, TENANT_CAPABILITIES.BAND_LINKPAGE)) return NOT_FOUND
 
   const [entitlements, links, songs, products, gigs] = await Promise.all([
     linkpageEntitlements(db, tenant.id),

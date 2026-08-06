@@ -84,13 +84,15 @@ describe('AppShell — nav filtered by tenant kind', () => {
     vi.clearAllMocks()
   })
 
-  it('hides band-only planning and repertoire items in a personal workspace', async () => {
+  it('hides band-only repertoire items in a personal workspace', async () => {
     mockUser('personal')
     const user = userEvent.setup()
     renderShell()
 
+    // Planning is shared whole: the calendar is the artist agenda here and the
+    // roster grid in a band, so nothing drops out of the group.
     expect(await itemsInGroup(user, 'Planning group')).toEqual([
-      'Gigs', 'Rehearsals', 'Band Events', 'Tasks',
+      'Calendar', 'Gigs', 'Rehearsals', 'Band Events', 'Tasks',
     ])
     expect(await itemsInGroup(user, 'Repertoire group')).toEqual(['Songs'])
   })

@@ -2,6 +2,7 @@
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { alpha, useTheme } from '@mui/material/styles'
+import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -47,6 +48,7 @@ import {
 } from '../api/me.ts'
 import { getProfile } from '../api/profile.ts'
 import { daysUntil, formatDueDate, localDateString } from '../utils/dateFormat.ts'
+import { tenantAvatarUrl } from '../utils/tenantAvatarUrl.ts'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.ts'
 import type { Achievement, Gig, Rehearsal, BandEvent, Id, Task } from '../types/entities.ts'
 import type {
@@ -326,20 +328,28 @@ export default function DashboardPage() {
   // no detail route and gig tasks open the source band's editable task tab.
   const openRow = (_tenantId: Id | null | undefined, path: string) => navigate(path)
 
-  // Which band a row came from. Never rendered in a band workspace, where every
-  // row belongs to the one you're looking at.
+  // Which band a task came from. Event rows use the source avatar instead, while
+  // tasks intentionally keep their existing text label.
   const bandName = (row: { tenantName?: string | null }) =>
     (crossBand ? row.tenantName : null) || null
 
-  // Spans both grid columns so it sits under the date/detail pair rather than
-  // squeezing into one of them.
-  const renderBandRow = (row: { tenantName?: string | null }) => {
-    const name = bandName(row)
-    if (!name) return null
+  const renderSourceBandAvatar = (row: {
+    tenantId?: Id
+    tenantName?: string | null
+    tenantAvatarPath?: string | null
+  }) => {
+    if (!crossBand) return null
+    const name = row.tenantName?.trim() || ''
     return (
-      <Typography variant="caption" sx={{ gridColumn: '1 / -1', color: 'text.secondary' }}>
-        {name}
-      </Typography>
+      <Tooltip title={name}>
+        <Avatar
+          src={tenantAvatarUrl(row.tenantId, row.tenantAvatarPath)}
+          alt={name}
+          sx={{ width: 32, height: 32, fontSize: '0.875rem', flexShrink: 0 }}
+        >
+          {name.charAt(0).toUpperCase() || '?'}
+        </Avatar>
+      </Tooltip>
     )
   }
 
@@ -501,7 +511,6 @@ export default function DashboardPage() {
                       return [venueHeadline(place), venueCity(place)].filter(Boolean).join(', ')
                     })()}
                   </Typography>
-                  {renderBandRow(nextGig.data)}
                 </Box>
                 {nextGig.data.banner_path && (
                   <Box
@@ -518,6 +527,7 @@ export default function DashboardPage() {
                     }}
                   />
                 )}
+                {renderSourceBandAvatar(nextGig.data)}
               </Box>
             )}
           </DashboardCard>
@@ -540,7 +550,7 @@ export default function DashboardPage() {
             {nextRehearsal.data && (
               <Box
                 onClick={() => openRow(nextRehearsal.data!.tenantId, `/rehearsals/${nextRehearsal.data!.id}`)}
-                sx={{ cursor: 'pointer', py: 0.5 }}
+                sx={{ cursor: 'pointer', py: 0.5, display: 'flex', alignItems: 'center', gap: 2 }}
               >
                 <Box
                   sx={{
@@ -549,6 +559,7 @@ export default function DashboardPage() {
                     gridTemplateColumns: 'auto 1fr',
                     columnGap: 3,
                     alignItems: 'baseline',
+                    flexGrow: 1,
                     minWidth: 0,
                   }}
                 >
@@ -566,8 +577,8 @@ export default function DashboardPage() {
                       {[nextRehearsal.data.start_time, nextRehearsal.data.end_time].filter(Boolean).map(t => t!.slice(0, 5)).join(' – ')}
                     </Typography>
                   )}
-                  {renderBandRow(nextRehearsal.data)}
                 </Box>
+                {renderSourceBandAvatar(nextRehearsal.data)}
               </Box>
             )}
           </DashboardCard>
@@ -615,9 +626,8 @@ export default function DashboardPage() {
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                     {nextBandEvent.data.location}
                   </Typography>
-                  {renderBandRow(nextBandEvent.data)}
                 </Box>
-                {(() => {
+                {crossBand ? renderSourceBandAvatar(nextBandEvent.data) : (() => {
                   const isDark = theme.palette.mode === 'dark'
                   if (profile?.avatar_path) {
                     return (
@@ -691,8 +701,8 @@ export default function DashboardPage() {
                         <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 'light' }}>
                           {[venueHeadline(place), venueCity(place)].filter(Boolean).join(', ')}
                         </Typography>
-                        {renderBandRow(g)}
                       </Box>
+                      {renderSourceBandAvatar(g)}
                     </ListItemButton>
                   </React.Fragment>
                 )

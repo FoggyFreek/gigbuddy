@@ -10,16 +10,16 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import StarIcon from '@mui/icons-material/Star'
 import StarBorderIcon from '@mui/icons-material/StarBorder'
-import { listVenueContacts as listVenueContactsRaw } from '../api/venues.ts'
+import { listVenueContacts as listVenueContactsRaw } from '../../api/venues.ts'
 import {
   addGigContact,
   listGigContacts,
   removeGigContact,
   setGigContactPrimary,
-} from '../api/gigs.ts'
-import ContactPicker from './ContactPicker.tsx'
-import CopyIconButton from './CopyIconButton.tsx'
-import type { Id, Contact } from '../types/entities.ts'
+} from '../../api/gigs.ts'
+import ContactPicker from '../ContactPicker.tsx'
+import CopyIconButton from '../CopyIconButton.tsx'
+import type { Id, Contact } from '../../types/entities.ts'
 
 // listVenueContacts returns flat contact rows ({ id, name, email, phone, is_primary })
 // at runtime even though its declared type is VenueContact[]. Wrap it so callers

@@ -197,6 +197,7 @@ const bandAvailability = requireTenantCapability(TENANT_CAPABILITIES.BAND_AVAILA
 const setlists = requireTenantCapability(TENANT_CAPABILITIES.SETLISTS)
 const merch = requireTenantCapability(TENANT_CAPABILITIES.MERCH)
 const bandPromotion = requireTenantCapability(TENANT_CAPABILITIES.BAND_PROMOTION_INTEGRATIONS)
+const bandLinkpage = requireTenantCapability(TENANT_CAPABILITIES.BAND_LINKPAGE)
 
 router.use('/invites/redeem', redeemLimiter, loadUser, invitesRedeemRouter)
 // Self-service owned tenants: user-level (no active-tenant resolution).
@@ -266,10 +267,11 @@ router.use('/tutorials', currentTermsUser, tutorialsRouter)
 // The public feed itself 404s while the entitlement is missing.
 router.use('/calendar-feed', tenantMember, calendarFeedRouter)
 router.use('/share/photos', tenantMember, sharePhotosRouter)
-// Link-page management is reserved to tenant admins and gated on the linkpage
-// feature (silver/gold). The public export/image routes above stay open — the
-// linkpage app enforces plan state from the entitlements in the export.
-router.use('/linkpage', tenantManage, requireEntitlement(FEATURES.LINKPAGE), linkpageRouter)
+// Link pages are a band surface, reserved to tenant admins and gated on the
+// linkpage feature (silver/gold). The public export/image routes above stay
+// open — the linkpage app enforces plan state from the entitlements in the
+// export, and the export itself refuses a non-band slug.
+router.use('/linkpage', tenantManage, bandLinkpage, requireEntitlement(FEATURES.LINKPAGE), linkpageRouter)
 router.use('/files', tenantMember, filesRouter)
 
 export default router

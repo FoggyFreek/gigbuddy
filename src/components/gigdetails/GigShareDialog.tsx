@@ -26,12 +26,12 @@ import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown'
 import DeleteIcon from '@mui/icons-material/Delete'
 import DownloadIcon from '@mui/icons-material/Download'
 import { useTranslation } from 'react-i18next'
-import GigShareCard from './share/GigShareCard.tsx'
-import { STICKER_CONFIGS } from './share/stickerConfigs.ts'
-import { SHARE_VARIATIONS, SHARE_VARIATION_MAP } from './share/variations/index.ts'
-import { AuthContext } from '../contexts/authContext.ts'
-import { getProfile } from '../api/profile.ts'
-import { getSharePhotos, uploadSharePhoto, deleteSharePhoto } from '../api/sharePhotos.ts'
+import GigShareCard from '../share/GigShareCard.tsx'
+import { STICKER_CONFIGS } from '../share/stickerConfigs.ts'
+import { SHARE_VARIATIONS, SHARE_VARIATION_MAP } from '../share/variations/index.ts'
+import { AuthContext } from '../../contexts/authContext.ts'
+import { getProfile } from '../../api/profile.ts'
+import { getSharePhotos, uploadSharePhoto, deleteSharePhoto } from '../../api/sharePhotos.ts'
 import {
   buildShareFilename,
   buildSharePdfFilename,
@@ -42,9 +42,9 @@ import {
   SHARE_FORMATS,
   SHARE_STICKER_POSITIONS,
   SHARE_VINTAGE_COLORS,
-} from '../utils/shareCard.ts'
-import { compressPhoto } from '../utils/compressImage.ts'
-import type { Gig, Id } from '../types/entities.ts'
+} from '../../utils/shareCard.ts'
+import { compressPhoto } from '../../utils/compressImage.ts'
+import type { Gig, Id } from '../../types/entities.ts'
 
 interface LocalSharePhoto {
   id?: Id

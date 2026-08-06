@@ -10,8 +10,8 @@ import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import DeleteIcon from '@mui/icons-material/Delete'
 import { useTranslation } from 'react-i18next'
-import VoteToggle from './VoteToggle.tsx'
-import type { Participant, Member, Id } from '../types/entities.ts'
+import VoteToggle from '../VoteToggle.tsx'
+import type { Participant, Member, Id } from '../../types/entities.ts'
 
 interface GigParticipantsSectionProps {
   participants: Participant[]

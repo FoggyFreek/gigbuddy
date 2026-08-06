@@ -12,8 +12,8 @@ import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
-import GigDetailContent, { type TabKey } from '../components/GigDetailContent.tsx'
-import GigShareMenu from '../components/GigShareMenu.tsx'
+import GigDetailContent, { type TabKey } from '../components/gigdetails/GigDetailContent.tsx'
+import GigShareMenu from '../components/gigdetails/GigShareMenu.tsx'
 import PastEventAlert from '../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import { deleteGig } from '../api/gigs.ts'
@@ -21,76 +21,14 @@ import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Gig, Id } from '../types/entities.ts'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
 import { useAuth } from '../contexts/authContext.ts'
-import { getMyGig, type MyGig } from '../api/me.ts'
-import CrossTenantGigDetail, { CrossTenantGigLoading } from '../components/CrossTenantGigDetail.tsx'
 
 export default function GigDetailPage() {
-  const { isPersonal } = useTenantKind()
-  return isPersonal ? <PersonalGigDetailPage /> : <TenantGigDetailPage />
-}
-
-function PersonalGigDetailPage() {
-  const { t } = useTranslation(['gigs', 'common'])
-  const { id } = useParams()
-  const gigId = Number(id)
-  const { user } = useAuth()
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
-  const insideSplitView = !!outletCtx.insideSplitView
-  const [gig, setGig] = useState<MyGig | null>(null)
-
-  useEffect(() => {
-    const ac = new AbortController()
-    getMyGig(gigId, { signal: ac.signal })
-      .then((loaded) => {
-        setGig(loaded)
-        ;(outletCtx.onGigDetailLoaded as ((gig: Gig) => void) | undefined)?.(loaded)
-      })
-      .catch(() => {
-        if (!ac.signal.aborted) {
-          ;(outletCtx.onGigDetailLoadError as (() => void) | undefined)?.()
-        }
-      })
-    return () => ac.abort()
-  }, [gigId, outletCtx.onGigDetailLoaded, outletCtx.onGigDetailLoadError])
-
-  if (gig?.id !== gigId) return <CrossTenantGigLoading />
-  if (gig.tenantId === user?.activeTenantId) return <TenantGigDetailPage />
-
-  const initialTab = searchParams.get('tab') === 'tasks' ? 'tasks' : 'event'
-  const handleBack = () => {
-    if (typeof outletCtx.onClose === 'function') outletCtx.onClose()
-    else navigate(-1)
-  }
-
-  return (
-    <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-        {!insideSplitView && (
-          <IconButton onClick={handleBack} aria-label={t($ => $.aria.back, { ns: 'common' })}>
-            <ArrowBackIcon />
-          </IconButton>
-        )}
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>{gig.event_description || t($ => $.page.titleFallback)}</Typography>
-        <Box sx={{ flexGrow: 1 }} />
-        {insideSplitView && (
-          <IconButton onClick={handleBack} aria-label={t($ => $.aria.close, { ns: 'common' })}>
-            <CloseIcon />
-          </IconButton>
-        )}
-      </Box>
-      <PastEventAlert date={gig.event_date} />
-      <CrossTenantGigDetail gig={gig} initialTab={initialTab} />
-    </Box>
-  )
-}
-
-function TenantGigDetailPage() {
   const { t } = useTranslation(['gigs', 'common'])
   const { id } = useParams()
   const gigId = Number(id)
   const { canWritePlanning } = usePermissions()
+  const { isPersonal } = useTenantKind()
+  const { user } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const TAB_KEYS: TabKey[] = ['event', 'terms', 'availability', 'tasks']
@@ -103,6 +41,13 @@ function TenantGigDetailPage() {
   const [polledStatus, setPolledStatus] = useState('idle')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [gig, setGig] = useState<Gig | null>(null)
+
+  // A gig one of the musician's other bands owns, opened from the artist
+  // workspace. It is read-only here: nothing on this page writes to a tenant
+  // the viewer isn't currently in. Same shape as the rehearsal/band-event pages.
+  const loaded = gig?.id === gigId
+  const isCrossBand = isPersonal && loaded && gig.tenantId !== user?.activeTenantId
+  const detailCanWrite = canWritePlanning && !isCrossBand
 
   // Report the gig this pane just fetched back up to the list page (e.g. so
   // it can pick the Upcoming/Past tab from the gig's date) instead of the
@@ -136,12 +81,13 @@ function TenantGigDetailPage() {
           </IconButton>
         )}
         <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          {gig?.id === gigId ? (gig.event_description || t($ => $.page.titleFallback)) : t($ => $.page.titleFallback)}
+          {loaded ? (gig.event_description || t($ => $.page.titleFallback)) : t($ => $.page.titleFallback)}
         </Typography>
         <Box sx={{ flexGrow: 1 }} />
         {/* Identity gate: the lifted gig lags during async loads / split-view id
-            changes, so only share once it matches the current id. */}
-        {gig?.id === gigId && <GigShareMenu gig={gig} />}
+            changes, so only share once it matches the current id. Sharing is a
+            tenant-scoped write, so a cross-band gig doesn't get it at all. */}
+        {loaded && !isCrossBand && <GigShareMenu gig={gig} />}
         {insideSplitView && (
           <IconButton onClick={handleBack} aria-label={t($ => $.aria.close, { ns: 'common' })}>
             <CloseIcon />
@@ -149,11 +95,12 @@ function TenantGigDetailPage() {
         )}
       </Box>
 
-      {gig?.id === gigId && <PastEventAlert date={gig.event_date} />}
+      {loaded && <PastEventAlert date={gig.event_date} />}
 
       <GigDetailContent
         ref={contentRef}
         gigId={gigId}
+        source={isPersonal ? 'me' : 'tenant'}
         canWrite={canWritePlanning}
         initialTab={initialTab}
         onBannerUpdate={outletCtx.onGigUpdate as ((gigId: Id, patch: Record<string, unknown>) => void) | undefined}
@@ -161,11 +108,13 @@ function TenantGigDetailPage() {
         onGigLoadError={onGigDetailLoadError}
       />
 
-      <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-        <SaveStatusLabel status={polledStatus} />
-      </Box>
+      {detailCanWrite && (
+        <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
+          <SaveStatusLabel status={polledStatus} />
+        </Box>
+      )}
 
-      {canWritePlanning && (
+      {detailCanWrite && (
         <Box sx={{ mt: 4 }}>
           <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
             {t($ => $.actions.delete, { ns: 'common' })}

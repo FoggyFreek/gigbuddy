@@ -61,6 +61,14 @@ vi.mock('../api/gigs.ts', () => ({
   addGigContact: vi.fn().mockResolvedValue({}),
   setGigContactPrimary: vi.fn().mockResolvedValue({}),
   removeGigContact: vi.fn().mockResolvedValue(undefined),
+  getGigMerchSummary: vi.fn().mockResolvedValue({ unitsSold: 0, netCents: 0, grossCents: 0 }),
+  searchGigTags: vi.fn().mockResolvedValue([]),
+  setGigTags: vi.fn().mockResolvedValue([]),
+  createTask: vi.fn().mockResolvedValue({}),
+  updateTask: vi.fn().mockResolvedValue({}),
+  deleteTask: vi.fn().mockResolvedValue(undefined),
+  uploadGigAttachment: vi.fn().mockResolvedValue({}),
+  deleteGigAttachment: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('../api/venues.ts', async (importOriginal) => ({
@@ -68,7 +76,14 @@ vi.mock('../api/venues.ts', async (importOriginal) => ({
   listVenueContacts: vi.fn().mockResolvedValue([]),
 }))
 
+vi.mock('../api/me.ts', () => ({
+  getMyGig: vi.fn(),
+  setMyTaskDone: vi.fn().mockResolvedValue({}),
+}))
+
 import { getGig } from '../api/gigs.ts'
+import { getMyGig } from '../api/me.ts'
+import { AuthContext } from '../contexts/authContext.ts'
 
 // Navigates within the same router so GigDetailPage stays mounted across the id change —
 // the split-view scenario the stale-gig guard protects against.
@@ -134,5 +149,85 @@ describe('GigDetailPage — header share button', () => {
     await waitFor(() =>
       expect(within(header()).getByLabelText('share gig')).toBeInTheDocument()
     )
+  })
+})
+
+describe('GigDetailPage — cross-band gig in a personal workspace', () => {
+  const ARTIST_USER = {
+    id: 9,
+    activeTenantId: 1,
+    activeTenantKind: 'personal',
+    activeTenantRole: 'tenant_admin',
+    permissions: ['app.view', 'planning.write'],
+    bandMemberId: 3,
+  }
+
+  const CROSS_BAND_GIG = {
+    ...gigFixture(1),
+    tenantId: 9,
+    tenantName: 'Other Band',
+    tenantAvatarPath: null,
+    viewerBandMemberId: 22,
+  }
+
+  function renderAsArtist(gig) {
+    const switchTenant = vi.fn().mockResolvedValue(undefined)
+    getMyGig.mockResolvedValue(gig)
+    render(
+      <MemoryRouter initialEntries={['/gigs/1']}>
+        <AuthContext.Provider
+          value={{
+            user: ARTIST_USER,
+            setUser: () => {},
+            logout: async () => {},
+            switchTenant,
+            refreshUser: async () => undefined,
+          }}
+        >
+          <ThemeProvider theme={theme}>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <Routes>
+                <Route path="/gigs/:id" element={<GigDetailPage />} />
+              </Routes>
+            </LocalizationProvider>
+          </ThemeProvider>
+        </AuthContext.Provider>
+      </MemoryRouter>
+    )
+    return switchTenant
+  }
+
+  beforeEach(() => {
+    getGig.mockReset()
+    getMyGig.mockReset()
+  })
+
+  it('names the source band and switches to it on request', async () => {
+    const user = userEvent.setup()
+    const switchTenant = renderAsArtist(CROSS_BAND_GIG)
+
+    await screen.findByTestId('source-tenant-switch')
+    expect(screen.getByText('Other Band')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Switch to band' }))
+    expect(switchTenant).toHaveBeenCalledWith(9)
+  })
+
+  it('offers no share, delete or edit affordances', async () => {
+    renderAsArtist(CROSS_BAND_GIG)
+    await screen.findByTestId('source-tenant-switch')
+
+    expect(within(header()).queryByLabelText('share gig')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+    expect(getGig).not.toHaveBeenCalled()
+  })
+
+  it("keeps the full editor for the workspace's own gig", async () => {
+    renderAsArtist({ ...CROSS_BAND_GIG, tenantId: 1, tenantName: 'Solo' })
+    await waitFor(() => expect(screen.getByDisplayValue('Gig 1')).toBeInTheDocument())
+
+    expect(screen.queryByTestId('source-tenant-switch')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Terms' })).toBeInTheDocument()
   })
 })

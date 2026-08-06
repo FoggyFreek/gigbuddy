@@ -23,7 +23,7 @@ import {
   updateRehearsal,
 } from '../api/rehearsals.ts'
 import { getAvailabilityOn } from '../api/availability.ts'
-import type { AvailabilityData } from './GigAvailabilityPanel.tsx'
+import type { AvailabilityData } from './gigdetails/GigAvailabilityPanel.tsx'
 import { listMembers } from '../api/bandMembers.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { toDateInput, toTimeInput } from '../utils/eventFormUtils.ts'

@@ -14,7 +14,8 @@ named capability, not compare `kind` inline.
 - Shared by default: profile, gigs, rehearsals, tasks, contacts, venues, songs,
   files, email templates, finance and accounting.
 - Band capabilities: roster, membership administration, availability grid,
-  setlists, merch, discovery and band-promotion integrations.
+  setlists, merch, discovery, sharing, band-promotion integrations and the
+  public link page.
 - Personal capability: external ensembles stored as contacts in the personal
   workspace.
 - Backend middleware is authoritative. Frontend capability checks only hide
@@ -66,7 +67,14 @@ named capability, not compare `kind` inline.
    - Desired end-state: bands are configured from settings; the artist's own
      workspace is never presented as a band.
 
-8. Invite-only onboarding
+8. Link-page boundary
+   - Task: gate the link-page editor mount and the public content export on the
+     band link-page capability.
+   - Desired end-state: a personal workspace gets the structured 403 on
+     `/linkpage/*` and its slug is unknown to the export; the "Edit link page"
+     affordance is absent from its profile.
+
+9. Invite-only onboarding
    - Task: redirect users without a resume pointer when tenant creation is
      disabled.
    - Desired end-state: `/onboarding` lands directly on `/redeem-invite` rather

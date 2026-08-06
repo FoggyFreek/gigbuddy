@@ -39,7 +39,7 @@ function wrap() {
         }}>
           <Routes>
             <Route path="/availability" element={<ArtistCalendarSection />} />
-            <Route path="/events/:id" element={<div>other event detail</div>} />
+            <Route path="/availability/events/:id" element={<div>other event detail</div>} />
           </Routes>
         </AuthContext.Provider>
       </MemoryRouter>

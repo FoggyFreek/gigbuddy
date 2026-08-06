@@ -96,6 +96,7 @@ export async function buildMePayload(db, userId, sessionActiveTenantId) {
         tenantName: m.tenant_name,
         displayName: m.display_name,
         tenantSlug: m.tenant_slug,
+        tenantAvatarPath: m.avatar_path,
         kind: m.tenant_kind,
         role: m.role,
         status: m.status,

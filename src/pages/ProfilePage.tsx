@@ -44,6 +44,7 @@ export default function ProfilePage() {
   const { canWritePlanning } = usePermissions()
   const { supports } = useTenantKind()
   const hasBandRoster = supports(TENANT_CAPABILITIES.BAND_ROSTER)
+  const hasLinkpage = supports(TENANT_CAPABILITIES.BAND_LINKPAGE)
   const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
 
   const [form, setForm] = useState<ProfileForm>(EMPTY_FORM)
@@ -155,14 +156,14 @@ export default function ProfilePage() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>{t($ => $.title)}</Typography>
-        {isAdmin && <LinkpageEditButton />}
+        {isAdmin && hasLinkpage && <LinkpageEditButton />}
         {canWritePlanning && <SaveStatusLabel status={saveStatus} />}
       </Box>
 
       <PlanningReadOnlyAlert canWrite={canWritePlanning} />
 
       <Grid container spacing={3} sx={{ mb: 3, alignItems: 'flex-start' }}>
-        <Grid size={{ xs: 12, lg: hasBandRoster ? 8 : 12 }}>
+        <Grid size={{ xs: 12, lg: 8 }}>
           {/* Hidden file inputs — live here to keep refs away from child render paths */}
           {imageSlots.map((slot) => (
             <input

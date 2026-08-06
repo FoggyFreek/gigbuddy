@@ -401,7 +401,19 @@ describe('GET /api/notifications/tenant-avatar/:tenantId', () => {
     expect(res.headers['content-type']).toContain('image/png')
   })
 
-  it('404s for a tenant without approved membership (no existence leak)', async () => {
+  it('streams the profile picture for a pending membership shown in settings', async () => {
+    await pool.query(
+      `INSERT INTO memberships (user_id, tenant_id, role, status, source)
+       VALUES ($1, $2, 'contributor', 'pending', 'invite')`,
+      [seed.userA.id, seed.tenantB.id],
+    )
+
+    await asUser(seed.userA)(
+      request(app).get(`/api/notifications/tenant-avatar/${seed.tenantB.id}`),
+    ).expect(200)
+  })
+
+  it('404s for a tenant without a current membership (no existence leak)', async () => {
     await asUser(seed.userA)(
       request(app).get(`/api/notifications/tenant-avatar/${seed.tenantB.id}`),
     ).expect(404)

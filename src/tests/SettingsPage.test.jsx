@@ -193,7 +193,7 @@ describe('SettingsPage — plan gating', () => {
     const logo = await screen.findByAltText('Resend')
     let card = logo.closest('.MuiPaper-outlined')
     await user.click(within(card).getByRole('button', { name: 'Add integration' }))
-    card = (await screen.findByText('Send Emails through Resend')).closest('.MuiPaper-outlined')
+    card = (await screen.findByText('Send emails through Resend')).closest('.MuiPaper-outlined')
     await user.click(within(card).getByRole('button', { name: 'Configure' }))
     await user.type(within(card).getByLabelText('Resend API key'), `re_${'a'.repeat(32)}`)
     await user.click(within(card).getByRole('button', { name: 'Save' }))
