@@ -45,6 +45,24 @@ export async function fetchTenantArchiveState(executor, tenantId) {
   return rows[0] || null
 }
 
+// Profile-picture lookup gated by the caller's pending or approved membership in
+// that tenant — the generic /api/files route only authorizes against the *active*
+// tenant, which would 404 the profile pictures of every other tenant the user can
+// see. Returns null when the caller is not a current member (indistinguishable
+// from "no profile picture": both 404).
+export async function fetchTenantAvatarPathForMember(executor, userId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT t.avatar_path
+     FROM tenants t
+     JOIN memberships m ON m.tenant_id = t.id AND m.user_id = $1
+      AND m.status IN ('pending', 'approved')
+     WHERE t.id = $2`,
+    [userId, tenantId],
+  )
+  if (!rows[0]) return null
+  return rows[0].avatar_path ?? null
+}
+
 export async function userExists(executor, userId) {
   const { rowCount } = await executor.query('SELECT 1 FROM users WHERE id = $1', [userId])
   return rowCount > 0

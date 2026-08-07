@@ -181,14 +181,6 @@ export async function loadSongs(executor, rehearsalId, tenantId) {
   return rows
 }
 
-export async function getBandMemberIdForUser(executor, userId, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT id FROM band_members WHERE user_id = $1 AND tenant_id = $2',
-    [userId, tenantId],
-  )
-  return rows[0]?.id ?? null
-}
-
 export async function getLeadMemberIds(executor, tenantId) {
   const { rows } = await executor.query(
     `SELECT id FROM band_members WHERE tenant_id = $1 AND position = 'lead'`,

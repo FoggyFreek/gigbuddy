@@ -13,10 +13,12 @@ import {
 } from '../repositories/taskRepository.js'
 import {
   gigExistsInTenant,
-  getBandMemberIdForUser,
   getGigDescription,
 } from '../repositories/gigRepository.js'
-import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
+import {
+  bandMemberExistsInTenant,
+  getBandMemberIdForUser,
+} from '../repositories/bandMemberRepository.js'
 import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
 import { parseId, buildGigTaskUpdateFields } from '../validators/gigValidators.js'
 import {

@@ -5,10 +5,13 @@ import type {
   PurchaseAttachment,
   Task,
 } from '../../types/entities.ts'
+import type { MaybeCrossTenant } from '../../types/api.ts'
 
 export type GigDetailTabKey = 'event' | 'terms' | 'availability' | 'tasks'
 
-export interface GigDetail extends Gig {
+// Read through `/api/me/gigs/:id` when the detail is opened on another band's
+// gig, so the band label fields may be present.
+export interface GigDetail extends MaybeCrossTenant<Gig> {
   event_link?: string
   booking_fee_cents?: number
   admission?: string

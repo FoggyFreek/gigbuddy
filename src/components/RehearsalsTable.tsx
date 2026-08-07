@@ -1,4 +1,5 @@
 import type { Rehearsal, Participant, Id } from '../types/entities.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
@@ -37,6 +38,10 @@ function formatTime(val: string | undefined | null) {
 
 export type RehearsalsTab = 'upcoming' | 'past'
 
+// `showBand` rows come from the cross-tenant `/api/me` feeds, so the band label
+// fields may be present.
+type RehearsalRow = MaybeCrossTenant<Rehearsal>
+
 function tallyCounts(participants: Participant[] | undefined) {
   const total = participants?.length ?? 0
   const yes = participants?.filter((p) => p.vote === 'yes').length ?? 0
@@ -68,11 +73,11 @@ function ParticipantProgress({ participants }: Readonly<{ participants?: Partici
 }
 
 interface RehearsalCardProps {
-  rehearsal: Rehearsal
+  rehearsal: RehearsalRow
   bandMemberId?: Id | null
   active?: boolean
   onClick?: () => void
-  onShare?: (rehearsal: Rehearsal) => void
+  onShare?: (rehearsal: RehearsalRow) => void
   onVote?: (rehearsalId: Id | undefined, memberId: Id | undefined, vote: string | null) => void
   showBand?: boolean
 }
@@ -151,10 +156,10 @@ function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onShare, onVo
 }
 
 interface DesktopRowProps {
-  rehearsal: Rehearsal
+  rehearsal: RehearsalRow
   active?: boolean
   onClick?: () => void
-  onShare?: (rehearsal: Rehearsal) => void
+  onShare?: (rehearsal: RehearsalRow) => void
   showBand?: boolean
 }
 
@@ -221,7 +226,7 @@ function DesktopHead({ showBand = false }: Readonly<{ showBand?: boolean }>) {
 }
 
 interface RehearsalsTableProps {
-  rehearsals?: Rehearsal[]
+  rehearsals?: RehearsalRow[]
   loading?: boolean
   activeTab?: RehearsalsTab
   onTabChange?: (tab: RehearsalsTab) => void

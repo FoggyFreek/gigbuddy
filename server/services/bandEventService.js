@@ -15,9 +15,13 @@ import {
   updateBandEventFields,
   deleteBandEvent as deleteBandEventRow,
 } from '../repositories/bandEventRepository.js'
-import { parseListCursor, parseLocalDate } from '../validators/common.js'
+import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
-import { limitedCollection, windowedCollection } from './limitedCollectionService.js'
+import {
+  limitedCollection,
+  limitedCollectionWithCursor,
+  windowedCollection,
+} from './limitedCollectionService.js'
 import { loadAvailabilityMatrix } from './availabilityService.js'
 import { summarizeSpan } from '../domain/availabilitySpan.js'
 import { toDateStr } from '../utils/dateOnly.js'
@@ -26,8 +30,6 @@ import { listBandMembers, bandMemberExistsInTenant } from '../repositories/bandM
 import { withTransaction } from '../db/withTransaction.js'
 
 const NOT_FOUND = notFound('Not found')
-const INVALID_TODAY = 'today must be a valid ISO date (YYYY-MM-DD)'
-const INVALID_CURSOR = 'cursorDate and cursorId must be provided together and valid'
 
 // ---------- availability ----------
 
@@ -89,16 +91,11 @@ export async function listPastEvents(db, tenantId, query = {}, scope = {}) {
   const parsedCursor = parseListCursor(query)
   if (parsedCursor === null) return badRequest(INVALID_CURSOR)
 
-  const result = await limitedCollection(query.limit, (limit) =>
-    listPastBandEventRows(db, tenantId, today, limit, parsedCursor.cursor))
+  const result = await limitedCollectionWithCursor(query.limit, (limit) =>
+    listPastBandEventRows(db, tenantId, today, limit, parsedCursor.cursor), (event) => event.end_date)
   if (result.error) return result
 
-  const last = result.items[result.items.length - 1]
-  const nextCursor = last && result.items.length === result.meta.limit
-    ? { date: toDateStr(last.end_date), id: last.id }
-    : null
-  const items = await enrichEventsWithAvailability(db, tenantId, scope, result.items)
-  return { items, meta: { ...result.meta, nextCursor } }
+  return { ...result, items: await enrichEventsWithAvailability(db, tenantId, scope, result.items) }
 }
 
 // Deliberately NOT enriched: this feed drives the calendar grid, which renders

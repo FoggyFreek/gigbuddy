@@ -21,9 +21,12 @@ import Tooltip from '@mui/material/Tooltip'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import MemberAvatarStack from './MemberAvatarStack.tsx'
 import type { BandEvent, Id } from '../types/entities.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
 import SourceTenantIdentity from './SourceTenantIdentity.tsx'
 
-type BandEventWithTime = BandEvent & { start_time?: string; end_time?: string }
+// `showBand` rows come from the cross-tenant `/api/me` feeds, so the band label
+// fields may be present.
+type BandEventWithTime = MaybeCrossTenant<BandEvent> & { start_time?: string; end_time?: string }
 
 const BASE_COLUMN_COUNT = 6
 

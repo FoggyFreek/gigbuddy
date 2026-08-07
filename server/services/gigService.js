@@ -74,13 +74,15 @@ import {
 } from '../repositories/gigRepository.js'
 import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
 import { getTaskById } from '../repositories/taskRepository.js'
-import { parseLocalDate, parseListCursor } from '../validators/common.js'
+import { INVALID_CURSOR, INVALID_TODAY, parseLocalDate, parseListCursor } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
-import { limitedCollection, limitedCollectionWithTotal, windowedCollection } from './limitedCollectionService.js'
+import {
+  limitedCollectionWithCursor,
+  limitedCollectionWithTotal,
+  windowedCollection,
+} from './limitedCollectionService.js'
 
 const NOT_FOUND = notFound('Not found')
-const INVALID_TODAY = 'today must be a valid ISO date (YYYY-MM-DD)'
-const INVALID_CURSOR = 'cursorDate and cursorId must be provided together and valid'
 
 // ---------- notifications ----------
 
@@ -230,17 +232,11 @@ export async function listPastGigs(db, tenantId, query = {}, viewer = null) {
   const parsedCursor = parseListCursor(query)
   if (parsedCursor === null) return badRequest(INVALID_CURSOR)
 
-  const result = await limitedCollection(query.limit, (limit) =>
-    listPastGigRows(db, tenantId, today, limit, parsedCursor.cursor))
+  const result = await limitedCollectionWithCursor(query.limit, (limit) =>
+    listPastGigRows(db, tenantId, today, limit, parsedCursor.cursor), (gig) => gig.event_date)
   if (result.error) return result
 
-  const items = await enrichGigsWithAvailability(db, tenantId, result.items, viewer)
-  const last = items[items.length - 1]
-  const nextCursor = last && items.length === result.meta.limit
-    ? { date: toDateStr(last.event_date), id: last.id }
-    : null
-
-  return { items, meta: { ...result.meta, nextCursor } }
+  return { ...result, items: await enrichGigsWithAvailability(db, tenantId, result.items, viewer) }
 }
 
 export async function listGigsInRange(db, tenantId, query = {}, viewer = null) {
@@ -511,7 +507,7 @@ export async function setParticipantVote(db, tenantId, userId, gigId, memberId, 
     return { error: { status: 400, body: { error: 'Invalid vote value' } } }
   }
 
-  return withTransaction(async (client) => {
+  const result = await withTransaction(async (client) => {
     const option = await lockGigOptionResponseState(client, gigId, tenantId)
     if (!option) return NOT_FOUND
 
@@ -539,6 +535,14 @@ export async function setParticipantVote(db, tenantId, userId, gigId, memberId, 
       notifications: { firstUnavailable, allResponded },
     }
   }, { db })
+
+  if (result.error) return result
+
+  // Dispatched here, after the commit, so no caller can forget to act on them.
+  const { gig, notifications } = result
+  if (notifications.firstUnavailable) await notifyGigOptionUnavailable(tenantId, gig)
+  if (notifications.allResponded) await notifyGigOptionResponsesComplete(tenantId, gig)
+  return { gig }
 }
 
 // ---------- banner ----------

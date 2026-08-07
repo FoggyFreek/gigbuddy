@@ -14,13 +14,6 @@ import type { JoinPolicy } from '../utils/membership.ts'
 
 export type Id = number | string
 
-interface CrossTenantFields {
-  tenantId?: Id
-  tenantName?: string | null
-  tenantAvatarPath?: string | null
-  kind?: TenantKind | null
-}
-
 export interface Venue {
   id?: Id
   name?: string
@@ -40,7 +33,7 @@ export interface Venue {
   longitude?: number | null
 }
 
-export interface Gig extends CrossTenantFields {
+export interface Gig {
   /**
    * The ensemble this gig was played with — an 'ensemble' contact in the same
    * tenant. Only meaningful in a personal workspace; a band's gigs are the
@@ -93,7 +86,7 @@ export interface BandMemberInput {
 // A task. May be linked to a gig (gig_id set, with event_description/event_date
 // joined in for display) or stand alone (gig_id null). assigned_to null = no
 // assignee.
-export interface Task extends CrossTenantFields {
+export interface Task {
   id?: Id
   title?: string
   done?: boolean
@@ -121,7 +114,7 @@ export interface RehearsalSong {
   artist?: string
 }
 
-export interface Rehearsal extends CrossTenantFields {
+export interface Rehearsal {
   id?: Id
   proposed_date?: string
   status?: string
@@ -171,7 +164,7 @@ export interface AvailabilitySummary {
   days?: AvailabilityDay[]
 }
 
-export interface BandEvent extends CrossTenantFields {
+export interface BandEvent {
   id?: Id
   title?: string
   start_date?: string
@@ -953,6 +946,17 @@ export interface Period {
   quarter?: number
   from?: string
   to?: string
+}
+
+/**
+ * How the calendar renders a slot with no `band_member_id`. A band reads that as
+ * "whole band" (the default); a personal workspace, which has no roster at all,
+ * reads it as "me" — so the artist calendar overrides the label and colour
+ * instead of inventing a member row to match against.
+ */
+export interface UnassignedSlotLane {
+  name: string
+  color: string
 }
 
 /** The per-cell view model produced by buildCalendarCellViewModel. */

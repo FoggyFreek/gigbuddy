@@ -25,6 +25,12 @@ import { listMyTasks, setMyTaskDone } from '../api/me.ts'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
 import { useCrossTenantNavigate } from '../hooks/useCrossTenantNavigate.ts'
 import type { Id, Task } from '../types/entities.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
+
+// The page serves both tenant kinds: a band reads the tenant-scoped `/tasks`,
+// a personal workspace the cross-tenant `/api/me/tasks`, whose rows carry the
+// owning band's label.
+type TaskItem = MaybeCrossTenant<Task>
 
 const FILTER_SX = { height: 31 } as const
 const TASK_LIST_LIMIT = 50
@@ -48,14 +54,14 @@ export default function TasksPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const isCompact = useCompactLayout()
-  const [tasks, setTasks] = useState<Task[]>([])
+  const [tasks, setTasks] = useState<TaskItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [myTasksOnly, setMyTasksOnly] = useState(false)
   // Finished tasks stay hidden by default; both statuses selected shows everything.
   const [selectedStatuses, setSelectedStatuses] = useState<Set<TaskStatus>>(() => new Set(['open']))
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [editingTask, setEditingTask] = useState<TaskItem | null>(null)
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null)
 
   const load = useCallback(async (silent = false) => {
@@ -76,14 +82,14 @@ export default function TasksPage() {
   useEffect(() => { load() }, [load])
 
   const canToggleDone = useCallback(
-    (task: Task) => isPersonal
+    (task: TaskItem) => isPersonal
       ? task.tenantId === user?.activeTenantId || task.tenantId != null
       : canWritePlanning || (task.assigned_to != null && task.assigned_to === user?.bandMemberId),
     [isPersonal, user?.activeTenantId, canWritePlanning, user?.bandMemberId],
   )
 
   const canEditTask = useCallback(
-    (task: Task) => !isPersonal || task.tenantId === user?.activeTenantId,
+    (task: TaskItem) => !isPersonal || task.tenantId === user?.activeTenantId,
     [isPersonal, user?.activeTenantId],
   )
 
@@ -105,7 +111,7 @@ export default function TasksPage() {
     }, { replace: true })
   }, [taskParam, loading, tasks, canWritePlanning, canEditTask, setSearchParams])
 
-  async function handleToggle(task: Task) {
+  async function handleToggle(task: TaskItem) {
     if (task.id === undefined) return
     setTasks((prev) => prev.map((x) => (x.id === task.id ? { ...x, done: !x.done } : x)))
     try {
@@ -124,7 +130,7 @@ export default function TasksPage() {
     setDialogOpen(true)
   }
 
-  function openEdit(task: Task) {
+  function openEdit(task: TaskItem) {
     setEditingTask(task)
     setDialogOpen(true)
   }
@@ -266,7 +272,7 @@ export default function TasksPage() {
           onToggleDone={handleToggle}
           canToggleDone={canToggleDone}
           onOpenGig={(gigId: Id) => navigate(`/gigs/${gigId}?tab=tasks`)}
-          onOpenGigTask={(gigId: Id, task: Task) => {
+          onOpenGigTask={(gigId: Id, task: TaskItem) => {
             if (isPersonal && task.tenantId !== user?.activeTenantId) {
               void openInTenant(task.tenantId, `/gigs/${gigId}?tab=tasks`)
             } else navigate(`/gigs/${gigId}?tab=tasks`)

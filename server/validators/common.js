@@ -52,6 +52,8 @@ export function parseDateRange(query) {
 // (`?cursorDate=YYYY-MM-DD&cursorId=123`), keyed on (date, id) to match the
 // feed's ORDER BY tiebreak. Both params are required together; omitting both
 // means "first page". Never use OFFSET-style page/offset params instead.
+export const INVALID_CURSOR = 'cursorDate and cursorId must be provided together and valid'
+
 export function parseListCursor(query) {
   const cursorDate = query?.cursorDate
   const cursorId = query?.cursorId
@@ -61,6 +63,8 @@ export function parseListCursor(query) {
   if (id === null) return null
   return { cursor: { date: cursorDate, id } }
 }
+
+export const INVALID_TODAY = 'today must be a valid ISO date (YYYY-MM-DD)'
 
 // Calendar-day cutoff supplied by the browser. This intentionally represents
 // the user's local date rather than the API or database server's date.

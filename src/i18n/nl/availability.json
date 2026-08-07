@@ -60,6 +60,19 @@
     "saveFailed": "Je beschikbaarheidsinstellingen konden niet worden opgeslagen.",
     "loadFailed": "Je beschikbaarheidsinstellingen konden niet worden geladen."
   },
+  "slotDialog": {
+    "createTitle": "Beschikbaarheid toevoegen",
+    "editTitle": "Beschikbaarheid bewerken",
+    "member": "Lid",
+    "wholeBand": "Hele band",
+    "startDate": "Startdatum",
+    "endDate": "Einddatum",
+    "statusLabel": "Status",
+    "reason": "Reden (optioneel)",
+    "required": "Verplicht",
+    "endBeforeStart": "Moet op of na de startdatum liggen",
+    "create": "Aanmaken"
+  },
   "projection": {
     "hidden": "Details verborgen",
     "hiddenHelp": "Dit lid houdt de reden privé.",

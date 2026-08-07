@@ -105,7 +105,7 @@ vi.mock('../components/map/GigLocationMap.tsx', () => ({
   ),
 }))
 
-import { getGig, getGigMerchSummary, setGigTags, updateGig, updateTask } from '../api/gigs.ts'
+import { getGig, getGigMerchSummary, setGigTags, setGigVote, updateGig, updateTask } from '../api/gigs.ts'
 import { createInvoice, draftFromGig, listInvoicesByGig } from '../api/invoices.ts'
 import { getAvailabilityOn } from '../api/availability.ts'
 import { listMembers } from '../api/bandMembers.ts'
@@ -378,6 +378,77 @@ describe('GigDetailContent — reader mode (canWrite=false)', () => {
     await openTab(user, 'Terms')
     await user.click(screen.getByLabelText(/paid admission/i))
     expect(updateGig).not.toHaveBeenCalled()
+  })
+})
+
+describe('GigDetailContent — availability voting', () => {
+  const GIG_WITH_VOTE = (vote) => ({
+    id: 1,
+    event_date: '2026-06-15',
+    event_description: 'Jazz Night',
+    venue: { id: 11, name: 'Bimhuis', category: 'venue', city: 'Amsterdam' },
+    event_link: '',
+    start_time: '20:00:00',
+    end_time: '23:00:00',
+    status: 'option',
+    booking_fee_cents: 15000,
+    admission: 'free',
+    ticket_link: null,
+    notes: '',
+    has_pa_system: false,
+    has_drumkit: false,
+    has_stage_lights: false,
+    tasks: [],
+    attachments: [],
+    participants: [{ band_member_id: 1, name: 'Alice', position: 'guitar', color: '#f00', vote }],
+    tags: [],
+  })
+
+  beforeEach(() => {
+    getGig.mockClear()
+    setGigVote.mockClear()
+  })
+
+  it('does not save when Yes is clicked on a participant already voted yes', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce(GIG_WITH_VOTE('yes'))
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
+    await openTab(user, 'Availability')
+    await user.click(screen.getByRole('button', { name: 'Yes' }))
+    expect(setGigVote).not.toHaveBeenCalled()
+    expect(getGig).toHaveBeenCalledTimes(1)
+  })
+
+  it('saves when Yes is clicked on a participant who has not voted yes', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce(GIG_WITH_VOTE('no'))
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
+    await openTab(user, 'Availability')
+    await user.click(screen.getByRole('button', { name: 'Yes' }))
+    await waitFor(() => expect(setGigVote).toHaveBeenCalledWith(1, 1, 'yes'))
+  })
+
+  it('does not save when No is clicked on a participant already voted no', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce(GIG_WITH_VOTE('no'))
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
+    await openTab(user, 'Availability')
+    await user.click(screen.getByRole('button', { name: 'No' }))
+    expect(setGigVote).not.toHaveBeenCalled()
+    expect(getGig).toHaveBeenCalledTimes(1)
+  })
+
+  it('saves when No is clicked on a participant who has not voted no', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce(GIG_WITH_VOTE('yes'))
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
+    await openTab(user, 'Availability')
+    await user.click(screen.getByRole('button', { name: 'No' }))
+    await waitFor(() => expect(setGigVote).toHaveBeenCalledWith(1, 1, 'no'))
   })
 })
 

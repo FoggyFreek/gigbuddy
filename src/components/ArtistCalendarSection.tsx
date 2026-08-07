@@ -14,9 +14,11 @@ import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import EventAvailableIcon from '@mui/icons-material/EventAvailable'
 import EventNoteIcon from '@mui/icons-material/EventNote'
+import MicIcon from '@mui/icons-material/Mic'
 import AvailabilityCalendar from './AvailabilityCalendar.tsx'
 import AvailabilitySlotDialog from './AvailabilitySlotDialog.tsx'
 import BandEventFormModal from './BandEventFormModal.tsx'
+import GigFormModal from './GigFormModal.tsx'
 import { buildCalendarCells } from './calendar/calendarGrid.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { listMyAgenda, type AgendaItem, type AgendaItemType } from '../api/me.ts'
@@ -28,9 +30,12 @@ import {
   type UserAvailabilitySlot,
 } from '../api/userAvailability.ts'
 import { toIsoDate } from '../utils/availabilityUtils.ts'
-import type { BandEvent, Gig, Id, Member, Rehearsal, Slot } from '../types/entities.ts'
+import type { BandEvent, Gig, Id, Member, Rehearsal, Slot, UnassignedSlotLane } from '../types/entities.ts'
 
-const ARTIST_MEMBER_ID = 'artist'
+// A personal workspace has no roster, so its slots carry no band_member_id at
+// all; the calendar's "no member" lane is relabelled as the artist instead.
+const SELF_LANE_COLOR = '#5c6bc0'
+const NO_MEMBERS: Member[] = []
 
 const ITEM_PATH: Record<AgendaItemType, string> = {
   gig: '/gigs',
@@ -46,7 +51,7 @@ function calendarBounds(year: number, month: number) {
 function asSlot(slot: UserAvailabilitySlot): Slot {
   return {
     ...slot,
-    band_member_id: ARTIST_MEMBER_ID,
+    band_member_id: null,
     source: 'slot',
     createdByUserId: slot.created_by_user_id,
     createdInTenantId: slot.created_in_tenant_id,
@@ -79,15 +84,14 @@ export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<A
   const [slots, setSlots] = useState<Slot[]>([])
   const [slotDialog, setSlotDialog] = useState<{ slot: Partial<Slot> } | null>(null)
   const [addMenu, setAddMenu] = useState<{ anchorEl: Element; date: string } | null>(null)
-  const [createEventDate, setCreateEventDate] = useState<string | null>(null)
+  const [createModal, setCreateModal] = useState<{ type: 'event' | 'gig'; date: string } | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const fabRef = useRef<HTMLButtonElement | null>(null)
 
-  const artistMembers = useMemo<Member[]>(() => [{
-    id: ARTIST_MEMBER_ID,
-    name: t($ => $.events.me),
-    color: '#5c6bc0',
-  }], [t])
+  const selfLane = useMemo<UnassignedSlotLane>(
+    () => ({ name: t($ => $.events.me), color: SELF_LANE_COLOR }),
+    [t],
+  )
 
   async function reloadCalendar() {
     try {
@@ -165,14 +169,19 @@ export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<A
     setAddMenu({ anchorEl, date })
   }
 
-  function chooseAdd(type: 'availability' | 'event') {
+  function chooseAdd(type: 'availability' | 'event' | 'gig') {
     const date = addMenu?.date ?? selectedDay
     setAddMenu(null)
     if (type === 'availability') {
       setSlotDialog({ slot: { start_date: date, end_date: date, status: 'unavailable', reason: null } })
     } else {
-      setCreateEventDate(date)
+      setCreateModal({ type, date })
     }
+  }
+
+  function closeCreateModal() {
+    setCreateModal(null)
+    void reloadCalendar()
   }
 
   async function saveSlot(data: Partial<Slot>) {
@@ -208,7 +217,8 @@ export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<A
         gigs={gigs}
         rehearsals={rehearsals}
         bandEvents={bandEvents}
-        members={artistMembers}
+        members={NO_MEMBERS}
+        unassignedLane={selfLane}
         mobile={isCompact}
         selectedDay={selectedDay}
         selectionStart={selectionStart ?? undefined}
@@ -267,6 +277,10 @@ export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<A
           <ListItemIcon><EventAvailableIcon fontSize="small" /></ListItemIcon>
           {t($ => $.addMenu.availability)}
         </MenuItem>
+        <MenuItem onClick={() => chooseAdd('gig')}>
+          <ListItemIcon><MicIcon fontSize="small" /></ListItemIcon>
+          {t($ => $.addMenu.gig)}
+        </MenuItem>
         <MenuItem onClick={() => chooseAdd('event')}>
           <ListItemIcon><EventNoteIcon fontSize="small" /></ListItemIcon>
           {t($ => $.addMenu.artistEvent)}
@@ -285,11 +299,19 @@ export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<A
         />
       )}
 
-      {createEventDate && (
+      {createModal?.type === 'event' && (
         <BandEventFormModal
           mode="create"
-          initialDate={createEventDate}
-          onClose={() => { setCreateEventDate(null); void reloadCalendar() }}
+          initialDate={createModal.date}
+          onClose={closeCreateModal}
+        />
+      )}
+
+      {createModal?.type === 'gig' && (
+        <GigFormModal
+          mode="create"
+          initialDate={createModal.date}
+          onClose={closeCreateModal}
         />
       )}
     </Box>

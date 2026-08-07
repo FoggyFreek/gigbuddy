@@ -21,7 +21,7 @@ import {
 } from './calendar/calendarGrid.ts'
 import MonthMenu from './calendar/MonthMenu.tsx'
 import CalendarCell from './calendar/CalendarCell.tsx'
-import type { Gig, Member, BandEvent, Slot, Rehearsal } from '../types/entities.ts'
+import type { Gig, Member, BandEvent, Slot, Rehearsal, UnassignedSlotLane } from '../types/entities.ts'
 
 interface AvailabilityCalendarProps {
   year: number
@@ -31,6 +31,8 @@ interface AvailabilityCalendarProps {
   rehearsals?: Rehearsal[]
   bandEvents?: BandEvent[]
   members: Member[]
+  /** Overrides how slots without a `band_member_id` render; defaults to band-wide. */
+  unassignedLane?: UnassignedSlotLane
   selectionStart?: string
   selectedDay?: string
   mobile?: boolean
@@ -56,6 +58,7 @@ export default function AvailabilityCalendar({
   rehearsals = [],
   bandEvents = [],
   members,
+  unassignedLane,
   selectionStart,
   selectedDay,
   mobile = false,
@@ -197,6 +200,7 @@ export default function AvailabilityCalendar({
               cell={cell}
               members={members}
               mobile={mobile}
+              unassignedLane={unassignedLane}
               onDayClick={onDayClick}
               onSlotClick={onSlotClick}
               onGigClick={onGigClick}
@@ -237,6 +241,7 @@ export default function AvailabilityCalendar({
                 cell={cell}
                 members={members}
                 mobile={mobile}
+                unassignedLane={unassignedLane}
                 onDayClick={onDayClick}
                 onSlotClick={onSlotClick}
                 onGigClick={onGigClick}

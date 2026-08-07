@@ -39,8 +39,6 @@ import {
   notifyGigCreated,
   notifyGigConfirmed,
   notifyGigsImported,
-  notifyGigOptionUnavailable,
-  notifyGigOptionResponsesComplete,
 } from '../services/gigService.js'
 
 const BANNER_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
@@ -264,8 +262,6 @@ router.patch('/:id/participants/:bandMemberId', requirePermission(PERMISSIONS.PL
   const memberId = requireParam(req, res, 'bandMemberId'); if (memberId === null) return
   const result = await setParticipantVote(pool, req.tenantId, req.user.id, gigId, memberId, req.body)
   if (result.error) return sendError(res, result.error)
-  if (result.notifications.firstUnavailable) await notifyGigOptionUnavailable(req.tenantId, result.gig)
-  if (result.notifications.allResponded) await notifyGigOptionResponsesComplete(req.tenantId, result.gig)
   res.json(result.gig)
 })
 

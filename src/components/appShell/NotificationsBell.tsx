@@ -26,16 +26,13 @@ import {
   deleteNotification,
 } from '../../api/notifications.ts'
 import { formatRelativeTime } from '../../utils/dateFormat.ts'
+import { tenantAvatarUrl } from '../../utils/tenantAvatarUrl.ts'
 import type { AppNotification } from '../../types/entities.ts'
 
 const POLL_INTERVAL_MS = 60_000
 
-// Cross-tenant profile pictures go through the membership-authorized notifications
-// endpoint — the generic /api/files route only serves the *active* tenant.
 function avatarSrc(n: AppNotification): string {
-  return n.tenantAvatarPath && n.tenantId != null
-    ? `/api/notifications/tenant-avatar/${n.tenantId}`
-    : '/share/logo.png'
+  return tenantAvatarUrl(n.tenantId ?? undefined, n.tenantAvatarPath) ?? '/share/logo.png'
 }
 
 export default function NotificationsBell() {

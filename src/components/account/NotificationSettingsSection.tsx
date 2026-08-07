@@ -11,6 +11,7 @@ import { usePushNotifications } from '../../hooks/usePushNotifications.ts'
 import { getNotificationPrefs, updateNotificationPrefs } from '../../api/notifications.ts'
 import type { NotificationPrefs } from '../../types/entities.ts'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
+import { tenantAvatarUrl } from '../../utils/tenantAvatarUrl.ts'
 
 // Maps the server's dash-cased notification types onto the camelCase i18n leaf
 // keys so the typed selector index stays compile-checked (nav-items pattern).
@@ -36,14 +37,9 @@ const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
   'achievement-unlocked': 'achievementUnlocked',
 }
 
-// Cross-tenant profile pictures use the membership-authorized notification
-// endpoint. The generic app logo is the fallback when no picture is uploaded.
-function tenantAvatarSrc(
-  tenantId: number,
-  avatarPath: string | null,
-): string {
-  if (!avatarPath) return '/share/logo.png'
-  return `/api/notifications/tenant-avatar/${tenantId}`
+// The generic app logo is the fallback when no picture is uploaded.
+function tenantAvatarSrc(tenantId: number, avatarPath: string | null): string {
+  return tenantAvatarUrl(tenantId, avatarPath) ?? '/share/logo.png'
 }
 
 export default function NotificationSettingsSection() {
@@ -56,7 +52,7 @@ export default function NotificationSettingsSection() {
     getNotificationPrefs().then(setPrefs).catch(() => { })
   }, [])
 
-  const pushDisabled = pushStatus === 'denied' || pushStatus === 'unsupported' || pushStatus === 'loading'
+  const pushDisabled = pushStatus !== 'subscribed' && pushStatus !== 'unsubscribed'
 
   const handlePushToggle = () => {
     if (pushStatus === 'subscribed') void unsubscribe()
@@ -112,6 +108,16 @@ export default function NotificationSettingsSection() {
           {pushStatus === 'unsupported' && (
             <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
               {t($ => $.settings.push.unsupported)}
+            </Typography>
+          )}
+          {pushStatus === 'loading' && (
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              {t($ => $.settings.push.loading)}
+            </Typography>
+          )}
+          {pushStatus === 'unavailable' && (
+            <Typography variant="caption" sx={{ color: 'warning.main', display: 'block' }}>
+              {t($ => $.settings.push.unavailable)}
             </Typography>
           )}
         </Box>

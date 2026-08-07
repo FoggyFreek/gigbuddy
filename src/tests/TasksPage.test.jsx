@@ -265,7 +265,7 @@ describe('TasksPage', () => {
     const user = userEvent.setup()
     wrap(<TasksPage />)
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: /new task/i }))
+    await user.click(screen.getByRole('button', { name: /^add$/i }))
     const titleField = await screen.findByLabelText(/title/i)
     await user.type(titleField, 'Practice set')
     await user.click(screen.getByRole('button', { name: /^save$/i }))
@@ -322,10 +322,10 @@ describe('TasksPage', () => {
       usePermissions.mockReturnValue({ canWritePlanning: false })
     })
 
-    it('hides the New task button', async () => {
+    it('hides the add task button', async () => {
       wrap(<TasksPage />)
       await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
-      expect(screen.queryByRole('button', { name: /new task/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^add$/i })).not.toBeInTheDocument()
     })
 
     it('ignores a ?task= deep link (the dialog is an edit affordance)', async () => {

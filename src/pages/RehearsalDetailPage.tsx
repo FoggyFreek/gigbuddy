@@ -28,8 +28,9 @@ import RehearsalSongsSection from '../components/RehearsalSongsSection.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
 import { useAuth } from '../contexts/authContext.ts'
-import { usePermissions } from '../hooks/usePermissions.ts'
+import { useCrossTenantRow } from '../hooks/useCrossTenantRow.ts'
 import type { Rehearsal, Member, Song, Id } from '../types/entities.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
 import { getMyRehearsal, setMyRehearsalVote } from '../api/me.ts'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
 import { SourceTenantSwitch } from '../components/SourceTenantIdentity.tsx'
@@ -39,9 +40,13 @@ interface RehearsalDetailOutletContext {
   onClose?: () => void
   onRehearsalUpdate?: (id: Id, patch: Partial<Rehearsal>) => void
   onRehearsalDelete?: (id: Id) => void
-  onRehearsalDetailLoaded?: (rehearsal: Rehearsal) => void
+  onRehearsalDetailLoaded?: (rehearsal: RehearsalDetail) => void
   onRehearsalDetailLoadError?: () => void
 }
+
+// Read through `/api/me/rehearsals/:id` when opened on another band's rehearsal,
+// so the band label fields may be present.
+type RehearsalDetail = MaybeCrossTenant<Rehearsal>
 
 interface RehearsalForm {
   proposed_date: string
@@ -59,7 +64,6 @@ export default function RehearsalDetailPage() {
   const rehearsalId = Number(id)
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { canWritePlanning } = usePermissions()
   const { isPersonal } = useTenantKind()
   const outletCtx = (useOutletContext<RehearsalDetailOutletContext>() || {}) as RehearsalDetailOutletContext
   const insideSplitView = !!outletCtx.insideSplitView
@@ -69,11 +73,10 @@ export default function RehearsalDetailPage() {
   const [form, setForm] = useState<RehearsalForm>({ proposed_date: '', start_time: '', end_time: '', location: '', notes: '' })
   const [loading, setLoading] = useState(true)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [rehearsal, setRehearsal] = useState<Rehearsal | null>(null)
+  const [rehearsal, setRehearsal] = useState<RehearsalDetail | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [addMemberId, setAddMemberId] = useState('')
-  const isCrossBand = isPersonal && rehearsal?.tenantId !== user?.activeTenantId
-  const detailCanWrite = canWritePlanning && !isCrossBand
+  const { isCrossBand, canWrite: detailCanWrite } = useCrossTenantRow(rehearsal)
 
   const saveFn = useCallback(
     async (patch: Partial<RehearsalForm>) => { await updateRehearsal(rehearsalId, patch) },
@@ -91,20 +94,19 @@ export default function RehearsalDetailPage() {
 
   const refresh = useCallback(async () => {
     const r = await (isPersonal ? getMyRehearsal(rehearsalId) : getRehearsal(rehearsalId))
-    setRehearsal(r as Rehearsal)
+    setRehearsal(r)
     setForm({
-      proposed_date: toDateInput((r as Rehearsal).proposed_date),
-      start_time: toTimeInput((r as Rehearsal).start_time),
-      end_time: toTimeInput((r as Rehearsal).end_time),
-      location: (r as Rehearsal).location || '',
-      notes: (r as Rehearsal).notes || '',
+      proposed_date: toDateInput(r.proposed_date),
+      start_time: toTimeInput(r.start_time),
+      end_time: toTimeInput(r.end_time),
+      location: r.location || '',
+      notes: r.notes || '',
     })
   }, [rehearsalId, isPersonal])
 
   useEffect(() => {
     ;(isPersonal ? getMyRehearsal(rehearsalId) : getRehearsal(rehearsalId))
-      .then((r) => {
-        const rehearsalData = r as Rehearsal
+      .then((rehearsalData) => {
         setRehearsal(rehearsalData)
         onRehearsalDetailLoaded?.(rehearsalData)
         setForm({

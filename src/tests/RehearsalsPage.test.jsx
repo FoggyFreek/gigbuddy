@@ -54,10 +54,17 @@ vi.mock('../api/rehearsals.ts', () => ({
 vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn().mockResolvedValue([]),
 }))
+vi.mock('../api/me.ts', () => ({
+  listMyUpcomingRehearsals: vi.fn().mockResolvedValue({ items: [], meta: { limit: 100, returned: 0 } }),
+  listMyPastRehearsals: vi.fn().mockResolvedValue({ items: [], meta: { limit: 100, returned: 0, nextCursor: null } }),
+  getMyRehearsal: vi.fn(),
+  setMyRehearsalVote: vi.fn().mockResolvedValue({}),
+}))
 
 import RehearsalsPage from '../pages/RehearsalsPage.tsx'
 import RehearsalDetailPage from '../pages/RehearsalDetailPage.tsx'
-import { deleteRehearsal, listPastRehearsals, listRehearsals, listUpcomingRehearsals, updateRehearsal } from '../api/rehearsals.ts'
+import { deleteRehearsal, getRehearsal, listPastRehearsals, listRehearsals, listUpcomingRehearsals, setVote, updateRehearsal } from '../api/rehearsals.ts'
+import { getMyRehearsal, setMyRehearsalVote } from '../api/me.ts'
 import theme from '../theme.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 
@@ -218,5 +225,110 @@ describe('RehearsalsPage', () => {
     await waitFor(() => expect(deleteRehearsal).toHaveBeenCalledWith(1))
     expect(screen.queryByText('Studio A')).not.toBeInTheDocument()
     expect(screen.getByText(/no upcoming rehearsals/i)).toBeInTheDocument()
+  })
+})
+
+// The rehearsal's own copy of the read-only-for-foreign-rows rule
+// (useCrossTenantRow): a row the artist workspace doesn't own is labelled with
+// its band, and that label alone decides.
+describe('RehearsalDetailPage — cross-band rehearsal in a personal workspace', () => {
+  const ARTIST_USER = {
+    id: 9,
+    activeTenantId: 1,
+    activeTenantKind: 'personal',
+    activeTenantRole: 'tenant_admin',
+    permissions: ['app.view', 'planning.write'],
+    bandMemberId: 3,
+  }
+
+  const CROSS_BAND_REHEARSAL = {
+    id: 1,
+    proposed_date: '2099-05-10',
+    start_time: '19:00:00',
+    end_time: '22:00:00',
+    location: 'Studio A',
+    notes: '',
+    status: 'option',
+    participants: [{ band_member_id: 22, name: 'Ann', position: 'drums', vote: null }],
+    viewerBandMemberId: 22,
+    tenantId: 9,
+    tenantName: 'Other Band',
+    tenantAvatarPath: null,
+  }
+
+  function renderAsArtist(rehearsal) {
+    const switchTenant = vi.fn().mockResolvedValue(undefined)
+    getMyRehearsal.mockResolvedValue(rehearsal)
+    render(
+      <MemoryRouter initialEntries={['/rehearsals/1']}>
+        <ThemeProvider theme={theme}>
+          <AuthContext.Provider
+            value={{
+              user: ARTIST_USER,
+              setUser: () => {},
+              logout: async () => {},
+              switchTenant,
+              refreshUser: async () => undefined,
+            }}
+          >
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <Routes>
+                <Route path="/rehearsals/:id" element={<RehearsalDetailPage />} />
+              </Routes>
+            </LocalizationProvider>
+          </AuthContext.Provider>
+        </ThemeProvider>
+      </MemoryRouter>
+    )
+    return switchTenant
+  }
+
+  beforeEach(() => {
+    getRehearsal.mockClear()
+    getMyRehearsal.mockReset()
+    setVote.mockClear()
+    setMyRehearsalVote.mockClear()
+  })
+
+  it('names the source band and offers no editing', async () => {
+    const user = userEvent.setup()
+    const switchTenant = renderAsArtist(CROSS_BAND_REHEARSAL)
+
+    await screen.findByTestId('source-tenant-switch')
+    expect(screen.getByText('Other Band')).toBeInTheDocument()
+    expect(screen.getByLabelText('Location')).toHaveAttribute('readonly')
+    expect(screen.queryByRole('button', { name: /^delete$/i })).not.toBeInTheDocument()
+    expect(getRehearsal).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Switch to band' }))
+    expect(switchTenant).toHaveBeenCalledWith(9)
+  })
+
+  // The one write left: /api/rehearsals is out of reach for a band the viewer
+  // isn't in, so the vote goes through the hub.
+  it("routes the viewer's own vote through the cross-tenant hub", async () => {
+    const user = userEvent.setup()
+    renderAsArtist(CROSS_BAND_REHEARSAL)
+    await screen.findByTestId('source-tenant-switch')
+
+    await user.click(screen.getByRole('button', { name: 'Yes' }))
+
+    await waitFor(() => expect(setMyRehearsalVote).toHaveBeenCalledWith(1, 'yes'))
+    expect(setVote).not.toHaveBeenCalled()
+  })
+
+  it("keeps the full editor for the workspace's own rehearsal", async () => {
+    const user = userEvent.setup()
+    renderAsArtist({ ...CROSS_BAND_REHEARSAL, tenantId: 1, tenantName: 'Solo' })
+    await waitFor(() => expect(screen.getByDisplayValue('Studio A')).toBeInTheDocument())
+
+    expect(screen.queryByTestId('source-tenant-switch')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Location')).not.toHaveAttribute('readonly')
+    expect(screen.getByRole('button', { name: /^delete$/i })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Yes' }))
+
+    await waitFor(() => expect(setVote).toHaveBeenCalledWith(1, 22, 'yes'))
+    expect(setMyRehearsalVote).not.toHaveBeenCalled()
   })
 })

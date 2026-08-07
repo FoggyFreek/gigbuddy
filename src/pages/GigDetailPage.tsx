@@ -19,8 +19,9 @@ import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import { deleteGig } from '../api/gigs.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Gig, Id } from '../types/entities.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
-import { useAuth } from '../contexts/authContext.ts'
+import { useCrossTenantRow } from '../hooks/useCrossTenantRow.ts'
 
 export default function GigDetailPage() {
   const { t } = useTranslation(['gigs', 'common'])
@@ -28,7 +29,6 @@ export default function GigDetailPage() {
   const gigId = Number(id)
   const { canWritePlanning } = usePermissions()
   const { isPersonal } = useTenantKind()
-  const { user } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const TAB_KEYS: TabKey[] = ['event', 'terms', 'availability', 'tasks']
@@ -40,21 +40,19 @@ export default function GigDetailPage() {
   const contentRef = useRef<{ saveStatus: string; flush: () => Promise<void> }>(null)
   const [polledStatus, setPolledStatus] = useState('idle')
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [gig, setGig] = useState<Gig | null>(null)
+  const [gig, setGig] = useState<MaybeCrossTenant<Gig> | null>(null)
 
-  // A gig one of the musician's other bands owns, opened from the artist
-  // workspace. It is read-only here: nothing on this page writes to a tenant
-  // the viewer isn't currently in. Same shape as the rehearsal/band-event pages.
+  // The lifted gig lags during async loads / split-view id changes, so a gig
+  // that isn't this page's yet says nothing about which band owns it.
   const loaded = gig?.id === gigId
-  const isCrossBand = isPersonal && loaded && gig.tenantId !== user?.activeTenantId
-  const detailCanWrite = canWritePlanning && !isCrossBand
+  const { isCrossBand, canWrite: detailCanWrite } = useCrossTenantRow(loaded ? gig : null)
 
   // Report the gig this pane just fetched back up to the list page (e.g. so
   // it can pick the Upcoming/Past tab from the gig's date) instead of the
   // list page making its own, redundant getGig() call for the same id.
-  const onGigDetailLoaded = outletCtx.onGigDetailLoaded as ((gig: Gig) => void) | undefined
+  const onGigDetailLoaded = outletCtx.onGigDetailLoaded as ((gig: MaybeCrossTenant<Gig>) => void) | undefined
   const onGigDetailLoadError = outletCtx.onGigDetailLoadError as (() => void) | undefined
-  const handleGigLoaded = useCallback((g: Gig) => {
+  const handleGigLoaded = useCallback((g: MaybeCrossTenant<Gig>) => {
     setGig(g)
     onGigDetailLoaded?.(g)
   }, [onGigDetailLoaded])

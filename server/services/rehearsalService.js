@@ -22,7 +22,6 @@ import {
   rehearsalExistsInTenant,
   loadParticipants,
   loadSongs,
-  getBandMemberIdForUser,
   getLeadMemberIds,
   filterMemberIdsInTenant,
   insertRehearsal,
@@ -41,15 +40,20 @@ import {
   insertRehearsalSong,
   deleteRehearsalSong,
 } from '../repositories/rehearsalRepository.js'
-import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
+import {
+  bandMemberExistsInTenant,
+  getBandMemberIdForUser,
+} from '../repositories/bandMemberRepository.js'
 import { songExistsInTenant } from '../repositories/songRepository.js'
-import { parseListCursor, parseLocalDate } from '../validators/common.js'
+import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
-import { limitedCollection, windowedCollection } from './limitedCollectionService.js'
+import {
+  limitedCollection,
+  limitedCollectionWithCursor,
+  windowedCollection,
+} from './limitedCollectionService.js'
 
 const NOT_FOUND = notFound('Not found')
-const INVALID_TODAY = 'today must be a valid ISO date (YYYY-MM-DD)'
-const INVALID_CURSOR = 'cursorDate and cursorId must be provided together and valid'
 
 // ---------- notifications ----------
 
@@ -153,16 +157,11 @@ export async function listPastRehearsals(db, tenantId, query = {}) {
   const parsedCursor = parseListCursor(query)
   if (parsedCursor === null) return badRequest(INVALID_CURSOR)
 
-  const result = await limitedCollection(query.limit, (limit) =>
-    listPastRehearsalRows(db, tenantId, today, limit, parsedCursor.cursor))
+  const result = await limitedCollectionWithCursor(query.limit, (limit) =>
+    listPastRehearsalRows(db, tenantId, today, limit, parsedCursor.cursor), (r) => r.proposed_date)
   if (result.error) return result
 
-  const items = await attachParticipants(db, tenantId, result.items)
-  const last = items[items.length - 1]
-  const nextCursor = last && items.length === result.meta.limit
-    ? { date: rehearsalDateStr(last), id: last.id }
-    : null
-  return { items, meta: { ...result.meta, nextCursor } }
+  return { ...result, items: await attachParticipants(db, tenantId, result.items) }
 }
 
 export async function listRehearsalsInRange(db, tenantId, query = {}) {
@@ -302,7 +301,7 @@ export async function setParticipantVote(db, tenantId, userId, rehearsalId, memb
     }
   }
 
-  return withTransaction(async (client) => {
+  const result = await withTransaction(async (client) => {
     const option = await lockRehearsalOptionResponseState(client, rehearsalId, tenantId)
     if (!option) return NOT_FOUND
 
@@ -334,6 +333,14 @@ export async function setParticipantVote(db, tenantId, userId, rehearsalId, memb
       notifications: { firstUnavailable, allResponded },
     }
   }, { db })
+
+  if (result.error) return result
+
+  // Dispatched here, after the commit, so no caller can forget to act on them.
+  const { rehearsal, notifications } = result
+  if (notifications.firstUnavailable) await notifyRehearsalOptionUnavailable(tenantId, rehearsal)
+  if (notifications.allResponded) await notifyRehearsalOptionResponsesComplete(tenantId, rehearsal)
+  return { rehearsal }
 }
 
 // ---------- songs ----------

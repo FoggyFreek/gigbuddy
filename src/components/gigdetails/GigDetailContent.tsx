@@ -29,6 +29,7 @@ import GigTasksSection from './GigTasksSection.tsx'
 import GigTerms from './GigTerms.tsx'
 import type { GigDetail, GigDetailForm, GigDetailTabKey } from './types.ts'
 import useDebouncedSave from '../../hooks/useDebouncedSave.ts'
+import { useCrossTenantRow } from '../../hooks/useCrossTenantRow.ts'
 import { useAuth } from '../../contexts/authContext.ts'
 import { addGigParticipant, deleteGigBanner, getGig, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../../api/gigs.ts'
 import { getBannerPath } from '../../api/profile.ts'
@@ -71,9 +72,9 @@ interface GigDetailContentProps {
   initialTab?: TabKey
   // 'me' reads through the cross-tenant hub (/api/me) instead of the active
   // tenant's /api/gigs — set by the page when the active tenant is personal, so
-  // gigs from the musician's other bands resolve at all. A gig that turns out to
-  // belong to another band is then read-only and drops the Terms and
-  // Availability tabs, whose data is band-scoped and unreachable from here.
+  // gigs from the musician's other bands resolve at all. Those arrive labelled
+  // with their band, which is what makes them read-only (useCrossTenantRow) and
+  // drops the Terms and Availability tabs, band-scoped and unreachable here.
   source?: 'tenant' | 'me'
 }
 
@@ -190,8 +191,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
 
   // A gig the personal workspace doesn't own: served read-only by /api/me, with
   // no band roster, availability, contacts, merch or invoices reachable.
-  const isCrossBand = source === 'me' && gig != null && gig.tenantId !== user?.activeTenantId
-  const editable = canWrite && !isCrossBand
+  const { isCrossBand, canWrite: editable } = useCrossTenantRow(gig, { canWrite })
 
   useEffect(() => {
     const ac = new AbortController()

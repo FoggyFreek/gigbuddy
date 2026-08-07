@@ -2,12 +2,11 @@ import './_envSetup.js'
 // @vitest-environment node
 import { vi, describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
 import request from 'supertest'
-import { Readable } from 'node:stream'
 import { PERMISSIONS } from '../../../shared/permissions.js'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
 let dispatchNotification
-let mockSendNotification, mockStatObject, mockGetObject
+let mockSendNotification
 let seed
 
 beforeAll(async () => {
@@ -21,20 +20,6 @@ beforeAll(async () => {
       setVapidDetails: vi.fn(),
       sendNotification: mockSendNotification,
     },
-  }))
-
-  // The tenant-avatar route streams from object storage; keep storage out of the
-  // test loop (only auth/ownership behavior is under test here).
-  const avatar = Buffer.from('AVATAR')
-  mockStatObject = vi.fn().mockResolvedValue({
-    size: avatar.length,
-    metaData: { 'content-type': 'image/png' },
-  })
-  mockGetObject = vi.fn().mockImplementation(async () => Readable.from([avatar]))
-  vi.doMock('../../../server/services/storageService.js', async (importOriginal) => ({
-    ...(await importOriginal()),
-    statObject: (...args) => mockStatObject(...args),
-    getObject: (...args) => mockGetObject(...args),
   }))
 
   const dbMod = await import('./_db.js')
@@ -385,43 +370,5 @@ describe('preferences', () => {
   })
 })
 
-describe('GET /api/notifications/tenant-avatar/:tenantId', () => {
-  beforeEach(async () => {
-    await pool.query(
-      `UPDATE tenants SET avatar_path = 'tenants/' || id || '/avatar/profile.png' WHERE id = $1`,
-      [seed.tenantB.id],
-    )
-  })
-
-  it('streams the profile picture for any tenant the caller is an approved member of', async () => {
-    const res = await asUser(seed.superUser)(
-      request(app).get(`/api/notifications/tenant-avatar/${seed.tenantB.id}`),
-    ).expect(200)
-    expect(mockGetObject).toHaveBeenCalledWith(`tenants/${seed.tenantB.id}/avatar/profile.png`)
-    expect(res.headers['content-type']).toContain('image/png')
-  })
-
-  it('streams the profile picture for a pending membership shown in settings', async () => {
-    await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status, source)
-       VALUES ($1, $2, 'contributor', 'pending', 'invite')`,
-      [seed.userA.id, seed.tenantB.id],
-    )
-
-    await asUser(seed.userA)(
-      request(app).get(`/api/notifications/tenant-avatar/${seed.tenantB.id}`),
-    ).expect(200)
-  })
-
-  it('404s for a tenant without a current membership (no existence leak)', async () => {
-    await asUser(seed.userA)(
-      request(app).get(`/api/notifications/tenant-avatar/${seed.tenantB.id}`),
-    ).expect(404)
-  })
-
-  it('404s when the tenant has no profile picture', async () => {
-    await asUser(seed.userA)(
-      request(app).get(`/api/notifications/tenant-avatar/${seed.tenantA.id}`),
-    ).expect(404)
-  })
-})
+// The tenant profile-picture stream the bell renders is covered by
+// tenantAvatar.test.js, where the route now lives — both mounts included.

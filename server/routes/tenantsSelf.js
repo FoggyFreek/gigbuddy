@@ -14,6 +14,7 @@ import {
   unarchiveOwnedTenant,
 } from '../services/tenantSelfService.js'
 import { getTenantOnboardingStatus } from '../services/platformSettingsService.js'
+import { tenantAvatarHandler } from './tenantAvatar.js'
 
 const router = Router()
 
@@ -39,6 +40,11 @@ router.get('/onboarding-status', async (_req, res) => {
 router.get('/owned', async (req, res) => {
   res.json(await listOwnedTenants(pool, req.user.id))
 })
+
+// Readable for every tenant the caller is a member of, not just owned ones —
+// avatars render across the switcher, dashboard, tables and the artist hub.
+// requireCurrentTerms matches the gating this had under /api/notifications.
+router.get('/:id/avatar', requireCurrentTerms, tenantAvatarHandler('id'))
 
 router.post('/:id/archive', requireCurrentTerms, async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return

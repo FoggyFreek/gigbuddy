@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
@@ -62,6 +62,7 @@ vi.mock('../api/venues.ts', async (importOriginal) => ({
 }))
 
 import { createGig, getGig, updateGig } from '../api/gigs.ts'
+import { getAvailabilityOn } from '../api/availability.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 
 // Editing a gig (auto-save fields) is gated on planning.write, so the modal
@@ -74,10 +75,10 @@ const AUTH_VALUE = {
   refreshUser: async () => undefined,
 }
 
-function wrap(ui) {
+function wrap(ui, tenantKind = 'band') {
   return render(
     <MemoryRouter>
-      <AuthContext.Provider value={AUTH_VALUE}>
+      <AuthContext.Provider value={{ ...AUTH_VALUE, user: { ...AUTH_VALUE.user, activeTenantKind: tenantKind } }}>
         <ThemeProvider theme={theme}>
           <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
         </ThemeProvider>
@@ -135,6 +136,22 @@ describe('GigFormModal — create mode', () => {
     wrap(<GigFormModal mode="create" onClose={onClose} />)
     await user.click(screen.getByRole('button', { name: /cancel/i }))
     expect(onClose).toHaveBeenCalled()
+  })
+
+  // A personal workspace has no roster, and /api/availability is gated on the
+  // band_availability capability — asking would 403.
+  it('skips the member availability panel in a personal workspace', async () => {
+    getAvailabilityOn.mockClear()
+    vi.useFakeTimers()
+    try {
+      wrap(<GigFormModal mode="create" initialDate="2026-08-01" onClose={() => {}} />, 'personal')
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(getAvailabilityOn).not.toHaveBeenCalled()
+    expect(screen.queryByText('Member availability')).not.toBeInTheDocument()
   })
 
   it('hides the notes field in create mode', () => {

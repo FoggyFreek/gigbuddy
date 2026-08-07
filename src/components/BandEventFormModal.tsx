@@ -13,6 +13,8 @@ import Typography from '@mui/material/Typography'
 import { createBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
 import { getAvailabilitySpan } from '../api/availability.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 import { toDateInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import BandEventFields from './BandEventFields.tsx'
@@ -43,6 +45,9 @@ const EMPTY_FORM = {
 
 export default function BandEventFormModal({ mode, bandEventId, onClose, initialDate }: Readonly<BandEventFormModalProps>) {
   const { t } = useTranslation(['bandEvents', 'common'])
+  // A personal workspace has no roster, and /api/availability is gated on the
+  // band_availability capability — asking there would 403.
+  const showAvailability = useTenantKind().supports(TENANT_CAPABILITIES.BAND_AVAILABILITY)
   const [form, setForm] = useState(() =>
     mode === 'create' && initialDate
       ? { ...EMPTY_FORM, start_date: initialDate, end_date: initialDate }
@@ -83,7 +88,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
   }, [mode, bandEventId])
 
   useEffect(() => {
-    if (mode !== 'create' || !form.start_date) return
+    if (mode !== 'create' || !showAvailability || !form.start_date) return
     const end = form.end_date || form.start_date
     if (end < form.start_date) return
 
@@ -96,7 +101,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
     return () => {
       if (availabilityTimerRef.current) clearTimeout(availabilityTimerRef.current)
     }
-  }, [mode, form.start_date, form.end_date])
+  }, [mode, showAvailability, form.start_date, form.end_date])
 
   function handleChange(field: string, value: string | boolean | null) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -158,7 +163,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
               onChange={handleChange}
               errors={mode === 'edit' ? { ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors } : errors}
             />
-            {mode === 'create' && form.start_date && (
+            {mode === 'create' && showAvailability && form.start_date && (
               <Grid size={12}>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>

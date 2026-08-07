@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Button from '@mui/material/Button'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
@@ -33,6 +34,7 @@ interface SlotForm {
 }
 
 export default function AvailabilitySlotDialog({ open, slot, members, onSave, onDelete, onClose, personal = false }: Readonly<AvailabilitySlotDialogProps>) {
+  const { t } = useTranslation(['availability', 'common'])
   const isEdit = !!slot?.id
   const [form, setForm] = useState<SlotForm>(() => slot ? {
     band_member_id: slot.band_member_id ?? null,
@@ -56,10 +58,10 @@ export default function AvailabilitySlotDialog({ open, slot, members, onSave, on
 
   function validate() {
     const errs: Record<string, string> = {}
-    if (!form.start_date) errs.start_date = 'Required'
-    if (!form.end_date) errs.end_date = 'Required'
+    if (!form.start_date) errs.start_date = t($ => $.slotDialog.required)
+    if (!form.end_date) errs.end_date = t($ => $.slotDialog.required)
     if (form.start_date && form.end_date && form.end_date < form.start_date) {
-      errs.end_date = 'Must be on or after start date'
+      errs.end_date = t($ => $.slotDialog.endBeforeStart)
     }
     return errs
   }
@@ -79,19 +81,19 @@ export default function AvailabilitySlotDialog({ open, slot, members, onSave, on
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>{isEdit ? 'Edit slot' : 'Add availability slot'}</DialogTitle>
+      <DialogTitle>{isEdit ? t($ => $.slotDialog.editTitle) : t($ => $.slotDialog.createTitle)}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           {!personal && (
             <TextField
               select
-              label="Member"
+              label={t($ => $.slotDialog.member)}
               value={form.band_member_id === null ? '' : String(form.band_member_id)}
               onChange={(e) => set('band_member_id', e.target.value === '' ? null : Number(e.target.value))}
               fullWidth
               size="small"
             >
-              <MenuItem value="">Whole band</MenuItem>
+              <MenuItem value="">{t($ => $.slotDialog.wholeBand)}</MenuItem>
               {members.map((m) => (
                 <MenuItem key={String(m.id)} value={String(m.id)}>{m.name}</MenuItem>
               ))}
@@ -99,7 +101,7 @@ export default function AvailabilitySlotDialog({ open, slot, members, onSave, on
           )}
 
           <DateEntryField
-            label="Start date"
+            label={t($ => $.slotDialog.startDate)}
             value={form.start_date}
             onChange={(e) => set('start_date', e.target.value)}
             fullWidth
@@ -109,7 +111,7 @@ export default function AvailabilitySlotDialog({ open, slot, members, onSave, on
           />
 
           <DateEntryField
-            label="End date"
+            label={t($ => $.slotDialog.endDate)}
             value={form.end_date}
             onChange={(e) => set('end_date', e.target.value)}
             fullWidth
@@ -119,20 +121,20 @@ export default function AvailabilitySlotDialog({ open, slot, members, onSave, on
           />
 
           <Stack spacing={0.5}>
-            <Typography variant="caption" color="text.secondary">Status</Typography>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{t($ => $.slotDialog.statusLabel)}</Typography>
             <ToggleButtonGroup
               exclusive
               value={form.status}
               onChange={(_e, val) => { if (val) set('status', val) }}
               size="small"
             >
-              <ToggleButton value="available">Available</ToggleButton>
-              <ToggleButton value="unavailable">Unavailable</ToggleButton>
+              <ToggleButton value="available">{t($ => $.status.available)}</ToggleButton>
+              <ToggleButton value="unavailable">{t($ => $.status.unavailable)}</ToggleButton>
             </ToggleButtonGroup>
           </Stack>
 
           <TextField
-            label="Reason (optional)"
+            label={t($ => $.slotDialog.reason)}
             value={form.reason || ''}
             onChange={(e) => set('reason', e.target.value)}
             fullWidth
@@ -143,12 +145,12 @@ export default function AvailabilitySlotDialog({ open, slot, members, onSave, on
       <DialogActions sx={{ px: 3, pb: 2 }}>
         {isEdit && (
           <Button color="error" onClick={() => onDelete(slot!.id!)} sx={{ mr: 'auto' }}>
-            Delete
+            {t($ => $.common.actions.delete)}
           </Button>
         )}
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t($ => $.common.actions.cancel)}</Button>
         <Button variant="contained" onClick={handleSave}>
-          {isEdit ? 'Save' : 'Create'}
+          {isEdit ? t($ => $.common.actions.save) : t($ => $.slotDialog.create)}
         </Button>
       </DialogActions>
     </Dialog>

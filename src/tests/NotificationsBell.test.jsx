@@ -120,7 +120,7 @@ describe('NotificationsBell', () => {
 
     const imgs = screen.getAllByRole('img')
     const srcs = imgs.map((img) => img.getAttribute('src'))
-    expect(srcs).toContain('/api/notifications/tenant-avatar/2')
+    expect(srcs).toContain('/api/tenants/2/avatar')
     expect(srcs).toContain('/share/logo.png')
   })
 

@@ -656,14 +656,6 @@ export async function clearGigBannerPath(executor, gigId, tenantId) {
   )
 }
 
-export async function getBandMemberIdForUser(executor, userId, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT id FROM band_members WHERE user_id = $1 AND tenant_id = $2',
-    [userId, tenantId],
-  )
-  return rows[0]?.id ?? null
-}
-
 export async function insertGigAttachment(executor, tenantId, gigId, file, objectKey) {
   const { rows } = await executor.query(
     `INSERT INTO gig_attachments (gig_id, tenant_id, object_key, original_filename, content_type, file_size)

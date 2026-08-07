@@ -250,6 +250,18 @@ describe('PurchasesPage', () => {
     expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument()
   })
 
+  it('shows the e-invoice import action as an icon button with a localized tooltip', async () => {
+    const user = userEvent.setup()
+    wrap(<PurchasesPage />)
+    await screen.findByText('mi5 Studios')
+
+    const importButton = screen.getByRole('button', { name: resources.en.purchases.importDialog.title })
+    expect(importButton).toHaveClass('MuiIconButton-root')
+
+    await user.hover(importButton)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(resources.en.purchases.importDialog.title)
+  })
+
   it('creates a purchase and opens it in the nested detail view', async () => {
     const user = userEvent.setup()
     await i18n.changeLanguage('nl')

@@ -37,6 +37,15 @@ export default function GigParticipantsSection({
   canWrite = true,
 }: Readonly<GigParticipantsSectionProps>) {
   const { t } = useTranslation(['gigs', 'common'])
+
+  // Re-affirming the current vote is a no-op: VoteToggle sends null when the
+  // clicked button already matches, and clearing that way is never intended
+  // here, so swallow the click instead of saving a retraction.
+  function handleVote(participant: Participant, next: string | null) {
+    if (next === null) return
+    onVote(participant.band_member_id!, next)
+  }
+
   return (
     <Stack spacing={1}>
       {participants.length === 0 && (
@@ -73,7 +82,7 @@ export default function GigParticipantsSection({
           <VoteToggle
             vote={p.vote}
             disabled={!canWrite}
-            onChange={(v: string | null) => onVote(p.band_member_id!, v)}
+            onChange={(v: string | null) => handleVote(p, v)}
           />
           {canWrite && (
             <IconButton

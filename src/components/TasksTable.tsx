@@ -17,6 +17,11 @@ import { tenantAvatarUrl } from '../utils/tenantAvatarUrl.ts'
 import Avatar from '@mui/material/Avatar'
 import { formatDueDate } from '../utils/dateFormat.ts'
 import type { Id, Task } from '../types/entities.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
+
+// The table is fed by both the tenant-scoped `/tasks` feed and the cross-tenant
+// `/api/me/tasks` one; only the latter's rows carry a band label.
+type TaskItem = MaybeCrossTenant<Task>
 
 const CHIP_SX = {
   height: 20,
@@ -38,12 +43,12 @@ function isOverdue(task: Task): boolean {
 }
 
 interface TaskRowProps {
-  task: Task
-  onToggleDone: (task: Task) => void
-  canToggleDone: (task: Task) => boolean
-  onEditTask?: (task: Task) => void
-  onOpenTask?: (task: Task) => void
-  canEditTask?: (task: Task) => boolean
+  task: TaskItem
+  onToggleDone: (task: TaskItem) => void
+  canToggleDone: (task: TaskItem) => boolean
+  onEditTask?: (task: TaskItem) => void
+  onOpenTask?: (task: TaskItem) => void
+  canEditTask?: (task: TaskItem) => boolean
 }
 
 function TaskRow({ task, onToggleDone, canToggleDone, onEditTask, onOpenTask, canEditTask }: Readonly<TaskRowProps>) {
@@ -139,13 +144,13 @@ function StandaloneTaskCard(props: Readonly<StandaloneTaskCardProps>) {
 
 interface GigTaskCardProps {
   gigId: Id
-  tasks: Task[]
-  onToggleDone: (task: Task) => void
-  canToggleDone: (task: Task) => boolean
+  tasks: TaskItem[]
+  onToggleDone: (task: TaskItem) => void
+  canToggleDone: (task: TaskItem) => boolean
   onOpenGig: (gigId: Id) => void
-  onOpenGigTask?: (gigId: Id, task: Task) => void
-  onEditTask?: (task: Task) => void
-  canEditTask?: (task: Task) => boolean
+  onOpenGigTask?: (gigId: Id, task: TaskItem) => void
+  onEditTask?: (task: TaskItem) => void
+  canEditTask?: (task: TaskItem) => boolean
 }
 
 function GigTaskCard({ gigId, tasks, onToggleDone, canToggleDone, onOpenGig, onOpenGigTask, onEditTask, canEditTask }: Readonly<GigTaskCardProps>) {
@@ -207,8 +212,8 @@ function GigTaskCard({ gigId, tasks, onToggleDone, canToggleDone, onOpenGig, onO
 }
 
 type TaskCardGroup =
-  | { kind: 'gig'; gigId: Id; tasks: Task[] }
-  | { kind: 'standalone'; task: Task }
+  | { kind: 'gig'; gigId: Id; tasks: TaskItem[] }
+  | { kind: 'standalone'; task: TaskItem }
 
 function compareTasksByDueDate(a: Task, b: Task): number {
   if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date)
@@ -217,7 +222,7 @@ function compareTasksByDueDate(a: Task, b: Task): number {
   return 0
 }
 
-function groupTasks(tasks: Task[]): TaskCardGroup[] {
+function groupTasks(tasks: TaskItem[]): TaskCardGroup[] {
   const groups: TaskCardGroup[] = []
   const gigGroups = new Map<string, Extract<TaskCardGroup, { kind: 'gig' }>>()
 
@@ -248,14 +253,14 @@ function groupTasks(tasks: Task[]): TaskCardGroup[] {
 }
 
 interface TasksTableProps {
-  tasks: Task[]
-  onToggleDone: (task: Task) => void
-  canToggleDone: (task: Task) => boolean
+  tasks: TaskItem[]
+  onToggleDone: (task: TaskItem) => void
+  canToggleDone: (task: TaskItem) => boolean
   onOpenGig: (gigId: Id) => void
-  onOpenGigTask?: (gigId: Id, task: Task) => void
-  onEditTask?: (task: Task) => void
-  onOpenTask?: (task: Task) => void
-  canEditTask?: (task: Task) => boolean
+  onOpenGigTask?: (gigId: Id, task: TaskItem) => void
+  onEditTask?: (task: TaskItem) => void
+  onOpenTask?: (task: TaskItem) => void
+  canEditTask?: (task: TaskItem) => boolean
 }
 
 export default function TasksTable({ tasks, onToggleDone, canToggleDone, onOpenGig, onOpenGigTask, onEditTask, onOpenTask, canEditTask }: Readonly<TasksTableProps>) {

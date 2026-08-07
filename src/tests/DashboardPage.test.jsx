@@ -414,11 +414,11 @@ describe('DashboardPage in an artist workspace', () => {
     expect(screen.getAllByRole('img', { name: 'The Nightowls' })).toHaveLength(2)
     expect(screen.getByRole('img', { name: 'Quartet Blue' })).toHaveAttribute(
       'src',
-      '/api/notifications/tenant-avatar/4',
+      '/api/tenants/4/avatar',
     )
     expect(screen.getByRole('img', { name: 'Brass Dept' })).toHaveAttribute(
       'src',
-      '/api/notifications/tenant-avatar/7',
+      '/api/tenants/7/avatar',
     )
     expect(screen.queryByText('The Nightowls')).not.toBeInTheDocument()
     expect(screen.queryByText('Brass Dept')).not.toBeInTheDocument()

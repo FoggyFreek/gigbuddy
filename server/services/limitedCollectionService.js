@@ -1,4 +1,5 @@
 import { MAX_LIST_LIMIT, parseListLimit, parseDateRange } from '../validators/common.js'
+import { toDateStr } from '../utils/dateOnly.js'
 import { badRequest } from './serviceErrors.js'
 
 const limitError = (maxLimit) => badRequest(`limit must be an integer between 1 and ${maxLimit}`)
@@ -37,6 +38,23 @@ export async function limitedCollectionWithTotal(rawLimit, fetchPage, maxLimit =
       total,
     },
   }
+}
+
+// Variant for deep bounded feeds ("load more"), which walk history with a
+// keyset cursor instead of an offset. `dateOf` names the row's ordering date —
+// the same column the repository's ORDER BY ... DESC, id DESC tiebreaks on, so
+// the cursor and the query agree. A page short of its limit is the last page
+// and gets no cursor.
+export async function limitedCollectionWithCursor(rawLimit, fetchItems, dateOf, maxLimit = MAX_LIST_LIMIT) {
+  const result = await limitedCollection(rawLimit, fetchItems, maxLimit)
+  if (result.error) return result
+
+  const last = result.items[result.items.length - 1]
+  const nextCursor = last && result.items.length === result.meta.limit
+    ? { date: toDateStr(dateOf(last)), id: last.id }
+    : null
+
+  return { items: result.items, meta: { ...result.meta, nextCursor } }
 }
 
 // Shared contract for endpoints that return every item inside an inclusive

@@ -18,6 +18,7 @@ import {
   listOwnedTenants as listOwnedTenantRows,
   fetchOwnedTenant,
   fetchPersonalTenant,
+  fetchTenantAvatarPathForMember,
   setTenantArchived,
 } from '../repositories/tenantRepository.js'
 import { lockUserForCapCheck } from '../repositories/limitRepository.js'
@@ -178,6 +179,15 @@ export async function createPersonalTenant(db, user, body) {
 
 export async function listOwnedTenants(db, userId) {
   return listOwnedTenantRows(db, userId)
+}
+
+// Membership-authorized, not ownership-authorized: a profile picture is shown for
+// every tenant the caller can see (the switcher, the dashboard, the artist hub,
+// the notification bell), including memberships that are still pending.
+export async function getMemberTenantAvatar(db, userId, tenantId) {
+  const avatarPath = await fetchTenantAvatarPathForMember(db, userId, tenantId)
+  if (!avatarPath) return NOT_FOUND
+  return { avatarPath }
 }
 
 export async function archiveOwnedTenant(db, userId, tenantId) {

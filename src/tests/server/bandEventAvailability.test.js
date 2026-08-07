@@ -87,6 +87,21 @@ async function addUserSlot(userId, start, end, status, reason = null) {
   )
 }
 
+// A personal workspace owned by user A: an ordinary tenant with no roster.
+async function addPersonalWorkspace(slug = 'solo-ws') {
+  const { rows: [workspace] } = await pool.query(
+    `INSERT INTO tenants (slug, band_name, display_name, kind, created_by_user_id, owner_user_id)
+     VALUES ($1, 'Solo', 'Solo', 'personal', $2, $2) RETURNING *`,
+    [slug, seed.userA.id],
+  )
+  await pool.query(
+    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+     VALUES ($1, $2, 'tenant_admin', 'approved', NOW(), 'owner')`,
+    [seed.userA.id, workspace.id],
+  )
+  return workspace
+}
+
 const memberEntry = (payload, memberId) =>
   payload.members_availability.find((m) => m.member_id === memberId)
 
@@ -161,16 +176,7 @@ describe('band event availability', () => {
   })
 
   it('omits availability in a personal workspace, which has no band roster', async () => {
-    const { rows: [workspace] } = await pool.query(
-      `INSERT INTO tenants (slug, band_name, display_name, kind, created_by_user_id, owner_user_id)
-       VALUES ('solo-ws', 'Solo', 'Solo', 'personal', $1, $1) RETURNING *`,
-      [seed.userA.id],
-    )
-    await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
-       VALUES ($1, $2, 'tenant_admin', 'approved', NOW(), 'owner')`,
-      [seed.userA.id, workspace.id],
-    )
+    const workspace = await addPersonalWorkspace()
     const event = await addEvent(workspace.id, 'Practice block', '2027-09-10', '2027-09-12')
 
     const res = await inTenant(seed.userA.id, workspace.id)(
@@ -178,6 +184,32 @@ describe('band event availability', () => {
 
     expect(res.body).not.toHaveProperty('members_availability')
     expect(res.body).not.toHaveProperty('availability_days')
+  })
+
+  it('creates a personal event in a personal workspace and shows it on that calendar only', async () => {
+    const workspace = await addPersonalWorkspace('solo-create-ws')
+
+    const created = await inTenant(seed.userA.id, workspace.id)(request(app).post('/api/band-events').send({
+      title: 'Studio day', start_date: SPAN.start, location: 'Home studio',
+    })).expect(201)
+
+    expect(created.body).toMatchObject({
+      title: 'Studio day', location: 'Home studio', tenant_id: workspace.id,
+    })
+    // No roster, so the lead-member default has nobody to add.
+    const { rows: participants } = await pool.query(
+      'SELECT * FROM band_event_participants WHERE band_event_id = $1', [created.body.id],
+    )
+    expect(participants).toHaveLength(0)
+
+    const calendar = await inTenant(seed.userA.id, workspace.id)(request(app)
+      .get('/api/band-events/range').query({ from: SPAN.start, to: SPAN.end })).expect(200)
+    expect(calendar.body.items.map((event) => event.title)).toEqual(['Studio day'])
+
+    const bandCalendar = await asUserA(request(app)
+      .get('/api/band-events/range').query({ from: SPAN.start, to: SPAN.end })).expect(200)
+    expect(bandCalendar.body.items).toHaveLength(0)
+    await asUserA(request(app).get(`/api/band-events/${created.body.id}`)).expect(404)
   })
 
   it('never leaks another tenant\'s members, slots or events', async () => {

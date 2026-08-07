@@ -3,9 +3,8 @@
 // the bell aggregates all bands. Every operation is scoped to req.user.id.
 import { Router } from 'express'
 import pool from '../db/index.js'
-import { statObject, getObject } from '../services/storageService.js'
-import { logger } from '../utils/logger.js'
 import { requireParam, sendError } from './routeHelpers.js'
+import { tenantAvatarHandler } from './tenantAvatar.js'
 import {
   listNotifications,
   markNotificationRead,
@@ -13,7 +12,6 @@ import {
   removeNotification,
   getPreferences,
   updatePreferences,
-  getTenantAvatar,
 } from '../services/notificationService.js'
 
 const router = Router()
@@ -32,37 +30,11 @@ router.put('/prefs', async (req, res) => {
   res.json(result.prefs)
 })
 
-// Streams a tenant profile picture for any tenant membership exposed by /auth/me
-// (pending or approved). The generic /api/files route only authorizes against the active tenant,
-// which would 404 the other bands' profile pictures shown in the bell.
-router.get('/tenant-avatar/:tenantId', async (req, res) => {
-  const tenantId = requireParam(req, res, 'tenantId'); if (tenantId === null) return
-  const result = await getTenantAvatar(pool, req.user.id, tenantId)
-  if (result.error) return sendError(res, result.error)
-
-  try {
-    const stat = await statObject(result.avatarPath)
-    res.setHeader('Content-Type', stat.metaData?.['content-type'] || 'application/octet-stream')
-    res.setHeader('Content-Length', stat.size)
-    const stream = await getObject(result.avatarPath)
-    // Stream errors after headers are sent don't reach Express's error
-    // handler via pipe(); mirror the handling in routes/files.js.
-    stream.on('error', (streamErr) => {
-      logger.error('storage.stream_error', { err: streamErr })
-      if (!res.headersSent) {
-        res.status(502).json({ error: 'Storage error' })
-      } else {
-        res.destroy()
-      }
-    })
-    stream.pipe(res)
-  } catch (err) {
-    if (err.code === 'NoSuchKey' || err.message?.includes('Not Found')) {
-      return res.status(404).json({ error: 'Not found' })
-    }
-    throw err
-  }
-})
+// Legacy alias for the tenant profile picture, which the bell was the first (and
+// for a while the only) consumer of. The route now belongs to the tenants stack
+// at /api/tenants/:id/avatar; this mount stays so clients loaded before the move
+// keep working.
+router.get('/tenant-avatar/:tenantId', tenantAvatarHandler('tenantId'))
 
 router.post('/read-all', async (req, res) => {
   await markAllNotificationsRead(pool, req.user.id)

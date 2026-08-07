@@ -3,6 +3,7 @@ import { loadUser } from './auth.js'
 import { setContextField } from '../utils/requestContextStore.js'
 import { tenantKindNotSupported } from '../services/serviceErrors.js'
 import { listApprovedMemberTenants } from '../repositories/tenantRepository.js'
+import { memberTenantScope } from '../domain/memberTenants.js'
 import { tenantKindSupports } from '../../shared/tenantCapabilities.js'
 
 async function fetchMembership(userId, tenantId) {
@@ -65,14 +66,14 @@ export async function resolveMemberTenantIds(req, res, next) {
     if (!req.user) return
     try {
       const rows = await listApprovedMemberTenants(pool, req.user.id)
-      req.memberTenants = rows.map((r) => ({
+      req.memberTenants = memberTenantScope(rows.map((r) => ({
         tenantId: r.id,
         kind: r.kind,
         displayName: r.display_name,
         slug: r.slug,
         avatarPath: r.avatar_path,
         role: r.role,
-      }))
+      })))
       next()
     } catch (e) {
       next(e)

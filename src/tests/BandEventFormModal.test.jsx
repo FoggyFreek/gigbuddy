@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
@@ -27,12 +27,21 @@ vi.mock('../api/availability.ts', () => ({
 import BandEventFormModal from '../components/BandEventFormModal.tsx'
 import { createBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
 import { getAvailabilitySpan } from '../api/availability.ts'
+import { AuthContext } from '../contexts/authContext.ts'
 import theme from '../theme.ts'
 
-function wrap(ui) {
+function wrap(ui, tenantKind = 'band') {
   return render(
     <ThemeProvider theme={theme}>
-      <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+      <AuthContext.Provider value={{
+        user: { id: 1, activeTenantId: 7, activeTenantKind: tenantKind },
+        setUser: () => {},
+        logout: async () => {},
+        switchTenant: async () => undefined,
+        refreshUser: async () => undefined,
+      }}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+      </AuthContext.Provider>
     </ThemeProvider>
   )
 }
@@ -116,6 +125,21 @@ describe('BandEventFormModal — create mode', () => {
     await user.click(screen.getByRole('button', { name: /add event/i }))
     expect(await screen.findByText(/lead member unavailable/i)).toBeInTheDocument()
     expect(createBandEvent).not.toHaveBeenCalled()
+  })
+
+  // A personal workspace has no roster, and /api/availability is gated on the
+  // band_availability capability — asking would 403.
+  it('skips the availability check in a personal workspace', async () => {
+    vi.useFakeTimers()
+    try {
+      wrap(<BandEventFormModal mode="create" initialDate="2099-09-01" onClose={() => {}} />, 'personal')
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(getAvailabilitySpan).not.toHaveBeenCalled()
+    expect(screen.queryByText('Availability')).not.toBeInTheDocument()
   })
 })
 

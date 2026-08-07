@@ -110,11 +110,11 @@ describe('BandsSection', () => {
     wrap()
     expect(screen.getByRole('img', { name: 'Band A' })).toHaveAttribute(
       'src',
-      '/api/notifications/tenant-avatar/1',
+      '/api/tenants/1/avatar',
     )
     expect(screen.getByRole('img', { name: 'Band B' })).toHaveAttribute(
       'src',
-      '/api/notifications/tenant-avatar/2',
+      '/api/tenants/2/avatar',
     )
   })
 

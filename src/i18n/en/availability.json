@@ -60,6 +60,19 @@
     "saveFailed": "Could not save your availability settings.",
     "loadFailed": "Could not load your availability settings."
   },
+  "slotDialog": {
+    "createTitle": "Add availability slot",
+    "editTitle": "Edit slot",
+    "member": "Member",
+    "wholeBand": "Whole band",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "statusLabel": "Status",
+    "reason": "Reason (optional)",
+    "required": "Required",
+    "endBeforeStart": "Must be on or after start date",
+    "create": "Create"
+  },
   "projection": {
     "hidden": "Details hidden",
     "hiddenHelp": "This member keeps the reason private.",

@@ -14,7 +14,7 @@ import {
 } from '../../utils/availabilityUtils.ts'
 import { venueHeadline } from '../../utils/venueDisplay.ts'
 import { getEventTextColor, resolvePaletteColor } from './calendarColors.ts'
-import type { CalendarCell as CalendarCellData, Member, Slot, Gig, Rehearsal, BandEvent } from '../../types/entities.ts'
+import type { CalendarCell as CalendarCellData, Member, Slot, Gig, Rehearsal, BandEvent, UnassignedSlotLane } from '../../types/entities.ts'
 
 const SLOT_BAR_SX = {
   minHeight: 20,
@@ -93,9 +93,10 @@ function Dot({ bgcolor, opacity, dataAttr }: Readonly<DotProps>) {
 interface MobileDotsProps {
   cell: CalendarCellData
   members: Member[]
+  unassignedLane?: UnassignedSlotLane
 }
 
-function MobileDots({ cell, members }: Readonly<MobileDotsProps>) {
+function MobileDots({ cell, members, unassignedLane }: Readonly<MobileDotsProps>) {
   return (
     <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, justifyContent: 'center', flexWrap: 'wrap', gap: 0.5, rowGap: 0.25 }}>
       {(cell.cellGigs ?? []).map((gig) => (
@@ -108,7 +109,7 @@ function MobileDots({ cell, members }: Readonly<MobileDotsProps>) {
         <Dot key={`be-${ev.id}`} dataAttr={{ 'data-band-event-id': String(ev.id) }} bgcolor={BAND_EVENT_COLOR} />
       ))}
       {(cell.cellSlots ?? []).map((slot) => (
-        <Dot key={`s-${slot.id}`} dataAttr={{ 'data-slot-id': String(slot.id) }} bgcolor={getMemberColor(slot, members)} />
+        <Dot key={`s-${slot.id}`} dataAttr={{ 'data-slot-id': String(slot.id) }} bgcolor={getMemberColor(slot, members, unassignedLane?.color)} />
       ))}
     </Stack>
   )
@@ -241,15 +242,18 @@ interface SlotBarProps {
   slot: Slot
   members: Member[]
   theme: Theme
+  unassignedLane?: UnassignedSlotLane
   onSlotClick: (slot: Slot) => void
 }
 
-function SlotBar({ slot, members, theme, onSlotClick }: Readonly<SlotBarProps>) {
+function SlotBar({ slot, members, theme, unassignedLane, onSlotClick }: Readonly<SlotBarProps>) {
   const { t } = useTranslation('availability')
-  const color = getMemberColor(slot, members)
+  const color = getMemberColor(slot, members, unassignedLane?.color)
   const isUnavailable = slot.status === 'unavailable'
-  const memberName = slot.band_member_id === null
-    ? t($ => $.events.band)
+  const isUnassigned = slot.band_member_id == null
+  const unassignedName = unassignedLane?.name ?? t($ => $.events.band)
+  const memberName = isUnassigned
+    ? unassignedName
     : members.find((m) => m.id === slot.band_member_id)?.name || ''
   const statusLabel = slot.status
     ? t($ => $.status[slot.status as 'available' | 'unavailable'])
@@ -262,7 +266,7 @@ function SlotBar({ slot, members, theme, onSlotClick }: Readonly<SlotBarProps>) 
     ? t($ => $.projection.hidden)
     : slot.description || [slot.reason, slot.title, slot.tenantName].filter(Boolean).join(' — ')
   return (
-    <Tooltip title={[slot.band_member_id === null ? t($ => $.events.bandWide) : memberName, statusLabel, detail].filter(Boolean).join(' — ')}>
+    <Tooltip title={[isUnassigned ? (unassignedLane?.name ?? t($ => $.events.bandWide)) : memberName, statusLabel, detail].filter(Boolean).join(' — ')}>
       <Box
         data-slot-id={slot.id}
         aria-disabled={isDerivedBooking || undefined}
@@ -290,13 +294,14 @@ interface DesktopEventsProps {
   cell: CalendarCellData
   members: Member[]
   theme: Theme
+  unassignedLane?: UnassignedSlotLane
   onGigClick?: (gig: Gig) => void
   onRehearsalClick?: (reh: Rehearsal) => void
   onBandEventClick?: (ev: BandEvent) => void
   onSlotClick: (slot: Slot) => void
 }
 
-function DesktopEvents({ cell, members, theme, onGigClick, onRehearsalClick, onBandEventClick, onSlotClick }: Readonly<DesktopEventsProps>) {
+function DesktopEvents({ cell, members, theme, unassignedLane, onGigClick, onRehearsalClick, onBandEventClick, onSlotClick }: Readonly<DesktopEventsProps>) {
   return (
     <>
       <Stack spacing={0.375} sx={{ mt: 0.25 }}>
@@ -312,7 +317,7 @@ function DesktopEvents({ cell, members, theme, onGigClick, onRehearsalClick, onB
       </Stack>
       <Stack spacing={0.375} sx={{ mt: 0.375 }}>
         {(cell.cellSlots ?? []).map((slot) => (
-          <SlotBar key={slot.id} slot={slot} members={members} theme={theme} onSlotClick={onSlotClick} />
+          <SlotBar key={slot.id} slot={slot} members={members} theme={theme} unassignedLane={unassignedLane} onSlotClick={onSlotClick} />
         ))}
       </Stack>
     </>
@@ -323,6 +328,7 @@ interface CalendarCellProps {
   cell: CalendarCellData
   members: Member[]
   mobile?: boolean
+  unassignedLane?: UnassignedSlotLane
   onDayClick: (iso: string, shift: boolean, target: EventTarget) => void
   onSlotClick: (slot: Slot) => void
   onGigClick?: (gig: Gig) => void
@@ -331,7 +337,7 @@ interface CalendarCellProps {
 }
 
 export default function CalendarCell({
-  cell, members, mobile, onDayClick, onSlotClick, onGigClick, onRehearsalClick, onBandEventClick,
+  cell, members, mobile, unassignedLane, onDayClick, onSlotClick, onGigClick, onRehearsalClick, onBandEventClick,
 }: Readonly<CalendarCellProps>) {
   const theme = useTheme()
   const { iso, date, inMonth, isRowStart, week, isSelected, isToday, bgcolor } = cell
@@ -383,12 +389,13 @@ export default function CalendarCell({
       >
         <DayNumber date={date!} mobile={mobile} isToday={isToday} isSelected={isSelected} inMonth={inMonth} theme={theme} />
         {mobile ? (
-          <MobileDots cell={cell} members={members} />
+          <MobileDots cell={cell} members={members} unassignedLane={unassignedLane} />
         ) : (
           <DesktopEvents
             cell={cell}
             members={members}
             theme={theme}
+            unassignedLane={unassignedLane}
             onGigClick={onGigClick}
             onRehearsalClick={onRehearsalClick}
             onBandEventClick={onBandEventClick}

@@ -16,7 +16,7 @@
     },
     "theme": {
       "title": "Theme",
-      "description": "Choose your favorite theme. Your band's accent color still applies within each theme.",
+      "description": "Choose your favorite theme. The accent color of your artist or band still applies within each theme.",
       "variants": {
         "default": {
           "label": "Default",
@@ -37,7 +37,9 @@
       "label": "Browser push notifications",
       "description": "Deliver notifications to this browser, even when gigBuddy is closed.",
       "denied": "Notifications blocked in browser",
-      "unsupported": "Push notifications are not supported in this browser"
+      "unsupported": "Push notifications are not supported in this browser",
+      "loading": "Checking browser notification support…",
+      "unavailable": "Could not reach the browser notification service. Reload the page to try again."
     },
     "types": {
       "title": "Notification types",

@@ -540,6 +540,16 @@ describe('/api/me planning details and self-actions', () => {
     expect(search.body.map((gig) => gig.event_description)).toEqual(['Needle newer', 'Needle older'])
   })
 
+  // The message belongs to the parser, not to each caller: a half-supplied
+  // cursor must read the same here as it does on the tenant-scoped feeds.
+  it('rejects a malformed cursor with the same message as the tenant-scoped feeds', async () => {
+    const expected = { error: 'cursorDate and cursorId must be provided together and valid' }
+    for (const path of ['/api/me/gigs/past', '/api/me/rehearsals/past', '/api/me/band-events/past']) {
+      const res = await hubGet(seed.userA.id, path, { today: TODAY, cursorDate: '2098-01-01' }).expect(400)
+      expect(res.body).toEqual(expected)
+    }
+  })
+
   it('returns a restricted gig detail and 404s when participation is missing', async () => {
     const artist = await createUser('detail-artist@test.local')
     await addMembership(artist.id, seed.tenantA.id)
@@ -656,7 +666,7 @@ describe('the cross-tenant agenda tier', () => {
       resolveMemberTenantIds(req, { status: () => ({ json: reject }) }, (err) =>
         err ? reject(err) : resolve())
     })
-    expect(req.memberTenants.map((tenant) => tenant.tenantId)).toEqual([seed.tenantA.id])
+    expect(req.memberTenants.ids).toEqual([seed.tenantA.id])
     expect(req.tenantId).toBeUndefined()
     expect(req.membership).toBeUndefined()
   })

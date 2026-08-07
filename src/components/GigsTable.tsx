@@ -32,6 +32,7 @@ import GigStatusIcon from './GigStatusIcon.tsx'
 import SourceTenantIdentity from './SourceTenantIdentity.tsx'
 import { ALL_STATUSES } from '../utils/gigStatus.ts'
 import type { Gig, Member, MemberAvailability, Id } from '../types/entities.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
 
 const BASE_COLUMN_COUNT = 7
 // Search text is kept as component-local state so keystrokes never touch the
@@ -44,7 +45,9 @@ export type GigsTab = 'upcoming' | 'past'
 
 type GigStatusKey = 'option' | 'confirmed' | 'announced'
 
-type GigWithExtras = Gig & {
+// `showBand` rows come from the cross-tenant `/api/me` feeds, so the band label
+// fields may be present.
+type GigWithExtras = MaybeCrossTenant<Gig> & {
   members_availability?: MemberAvailability[]
   open_task_count?: number
 }

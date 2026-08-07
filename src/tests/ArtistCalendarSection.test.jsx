@@ -1,12 +1,17 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ArtistCalendarSection from '../components/ArtistCalendarSection.tsx'
 import { AuthContext } from '../contexts/authContext.ts'
 import theme from '../theme.ts'
 import { listMyAgenda } from '../api/me.ts'
+import { createBandEvent } from '../api/bandEvents.ts'
+import { createGig } from '../api/gigs.ts'
+import { getAvailabilitySpan } from '../api/availability.ts'
 import {
   createMyAvailability,
   deleteMyAvailability,
@@ -21,6 +26,22 @@ vi.mock('../api/userAvailability.ts', () => ({
   listMyAvailability: vi.fn(),
   updateMyAvailability: vi.fn(),
 }))
+vi.mock('../api/bandEvents.ts', () => ({
+  createBandEvent: vi.fn(),
+  getBandEvent: vi.fn(),
+  updateBandEvent: vi.fn(),
+}))
+vi.mock('../api/availability.ts', () => ({
+  getAvailabilitySpan: vi.fn(),
+  getAvailabilityOn: vi.fn(),
+}))
+vi.mock('../api/gigs.ts', () => ({ createGig: vi.fn() }))
+vi.mock('../api/venues.ts', () => ({
+  searchVenues: vi.fn().mockResolvedValue([]),
+  createVenue: vi.fn(),
+  updateVenue: vi.fn(),
+  listVenueContacts: vi.fn().mockResolvedValue([]),
+}))
 
 const USER = { id: 1, activeTenantId: 7, activeTenantKind: 'personal' }
 let switchTenant
@@ -29,20 +50,22 @@ function wrap() {
   switchTenant = vi.fn().mockResolvedValue({})
   return render(
     <ThemeProvider theme={theme}>
-      <MemoryRouter initialEntries={['/availability']}>
-        <AuthContext.Provider value={{
-          user: USER,
-          setUser: vi.fn(),
-          logout: vi.fn(),
-          switchTenant,
-          refreshUser: vi.fn(),
-        }}>
-          <Routes>
-            <Route path="/availability" element={<ArtistCalendarSection />} />
-            <Route path="/availability/events/:id" element={<div>other event detail</div>} />
-          </Routes>
-        </AuthContext.Provider>
-      </MemoryRouter>
+      <LocalizationProvider dateAdapter={AdapterDayjs}>
+        <MemoryRouter initialEntries={['/availability']}>
+          <AuthContext.Provider value={{
+            user: USER,
+            setUser: vi.fn(),
+            logout: vi.fn(),
+            switchTenant,
+            refreshUser: vi.fn(),
+          }}>
+            <Routes>
+              <Route path="/availability" element={<ArtistCalendarSection />} />
+              <Route path="/availability/events/:id" element={<div>other event detail</div>} />
+            </Routes>
+          </AuthContext.Provider>
+        </MemoryRouter>
+      </LocalizationProvider>
     </ThemeProvider>,
   )
 }
@@ -82,6 +105,10 @@ beforeEach(() => {
   createMyAvailability.mockResolvedValue({})
   updateMyAvailability.mockResolvedValue({})
   deleteMyAvailability.mockResolvedValue(undefined)
+  createBandEvent.mockResolvedValue({ id: 77 })
+  createGig.mockResolvedValue({ id: 88 })
+  // A personal workspace has no band availability; the endpoint would 403 there.
+  getAvailabilitySpan.mockRejectedValue(new Error('forbidden'))
 })
 
 describe('ArtistCalendarSection', () => {
@@ -122,6 +149,14 @@ describe('ArtistCalendarSection', () => {
     await waitFor(() => expect(deleteMyAvailability).toHaveBeenCalledWith(9))
   })
 
+  it('labels the artist\'s own slots "Me" rather than the band-wide fallback', async () => {
+    const { container } = wrap()
+    await waitFor(() => expect(container.querySelector('[data-slot-id="9"]')).not.toBeNull())
+
+    const slot = container.querySelector('[data-slot-id="9"]')
+    expect(slot.textContent).toBe('Me')
+  })
+
   it('creates user-owned availability without a band member id', async () => {
     const user = userEvent.setup()
     const { container } = wrap()
@@ -137,5 +172,44 @@ describe('ArtistCalendarSection', () => {
       status: 'unavailable',
     })))
     expect(createMyAvailability.mock.calls[0][0]).not.toHaveProperty('band_member_id')
+  })
+
+  it('creates a personal event on the clicked day and reloads the month', async () => {
+    const user = userEvent.setup()
+    const { container } = wrap()
+    await waitFor(() => expect(listMyAgenda).toHaveBeenCalled())
+
+    await user.click(container.querySelector('[data-date="2026-08-20"]'))
+    await user.click(await screen.findByText('Personal event'))
+
+    await user.type(screen.getByLabelText(/title/i), 'Studio day')
+    await user.click(screen.getByRole('button', { name: /add event/i }))
+
+    await waitFor(() => expect(createBandEvent).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Studio day',
+      start_date: '2026-08-20',
+      end_date: '2026-08-20',
+    })))
+    // The dialog closes onto a fresh agenda read, so the new event lands in the grid.
+    await waitFor(() => expect(listMyAgenda).toHaveBeenCalledTimes(2))
+    expect(screen.queryByRole('button', { name: /add event/i })).not.toBeInTheDocument()
+  })
+
+  it('creates a gig on the clicked day and reloads the month', async () => {
+    const user = userEvent.setup()
+    const { container } = wrap()
+    await waitFor(() => expect(listMyAgenda).toHaveBeenCalled())
+
+    await user.click(container.querySelector('[data-date="2026-08-20"]'))
+    await user.click(await screen.findByText('Gig'))
+
+    await user.type(screen.getByLabelText(/event description/i), 'Solo set')
+    await user.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => expect(createGig).toHaveBeenCalledWith(expect.objectContaining({
+      event_date: '2026-08-20',
+      event_description: 'Solo set',
+    })))
+    await waitFor(() => expect(listMyAgenda).toHaveBeenCalledTimes(2))
   })
 })

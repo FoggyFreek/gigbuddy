@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react'
 import { getVapidPublicKey, saveSubscription, removeSubscription } from '../api/push.ts'
 
-export type PushStatus = 'unsupported' | 'denied' | 'loading' | 'subscribed' | 'unsubscribed'
+export type PushStatus =
+  | 'unsupported' | 'denied' | 'loading' | 'subscribed' | 'unsubscribed' | 'unavailable'
+
+// `serviceWorker.ready` never settles when registration failed, so every wait
+// on it is bounded — otherwise the UI sits in 'loading' forever.
+const READY_TIMEOUT_MS = 10_000
 
 export interface PushNotificationsResult {
   status: PushStatus
@@ -16,6 +21,14 @@ function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0))).buffer as ArrayBuffer
 }
 
+function serviceWorkerReady(): Promise<ServiceWorkerRegistration> {
+  let timer: ReturnType<typeof setTimeout>
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('service worker never became ready')), READY_TIMEOUT_MS)
+  })
+  return Promise.race([navigator.serviceWorker.ready, timeout]).finally(() => clearTimeout(timer))
+}
+
 function getInitialStatus(): PushStatus {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported'
   if (Notification.permission === 'denied') return 'denied'
@@ -27,10 +40,17 @@ export function usePushNotifications(): PushNotificationsResult {
 
   useEffect(() => {
     if (status !== 'loading') return
-    navigator.serviceWorker.ready.then(async (reg) => {
-      const existing = await reg.pushManager.getSubscription()
-      setStatus(existing ? 'subscribed' : 'unsubscribed')
-    })
+    let cancelled = false
+    serviceWorkerReady()
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((existing) => {
+        if (!cancelled) setStatus(existing ? 'subscribed' : 'unsubscribed')
+      })
+      .catch((err: unknown) => {
+        console.error('[push] readiness check failed', err)
+        if (!cancelled) setStatus('unavailable')
+      })
+    return () => { cancelled = true }
   }, [status])
 
   async function subscribe(): Promise<void> {
@@ -40,7 +60,7 @@ export function usePushNotifications(): PushNotificationsResult {
         setStatus(perm === 'denied' ? 'denied' : 'unsubscribed')
         return
       }
-      const reg = await navigator.serviceWorker.ready
+      const reg = await serviceWorkerReady()
       const { publicKey } = await getVapidPublicKey()
       if (!publicKey) throw new Error('VAPID public key not available')
       const sub = await reg.pushManager.subscribe({
@@ -57,7 +77,7 @@ export function usePushNotifications(): PushNotificationsResult {
 
   async function unsubscribe(): Promise<void> {
     try {
-      const reg = await navigator.serviceWorker.ready
+      const reg = await serviceWorkerReady()
       const sub = await reg.pushManager.getSubscription()
       if (sub) {
         await removeSubscription(sub.endpoint)

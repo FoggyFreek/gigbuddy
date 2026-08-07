@@ -23,6 +23,7 @@ import {
 } from '../api/bandEvents.ts'
 import { listMembers } from '../api/bandMembers.ts'
 import type { BandEvent, Id, Member } from '../types/entities.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { toDateInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
@@ -30,16 +31,17 @@ import BandEventFields from '../components/BandEventFields.tsx'
 import BandEventAvailabilitySection from '../components/BandEventAvailabilitySection.tsx'
 import PastEventAlert from '../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
-import { usePermissions } from '../hooks/usePermissions.ts'
+import { useCrossTenantRow } from '../hooks/useCrossTenantRow.ts'
 import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
 import { getMyBandEvent } from '../api/me.ts'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
-import { useAuth } from '../contexts/authContext.ts'
 import { SourceTenantSwitch } from '../components/SourceTenantIdentity.tsx'
 
 const REQUIRED_FIELDS = ['title', 'start_date']
 
-interface BandEventDetail extends BandEvent {
+// Read through `/api/me/band-events/:id` when opened on another band's event,
+// so the band label fields may be present.
+interface BandEventDetail extends MaybeCrossTenant<BandEvent> {
   start_time?: string
   end_time?: string
   notes?: string
@@ -60,9 +62,7 @@ export default function BandEventDetailPage() {
   const { t } = useTranslation(['bandEvents', 'common'])
   const { id } = useParams()
   const bandEventId = Number(id)
-  const { canWritePlanning } = usePermissions()
   const { isPersonal } = useTenantKind()
-  const { user } = useAuth()
   const navigate = useNavigate()
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
   const insideSplitView = !!outletCtx.insideSplitView
@@ -86,8 +86,7 @@ export default function BandEventDetailPage() {
   const [availability, setAvailability] = useState<Pick<BandEvent, 'members_availability' | 'availability_days'>>({})
   const [members, setMembers] = useState<Member[]>([])
   const [event, setEvent] = useState<BandEventDetail | null>(null)
-  const isCrossBand = isPersonal && event?.tenantId !== user?.activeTenantId
-  const detailCanWrite = canWritePlanning && !isCrossBand
+  const { isCrossBand, canWrite: detailCanWrite } = useCrossTenantRow(event)
 
   const setEventAvailability = useCallback((event: BandEvent) => {
     setAvailability({

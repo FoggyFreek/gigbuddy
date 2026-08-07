@@ -33,6 +33,17 @@ export async function bandMemberUserId(executor, memberId, tenantId) {
   return rows[0]?.user_id ?? null
 }
 
+// The inverse of bandMemberUserId: the roster row a signed-in user occupies in
+// this tenant, or null when they have none (a member without a linked account,
+// or a user reading a tenant they only just joined).
+export async function getBandMemberIdForUser(executor, userId, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT id FROM band_members WHERE user_id = $1 AND tenant_id = $2',
+    [userId, tenantId],
+  )
+  return rows[0]?.id ?? null
+}
+
 export async function nextSortOrder(executor, tenantId) {
   const { rows } = await executor.query(
     'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM band_members WHERE tenant_id = $1',

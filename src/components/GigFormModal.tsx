@@ -33,6 +33,8 @@ const VenuePicker = _VenuePickerRaw as React.ComponentType<_VenuePickerProps>
 import { createGig } from '../api/gigs.ts'
 import { dayjsToTimeString, timeStringToDayjs } from '../utils/eventFormUtils.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 import type { Id, Venue, Gig } from '../types/entities.ts'
 
 dayjs.extend(customParseFormat)
@@ -78,6 +80,9 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
   const { t } = useTranslation(['gigs', 'common'])
   const contentRef = useRef<GigDetailHandle | null>(null)
   const { canWritePlanning: canWrite } = usePermissions()
+  // A personal workspace has no roster, and /api/availability is gated on the
+  // band_availability capability — asking there would 403.
+  const showAvailability = useTenantKind().supports(TENANT_CAPABILITIES.BAND_AVAILABILITY)
 
   // ── Create mode state ──────────────────────────────────────────────────────
   const [form, setForm] = useState<GigFormShape>(() =>
@@ -223,16 +228,18 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
               </TextField>
             </Grid>
 
-            <Grid size={12}>
-              <Divider sx={{ my: 1 }} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                {t($ => $.form.memberAvailability)}
-              </Typography>
-              <GigAvailabilityPanel
-                eventDate={form.event_date}
-                onDataLoad={setAvailabilityData}
-              />
-            </Grid>
+            {showAvailability && (
+              <Grid size={12}>
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  {t($ => $.form.memberAvailability)}
+                </Typography>
+                <GigAvailabilityPanel
+                  eventDate={form.event_date}
+                  onDataLoad={setAvailabilityData}
+                />
+              </Grid>
+            )}
           </Grid>
         )}
       </DialogContent>

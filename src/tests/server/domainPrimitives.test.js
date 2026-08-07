@@ -2,8 +2,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fetchTenant } from '../../../server/repositories/tenantRepository.js'
 import { songExistsInTenant } from '../../../server/repositories/songRepository.js'
-import { bandMemberExistsInTenant } from '../../../server/repositories/bandMemberRepository.js'
+import {
+  bandMemberExistsInTenant,
+  getBandMemberIdForUser,
+} from '../../../server/repositories/bandMemberRepository.js'
+import * as gigRepository from '../../../server/repositories/gigRepository.js'
+import * as rehearsalRepository from '../../../server/repositories/rehearsalRepository.js'
 import { insertLedgerEntries } from '../../../server/repositories/ledgerRepository.js'
+import { limitedCollectionWithCursor } from '../../../server/services/limitedCollectionService.js'
+import { memberTenantScope } from '../../../server/domain/memberTenants.js'
 import { normalizeIban } from '../../../server/utils/normalizeIban.js'
 
 describe('aggregate-owned repository primitives', () => {
@@ -38,6 +45,29 @@ describe('aggregate-owned repository primitives', () => {
     )
   })
 
+  it('resolves the roster row for a user through the band-member repository', async () => {
+    const executor = { query: vi.fn().mockResolvedValue({ rows: [{ id: 5 }] }) }
+
+    await expect(getBandMemberIdForUser(executor, 3, 7)).resolves.toBe(5)
+    expect(executor.query).toHaveBeenCalledWith(
+      'SELECT id FROM band_members WHERE user_id = $1 AND tenant_id = $2',
+      [3, 7],
+    )
+  })
+
+  it('returns null when the user has no roster row in the tenant', async () => {
+    const executor = { query: vi.fn().mockResolvedValue({ rows: [] }) }
+
+    await expect(getBandMemberIdForUser(executor, 3, 7)).resolves.toBeNull()
+  })
+
+  // The band_members lookup used to live in the gig and rehearsal repositories
+  // as two identical copies. Aggregate repositories must not grow a third.
+  it('keeps the roster lookup out of the gig and rehearsal repositories', () => {
+    expect(gigRepository.getBandMemberIdForUser).toBeUndefined()
+    expect(rehearsalRepository.getBandMemberIdForUser).toBeUndefined()
+  })
+
   it('inserts every ledger line in one batch query', async () => {
     const executor = { query: vi.fn().mockResolvedValue({}) }
     const lines = [
@@ -52,6 +82,99 @@ describe('aggregate-owned repository primitives', () => {
       expect.stringMatching(/UNNEST/i),
       [7, 42, ['11000', '41000'], [1250, 0], [0, 1250], ['Bank', null]],
     )
+  })
+})
+
+describe('memberTenantScope', () => {
+  const tenants = [
+    { tenantId: 4, kind: 'band', displayName: 'Alpha Band', avatarPath: 'tenants/4/logo.png', role: 'reader' },
+    { tenantId: 9, kind: 'personal', displayName: 'My Workspace', avatarPath: null, role: 'tenant_admin' },
+  ]
+
+  it('prepares the ids and the index once for the whole request', () => {
+    const scope = memberTenantScope(tenants)
+
+    expect(scope.ids).toEqual([4, 9])
+    expect(scope.byId.get(9)).toBe(tenants[1])
+  })
+
+  it('labels a row with the tenant it came from', () => {
+    const scope = memberTenantScope(tenants)
+
+    expect(scope.label({ id: 1, tenant_id: 4, title: 'Show' })).toEqual({
+      id: 1,
+      tenant_id: 4,
+      title: 'Show',
+      tenantId: 4,
+      tenantName: 'Alpha Band',
+      tenantAvatarPath: 'tenants/4/logo.png',
+      kind: 'band',
+    })
+  })
+
+  // A row can only reach a label through a member-tenant query, so an unknown
+  // id means a bug — it must not invent a name, and it must not throw either.
+  it('blanks the reference for a tenant outside the scope', () => {
+    expect(memberTenantScope(tenants).ref(77)).toEqual({
+      tenantId: 77,
+      tenantName: null,
+      tenantAvatarPath: null,
+      kind: null,
+    })
+  })
+
+  it('is empty, not broken, for a user with no memberships', () => {
+    const scope = memberTenantScope([])
+
+    expect(scope.ids).toEqual([])
+    expect(scope.byId.size).toBe(0)
+  })
+})
+
+describe('limitedCollectionWithCursor', () => {
+  const rows = [{ id: 3, event_date: '2098-02-01' }, { id: 1, event_date: '2098-01-01' }]
+  const dateOf = (row) => row.event_date
+
+  it('emits a keyset cursor from the last row of a full page', async () => {
+    const result = await limitedCollectionWithCursor(2, async () => rows, dateOf)
+
+    expect(result.items).toEqual(rows)
+    expect(result.meta).toEqual({
+      limit: 2,
+      returned: 2,
+      nextCursor: { date: '2098-01-01', id: 1 },
+    })
+  })
+
+  // A page short of its limit is the last page — offering a cursor there would
+  // send the client on a round trip that can only come back empty.
+  it('emits no cursor when the page is short of the limit', async () => {
+    const result = await limitedCollectionWithCursor(10, async () => rows, dateOf)
+
+    expect(result.meta.nextCursor).toBeNull()
+  })
+
+  it('emits no cursor for an empty page', async () => {
+    const result = await limitedCollectionWithCursor(10, async () => [], dateOf)
+
+    expect(result.items).toEqual([])
+    expect(result.meta.nextCursor).toBeNull()
+  })
+
+  it('normalizes a Date accessor onto the day string the cursor parser accepts', async () => {
+    const result = await limitedCollectionWithCursor(
+      1, async () => [{ id: 9, day: new Date('2098-03-04T22:00:00Z') }], (row) => row.day,
+    )
+
+    expect(result.meta.nextCursor).toEqual({ date: '2098-03-04', id: 9 })
+  })
+
+  it('rejects a malformed limit before touching the database', async () => {
+    const fetchItems = vi.fn()
+    const result = await limitedCollectionWithCursor('0', fetchItems, dateOf)
+
+    expect(result.error).toEqual({ status: 400, body: { error: 'limit must be an integer between 1 and 100' } })
+    expect(fetchItems).not.toHaveBeenCalled()
   })
 })
 
