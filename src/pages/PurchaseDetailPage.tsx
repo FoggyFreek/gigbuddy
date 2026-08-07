@@ -1,4 +1,4 @@
-﻿import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
+﻿import { useNavigate, useOutletContext, useParams } from 'react-router'
 import Box from '@mui/material/Box'
 import { useTranslation } from 'react-i18next'
 import IconButton from '@mui/material/IconButton'

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import GigDetailContent from '../components/gigdetails/GigDetailContent.tsx'
 import theme from '../theme.ts'
@@ -75,7 +75,7 @@ vi.mock('../api/invoices.ts', () => ({
 }))
 
 const navigate = vi.fn()
-vi.mock('react-router-dom', async (orig) => ({
+vi.mock('react-router', async (orig) => ({
   ...(await orig()),
   useNavigate: () => navigate,
 }))

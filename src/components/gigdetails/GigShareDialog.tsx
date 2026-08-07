@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState } from 'react'
+import { useContext, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import ButtonBase from '@mui/material/ButtonBase'
@@ -114,34 +114,32 @@ export default function GigShareDialog({ open, onClose, gig }: Readonly<GigShare
     }
   }
 
-  useEffect(() => {
-    if (open) {
-      setFormat('square')
-      setAccentId(SHARE_VINTAGE_COLORS[0].id)
-      setVariation(SHARE_VARIATIONS[0].id)
-      setZoom(100)
-      setPan(0)
-      setSticker(null)
-      setStickerPos('right-top')
-      setBusy(false)
-      setDownloadMenuAnchor(null)
-      setShowBanner(!!gig?.banner_path)
-      setShowLogo(true)
-      setUseDarkLogo(false)
-      setBandName('')
-      loadPhotos()
-      getProfile().then((p) => {
-        setSocials({
-          instagram: p?.instagram_handle || '',
-          facebook: p?.facebook_handle || '',
-          tiktok: p?.tiktok_handle || '',
-        })
-        setLogoSrc(p?.logo_path ? `/api/files/${p.logo_path}` : '/share/logo.png')
-        setLogoDarkSrc(p?.logo_dark_path ? `/api/files/${p.logo_dark_path}` : null)
-        setBandName(p?.band_name || '')
-      }).catch(() => {})
-    }
-  }, [open, gig?.banner_path])
+  function handleEnter() {
+    setFormat('square')
+    setAccentId(SHARE_VINTAGE_COLORS[0].id)
+    setVariation(SHARE_VARIATIONS[0].id)
+    setZoom(100)
+    setPan(0)
+    setSticker(null)
+    setStickerPos('right-top')
+    setBusy(false)
+    setDownloadMenuAnchor(null)
+    setShowBanner(!!gig?.banner_path)
+    setShowLogo(true)
+    setUseDarkLogo(false)
+    setBandName('')
+    void loadPhotos()
+    getProfile().then((p) => {
+      setSocials({
+        instagram: p?.instagram_handle || '',
+        facebook: p?.facebook_handle || '',
+        tiktok: p?.tiktok_handle || '',
+      })
+      setLogoSrc(p?.logo_path ? `/api/files/${p.logo_path}` : '/share/logo.png')
+      setLogoDarkSrc(p?.logo_dark_path ? `/api/files/${p.logo_dark_path}` : null)
+      setBandName(p?.band_name || '')
+    }).catch(() => {})
+  }
 
   const previewMaxWidth = 320
   const scale = previewMaxWidth / formatDef.width
@@ -232,6 +230,7 @@ export default function GigShareDialog({ open, onClose, gig }: Readonly<GigShare
         onClose={busy ? undefined : onClose}
         maxWidth="md"
         fullWidth
+        slotProps={{ transition: { onEnter: handleEnter } }}
         onClick={(e) => e.stopPropagation()}
       >
         <DialogTitle>{t($ => $.gigShare.title)}</DialogTitle>

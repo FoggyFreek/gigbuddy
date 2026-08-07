@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css'
 // react-leaflet types are incomplete (leaflet has no bundled .d.ts) — cast
 // the components to accept any props so tsc doesn't block on known-good usage.
 import { MapContainer as _MapContainer, TileLayer as _TileLayer, Marker as _Marker, Popup, useMap } from 'react-leaflet'
-import { Link as RouterLink } from 'react-router-dom'
+import { Link as RouterLink } from 'react-router'
 import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'

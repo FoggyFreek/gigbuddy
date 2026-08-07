@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -47,8 +47,6 @@ export default function BillingSettingsSection() {
   const { t } = useTranslation('billing')
   const showToast = useToast()
   const { refreshUser, user } = useAuth()
-  const [state, setState] = useState<BillingState | null>(null)
-  const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
 
   const errorMessage = useCallback((err: unknown): string => {
@@ -60,15 +58,26 @@ export default function BillingSettingsSection() {
     return e.message || t($ => $.errors.generic)
   }, [t])
 
-  const load = useCallback(() => {
-    setLoading(true)
-    getBillingState()
-      .then(setState)
-      .catch((err) => showToast?.(errorMessage(err), 'error'))
-      .finally(() => setLoading(false))
-  }, [showToast, errorMessage])
+  // The billing state is tagged with the reload it answered, so `loading` is
+  // derived from whether the newest reload has landed.
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const load = useCallback(() => setReloadNonce((n) => n + 1), [])
+  const [billingState, setBillingState] = useState<{ key: number; state: BillingState | null } | null>(null)
+  const state = billingState?.state ?? null
+  const loading = billingState?.key !== reloadNonce
 
-  useEffect(load, [load])
+  useEffect(() => {
+    let cancelled = false
+    getBillingState()
+      .then((next) => { if (!cancelled) setBillingState({ key: reloadNonce, state: next }) })
+      .catch((err) => {
+        if (cancelled) return
+        showToast?.(errorMessage(err), 'error')
+        // Keep whatever was on screen; only stop showing the spinner.
+        setBillingState((prev) => ({ key: reloadNonce, state: prev?.state ?? null }))
+      })
+    return () => { cancelled = true }
+  }, [reloadNonce, showToast, errorMessage])
 
   // Returning from the hosted checkout (?checkout=return&audience=…): re-ingest
   // the payment now — with webhooks disabled (local dev) nothing else flips the

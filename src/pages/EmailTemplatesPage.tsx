@@ -22,29 +22,38 @@ type ModalState = { mode: 'create' } | { mode: 'edit'; templateId: Id } | null
 
 export default function EmailTemplatesPage() {
   const { t } = useTranslation(['emailTemplates', 'common'])
-  const [templates, setTemplates] = useState<EmailTemplate[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>(null)
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await listEmailTemplates()
-      setTemplates(data)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  // The fetched list is tagged with the reload it answered, so `loading` and
+  // `error` are derived from whether the newest reload has landed.
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const reload = useCallback(() => setReloadNonce((n) => n + 1), [])
+  const [templatesState, setTemplatesState] = useState<{ key: number; templates: EmailTemplate[]; error: string | null } | null>(null)
+  const templates = templatesState?.templates ?? []
+  const loading = templatesState?.key !== reloadNonce
+  const error = templatesState?.key === reloadNonce ? templatesState.error : null
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+    listEmailTemplates()
+      .then((data) => {
+        if (!cancelled) setTemplatesState({ key: reloadNonce, templates: data, error: null })
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setTemplatesState((prev) => ({
+            key: reloadNonce,
+            templates: prev?.templates ?? [],
+            error: e instanceof Error ? e.message : String(e),
+          }))
+        }
+      })
+    return () => { cancelled = true }
+  }, [reloadNonce])
 
   function handleClose() {
     setModal(null)
-    load()
+    reload()
   }
 
   return (

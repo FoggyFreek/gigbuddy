@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -34,6 +34,10 @@ type TaskItem = MaybeCrossTenant<Task>
 
 const FILTER_SX = { height: 31 } as const
 const TASK_LIST_LIMIT = 50
+
+// Stable empty fallback: a fresh [] each render would change the identity of
+// every memo and effect that depends on the task list.
+const NO_TASKS: TaskItem[] = []
 const TASK_STATUSES = ['open', 'finished'] as const
 
 type TaskStatus = typeof TASK_STATUSES[number]
@@ -54,9 +58,6 @@ export default function TasksPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const isCompact = useCompactLayout()
-  const [tasks, setTasks] = useState<TaskItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [myTasksOnly, setMyTasksOnly] = useState(false)
   // Finished tasks stay hidden by default; both statuses selected shows everything.
   const [selectedStatuses, setSelectedStatuses] = useState<Set<TaskStatus>>(() => new Set(['open']))
@@ -64,22 +65,38 @@ export default function TasksPage() {
   const [editingTask, setEditingTask] = useState<TaskItem | null>(null)
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null)
 
-  const load = useCallback(async (silent = false) => {
-    try {
-      if (!silent) setLoading(true)
-      setError(null)
-      const response = await (isPersonal
-        ? listMyTasks({ limit: TASK_LIST_LIMIT })
-        : listTasks({ limit: TASK_LIST_LIMIT }))
-      setTasks(response.items)
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      if (!silent) setLoading(false)
-    }
-  }, [isPersonal])
+  // Tasks are tagged with the request they answered, so `loading` and `error`
+  // are derived from whether the newest request has landed. A silent reload
+  // refreshes the rows in place instead of swapping them for a spinner.
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const [silentReload, setSilentReload] = useState(false)
+  const reload = useCallback((silent = false) => {
+    setSilentReload(silent)
+    setReloadNonce((n) => n + 1)
+  }, [])
+  const tasksKey = `${isPersonal}|${reloadNonce}`
+  const [tasksState, setTasksState] = useState<{ key: string; tasks: TaskItem[]; error: string | null } | null>(null)
+  const tasks = tasksState?.tasks ?? NO_TASKS
+  const loading = tasksState == null || (tasksState.key !== tasksKey && !silentReload)
+  const error = tasksState?.key === tasksKey ? tasksState.error : null
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+    ;(isPersonal ? listMyTasks({ limit: TASK_LIST_LIMIT }) : listTasks({ limit: TASK_LIST_LIMIT }))
+      .then((response) => {
+        if (!cancelled) setTasksState({ key: tasksKey, tasks: response.items, error: null })
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setTasksState((prev) => ({
+            key: tasksKey,
+            tasks: prev?.tasks ?? [],
+            error: e instanceof Error ? e.message : String(e),
+          }))
+        }
+      })
+    return () => { cancelled = true }
+  }, [tasksKey, isPersonal])
 
   const canToggleDone = useCallback(
     (task: TaskItem) => isPersonal
@@ -93,27 +110,29 @@ export default function TasksPage() {
     [isPersonal, user?.activeTenantId],
   )
 
-  // Deep link from global search (?task=<id>): pop that task straight into the
-  // edit dialog once the list has loaded. The param is consumed immediately so
-  // closing the dialog doesn't reopen it, and a stale link just lands on the list.
+  // Deep links are derived from the loaded list, so opening the dialog does not
+  // require a state-setting effect. The close event consumes the query param.
   const taskParam = searchParams.get('task')
-  useEffect(() => {
-    if (!taskParam || loading) return
-    const target = tasks.find((task) => String(task.id) === taskParam)
-    if (target && canWritePlanning && canEditTask(target)) {
-      setEditingTask(target)
-      setDialogOpen(true)
-    }
+  const deepLinkedTask = !loading && taskParam && canWritePlanning
+    ? tasks.find((task) => String(task.id) === taskParam && canEditTask(task)) ?? null
+    : null
+
+  function consumeTaskParam() {
+    if (!taskParam || !deepLinkedTask) return
+    setEditingTask(deepLinkedTask)
+    setDialogOpen(true)
     setSearchParams((params) => {
       const next = new URLSearchParams(params)
       next.delete('task')
       return next
     }, { replace: true })
-  }, [taskParam, loading, tasks, canWritePlanning, canEditTask, setSearchParams])
+  }
 
   async function handleToggle(task: TaskItem) {
     if (task.id === undefined) return
-    setTasks((prev) => prev.map((x) => (x.id === task.id ? { ...x, done: !x.done } : x)))
+    setTasksState((prev) => (prev
+      ? { ...prev, tasks: prev.tasks.map((x) => (x.id === task.id ? { ...x, done: !x.done } : x)) }
+      : prev))
     try {
       if (isPersonal && task.tenantId !== user?.activeTenantId) {
         await setMyTaskDone(task.id, !task.done)
@@ -121,7 +140,7 @@ export default function TasksPage() {
         await updateTask(task.id, { done: !task.done })
       }
     } finally {
-      load(true)
+      reload(true)
     }
   }
 
@@ -288,11 +307,12 @@ export default function TasksPage() {
       )}
 
       <TaskFormDialog
-        open={dialogOpen}
-        task={editingTask}
+        open={dialogOpen || deepLinkedTask !== null}
+        task={editingTask ?? deepLinkedTask}
         onClose={() => setDialogOpen(false)}
-        onSaved={load}
-        onDeleted={load}
+        onSaved={() => reload()}
+        onDeleted={() => reload()}
+        onEnter={consumeTaskParam}
       />
     </>
   )

@@ -4,6 +4,7 @@ Source: https://react.dev/reference/rules/rules-of-hooks
 
 Hooks are JavaScript functions with special restrictions on where they can be called. Violating these rules breaks Hook identity across renders, causing stale state, incorrect behavior, and hard-to-trace bugs.
 
+When something can be calculated from the existing props or state, don’t put it in state. Instead, calculate it during rendering. This makes your code faster, simpler, and less error-prone.
 ---
 
 ## Rule 1 — Only call Hooks at the top level

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
@@ -43,10 +43,6 @@ export default function CalendarFeedDialog({ open, onClose }: Readonly<CalendarF
     }
   }, [])
 
-  useEffect(() => {
-    if (open) load()
-  }, [open, load])
-
   function handleGenerate() {
     setBusy(true)
     regenerateCalendarFeed()
@@ -72,7 +68,13 @@ export default function CalendarFeedDialog({ open, onClose }: Readonly<CalendarF
   }
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="sm"
+      slotProps={{ transition: { onEnter: load } }}
+    >
       <DialogTitle>Subscribe to calendar</DialogTitle>
       <DialogContent>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>

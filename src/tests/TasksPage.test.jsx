@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter, useLocation } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/tasks.ts', () => ({
@@ -21,7 +21,7 @@ vi.mock('../contexts/authContext.ts', () => ({ useAuth: vi.fn() }))
 vi.mock('../hooks/usePermissions.ts', () => ({ usePermissions: vi.fn() }))
 
 const navigate = vi.fn()
-vi.mock('react-router-dom', async (orig) => ({
+vi.mock('react-router', async (orig) => ({
   ...(await orig()),
   useNavigate: () => navigate,
 }))

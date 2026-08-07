@@ -48,25 +48,26 @@ export default function DowngradeDialog({ open, plan, interval, isFreeFallback, 
   const { t } = useTranslation(['billing', 'common'])
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
-  const [preview, setPreview] = useState<DowngradePreview | null>(null)
-  const [previewFailed, setPreviewFailed] = useState(false)
+  // The preview is keyed by the plan/interval it was fetched for, so a stale
+  // result is simply not current rather than something an effect has to clear.
+  const previewKey = open && plan ? `${plan.id}|${interval}` : null
+  const [previewState, setPreviewState] = useState<{ key: string; preview: DowngradePreview | null; failed: boolean } | null>(null)
+  const currentPreview = previewKey != null && previewState?.key === previewKey ? previewState : null
+  const preview = currentPreview?.preview ?? null
+  const previewFailed = currentPreview?.failed ?? false
   // The confirmation phrase is a server-side token built from the slug — it is
   // deliberately not localized.
   const phrase = plan ? `downgrade to ${plan.slug}` : ''
   const matches = text.trim().toLowerCase() === phrase
 
   useEffect(() => {
-    if (!open || !plan) {
-      setPreview(null)
-      setPreviewFailed(false)
-      return
-    }
+    if (previewKey == null || !plan) return
     let cancelled = false
     downgradePreview(plan.id, interval)
-      .then((p) => { if (!cancelled) setPreview(p) })
-      .catch(() => { if (!cancelled) setPreviewFailed(true) })
+      .then((p) => { if (!cancelled) setPreviewState({ key: previewKey, preview: p, failed: false }) })
+      .catch(() => { if (!cancelled) setPreviewState({ key: previewKey, preview: null, failed: true }) })
     return () => { cancelled = true }
-  }, [open, plan, interval])
+  }, [previewKey, plan, interval])
 
   const blockers = preview?.blockers ?? []
   const purgedFeatures = preview?.features ?? []

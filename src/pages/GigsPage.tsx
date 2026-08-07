@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
@@ -73,8 +73,10 @@ export default function GigsPage() {
 
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState<Gig[]>([])
-  const [searchLoading, setSearchLoading] = useState(false)
   const isSearching = search.trim().length >= SEARCH_MIN_CHARS
+  const searchKey = isSearching ? `${isPersonal}|${search.trim()}` : null
+  const [loadedSearchKey, setLoadedSearchKey] = useState<string | null>(null)
+  const searchLoading = searchKey !== null && loadedSearchKey !== searchKey
 
   const [modal, setModal] = useState<{ mode: 'create' } | null>(null)
   const [tourMenuAnchor, setTourMenuAnchor] = useState<HTMLElement | null>(null)
@@ -104,31 +106,23 @@ export default function GigsPage() {
     }
   }, [setError])
 
-  useEffect(() => {
-    if (allGigsRequested) load()
-  }, [allGigsRequested, load])
-
   function requestAllGigs() {
+    if (allGigsRequested) return
     setAllGigsRequested(true)
+    void load()
   }
 
   useEffect(() => {
     // `search` only changes after GigsTable's own debounce has settled, so no
     // further debouncing is needed here.
-    const q = search.trim()
-    if (q.length < SEARCH_MIN_CHARS) {
-      setSearchResults([])
-      setSearchLoading(false)
-      return
-    }
+    if (searchKey === null) return
     let cancelled = false
-    setSearchLoading(true)
-    ;(isPersonal ? searchMyGigs(q) : searchGigs(q))
+    ;(isPersonal ? searchMyGigs(search.trim()) : searchGigs(search.trim()))
       .then((rows) => { if (!cancelled) setSearchResults(rows) })
       .catch(() => { if (!cancelled) setSearchResults([]) })
-      .finally(() => { if (!cancelled) setSearchLoading(false) })
+      .finally(() => { if (!cancelled) setLoadedSearchKey(searchKey) })
     return () => { cancelled = true }
-  }, [search, isPersonal])
+  }, [search, searchKey, isPersonal])
 
   useEffect(() => {
     if (!bandsintownConfigured) return

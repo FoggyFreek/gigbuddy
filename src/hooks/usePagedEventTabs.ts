@@ -66,13 +66,17 @@ export function usePagedEventTabs<T>(options: PagedEventTabsOptions<T>): PagedEv
   // Callers pass a fresh options literal every render; read them through a ref
   // so loadTab stays stable and the load effect doesn't re-run on identity.
   const optionsRef = useRef(options)
-  optionsRef.current = options
+  useEffect(() => {
+    optionsRef.current = options
+  }, [options])
 
   const [activeTab, setActiveTab] = useState<EventTab>('upcoming')
   // Read by the reload/detail callbacks without being a dependency, so they
   // stay stable across ordinary tab switches (page outlet contexts memo on them).
   const activeTabRef = useRef(activeTab)
-  activeTabRef.current = activeTab
+  useEffect(() => {
+    activeTabRef.current = activeTab
+  }, [activeTab])
   const [items, setItems] = useState<T[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)

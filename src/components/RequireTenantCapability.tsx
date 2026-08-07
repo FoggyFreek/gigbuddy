@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet } from 'react-router'
 import type { TenantCapability } from '../auth/tenantCapabilities.ts'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
 

@@ -22,7 +22,7 @@ import LocalMallIcon from '@mui/icons-material/LocalMall'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink, useNavigate } from 'react-router-dom'
+import { Link as RouterLink, useNavigate } from 'react-router'
 import StatusDot from '../StatusDot.tsx'
 import { getGigMerchSummary } from '../../api/gigs.ts'
 import { draftFromGig, listInvoicesByGig } from '../../api/invoices.ts'
@@ -64,35 +64,36 @@ export default function GigTerms({
   const { t, i18n } = useTranslation(['gigs', 'common'])
   const { canViewFinance, canManageFinance } = usePermissions()
   const navigate = useNavigate()
-  const [merchSummary, setMerchSummary] = useState<GigMerchSummary | null>(null)
-  const [relatedInvoices, setRelatedInvoices] = useState<Invoice[] | null>(null)
+  const [fetchedMerchSummary, setFetchedMerchSummary] = useState<GigMerchSummary | null>(null)
+  const [fetchedInvoices, setFetchedInvoices] = useState<Invoice[] | null>(null)
   const [invoiceConfirmOpen, setInvoiceConfirmOpen] = useState(false)
   const [invoiceBusy, setInvoiceBusy] = useState(false)
   const [invoiceError, setInvoiceError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!gigLoaded || !editable) {
-      setMerchSummary(null)
-      return
-    }
-    const controller = new AbortController()
-    getGigMerchSummary(gigId, { signal: controller.signal })
-      .then(setMerchSummary)
-      .catch((error: Error) => { if (!controller.signal.aborted) console.error(error) })
-    return () => controller.abort()
-  }, [gigId, gigLoaded, editable])
+  // Both reads are gated. The gated-off value is derived during render rather
+  // than written back by the effect, so closing the gate needs no extra render.
+  const merchEnabled = gigLoaded && editable
+  const merchSummary = merchEnabled ? fetchedMerchSummary : null
+  const invoicesEnabled = gigLoaded && canViewFinance
+  const relatedInvoices = invoicesEnabled ? fetchedInvoices : []
 
   useEffect(() => {
-    if (!gigLoaded || !canViewFinance) {
-      setRelatedInvoices([])
-      return
-    }
+    if (!merchEnabled) return
     const controller = new AbortController()
-    listInvoicesByGig(gigId, { signal: controller.signal })
-      .then(setRelatedInvoices)
+    getGigMerchSummary(gigId, { signal: controller.signal })
+      .then(setFetchedMerchSummary)
       .catch((error: Error) => { if (!controller.signal.aborted) console.error(error) })
     return () => controller.abort()
-  }, [gigId, gigLoaded, canViewFinance])
+  }, [gigId, merchEnabled])
+
+  useEffect(() => {
+    if (!invoicesEnabled) return
+    const controller = new AbortController()
+    listInvoicesByGig(gigId, { signal: controller.signal })
+      .then(setFetchedInvoices)
+      .catch((error: Error) => { if (!controller.signal.aborted) console.error(error) })
+    return () => controller.abort()
+  }, [gigId, invoicesEnabled])
 
   const invoiceTarget = selectedFestival ?? selectedVenue
   const invoiceCustomerName = invoiceTarget?.organization_name || invoiceTarget?.name || ''

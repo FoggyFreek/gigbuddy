@@ -1,5 +1,5 @@
 import type { RehearsalSong, Song, Id } from '../types/entities.ts'
-import { Link as RouterLink } from 'react-router-dom'
+import { Link as RouterLink } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'

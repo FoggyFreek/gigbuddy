@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   listJournals,
   createJournal,
@@ -37,19 +37,18 @@ interface UseJournalListStateResult {
   approveSelected: () => Promise<void>
   deleteSelected: () => Promise<void>
 }
-
 // Owns the journal list: loads journals + the active chart of accounts, tracks
 // selection, and runs the add / delete / approve lifecycle. Each entry row
 // registers its debounced-save `flush` here so approving can persist pending
 // edits first (useDebouncedSave does not flush on unmount).
 export function useJournalListState(): UseJournalListStateResult {
-  const [journals, setJournals] = useState<Journal[]>([])
   const [accounts, setAccounts] = useState<Account[]>([])
   const [accountingSettings, setAccountingSettings] = useState<AccountingSettings | null>(null)
   const [accountOptionsLoaded, setAccountOptionsLoaded] = useState(false)
   const [liveForms, setLiveForms] = useState<Map<Id, JournalForm>>(() => new Map())
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Errors raised by user actions (approve, delete) rather than by the list
+  // fetch; they outlive a reload and so are tracked separately.
+  const [actionError, setActionError] = useState<string | null>(null)
   const [approvalErrors, setApprovalErrors] = useState<Array<{ id: Id; ok: boolean; message?: string }>>([])
   const [selected, setSelected] = useState<Set<Id>>(() => new Set())
   const [saveStatuses, setSaveStatuses] = useState<Map<Id, SaveStatus>>(() => new Map())
@@ -105,24 +104,42 @@ export function useJournalListState(): UseJournalListStateResult {
   // Loads the drafts and, if none exist (first visit, or after approving/deleting
   // them all), seeds one blank draft and re-fetches once so the editor always has
   // a row. The single guarded `if` (no loop) keeps a still-empty re-fetch safe.
-  const load = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
+  // Drafts are tagged with the reload they answered, so `loading` is derived
+  // from whether the newest reload has landed rather than flipped synchronously
+  // before the request goes out.
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const load = useCallback(async () => { setReloadNonce((n) => n + 1) }, [])
+  const [journalsState, setJournalsState] = useState<{ key: number; journals: Journal[]; error: string | null } | null>(null)
+  const journals = useMemo(() => journalsState?.journals ?? [], [journalsState])
+  const loading = journalsState?.key !== reloadNonce
+  const loadError = journalsState?.key === reloadNonce ? journalsState.error : null
+  const error = actionError ?? loadError
+
+  useEffect(() => {
+    let cancelled = false
+    const run = async () => {
       let data = await listJournals()
       if (!data.length) {
         await createBlankDraft()
         data = await listJournals()
       }
-      setJournals(data)
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
+      return data
     }
-  }, [createBlankDraft])
-
-  useEffect(() => { load() }, [load])
+    run()
+      .then((data) => {
+        if (!cancelled) setJournalsState({ key: reloadNonce, journals: data, error: null })
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setJournalsState((prev) => ({
+            key: reloadNonce,
+            journals: prev?.journals ?? [],
+            error: e instanceof Error ? e.message : String(e),
+          }))
+        }
+      })
+    return () => { cancelled = true }
+  }, [reloadNonce, createBlankDraft])
 
   useEffect(() => {
     let cancelled = false
@@ -134,7 +151,7 @@ export function useJournalListState(): UseJournalListStateResult {
         setAccountOptionsLoaded(true)
       })
       .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+        if (!cancelled) setActionError(e instanceof Error ? e.message : String(e))
       })
     return () => { cancelled = true }
   }, [])
@@ -145,7 +162,10 @@ export function useJournalListState(): UseJournalListStateResult {
     return accounts.filter((account) => !protectedCodes.has(account.code))
   }, [accountOptionsLoaded, accountingSettings, accounts])
 
-  const draftIds = journals.filter((j) => j.status === 'draft').map((j) => j.id as Id)
+  const draftIds = useMemo(
+    () => journals.filter((j) => j.status === 'draft').map((j) => j.id as Id),
+    [journals],
+  )
 
   const toggleSelect = useCallback((id: Id, checked: boolean) => {
     setSelected((prev) => {
@@ -157,14 +177,14 @@ export function useJournalListState(): UseJournalListStateResult {
 
   const selectAll = useCallback((checked: boolean) => {
     setSelected(checked ? new Set(draftIds) : new Set())
-  }, [draftIds.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [draftIds])
 
   const addEntry = useCallback(async () => {
     try {
       await createBlankDraft()
       await load()
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
+      setActionError(e instanceof Error ? e.message : String(e))
     }
   }, [createBlankDraft, load])
 
@@ -174,7 +194,7 @@ export function useJournalListState(): UseJournalListStateResult {
   const approveIds = useCallback(async (ids: Id[]) => {
     if (!ids.length) return
     try {
-      setError(null)
+      setActionError(null)
       await flushIds(ids)
       const { results } = await approveJournals(ids)
       const failed = (results || []).filter((r) => !r.ok)
@@ -182,7 +202,7 @@ export function useJournalListState(): UseJournalListStateResult {
       setSelected(new Set())
       await load()
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
+      setActionError(e instanceof Error ? e.message : String(e))
     }
   }, [flushIds, load])
 
@@ -193,12 +213,12 @@ export function useJournalListState(): UseJournalListStateResult {
     const ids = [...selected]
     if (!ids.length) return
     try {
-      setError(null)
+      setActionError(null)
       await Promise.all(ids.map((id) => deleteJournal(id)))
       setSelected(new Set())
       await load()
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
+      setActionError(e instanceof Error ? e.message : String(e))
     }
   }, [selected, load])
 
@@ -211,3 +231,4 @@ export function useJournalListState(): UseJournalListStateResult {
     addEntry, approveAll, approveSelected, deleteSelected,
   }
 }
+

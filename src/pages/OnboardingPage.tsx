@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -54,16 +54,13 @@ function CheckoutReturn({ audience }: Readonly<{ audience: PlanAudience | null }
   const { t } = useTranslation('onboarding')
   const navigate = useNavigate()
   const { refreshUser } = useAuth()
-  const [phase, setPhase] = useState<CheckoutPhase>('processing')
+  const [phase, setPhase] = useState<CheckoutPhase>(() => audience === null ? 'timeout' : 'processing')
 
   useEffect(() => {
     // Without a named product we cannot tell which subscription this checkout
     // was for, and a settled one on the other ladder would read as success.
     // Better to time out and let the webhook/scheduler finish the job.
-    if (audience === null) {
-      setPhase('timeout')
-      return undefined
-    }
+    if (audience === null) return undefined
     let cancelled = false
     const run = async () => {
       for (let attempt = 0; attempt < POLL_ATTEMPTS && !cancelled; attempt++) {
@@ -305,16 +302,16 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null)
   const [capBlocked, setCapBlocked] = useState(false)
   const [tenantOnboardingEnabled, setTenantOnboardingEnabled] = useState<boolean | null>(null)
+  const onboardingTenantId = user?.onboardingTenantId ?? null
   // Whether the resume-pointer lookup has settled. The wizard must not become
   // interactive before this: proceeding while it's still in flight would let
   // handleConfirm see a null onboardingTenant and create ANOTHER band —
   // producing a false band-cap dead end (they already own the pointer band) or
   // a duplicate tenant. Starts true when there's no pointer to resolve.
-  const [resumeChecked, setResumeChecked] = useState(false)
+  const [resumeLookupComplete, setResumeLookupComplete] = useState(false)
+  const resumeChecked = onboardingTenantId === null || resumeLookupComplete
   // StrictMode double-effect guard for the mount loads.
   const loadedRef = useRef(false)
-
-  const onboardingTenantId = user?.onboardingTenantId ?? null
 
   useEffect(() => {
     if (checkoutReturn || loadedRef.current) return
@@ -341,13 +338,11 @@ export default function OnboardingPage() {
             setCountryCode(resumed.accounting_country ?? '')
             setKind(resumed.kind ?? 'band')
           }
-          setResumeChecked(true)
+          setResumeLookupComplete(true)
         })
         // A failed lookup must NOT be swallowed: block the wizard rather than
         // let the user re-create a band they may already own.
         .catch(() => setLoadError(true))
-    } else {
-      setResumeChecked(true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkoutReturn])
@@ -393,7 +388,7 @@ export default function OnboardingPage() {
     } finally {
       setBusy(false)
     }
-  }, [termsAgreed, selectedPlan, user?.termsVersion, t])
+  }, [termsAgreed, selectedPlan, user, t])
 
   // Create the onboarding band unless one was already created/resumed. Returns
   // null when a handled dead end (band cap / onboarding disabled) was shown.

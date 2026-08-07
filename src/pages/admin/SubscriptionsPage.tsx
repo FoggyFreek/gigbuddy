@@ -45,9 +45,8 @@ function errMessage(e: unknown): string {
 
 export default function SubscriptionsPage() {
   const showToast = useToast()
-  const [rows, setRows] = useState<AdminSubscription[]>([])
+  const [rowsState, setRowsState] = useState<{ key: string; rows: AdminSubscription[] } | null>(null)
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
-  const [loading, setLoading] = useState(true)
   const [rowsRevision, setRowsRevision] = useState(0)
   const [plansRevision, setPlansRevision] = useState(0)
   const [repairOnly, setRepairOnly] = useState(false)
@@ -60,15 +59,25 @@ export default function SubscriptionsPage() {
   const refreshRows = useCallback(() => setRowsRevision((revision) => revision + 1), [])
   const refreshPlans = useCallback(() => setPlansRevision((revision) => revision + 1), [])
 
+  // Rows are tagged with the request they answered, so "still loading" is the
+  // derived fact that the newest request hasn't landed yet — no synchronous
+  // setLoading(true) and no extra render when a refresh starts.
+  const rowsKey = `${repairOnly}|${rowsRevision}`
+  const rows = rowsState?.rows ?? []
+  const loading = rowsState?.key !== rowsKey
+
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
     listSubscriptions(repairOnly)
-      .then((data) => { if (!cancelled) setRows(data.subscriptions) })
-      .catch((e: unknown) => { if (!cancelled) showToast?.(errMessage(e), 'error') })
-      .finally(() => { if (!cancelled) setLoading(false) })
+      .then((data) => { if (!cancelled) setRowsState({ key: rowsKey, rows: data.subscriptions }) })
+      .catch((e: unknown) => {
+        if (cancelled) return
+        showToast?.(errMessage(e), 'error')
+        // Keep whatever was on screen; only stop showing the spinner.
+        setRowsState((prev) => ({ key: rowsKey, rows: prev?.rows ?? [] }))
+      })
     return () => { cancelled = true }
-  }, [repairOnly, rowsRevision, showToast])
+  }, [repairOnly, rowsKey, showToast])
 
   useEffect(() => {
     let cancelled = false

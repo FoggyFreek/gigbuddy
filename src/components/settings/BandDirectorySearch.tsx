@@ -34,7 +34,7 @@ export default function BandDirectorySearch() {
   const { t } = useTranslation('settings')
   const compact = useCompactLayout()
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<DirectoryBand[] | null>(null)
+  const [fetchedResults, setFetchedResults] = useState<DirectoryBand[] | null>(null)
   const [openRequests, setOpenRequests] = useState<JoinRequest[]>([])
   const [asking, setAsking] = useState<DirectoryBand | null>(null)
   const [message, setMessage] = useState('')
@@ -47,22 +47,25 @@ export default function BandDirectorySearch() {
 
   useEffect(() => { loadRequests() }, [loadRequests])
 
+  // A too-short query has no results by definition, so that case is derived
+  // during render instead of cleared by the effect; the effect only ever
+  // records what the server returned.
+  const trimmedQuery = query.trim()
+  const searchable = trimmedQuery.length >= MIN_QUERY
+  const results = searchable ? fetchedResults : null
+
   // Debounced so a picker doesn't fire a request per keystroke; the endpoint
   // has its own rate limiter regardless.
   useEffect(() => {
-    const trimmed = query.trim()
-    if (trimmed.length < MIN_QUERY) {
-      setResults(null)
-      return
-    }
+    if (!searchable) return
     let cancelled = false
     const timer = setTimeout(() => {
-      searchBands(trimmed)
-        .then((res) => { if (!cancelled) setResults(res.items) })
-        .catch(() => { if (!cancelled) setResults([]) })
+      searchBands(trimmedQuery)
+        .then((res) => { if (!cancelled) setFetchedResults(res.items) })
+        .catch(() => { if (!cancelled) setFetchedResults([]) })
     }, SEARCH_DEBOUNCE_MS)
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [query])
+  }, [trimmedQuery, searchable])
 
   async function submitRequest() {
     if (!asking) return
@@ -72,8 +75,8 @@ export default function BandDirectorySearch() {
       await requestToJoinBand(asking.id, message.trim() || undefined)
       setAsking(null)
       setMessage('')
+      // Clearing the query is enough — `results` is derived from it.
       setQuery('')
-      setResults(null)
       loadRequests()
     } catch (err) {
       const code = (err as { code?: string }).code

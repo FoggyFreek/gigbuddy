@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -73,7 +73,6 @@ export default function InvoicesPage() {
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
   const [invoices, setInvoices] = useState<Invoice[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [newDialog, setNewDialog] = useState(false)
   const [summaryFilter, setSummaryFilter] = useState<SummaryKey>('unpaid')
@@ -81,6 +80,9 @@ export default function InvoicesPage() {
   const [period, setPeriod] = useState<Period>(() => defaultPeriodForDates([], fiscalYearStart))
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
+  const requestKey = JSON.stringify(period)
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null)
+  const loading = !periodsLoaded || loadedRequestKey !== requestKey
 
   const refreshPeriods = useCallback(async ({ signalLoaded = false } = {}) => {
     try {
@@ -100,8 +102,24 @@ export default function InvoicesPage() {
   }, [fiscalYearStart])
 
   useEffect(() => {
-    refreshPeriods({ signalLoaded: true })
-  }, [refreshPeriods])
+    let cancelled = false
+    listInvoicePeriods()
+      .then((dates) => {
+        if (cancelled) return
+        setAvailableDates(dates as string[])
+        setPeriod((prev) => {
+          const fallback = defaultPeriodForDates(dates as string[], fiscalYearStart)
+          const currentYear = defaultPeriodForDates([], fiscalYearStart).year
+          if (prev.mode !== 'fiscal_year' || prev.year !== currentYear) return prev
+          return fallback
+        })
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => { if (!cancelled) setPeriodsLoaded(true) })
+    return () => { cancelled = true }
+  }, [fiscalYearStart])
 
   const summaryStats = useMemo(() => {
     const stats: Record<string, { count: number; total: number }> = {
@@ -146,20 +164,32 @@ export default function InvoicesPage() {
 
   const load = useCallback(async () => {
     try {
-      setLoading(true)
+      setLoadedRequestKey(null)
       setError(null)
       const data = await listInvoices(period)
       setInvoices(data)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
+      setLoadedRequestKey(requestKey)
     }
-  }, [period])
+  }, [period, requestKey])
 
   useEffect(() => {
-    if (periodsLoaded) load()
-  }, [load, periodsLoaded])
+    if (!periodsLoaded) return
+    let cancelled = false
+    listInvoices(period)
+      .then((data) => {
+        if (cancelled) return
+        setInvoices(data)
+        setError(null)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => { if (!cancelled) setLoadedRequestKey(requestKey) })
+    return () => { cancelled = true }
+  }, [period, periodsLoaded, requestKey])
 
   function handleCreated(id: Id) {
     setNewDialog(false)

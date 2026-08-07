@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
@@ -57,9 +57,6 @@ export default function ContactDirectoryPage({
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
-  const [contacts, setContacts] = useState<Contact[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<{ mode: 'create' } | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const { category, excludeCategory } = listFilter
@@ -70,36 +67,53 @@ export default function ContactDirectoryPage({
     return filters
   }, [category, excludeCategory])
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await listContacts(activeFilter)
-      setContacts(data)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [activeFilter])
+  // Contacts are tagged with the request they answered — the active filter plus
+  // the reload counter — so `loading` and `error` are derived from whether the
+  // newest request has landed rather than set synchronously when it starts.
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const reload = useCallback(() => setReloadNonce((n) => n + 1), [])
+  const contactsKey = `${JSON.stringify(activeFilter)}|${reloadNonce}`
+  const [contactsState, setContactsState] = useState<{ key: string; contacts: Contact[]; error: string | null } | null>(null)
+  const contacts = contactsState?.contacts ?? []
+  const loading = contactsState?.key !== contactsKey
+  const error = contactsState?.key === contactsKey ? contactsState.error : null
+
+  useEffect(() => {
+    let cancelled = false
+    listContacts(activeFilter)
+      .then((data) => {
+        if (!cancelled) setContactsState({ key: contactsKey, contacts: data, error: null })
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setContactsState((prev) => ({
+            key: contactsKey,
+            contacts: prev?.contacts ?? [],
+            error: e instanceof Error ? e.message : String(e),
+          }))
+        }
+      })
+    return () => { cancelled = true }
+  }, [contactsKey, activeFilter])
 
   const handleContactUpdate = useCallback((id: number, patch: Partial<Contact>) => {
-    setContacts((prev) => {
-      return prev
-        .map((c) => (c.id === id ? { ...c, ...patch } : c))
-        .filter((c) => contactMatchesCategoryFilter(c, activeFilter))
-    })
+    setContactsState((prev) => (prev
+      ? {
+        ...prev,
+        contacts: prev.contacts
+          .map((c) => (c.id === id ? { ...c, ...patch } : c))
+          .filter((c) => contactMatchesCategoryFilter(c, activeFilter)),
+      }
+      : prev))
   }, [activeFilter])
 
   const handleContactDelete = useCallback((id: number) => {
-    setContacts((prev) => prev.filter((c) => c.id !== id))
+    setContactsState((prev) => (prev ? { ...prev, contacts: prev.contacts.filter((c) => c.id !== id) } : prev))
   }, [])
-
-  useEffect(() => { load() }, [load])
 
   function handleClose() {
     setModal(null)
-    load()
+    reload()
   }
 
   return (
@@ -173,7 +187,7 @@ export default function ContactDirectoryPage({
           title={resolvedImportTitle}
           onClose={(reloaded) => {
             setImportOpen(false)
-            if (reloaded) load()
+            if (reloaded) reload()
           }}
         />
       )}

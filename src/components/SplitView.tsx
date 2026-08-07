@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo } from 'react'
-import { Outlet, useNavigate, useOutlet } from 'react-router-dom'
+import { Outlet, useNavigate, useOutlet } from 'react-router'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
 import useMediaQuery from '@mui/material/useMediaQuery'

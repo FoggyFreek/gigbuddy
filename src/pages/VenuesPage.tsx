@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
@@ -21,38 +21,51 @@ export default function VenuesPage() {
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
-  const [venues, setVenues] = useState<Venue[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<{ mode: 'create' } | null>(null)
   const [importOpen, setImportOpen] = useState(false)
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await listVenues()
-      setVenues(data as Venue[])
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  // The fetched list is tagged with the reload it answered, so `loading` and
+  // `error` are derived from whether the newest reload has landed — no flags an
+  // effect has to flip synchronously before the request goes out.
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const reload = useCallback(() => setReloadNonce((n) => n + 1), [])
+  const [venuesState, setVenuesState] = useState<{ key: number; venues: Venue[]; error: string | null } | null>(null)
+  const venues = venuesState?.venues ?? []
+  const loading = venuesState?.key !== reloadNonce
+  const error = venuesState?.key === reloadNonce ? venuesState.error : null
+
+  useEffect(() => {
+    let cancelled = false
+    listVenues()
+      .then((data) => {
+        if (!cancelled) setVenuesState({ key: reloadNonce, venues: data as Venue[], error: null })
+      })
+      .catch((e: unknown) => {
+        // Keep the rows already on screen; surface the failure alongside them.
+        if (!cancelled) {
+          setVenuesState((prev) => ({
+            key: reloadNonce,
+            venues: prev?.venues ?? [],
+            error: e instanceof Error ? e.message : String(e),
+          }))
+        }
+      })
+    return () => { cancelled = true }
+  }, [reloadNonce])
 
   const handleVenueUpdate = useCallback((id: Id, patch: Partial<Venue>) => {
-    setVenues((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)))
+    setVenuesState((prev) => (prev
+      ? { ...prev, venues: prev.venues.map((v) => (v.id === id ? { ...v, ...patch } : v)) }
+      : prev))
   }, [])
 
   const handleVenueDelete = useCallback((id: Id) => {
-    setVenues((prev) => prev.filter((v) => v.id !== id))
+    setVenuesState((prev) => (prev ? { ...prev, venues: prev.venues.filter((v) => v.id !== id) } : prev))
   }, [])
-
-  useEffect(() => { load() }, [load])
 
   function handleClose() {
     setModal(null)
-    load()
+    reload()
   }
 
   return (
@@ -109,7 +122,7 @@ export default function VenuesPage() {
         <VenueImportDialog
           onClose={(reloaded) => {
             setImportOpen(false)
-            if (reloaded) load()
+            if (reloaded) reload()
           }}
         />
       )}

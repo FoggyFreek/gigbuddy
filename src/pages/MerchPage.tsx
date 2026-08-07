@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -75,7 +75,9 @@ export default function MerchPage() {
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
   const [summary, setSummary] = useState<MerchSalesSummaryRow[]>([])
-  const [summaryLoading, setSummaryLoading] = useState(true)
+  const summaryRequestKey = JSON.stringify(period)
+  const [loadedSummaryKey, setLoadedSummaryKey] = useState<string | null>(null)
+  const summaryLoading = !periodsLoaded || loadedSummaryKey !== summaryRequestKey
 
   const refreshPeriods = useCallback(async ({ signalLoaded = false } = {}) => {
     try {
@@ -90,22 +92,41 @@ export default function MerchPage() {
 
   const loadSummary = useCallback(async () => {
     try {
-      setSummaryLoading(true)
+      setLoadedSummaryKey(null)
       setSummary(await listMerchSalesSummary(period))
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setSummaryLoading(false)
+      setLoadedSummaryKey(summaryRequestKey)
     }
-  }, [period, setError])
+  }, [period, setError, summaryRequestKey])
 
   useEffect(() => {
-    refreshPeriods({ signalLoaded: true })
-  }, [refreshPeriods])
+    let cancelled = false
+    listMerchSalePeriods()
+      .then((dates) => {
+        if (!cancelled) setAvailableDates(dates.filter(Boolean))
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => { if (!cancelled) setPeriodsLoaded(true) })
+    return () => { cancelled = true }
+  }, [setError])
 
   useEffect(() => {
-    if (periodsLoaded) loadSummary()
-  }, [loadSummary, periodsLoaded])
+    if (!periodsLoaded) return
+    let cancelled = false
+    listMerchSalesSummary(period)
+      .then((nextSummary) => {
+        if (!cancelled) setSummary(nextSummary)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => { if (!cancelled) setLoadedSummaryKey(summaryRequestKey) })
+    return () => { cancelled = true }
+  }, [period, periodsLoaded, setError, summaryRequestKey])
 
   // The detail pane fires this after a void: the totals change and a product may
   // drop out of the summary (and its dates out of the picker) entirely.

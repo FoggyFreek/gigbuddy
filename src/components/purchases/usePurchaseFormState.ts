@@ -117,7 +117,6 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
     getPurchase(purchaseId)
       .then((data) => {
         if (cancelled) return

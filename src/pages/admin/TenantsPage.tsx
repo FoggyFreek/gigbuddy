@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -142,8 +142,21 @@ export default function TenantsPage() {
   }
 
   useEffect(() => {
-    refresh()
-   
+    Promise.all([
+      listTenants(),
+      listAllUsers(),
+      getAllStorageStats(),
+      getTenantOnboardingStatus(),
+      getStorageConnection(),
+    ])
+      .then(([t, u, stats, onboardingStatus, connection]) => {
+        setTenants(t as TenantRow[])
+        setUsers(u as AdminUser[])
+        setStorageByTenant(Object.fromEntries((stats as StorageStats[]).map((s) => [String(s.tenant_id), s])))
+        setTenantOnboardingEnabled(onboardingStatus.tenantOnboardingEnabled)
+        setStorageConnection(connection)
+      })
+      .finally(() => setLoading(false))
   }, [])
 
   const handleRecomputeStorage = async () => {

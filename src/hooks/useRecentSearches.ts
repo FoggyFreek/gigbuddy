@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { Id } from '../types/entities.ts'
 
 // A recently navigated-to search result. We store the item the user clicked —
@@ -40,8 +40,14 @@ function write(key: string, items: RecentItem[]) {
 export function useRecentSearches(tenantId: Id | null) {
   const [recents, setRecents] = useState<RecentItem[]>(() => read(keyFor(tenantId)))
 
-  // Re-read when the active tenant changes.
-  useEffect(() => { setRecents(read(keyFor(tenantId))) }, [tenantId])
+  // Re-read when the active tenant changes. Adjusting during render (rather than
+  // in an effect) keeps the first render of the new tenant from showing the old
+  // tenant's list.
+  const [loadedTenantId, setLoadedTenantId] = useState(tenantId)
+  if (tenantId !== loadedTenantId) {
+    setLoadedTenantId(tenantId)
+    setRecents(read(keyFor(tenantId)))
+  }
 
   // localStorage is the source of truth; `recents` is just a render cache. Each
   // mutation reads the current stored value, persists the next value, then

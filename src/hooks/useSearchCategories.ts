@@ -33,8 +33,15 @@ function write(key: string, keys: string[]) {
 export function useSearchCategories(tenantId: Id | null, defaultKeys: string[]) {
   const [activeKeys, setActiveKeys] = useState<string[]>(() => read(keyFor(tenantId), defaultKeys))
 
-  // Re-read when the active tenant changes.
-  useEffect(() => { setActiveKeys(read(keyFor(tenantId), defaultKeys)) }, [tenantId, defaultKeys])
+  // Re-read when the active tenant changes. Adjusting during render (rather than
+  // in an effect) keeps the first render of the new tenant from showing the old
+  // tenant's categories — and from persisting them over the new tenant's entry
+  // via the write effect below.
+  const [loadedTenantId, setLoadedTenantId] = useState(tenantId)
+  if (tenantId !== loadedTenantId) {
+    setLoadedTenantId(tenantId)
+    setActiveKeys(read(keyFor(tenantId), defaultKeys))
+  }
 
   // Persist on every change. localStorage is the durable copy; `activeKeys` is
   // the render state. Unlike recent searches, category edits don't navigate away

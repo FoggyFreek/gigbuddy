@@ -1,6 +1,6 @@
-﻿import { useCallback, useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -61,25 +61,29 @@ export default function SetlistsPage() {
   const { t } = useTranslation(['setlists', 'common'])
   const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
-  const [setlists, setSetlists] = useState<Setlist[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      setSetlists(await listSetlists() as Setlist[])
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  // Loaded once on mount; "still loading" is simply "the result hasn't landed",
+  // so no flag has to be flipped synchronously when the fetch starts.
+  const [setlistsState, setSetlistsState] = useState<{ setlists: Setlist[]; error: string | null } | null>(null)
+  const setlists = setlistsState?.setlists ?? []
+  const loading = setlistsState == null
+  const error = setlistsState?.error ?? null
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+    listSetlists()
+      .then((data) => {
+        if (!cancelled) setSetlistsState({ setlists: data as Setlist[], error: null })
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setSetlistsState({ setlists: [], error: e instanceof Error ? e.message : String(e) })
+        }
+      })
+    return () => { cancelled = true }
+  }, [])
 
   async function handleCreate() {
     const name = newName.trim()

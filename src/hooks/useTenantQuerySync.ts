@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router'
 import { useAuth } from '../contexts/authContext.ts'
 
 // When a push-notification deep link lands on the SPA with `?tenant=N`, this
