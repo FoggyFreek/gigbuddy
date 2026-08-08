@@ -1,4 +1,9 @@
-import { MAX_LIST_LIMIT, parseListLimit, parseDateRange } from '../validators/common.js'
+import {
+  MAX_LIST_LIMIT,
+  parseListLimit,
+  parseDateRange,
+  encodeTimestampCursor,
+} from '../validators/common.js'
 import { toDateStr } from '../utils/dateOnly.js'
 import { badRequest } from './serviceErrors.js'
 
@@ -52,6 +57,23 @@ export async function limitedCollectionWithCursor(rawLimit, fetchItems, dateOf, 
   const last = result.items[result.items.length - 1]
   const nextCursor = last && result.items.length === result.meta.limit
     ? { date: toDateStr(dateOf(last)), id: last.id }
+    : null
+
+  return { items: result.items, meta: { ...result.meta, nextCursor } }
+}
+
+// The full-precision twin of limitedCollectionWithCursor, for feeds ordered by
+// a TIMESTAMPTZ. `atOf` names the row's ordering instant — the same column the
+// repository's ORDER BY ... DESC, id DESC tiebreaks on. The cursor is opaque
+// (see parseTimestampCursor) because a visible date param would quietly drop
+// the time and make rows sharing a day skip or repeat across pages.
+export async function limitedCollectionWithTimestampCursor(rawLimit, fetchItems, atOf, maxLimit = MAX_LIST_LIMIT) {
+  const result = await limitedCollection(rawLimit, fetchItems, maxLimit)
+  if (result.error) return result
+
+  const last = result.items[result.items.length - 1]
+  const nextCursor = last && result.items.length === result.meta.limit
+    ? encodeTimestampCursor(atOf(last), last.id)
     : null
 
   return { items: result.items, meta: { ...result.meta, nextCursor } }

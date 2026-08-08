@@ -64,6 +64,48 @@ export function parseListCursor(query) {
   return { cursor: { date: cursorDate, id } }
 }
 
+// The full-precision twin of parseListCursor, for feeds ordered by a
+// TIMESTAMPTZ rather than a DATE. A day-granular cursor cannot page those: many
+// rows share a calendar day, so resuming from a date alone skips the rest of
+// that day or repeats it.
+//
+// One opaque `?cursor=` param (base64url of `<iso instant>|<id>`) rather than a
+// visible pair, precisely so a caller cannot pass a plain date and silently
+// lose the time the ordering depends on — a malformed value is rejected, never
+// coerced into "first page".
+export const INVALID_TIMESTAMP_CURSOR = 'cursor must be a value returned as meta.nextCursor'
+
+export function parseTimestampCursor(query) {
+  const raw = query?.cursor
+  if (raw === undefined) return { cursor: null }
+  if (typeof raw !== 'string' || raw === '') return null
+
+  let decoded
+  try {
+    decoded = Buffer.from(raw, 'base64url').toString('utf8')
+  } catch {
+    return null
+  }
+
+  const separator = decoded.lastIndexOf('|')
+  if (separator === -1) return null
+
+  const at = decoded.slice(0, separator)
+  const id = parsePositiveId(decoded.slice(separator + 1))
+  if (id === null || !isValidIsoDate(at)) return null
+  // Round-trip through Date to reject values Date.parse accepts loosely and to
+  // hand the repository one canonical instant.
+  const instant = new Date(at)
+  if (instant.toISOString() !== at) return null
+
+  return { cursor: { at, id } }
+}
+
+export function encodeTimestampCursor(at, id) {
+  const instant = at instanceof Date ? at : new Date(at)
+  return Buffer.from(`${instant.toISOString()}|${id}`).toString('base64url')
+}
+
 export const INVALID_TODAY = 'today must be a valid ISO date (YYYY-MM-DD)'
 
 // Calendar-day cutoff supplied by the browser. This intentionally represents

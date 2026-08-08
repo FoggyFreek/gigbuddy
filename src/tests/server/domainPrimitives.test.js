@@ -9,7 +9,11 @@ import {
 import * as gigRepository from '../../../server/repositories/gigRepository.js'
 import * as rehearsalRepository from '../../../server/repositories/rehearsalRepository.js'
 import { insertLedgerEntries } from '../../../server/repositories/ledgerRepository.js'
-import { limitedCollectionWithCursor } from '../../../server/services/limitedCollectionService.js'
+import {
+  limitedCollectionWithCursor,
+  limitedCollectionWithTimestampCursor,
+} from '../../../server/services/limitedCollectionService.js'
+import { parseTimestampCursor } from '../../../server/validators/common.js'
 import { memberTenantScope } from '../../../server/domain/memberTenants.js'
 import { normalizeIban } from '../../../server/utils/normalizeIban.js'
 
@@ -172,6 +176,83 @@ describe('limitedCollectionWithCursor', () => {
   it('rejects a malformed limit before touching the database', async () => {
     const fetchItems = vi.fn()
     const result = await limitedCollectionWithCursor('0', fetchItems, dateOf)
+
+    expect(result.error).toEqual({ status: 400, body: { error: 'limit must be an integer between 1 and 100' } })
+    expect(fetchItems).not.toHaveBeenCalled()
+  })
+})
+
+// The day-keyed cursor above is right for planning feeds, whose rows are
+// ordered by a DATE. A feed ordered by a TIMESTAMPTZ cannot use it: several
+// rows share a calendar day, so a day-granular cursor skips or repeats them at
+// every page boundary. This is its full-precision twin.
+describe('parseTimestampCursor', () => {
+  const encode = (iso, id) => Buffer.from(`${iso}|${id}`).toString('base64url')
+
+  it('reads an opaque cursor back as its exact instant and id', () => {
+    const iso = '2098-03-04T22:15:30.123Z'
+
+    expect(parseTimestampCursor({ cursor: encode(iso, 42) }))
+      .toEqual({ cursor: { at: iso, id: 42 } })
+  })
+
+  it('treats an absent cursor as the first page', () => {
+    expect(parseTimestampCursor({})).toEqual({ cursor: null })
+    expect(parseTimestampCursor(undefined)).toEqual({ cursor: null })
+  })
+
+  it('rejects malformed cursors rather than silently starting over', () => {
+    expect(parseTimestampCursor({ cursor: 'not-base64!!' })).toBeNull()
+    expect(parseTimestampCursor({ cursor: encode('2098-03-04T22:15:30Z', 'abc') })).toBeNull()
+    expect(parseTimestampCursor({ cursor: encode('nonsense', 1) })).toBeNull()
+    expect(parseTimestampCursor({ cursor: Buffer.from('no-separator').toString('base64url') })).toBeNull()
+    expect(parseTimestampCursor({ cursor: '' })).toBeNull()
+  })
+
+  // The whole point of the opaque form: a caller cannot hand it a date and
+  // silently lose the time component the ordering depends on.
+  it('rejects a plain date, which is what the day-keyed cursor would accept', () => {
+    expect(parseTimestampCursor({ cursor: '2098-03-04' })).toBeNull()
+  })
+})
+
+describe('limitedCollectionWithTimestampCursor', () => {
+  const rows = [
+    { id: 3, created_at: new Date('2098-02-01T10:00:00.000Z') },
+    { id: 1, created_at: new Date('2098-02-01T09:00:00.000Z') },
+  ]
+  const atOf = (row) => row.created_at
+
+  it('keeps full precision for rows created on the same day', async () => {
+    const result = await limitedCollectionWithTimestampCursor(2, async () => rows, atOf)
+
+    expect(result.meta.nextCursor).toBe(
+      Buffer.from('2098-02-01T09:00:00.000Z|1').toString('base64url'),
+    )
+    // Round-trips to the exact instant, so the next page resumes between two
+    // rows of the same day instead of skipping the rest of it.
+    expect(parseTimestampCursor({ cursor: result.meta.nextCursor }))
+      .toEqual({ cursor: { at: '2098-02-01T09:00:00.000Z', id: 1 } })
+  })
+
+  it('emits no cursor when the page is short of the limit', async () => {
+    const result = await limitedCollectionWithTimestampCursor(10, async () => rows, atOf)
+
+    expect(result.meta.nextCursor).toBeNull()
+  })
+
+  it('accepts an ISO string as readily as a Date', async () => {
+    const result = await limitedCollectionWithTimestampCursor(
+      1, async () => [{ id: 9, at: '2098-03-04T22:00:00.000Z' }], (row) => row.at,
+    )
+
+    expect(parseTimestampCursor({ cursor: result.meta.nextCursor }))
+      .toEqual({ cursor: { at: '2098-03-04T22:00:00.000Z', id: 9 } })
+  })
+
+  it('rejects a malformed limit before touching the database', async () => {
+    const fetchItems = vi.fn()
+    const result = await limitedCollectionWithTimestampCursor('0', fetchItems, atOf)
 
     expect(result.error).toEqual({ status: 400, body: { error: 'limit must be an integer between 1 and 100' } })
     expect(fetchItems).not.toHaveBeenCalled()
