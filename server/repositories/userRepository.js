@@ -64,6 +64,20 @@ export async function deleteMembership(executor, tenantId, userId) {
   )
 }
 
+// How many approved tenant_admins the tenant would still have if this user
+// stopped being one. Callers must already hold the tenant row lock: without it
+// two concurrent demotions of different admins could each see the other and
+// both proceed, leaving the tenant with none.
+export async function countOtherApprovedTenantAdmins(executor, tenantId, excludeUserId) {
+  const { rows } = await executor.query(
+    `SELECT COUNT(*)::int AS count FROM memberships
+      WHERE tenant_id = $1 AND user_id <> $2
+        AND role = 'tenant_admin' AND status = 'approved'`,
+    [tenantId, excludeUserId],
+  )
+  return rows[0].count
+}
+
 // ---------- band-member link ----------
 
 // Locks the target band member row to serialize concurrent reassignments.
