@@ -64,6 +64,34 @@ export function parseListCursor(query) {
   return { cursor: { date: cursorDate, id } }
 }
 
+// Search over rows the caller has no membership in — the band directory and the
+// global band profiles. A picker, not a feed: queries shorter than the minimum
+// would return most of the table, so they are refused rather than silently
+// broadened, and the limit is capped hard.
+//
+// Returns { error: '<code>' } | { query, limit }, the discriminated shape these
+// endpoints report to the client as a machine-readable code.
+export const MIN_DISCOVERY_QUERY_LENGTH = 3
+const MAX_DISCOVERY_QUERY_LENGTH = 100
+const DISCOVERY_LIMIT = 10
+
+export function parseDiscoverySearch(query, { requireQuery = true } = {}) {
+  const raw = typeof query?.q === 'string' ? query.q.trim() : ''
+  if (!(raw === '' && !requireQuery)) {
+    if (raw.length < MIN_DISCOVERY_QUERY_LENGTH) return { error: 'query_too_short' }
+    if (raw.length > MAX_DISCOVERY_QUERY_LENGTH) return { error: 'query_too_long' }
+  }
+
+  const requested = query?.limit
+  let limit = DISCOVERY_LIMIT
+  if (requested !== undefined && requested !== '') {
+    limit = Number(requested)
+    if (!Number.isInteger(limit) || limit < 1) return { error: 'invalid_limit' }
+    limit = Math.min(limit, DISCOVERY_LIMIT)
+  }
+  return { query: raw, limit }
+}
+
 // The full-precision twin of parseListCursor, for feeds ordered by a
 // TIMESTAMPTZ rather than a DATE. A day-granular cursor cannot page those: many
 // rows share a calendar day, so resuming from a date alone skips the rest of

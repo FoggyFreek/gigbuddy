@@ -35,6 +35,7 @@ import bandDirectoryRouter from './bandDirectory.js'
 import meRouter from './me.js'
 import meAvailabilityRouter from './meAvailability.js'
 import meMembershipsRouter from './meMemberships.js'
+import bandProfilesRouter from './bandProfiles.js'
 import platformSettingsRouter from './platformSettings.js'
 import adminUsersRouter from './adminUsers.js'
 import adminPlansRouter from './adminPlans.js'
@@ -140,6 +141,19 @@ const bandDirectoryLimiter = rateLimit({
   skip: () => isTest,
 })
 
+// Global band profiles are readable by any authenticated user and searched as
+// the artist types, so the same reasoning as the directory applies: bound how
+// fast the table can be enumerated.
+const bandProfileLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+  keyGenerator,
+  skip: () => isTest,
+})
+
 // Place lookup hits a metered third-party API once per debounced keystroke, so
 // the blanket apiLimiter (1000) is far too loose to bound the upstream bill.
 const placeSearchLimiter = rateLimit({
@@ -206,6 +220,9 @@ router.use('/tenants', requireApproved, tenantsSelfRouter)
 // Band directory: user-level too — an artist searches and asks to join from
 // inside their own workspace, with no membership in the target band.
 router.use('/band-directory', currentTermsUser, bandDirectoryLimiter, bandDirectoryRouter)
+// Global band profiles: bands that are not gigbuddy customers. User-level for
+// the same reason — the row belongs to no tenant, so there is none to resolve.
+router.use('/band-profiles', currentTermsUser, bandProfileLimiter, bandProfilesRouter)
 // The cross-tenant artist agenda. Its own tier: authenticated + terms + the member tenant
 // set, and deliberately NO resolveTenantId — see resolveMemberTenantIds.
 // Availability is user-level, so it sits on the /me tier and resolves no

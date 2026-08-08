@@ -5,6 +5,7 @@ import { getObject } from './storageService.js'
 import { fetchInvoiceWithGig } from '../repositories/invoiceRepository.js'
 import { fetchTenant } from '../repositories/tenantRepository.js'
 import { logger } from '../utils/logger.js'
+import { EMAIL_RE } from '../utils/email.js'
 import { notFound } from './serviceErrors.js'
 
 const NOT_FOUND = notFound('Not found')
@@ -139,8 +140,9 @@ function buildEmailHtml({ bandName, invoiceNumber, issueDate, gigDate, greeting,
 
 // RFC 5322 "specials" that force a display name to be quoted or MIME-encoded.
 const HEADER_ADDR_SPECIALS_RE = /[()<>[\]:;@\\,."]/
-// Conservative email check: no whitespace/control chars, a single @, a dotted domain.
-const HEADER_EMAIL_RE = /^[^\s@<>]+@[^.\s@<>]+(?:\.[^.\s@<>]+)+$/
+// Conservative email check: no whitespace/control chars, a single @, a dotted
+// domain. Shared with profile validation so the two cannot drift apart — a
+// contact address the profile accepts must survive as a mail header here.
 
 function stripHeaderControlChars(value) {
   // Drop CR, LF, and other C0 control chars so user fields can't inject headers.
@@ -167,7 +169,7 @@ function encodeDisplayName(rawName) {
 // raw header (the subject is already MIME encoded-word'd).
 function formatHeaderAddress(name, email) {
   const cleanEmail = stripHeaderControlChars(email)
-  if (!HEADER_EMAIL_RE.test(cleanEmail)) return ''
+  if (!EMAIL_RE.test(cleanEmail)) return ''
   const display = encodeDisplayName(name)
   return display ? `${display} <${cleanEmail}>` : cleanEmail
 }

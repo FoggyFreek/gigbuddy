@@ -7,7 +7,14 @@
 // they see, which is the point. Nothing beyond minimal public identity is
 // selected — no member counts, no contact details, nothing financial.
 
-const DISCOVERABLE = `kind = 'band' AND join_policy = 'request' AND archived_at IS NULL`
+// The single owner of "which tenants may be seen by a non-member". Exported as
+// an alias-taking fragment because the band-profile reads join tenants rather
+// than selecting from it, and a second copy of this predicate is exactly how a
+// private band starts leaking.
+export const discoverableSql = (alias) =>
+  `${alias}.kind = 'band' AND ${alias}.join_policy = 'request' AND ${alias}.archived_at IS NULL`
+
+const DISCOVERABLE = discoverableSql('t')
 
 // Minimal public identity plus the caller's own membership status, so the UI
 // can label a row ("pending", "you're already in this band") instead of
@@ -32,7 +39,7 @@ export async function searchDiscoverableTenants(executor, { query, limit, userId
 // longer) discoverable — the caller turns that into a 404.
 export async function fetchDiscoverableTenant(executor, tenantId) {
   const { rows } = await executor.query(
-    `SELECT id, slug, display_name FROM tenants WHERE id = $1 AND ${DISCOVERABLE}`,
+    `SELECT t.id, t.slug, t.display_name FROM tenants t WHERE t.id = $1 AND ${DISCOVERABLE}`,
     [tenantId],
   )
   return rows[0] || null
