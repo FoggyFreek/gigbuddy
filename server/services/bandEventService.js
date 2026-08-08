@@ -17,6 +17,7 @@ import {
 } from '../repositories/bandEventRepository.js'
 import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
+import { assertMyBandWritable } from './myBandService.js'
 import {
   limitedCollection,
   limitedCollectionWithCursor,
@@ -27,7 +28,7 @@ import { summarizeSpan } from '../domain/availabilitySpan.js'
 import { toDateStr } from '../utils/dateOnly.js'
 import { TENANT_CAPABILITIES, tenantKindSupports } from '../../shared/tenantCapabilities.js'
 import { listBandMembers, bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
-import { withTransaction } from '../db/withTransaction.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 
 const NOT_FOUND = notFound('Not found')
 
@@ -116,6 +117,11 @@ export async function createEvent(db, tenantId, body) {
   if (!title || !start_date) return badRequest('title and start_date are required')
 
   return withTransaction(async (client) => {
+    // Holds the My Bands row for the rest of this transaction, so a concurrent
+    // removal cannot turn this insert into a foreign-key violation.
+    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    if (bandCheck) abortTransaction(bandCheck)
+
     const event = await insertBandEvent(client, tenantId, {
       title,
       start_date,
@@ -124,6 +130,7 @@ export async function createEvent(db, tenantId, body) {
       end_time: end_time || null,
       location: location || null,
       notes: notes || null,
+      my_band_id: body.my_band_id ?? null,
     })
     const members = await listBandMembers(client, tenantId)
     for (const member of members.filter((candidate) => candidate.position === 'lead')) {
@@ -158,9 +165,16 @@ export async function patchEvent(db, tenantId, eventId, body) {
   const built = buildEventUpdateFields(body)
   if (!built.fields.length) return badRequest('No valid fields to update')
 
-  const event = await updateBandEventFields(db, tenantId, eventId, built.fields, built.values)
-  if (!event) return NOT_FOUND
-  return { event }
+  // In a transaction so the My Bands row stays locked from validation through
+  // the write; the check is a no-op when the body doesn't mention the link.
+  return withTransaction(async (client) => {
+    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    if (bandCheck) abortTransaction(bandCheck)
+
+    const event = await updateBandEventFields(client, tenantId, eventId, built.fields, built.values)
+    if (!event) abortTransaction(NOT_FOUND)
+    return { event }
+  }, { db })
 }
 
 export async function deleteEvent(db, tenantId, eventId) {

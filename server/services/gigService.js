@@ -76,6 +76,7 @@ import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.j
 import { getTaskById } from '../repositories/taskRepository.js'
 import { INVALID_CURSOR, INVALID_TODAY, parseLocalDate, parseListCursor } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
+import { assertMyBandWritable } from './myBandService.js'
 import {
   limitedCollectionWithCursor,
   limitedCollectionWithTotal,
@@ -351,10 +352,16 @@ export async function createGig(tenantId, userId, body) {
     if (venueCheck.error) {
       abortTransaction({ error: { status: 400, body: { error: venueCheck.error } } })
     }
+    // Holds the My Bands row for the rest of this transaction, so a concurrent
+    // removal cannot turn this insert into a foreign-key violation.
+    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    if (bandCheck) abortTransaction(bandCheck)
+
     const gig = await insertGigWithRelations(client, tenantId, {
       event_date, event_description, venueId, festivalId,
       start_time: start_time || null, end_time: end_time || null, status: finalStatus,
       has_pa_system: !!has_pa_system, has_drumkit: !!has_drumkit, has_stage_lights: !!has_stage_lights,
+      myBandId: body.my_band_id ?? null,
     })
 
     const leadIds = await getLeadMemberIds(client, tenantId)
@@ -381,9 +388,19 @@ export async function patchGig(db, tenantId, gigId, body) {
   if (built.error) return { error: { status: 400, body: { error: built.error } } }
   if (!built.fields.length) return { error: { status: 400, body: { error: 'No valid fields to update' } } }
 
-  const gig = await updateGigFields(db, tenantId, gigId, built.fields, built.values)
-  if (!gig) return NOT_FOUND
-  return { gig, confirmed: body.status === 'confirmed' }
+  // In a transaction so the My Bands row stays locked from validation through
+  // the write; the check is a no-op when the body doesn't mention the link.
+  const result = await withTransaction(async (client) => {
+    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    if (bandCheck) abortTransaction(bandCheck)
+
+    const gig = await updateGigFields(client, tenantId, gigId, built.fields, built.values)
+    if (!gig) abortTransaction(NOT_FOUND)
+    return { gig }
+  }, { db })
+
+  if (result.error) return result
+  return { gig: result.gig, confirmed: body.status === 'confirmed' }
 }
 
 // Replaces a gig's complete tag set. Tag rows remain available as suggestions

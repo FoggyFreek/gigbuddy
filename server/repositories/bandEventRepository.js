@@ -2,10 +2,11 @@
 // transaction client) so callers control transactions. Every query is scoped by
 // tenant_id.
 import { bandEventScopeSql } from './memberEventScope.js'
+import { myBandSelect } from './myBandRepository.js'
 
 export async function listBandEvents(executor, tenantId) {
   const { rows } = await executor.query(
-    'SELECT * FROM band_events WHERE tenant_id = $1 ORDER BY start_date ASC, id ASC',
+    `SELECT *, ${myBandSelect('band_events')} FROM band_events WHERE tenant_id = $1 ORDER BY start_date ASC, id ASC`,
     [tenantId],
   )
   return rows
@@ -13,7 +14,7 @@ export async function listBandEvents(executor, tenantId) {
 
 export async function listUpcomingBandEvents(executor, tenantId, today, limit) {
   const { rows } = await executor.query(
-    `SELECT * FROM band_events
+    `SELECT *, ${myBandSelect('band_events')} FROM band_events
      WHERE tenant_id = $1 AND end_date >= $2
      ORDER BY start_date ASC, id ASC
      LIMIT $3`,
@@ -31,7 +32,7 @@ export async function listPastBandEvents(executor, tenantId, today, limit, curso
   }
   params.push(limit)
   const { rows } = await executor.query(
-    `SELECT * FROM band_events
+    `SELECT *, ${myBandSelect('band_events')} FROM band_events
      WHERE tenant_id = $1 AND end_date < $2 ${cursorClause}
      ORDER BY end_date DESC, id DESC
      LIMIT $${params.length}`,
@@ -42,7 +43,7 @@ export async function listPastBandEvents(executor, tenantId, today, limit, curso
 
 export async function listBandEventsInRange(executor, tenantId, from, to) {
   const { rows } = await executor.query(
-    `SELECT * FROM band_events
+    `SELECT *, ${myBandSelect('band_events')} FROM band_events
      WHERE tenant_id = $1 AND start_date <= $3 AND end_date >= $2
      ORDER BY start_date ASC, id ASC`,
     [tenantId, from, to],
@@ -56,7 +57,7 @@ export async function listBandEventsInRange(executor, tenantId, from, to) {
 // a participant linked to the caller.
 export async function listBandEventsInRangeForMemberTenants(executor, userId, tenantIds, from, to) {
   const { rows } = await executor.query(
-    `SELECT e.* FROM band_events e
+    `SELECT e.*, ${myBandSelect('e')} FROM band_events e
       WHERE e.tenant_id = ANY($2) AND e.start_date <= $4 AND e.end_date >= $3
         AND ${bandEventScopeSql('e', '$1')}
       ORDER BY e.start_date ASC, e.id ASC`,
@@ -68,7 +69,7 @@ export async function listBandEventsInRangeForMemberTenants(executor, userId, te
 // Mirrors listUpcomingBandEvents across every band the caller plays in.
 export async function listUpcomingBandEventsForMemberTenants(executor, userId, tenantIds, today, limit) {
   const { rows } = await executor.query(
-    `SELECT e.* FROM band_events e
+    `SELECT e.*, ${myBandSelect('e')} FROM band_events e
       WHERE e.tenant_id = ANY($2) AND e.end_date >= $3
         AND ${bandEventScopeSql('e', '$1')}
       ORDER BY e.start_date ASC, e.id ASC
@@ -87,7 +88,7 @@ export async function listPastBandEventsForMemberTenants(executor, userId, tenan
   }
   params.push(limit)
   const { rows } = await executor.query(
-    `SELECT e.* FROM band_events e
+    `SELECT e.*, ${myBandSelect('e')} FROM band_events e
       WHERE e.tenant_id = ANY($2) AND e.end_date < $3 ${cursorClause}
         AND ${bandEventScopeSql('e', '$1')}
       ORDER BY e.end_date DESC, e.id DESC
@@ -109,7 +110,7 @@ export async function findBandEventTenantForMember(executor, userId, tenantIds, 
 
 export async function fetchBandEvent(executor, eventId, tenantId) {
   const { rows } = await executor.query(
-    'SELECT * FROM band_events WHERE id = $1 AND tenant_id = $2',
+    `SELECT *, ${myBandSelect('band_events')} FROM band_events WHERE id = $1 AND tenant_id = $2`,
     [eventId, tenantId],
   )
   return rows[0] || null
@@ -132,9 +133,9 @@ export async function loadBandEventParticipantIds(executor, eventIds, tenantId) 
 
 export async function insertBandEvent(executor, tenantId, data) {
   const { rows } = await executor.query(
-    `INSERT INTO band_events (tenant_id, title, start_date, end_date, start_time, end_time, location, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     RETURNING *`,
+    `INSERT INTO band_events (tenant_id, title, start_date, end_date, start_time, end_time, location, notes, my_band_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     RETURNING *, ${myBandSelect('band_events')}`,
     [
       tenantId,
       data.title,
@@ -144,6 +145,7 @@ export async function insertBandEvent(executor, tenantId, data) {
       data.end_time,
       data.location,
       data.notes,
+      data.my_band_id ?? null,
     ],
   )
   return rows[0]
@@ -171,7 +173,7 @@ export async function updateBandEventFields(executor, tenantId, eventId, fields,
   const whereIdx = values.length + 1
   const { rows } = await executor.query(
     `UPDATE band_events SET ${assignments.join(', ')}
-     WHERE id = $${whereIdx} AND tenant_id = $${whereIdx + 1} RETURNING *`,
+     WHERE id = $${whereIdx} AND tenant_id = $${whereIdx + 1} RETURNING *, ${myBandSelect('band_events')}`,
     [...values, eventId, tenantId],
   )
   return rows[0] || null

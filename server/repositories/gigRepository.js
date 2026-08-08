@@ -1,6 +1,7 @@
 // Data-access helpers and shared SQL fragments for gigs. Each query takes an
 // `executor` (a pool or transaction client) so callers control transactions.
 import { gigScopeSql } from './memberEventScope.js'
+import { myBandSelect } from './myBandRepository.js'
 
 export const VENUE_JSON_SELECT = `CASE WHEN v.id IS NULL THEN NULL ELSE jsonb_build_object(
   'id', v.id,
@@ -57,7 +58,8 @@ export const GIG_LIST_PROJECTION = `g.*,
   ) AS open_task_count,
   ${VENUE_JSON_SELECT},
   ${FESTIVAL_JSON_SELECT},
-  ${GIG_TAGS_SELECT}`
+  ${GIG_TAGS_SELECT},
+  ${myBandSelect('g')}`
 
 // Throws a 400 Error when venueId is set but does not reference a row of the
 // expected category in the tenant. A null/undefined id is a no-op.
@@ -257,7 +259,8 @@ export async function searchGigsForMemberTenants(executor, userId, tenantIds, { 
   const { rows } = await executor.query(
     `SELECT g.id, g.tenant_id, g.event_date, g.event_description, g.status,
             g.venue_id, g.festival_id,
-            ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}
+            ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT},
+            ${myBandSelect('g')}
        FROM gigs g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}
@@ -370,7 +373,8 @@ export async function searchGigs(executor, tenantId, { like, limit }) {
        g.venue_id, g.festival_id,
        ${VENUE_JSON_SELECT},
        ${FESTIVAL_JSON_SELECT},
-       ${GIG_TAGS_SELECT}
+       ${GIG_TAGS_SELECT},
+       ${myBandSelect('g')}
      FROM gigs g
      ${VENUE_JOIN}
      ${FESTIVAL_JOIN}
@@ -474,11 +478,11 @@ export async function insertGigWithRelations(executor, tenantId, data) {
   const { rows } = await executor.query(
     `WITH inserted AS (
        INSERT INTO gigs (tenant_id, event_date, event_description, venue_id, festival_id, start_time, end_time, status,
-                         has_pa_system, has_drumkit, has_stage_lights)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                         has_pa_system, has_drumkit, has_stage_lights, my_band_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *
      )
-     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}
+     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}, ${myBandSelect('g')}
        FROM inserted g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}`,
@@ -486,7 +490,7 @@ export async function insertGigWithRelations(executor, tenantId, data) {
       tenantId,
       data.event_date, data.event_description, data.venueId, data.festivalId,
       data.start_time, data.end_time, data.status,
-      data.has_pa_system, data.has_drumkit, data.has_stage_lights,
+      data.has_pa_system, data.has_drumkit, data.has_stage_lights, data.myBandId ?? null,
     ],
   )
   return rows[0]
@@ -760,7 +764,7 @@ export async function deleteGigContact(executor, gigId, contactId, tenantId) {
 
 export async function fetchGigWithRelations(executor, gigId, tenantId) {
   const { rows } = await executor.query(
-    `SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}
+    `SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}, ${myBandSelect('g')}
        FROM gigs g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}
@@ -782,7 +786,7 @@ export async function updateGigFields(executor, tenantId, gigId, fields, values)
        WHERE id = $${whereIdx} AND tenant_id = $${whereIdx + 1}
        RETURNING *
      )
-     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}
+     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}, ${myBandSelect('g')}
        FROM updated g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}`,

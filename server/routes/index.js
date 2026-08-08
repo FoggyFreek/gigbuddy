@@ -62,6 +62,7 @@ import {
   resolveTenantId,
   requireTenantMember,
   requireTenantCapability,
+  requireTenantCapabilityForBodyFields,
   resolveMemberTenantIds,
   requireSuperAdmin,
 } from '../middleware/tenant.js'
@@ -215,6 +216,10 @@ const merch = requireTenantCapability(TENANT_CAPABILITIES.MERCH)
 const bandPromotion = requireTenantCapability(TENANT_CAPABILITIES.BAND_PROMOTION_INTEGRATIONS)
 const bandLinkpage = requireTenantCapability(TENANT_CAPABILITIES.BAND_LINKPAGE)
 const myBands = requireTenantCapability(TENANT_CAPABILITIES.MY_BANDS)
+// Tagging an event with a band is personal-only, but the planning endpoints
+// themselves are shared. The field variant keeps them shared: it gates only the
+// requests that actually mention my_band_id.
+const myBandField = requireTenantCapabilityForBodyFields(TENANT_CAPABILITIES.MY_BANDS, ['my_band_id'])
 
 router.use('/invites/redeem', redeemLimiter, loadUser, invitesRedeemRouter)
 // Self-service owned tenants: user-level (no active-tenant resolution).
@@ -247,7 +252,7 @@ router.use('/admin/storage', superAdmin, adminStorageRouter)
 router.use('/invites', membersManage, bandMembershipAdmin, invitesAdminRouter)
 router.use('/users', membersManage, bandMembershipAdmin, usersRouter)
 router.use('/statistics', tenantManage, statisticsRouter)
-router.use('/gigs', tenantMember, gigsRouter)
+router.use('/gigs', tenantMember, myBandField, gigsRouter)
 router.use('/geocode', tenantMember, geocodeRouter)
 router.use('/places', tenantMember, placeSearchLimiter, placesRouter)
 router.use('/bandsintown', tenantMember, bandPromotion, integrations, bandsintownRouter)
@@ -255,9 +260,9 @@ router.use('/tasks', tenantMember, tasksRouter)
 router.use('/profile', tenantMember, profileRouter)
 router.use('/band-members', tenantMember, bandRoster, bandMembersRouter)
 router.use('/availability', tenantMember, bandAvailability, availabilityRouter)
-router.use('/rehearsals', tenantMember, rehearsalsRouter)
+router.use('/rehearsals', tenantMember, myBandField, rehearsalsRouter)
 router.use('/achievements', tenantMember, achievementsRouter)
-router.use('/band-events', tenantMember, bandEventsRouter)
+router.use('/band-events', tenantMember, myBandField, bandEventsRouter)
 // The bands an artist plays in that aren't on gigbuddy. Personal-only: a band
 // workspace's events are already the band's.
 router.use('/my-bands', tenantMember, myBands, myBandsRouter)

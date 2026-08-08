@@ -12,6 +12,9 @@ export const GIG_PATCH_FIELDS = [
   'start_time', 'end_time', 'status', 'booking_fee_cents', 'admission',
   'ticket_link', 'notes', 'merchandise_cut', 'percentage_of_sales',
   'has_pa_system', 'has_drumkit', 'has_stage_lights',
+  // Only meaningful in a personal workspace; the route gates the field on the
+  // MY_BANDS capability and the service validates it against my_bands.
+  'my_band_id',
 ]
 
 // Percentage fields stored as NUMERIC(5,2). Accepted from the client as a number

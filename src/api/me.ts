@@ -1,5 +1,5 @@
 import { request } from './_client.ts'
-import type { BandEvent, Gig, Id, Rehearsal, Task } from '../types/entities.ts'
+import type { BandEvent, Gig, Id, MyBandRef, Rehearsal, Task } from '../types/entities.ts'
 import type {
   CrossTenantRef,
   GigMapGig,
@@ -28,6 +28,12 @@ export interface AgendaItem extends CrossTenantRef {
   description: string | null
   location: string | null
   status: string | null
+  /**
+   * The band a personal-workspace row was tagged with. camelCase here because
+   * the agenda payload is assembled field by field server-side rather than
+   * projected from a row — see agendaItem in server/services/meService.js.
+   */
+  myBand: MyBandRef | null
 }
 
 export type MyGig = MaybeCrossTenant<Gig>

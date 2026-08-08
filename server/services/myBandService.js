@@ -45,6 +45,7 @@ import {
   countLinkedEvents,
   listLinkedGigStorageKeys,
   deleteLinkedEvents,
+  lockMyBandForEventWrite,
 } from '../repositories/myBandRepository.js'
 import { shapeBandProfile, invalidInput, mapDuplicate } from './bandProfileService.js'
 import { conflict, notFound } from './serviceErrors.js'
@@ -245,6 +246,28 @@ export async function removeBand(db, tenantId, myBandId, query) {
     },
     audit: result.audit,
   }
+}
+
+// Validates a my_band_id on an event write and HOLDS a KEY SHARE lock on the
+// row for the rest of the caller's transaction, so a concurrent removal blocks
+// until that write commits. Without the lock, validation could pass and the
+// insert then hit the composite foreign key — a raw 23503 where the caller
+// deserves a clean 404.
+//
+// `undefined` means the write does not mention the link; `null` clears it.
+// Both are fine and neither needs a lock.
+export async function assertMyBandWritable(client, tenantId, value) {
+  if (value === undefined || value === null) return null
+
+  const myBandId = parsePositiveId(value)
+  if (myBandId === null) return invalidInput('invalid_my_band_id')
+
+  // 404, not 403: a row in someone else's workspace must be indistinguishable
+  // from one that does not exist.
+  if (!(await lockMyBandForEventWrite(client, myBandId, tenantId))) {
+    return notFound('Band not found in your bands')
+  }
+  return null
 }
 
 // Called from tenant deletion, INSIDE its transaction and after its cascades.

@@ -122,6 +122,9 @@ function agendaItem(type, row, date, title, scope, endDate = date) {
     description: [title, tenant.tenantName].filter(Boolean).join(' — ') || null,
     location: row.location ?? row.venue?.name ?? row.festival?.name ?? null,
     status: row.status ?? null,
+    // Explicit, because this object is built field by field: anything the
+    // projections add is dropped here unless it is named.
+    myBand: row.my_band ?? null,
     ...tenant,
   }
 }

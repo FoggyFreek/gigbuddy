@@ -2,7 +2,7 @@
 // that can fail with a specific HTTP outcome return { error: { status, body } };
 // success returns a domain payload (see each function).
 import pool from '../db/index.js'
-import { withTransaction } from '../db/withTransaction.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
 import { dispatchNotification } from './notificationService.js'
 import { logger } from '../utils/logger.js'
@@ -47,6 +47,7 @@ import {
 import { songExistsInTenant } from '../repositories/songRepository.js'
 import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
+import { assertMyBandWritable } from './myBandService.js'
 import {
   limitedCollection,
   limitedCollectionWithCursor,
@@ -195,6 +196,11 @@ export async function createRehearsal(tenantId, userId, body) {
   const extras = normalizeExtraMemberIds(body.extra_member_ids)
 
   const rehearsal = await withTransaction(async (client) => {
+    // Holds the My Bands row for the rest of this transaction, so a concurrent
+    // removal cannot turn this insert into a foreign-key violation.
+    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    if (bandCheck) abortTransaction(bandCheck)
+
     const created = await insertRehearsal(client, tenantId, body, userId)
 
     const leadIds = await getLeadMemberIds(client, tenantId)
@@ -209,6 +215,8 @@ export async function createRehearsal(tenantId, userId, body) {
     }
     return created
   })
+
+  if (rehearsal.error) return rehearsal
 
   // Post-commit read (on the pool): the created rehearsal with its participants.
   return { rehearsal: await withParticipants(pool, rehearsal, tenantId) }
@@ -235,8 +243,19 @@ export async function patchRehearsal(db, tenantId, rehearsalId, body) {
     return { error: { status: 400, body: { error: 'No valid fields to update' } } }
   }
 
-  const updated = await updateRehearsalFields(db, tenantId, rehearsalId, built.fields, built.values)
-  if (!updated) return NOT_FOUND
+  // In a transaction so the My Bands row stays locked from validation through
+  // the write; the check is a no-op when the body doesn't mention the link.
+  const result = await withTransaction(async (client) => {
+    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    if (bandCheck) abortTransaction(bandCheck)
+
+    const row = await updateRehearsalFields(client, tenantId, rehearsalId, built.fields, built.values)
+    if (!row) abortTransaction(NOT_FOUND)
+    return { row }
+  }, { db })
+
+  if (result.error) return result
+  const updated = result.row
 
   return {
     rehearsal: await withParticipants(db, updated, tenantId),

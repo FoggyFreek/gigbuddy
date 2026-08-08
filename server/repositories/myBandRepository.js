@@ -18,6 +18,22 @@ export const LINKED_EVENT_TABLES = Object.freeze([
   { table: 'band_events', alias: 'band_events' },
 ])
 
+// The band label an event carries, for every projection in the three planning
+// repositories. A correlated subquery rather than a join, so it can be appended
+// to a `SELECT *` or a `RETURNING *` without restructuring the statement — and
+// so a projection that forgets it is a visibly missing field rather than a
+// silently dropped join.
+//
+// Correlated on tenant_id as well as the id: the composite FK already
+// guarantees they agree, and repeating it here means the label can never be
+// resolved across tenants even if that constraint were ever relaxed.
+export const myBandSelect = (alias) => `(
+    SELECT jsonb_build_object('id', mb.id, 'name', bp.name, 'country_code', bp.country_code)
+      FROM my_bands mb
+      JOIN band_profiles bp ON bp.id = mb.band_profile_id
+     WHERE mb.id = ${alias}.my_band_id AND mb.tenant_id = ${alias}.tenant_id
+  ) AS my_band`
+
 const eventCountSql = ({ table, alias }) => `(
     SELECT COUNT(*)::int FROM ${table} e
      WHERE e.my_band_id = mb.id AND e.tenant_id = mb.tenant_id

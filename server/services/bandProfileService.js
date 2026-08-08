@@ -51,6 +51,7 @@ const INPUT_MESSAGES = Object.freeze({
   invalid_band_profile_id: 'Invalid band profile id',
   band_profile_required: 'Provide a band profile id or a new band profile',
   invalid_mode: 'mode must be "keep" or "delete"',
+  invalid_my_band_id: 'Invalid band reference',
 })
 
 export function invalidInput(code) {

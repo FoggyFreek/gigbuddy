@@ -1,10 +1,11 @@
 // Data-access helpers for rehearsals. Each query takes an `executor` (a pool or
 // transaction client) so callers control transactions.
 import { rehearsalScopeSql } from './memberEventScope.js'
+import { myBandSelect } from './myBandRepository.js'
 
 export async function listRehearsals(executor, tenantId) {
   const { rows } = await executor.query(
-    'SELECT * FROM rehearsals WHERE tenant_id = $1 ORDER BY proposed_date ASC, id ASC',
+    `SELECT *, ${myBandSelect('rehearsals')} FROM rehearsals WHERE tenant_id = $1 ORDER BY proposed_date ASC, id ASC`,
     [tenantId],
   )
   return rows
@@ -12,7 +13,7 @@ export async function listRehearsals(executor, tenantId) {
 
 export async function listNextPlannedRehearsal(executor, tenantId) {
   const { rows } = await executor.query(
-    `SELECT * FROM rehearsals
+    `SELECT *, ${myBandSelect('rehearsals')} FROM rehearsals
      WHERE tenant_id = $1 AND status = 'planned' AND proposed_date >= CURRENT_DATE
      ORDER BY proposed_date ASC, id ASC
      LIMIT 1`,
@@ -23,7 +24,7 @@ export async function listNextPlannedRehearsal(executor, tenantId) {
 
 export async function listUpcomingRehearsals(executor, tenantId, today, limit) {
   const { rows } = await executor.query(
-    `SELECT * FROM rehearsals
+    `SELECT *, ${myBandSelect('rehearsals')} FROM rehearsals
      WHERE tenant_id = $1 AND proposed_date >= $2
      ORDER BY proposed_date ASC, id ASC
      LIMIT $3`,
@@ -41,7 +42,7 @@ export async function listPastRehearsals(executor, tenantId, today, limit, curso
   }
   params.push(limit)
   const { rows } = await executor.query(
-    `SELECT * FROM rehearsals
+    `SELECT *, ${myBandSelect('rehearsals')} FROM rehearsals
      WHERE tenant_id = $1 AND proposed_date < $2 ${cursorClause}
      ORDER BY proposed_date DESC, id DESC
      LIMIT $${params.length}`,
@@ -52,7 +53,7 @@ export async function listPastRehearsals(executor, tenantId, today, limit, curso
 
 export async function listRehearsalsInRange(executor, tenantId, from, to) {
   const { rows } = await executor.query(
-    `SELECT * FROM rehearsals
+    `SELECT *, ${myBandSelect('rehearsals')} FROM rehearsals
      WHERE tenant_id = $1 AND proposed_date BETWEEN $2 AND $3
      ORDER BY proposed_date ASC, id ASC`,
     [tenantId, from, to],
@@ -65,7 +66,7 @@ export async function listRehearsalsInRange(executor, tenantId, from, to) {
 // the caller must also be linked to a participant row.
 export async function listRehearsalsInRangeForMemberTenants(executor, userId, tenantIds, from, to) {
   const { rows } = await executor.query(
-    `SELECT r.* FROM rehearsals r
+    `SELECT r.*, ${myBandSelect('r')} FROM rehearsals r
       WHERE r.tenant_id = ANY($2) AND r.proposed_date BETWEEN $3 AND $4
         AND ${rehearsalScopeSql('r', '$1')}
       ORDER BY r.proposed_date ASC, r.id ASC`,
@@ -77,7 +78,7 @@ export async function listRehearsalsInRangeForMemberTenants(executor, userId, te
 // Mirrors listNextPlannedRehearsal across every band the caller plays in.
 export async function listNextPlannedRehearsalForMemberTenants(executor, userId, tenantIds) {
   const { rows } = await executor.query(
-    `SELECT r.* FROM rehearsals r
+    `SELECT r.*, ${myBandSelect('r')} FROM rehearsals r
       WHERE r.tenant_id = ANY($2) AND r.status = 'planned' AND r.proposed_date >= CURRENT_DATE
         AND ${rehearsalScopeSql('r', '$1')}
       ORDER BY r.proposed_date ASC, r.id ASC
@@ -89,7 +90,7 @@ export async function listNextPlannedRehearsalForMemberTenants(executor, userId,
 
 export async function listUpcomingRehearsalsForMemberTenants(executor, userId, tenantIds, today, limit) {
   const { rows } = await executor.query(
-    `SELECT r.* FROM rehearsals r
+    `SELECT r.*, ${myBandSelect('r')} FROM rehearsals r
       WHERE r.tenant_id = ANY($2) AND r.proposed_date >= $3
         AND ${rehearsalScopeSql('r', '$1')}
       ORDER BY r.proposed_date ASC, r.id ASC
@@ -108,7 +109,7 @@ export async function listPastRehearsalsForMemberTenants(executor, userId, tenan
   }
   params.push(limit)
   const { rows } = await executor.query(
-    `SELECT r.* FROM rehearsals r
+    `SELECT r.*, ${myBandSelect('r')} FROM rehearsals r
       WHERE r.tenant_id = ANY($2) AND r.proposed_date < $3 ${cursorClause}
         AND ${rehearsalScopeSql('r', '$1')}
       ORDER BY r.proposed_date DESC, r.id DESC
@@ -130,7 +131,7 @@ export async function findRehearsalTenantForMember(executor, userId, tenantIds, 
 
 export async function fetchRehearsal(executor, rehearsalId, tenantId) {
   const { rows } = await executor.query(
-    'SELECT * FROM rehearsals WHERE id = $1 AND tenant_id = $2',
+    `SELECT *, ${myBandSelect('rehearsals')} FROM rehearsals WHERE id = $1 AND tenant_id = $2`,
     [rehearsalId, tenantId],
   )
   return rows[0] || null
@@ -201,9 +202,9 @@ export async function filterMemberIdsInTenant(executor, memberIds, tenantId) {
 export async function insertRehearsal(executor, tenantId, data, createdByUserId) {
   const { rows } = await executor.query(
     `INSERT INTO rehearsals
-       (tenant_id, proposed_date, start_time, end_time, location, notes, created_by_user_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
-     RETURNING *`,
+       (tenant_id, proposed_date, start_time, end_time, location, notes, created_by_user_id, my_band_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING *, ${myBandSelect('rehearsals')}`,
     [
       tenantId,
       data.proposed_date,
@@ -212,6 +213,7 @@ export async function insertRehearsal(executor, tenantId, data, createdByUserId)
       data.location || null,
       data.notes || null,
       createdByUserId,
+      data.my_band_id ?? null,
     ],
   )
   return rows[0]
@@ -327,7 +329,7 @@ export async function updateRehearsalFields(executor, tenantId, rehearsalId, fie
   const whereIdx = values.length + 1
   const { rows } = await executor.query(
     `UPDATE rehearsals SET ${assignments.join(', ')}
-     WHERE id = $${whereIdx} AND tenant_id = $${whereIdx + 1} RETURNING *`,
+     WHERE id = $${whereIdx} AND tenant_id = $${whereIdx + 1} RETURNING *, ${myBandSelect('rehearsals')}`,
     [...values, rehearsalId, tenantId],
   )
   return rows[0] || null

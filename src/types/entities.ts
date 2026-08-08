@@ -33,11 +33,27 @@ export interface Venue {
   longitude?: number | null
 }
 
+/**
+ * Which of the artist's bands a personal-workspace event was for. A domain
+ * reference like `venue`, NOT a tenant label — a foreign-tenant row is
+ * identified by CrossTenantRef in api.ts, and conflating the two would make a
+ * band tag look like a read-only marker.
+ *
+ * Only ever set in a personal workspace; a band's own events are already the
+ * band's.
+ */
+export interface MyBandRef {
+  id: Id
+  name: string
+  country_code: string
+}
+
 export interface Gig {
   id?: Id
   event_date?: string | Date
   event_description?: string
   status?: string
+  my_band?: MyBandRef | null
   start_time?: string | null
   end_time?: string | null
   banner_path?: string | null
@@ -112,6 +128,7 @@ export interface Rehearsal {
   id?: Id
   proposed_date?: string
   status?: string
+  my_band?: MyBandRef | null
   location?: string
   /** Optional calendar-only label, used when a rehearsal is shown outside its tenant. */
   calendar_description?: string
@@ -162,6 +179,7 @@ export interface BandEvent {
   id?: Id
   title?: string
   start_date?: string
+  my_band?: MyBandRef | null
   end_date?: string
   location?: string
   /** Absent in a personal workspace, which has no band roster. */
