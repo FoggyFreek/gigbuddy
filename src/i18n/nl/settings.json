@@ -55,7 +55,8 @@
       "cannotRemoveSuperAdmin": "Een super admin kan niet worden verwijderd",
       "onlySuperAdminRemoveTenantAdmin": "Alleen super admins kunnen een tenant admin verwijderen",
       "removeFromTenant": "Verwijder uit deze band",
-      "onlySuperAdminApproveTenantAdmin": "Alleen super admins kunnen een tenant_admin-lidmaatschap goedkeuren"
+      "onlySuperAdminApproveTenantAdmin": "Alleen super admins kunnen een tenant_admin-lidmaatschap goedkeuren",
+      "lastTenantAdmin": "Deze band moet minstens één admin houden. Maak eerst iemand anders admin."
     },
     "aria": {
       "removeMember": "lid verwijderen"

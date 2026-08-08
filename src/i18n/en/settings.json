@@ -55,7 +55,8 @@
       "cannotRemoveSuperAdmin": "Cannot remove a super admin",
       "onlySuperAdminRemoveTenantAdmin": "Only super admins can remove a tenant admin",
       "removeFromTenant": "Remove from this tenant",
-      "onlySuperAdminApproveTenantAdmin": "Only super admins can approve a tenant_admin membership"
+      "onlySuperAdminApproveTenantAdmin": "Only super admins can approve a tenant_admin membership",
+      "lastTenantAdmin": "This band must keep at least one admin. Make someone else an admin first."
     },
     "aria": {
       "removeMember": "remove member"

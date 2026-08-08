@@ -31,6 +31,14 @@ function removeDenied(targetUserId, reason) {
   return { action: 'membership.remove.denied', details: { targetUserId, reason } }
 }
 
+function leaveDenied(tenantId, reason) {
+  return { action: 'membership.leave.denied', details: { tenantId, reason } }
+}
+
+// A band the caller has no approved membership in must look exactly like one
+// that does not exist, so every leave failure shares this response.
+const NOT_A_MEMBER = notFound('Membership not found')
+
 // Privileged-change gates that need the existing membership row. Returns
 // { error, audit } on denial, or null when allowed.
 function authorizeMembershipChange({ existing, status, role, callerIsSuperAdmin, userId, actingUserId }) {
@@ -211,4 +219,31 @@ export async function removeMembership(db, tenantId, actingUser, userId) {
   if (removal.error) return removal
 
   return { audit: { action: 'membership.remove', details: { targetUserId: userId } } }
+}
+
+// Self-service departure, from anywhere: a musician leaves a band from their own
+// workspace, with no active tenant and no admin's warrant. It acts on the
+// caller's OWN approved membership and nothing else, so there is no target-user
+// parameter to abuse.
+//
+// Every miss is 404 — not a member, never was, already left, still pending —
+// because a band the caller has no approved membership in must be
+// indistinguishable from one that does not exist.
+export async function leaveTenant(db, user, tenantId) {
+  return withTransaction(async (client) => {
+    await lockTenantRow(client, tenantId)
+
+    const existing = await readMembershipRow(client, tenantId, user.id)
+    if (!existing || existing.status !== 'approved') abortTransaction(NOT_A_MEMBER)
+
+    const denial = await assertTenantAdminRemains(client, tenantId, user.id, existing, null)
+    if (denial) abortTransaction({ ...denial, audit: leaveDenied(tenantId, 'last_tenant_admin') })
+
+    await clearUserBandMember(client, user.id, tenantId)
+    await deleteMembership(client, tenantId, user.id)
+
+    // `tenantId` rides in the details because there is no active tenant on this
+    // tier for the request context to supply — same as invite redemption.
+    return { audit: { action: 'membership.leave', details: { tenantId } } }
+  }, { db })
 }

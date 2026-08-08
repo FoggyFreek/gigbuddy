@@ -95,15 +95,18 @@ interface MemberRowActionsProps {
   r: MembershipRow
   callerIsSuperAdmin: boolean
   isSelf: boolean
+  isLastAdmin: boolean
   cannotDelete: boolean
   onStatus: (userId: Id, status: string) => void
   onDelete: (userId: Id) => void
 }
 
-function MemberRowActions({ r, callerIsSuperAdmin, isSelf, cannotDelete, onStatus, onDelete }: Readonly<MemberRowActionsProps>) {
+function MemberRowActions({ r, callerIsSuperAdmin, isSelf, isLastAdmin, cannotDelete, onStatus, onDelete }: Readonly<MemberRowActionsProps>) {
   const { t } = useTranslation('settings')
   let removeTooltip: string
-  if (isSelf) {
+  if (isLastAdmin) {
+    removeTooltip = t($ => $.members.tooltips.lastTenantAdmin)
+  } else if (isSelf) {
     removeTooltip = t($ => $.members.tooltips.cannotRemoveSelf)
   } else if (r.is_super_admin) {
     removeTooltip = t($ => $.members.tooltips.cannotRemoveSuperAdmin)
@@ -126,7 +129,9 @@ function MemberRowActions({ r, callerIsSuperAdmin, isSelf, cannotDelete, onStatu
           </span>
         </Tooltip>
       )}
-      {r.status !== 'rejected' && !isSelf && !r.is_super_admin && (
+      {/* Rejecting the last admin revokes the tenant's only approved admin,
+          which the backend refuses for the same reason as a demotion. */}
+      {r.status !== 'rejected' && !isSelf && !r.is_super_admin && !isLastAdmin && (
         <Button size="small" variant="outlined" color="error" onClick={() => r.user_id != null && onStatus(r.user_id, 'rejected')}>
           {t($ => $.members.reject)}
         </Button>
@@ -148,22 +153,36 @@ function MemberRowActions({ r, callerIsSuperAdmin, isSelf, cannotDelete, onStatu
 // super-admin-only. Mirrors ASSIGNABLE_ROLES in src/auth/permissions.ts.
 const ASSIGNABLE_ROLE_OPTIONS = [...ASSIGNABLE_ROLES]
 
+// A tenant must always keep one approved admin, so the backend refuses to
+// remove or demote the last one — super admins included. Mirrored here so the
+// UI never offers an action that is going to 409.
+function isLastApprovedAdmin(r: MembershipRow, approvedAdminCount: number) {
+  return r.role === 'tenant_admin' && r.status === 'approved' && approvedAdminCount === 1
+}
+
+const countApprovedAdmins = (rows: MembershipRow[]) =>
+  rows.filter((r) => r.role === 'tenant_admin' && r.status === 'approved').length
+
 interface RoleSelectProps {
   r: MembershipRow
   callerIsSuperAdmin: boolean
   isSelf: boolean
+  isLastAdmin: boolean
   onRole: (userId: Id, role: string) => void
 }
 
-function RoleSelect({ r, callerIsSuperAdmin, isSelf, onRole }: Readonly<RoleSelectProps>) {
+function RoleSelect({ r, callerIsSuperAdmin, isSelf, isLastAdmin, onRole }: Readonly<RoleSelectProps>) {
+  const { t } = useTranslation('settings')
   // Non-super callers cannot touch a tenant_admin's role, nor grant tenant_admin.
   const cannotDemoteAdmin = r.role === 'tenant_admin' && !callerIsSuperAdmin && !isSelf
   const cannotPromote = !callerIsSuperAdmin
-  return (
+  // The only role the last admin may hold is the one they already have.
+  const disabled = cannotDemoteAdmin || isLastAdmin
+  const select = (
     <FormControl size="small" fullWidth>
       <Select
         value={r.role ?? ''}
-        disabled={cannotDemoteAdmin}
+        disabled={disabled}
         onChange={(e) => r.user_id != null && onRole(r.user_id, e.target.value)}
       >
         {ASSIGNABLE_ROLE_OPTIONS.map((role) => (
@@ -174,6 +193,12 @@ function RoleSelect({ r, callerIsSuperAdmin, isSelf, onRole }: Readonly<RoleSele
         </MenuItem>
       </Select>
     </FormControl>
+  )
+  if (!isLastAdmin) return select
+  return (
+    <Tooltip title={t($ => $.members.tooltips.lastTenantAdmin)}>
+      <span>{select}</span>
+    </Tooltip>
   )
 }
 
@@ -190,6 +215,7 @@ interface MembersTableProps {
 
 function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onStatus, onRole, onBandMember, onDelete }: Readonly<MembersTableProps>) {
   const { t } = useTranslation('settings')
+  const approvedAdminCount = countApprovedAdmins(rows)
   return (
     <>
       {/* Desktop table — hidden below 600 px */}
@@ -213,9 +239,11 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
               const availableMembers = bandMembers.filter(
                 (bm) => !(bm as MemberWithUser).user_id || (bm as MemberWithUser).user_id === r.user_id,
               )
+              const isLastAdmin = isLastApprovedAdmin(r, approvedAdminCount)
               const cannotDelete =
                 isSelf ||
                 r.is_super_admin ||
+                isLastAdmin ||
                 (r.role === 'tenant_admin' && !callerIsSuperAdmin)
               const status = r.status
               return (
@@ -238,7 +266,7 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
                     <Chip label={status ? t($ => $.members.status[status]) : ''} color={STATUS_COLOR[r.status ?? ''] || 'default'} size="small" />
                   </TableCell>
                   <TableCell sx={{ minWidth: 140 }}>
-                    <RoleSelect r={r} callerIsSuperAdmin={callerIsSuperAdmin} isSelf={isSelf} onRole={onRole} />
+                    <RoleSelect r={r} callerIsSuperAdmin={callerIsSuperAdmin} isSelf={isSelf} isLastAdmin={isLastAdmin} onRole={onRole} />
                   </TableCell>
                   <TableCell sx={{ minWidth: 160 }}>
                     <FormControl size="small" fullWidth>
@@ -264,6 +292,7 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
                         r={r}
                         callerIsSuperAdmin={callerIsSuperAdmin}
                         isSelf={isSelf}
+                        isLastAdmin={isLastAdmin}
                         cannotDelete={cannotDelete}
                         onStatus={onStatus}
                         onDelete={onDelete}
@@ -285,7 +314,8 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
           const availableMembers = bandMembers.filter(
             (bm) => !(bm as MemberWithUser).user_id || (bm as MemberWithUser).user_id === r.user_id,
           )
-          const cannotDelete = isSelf || r.is_super_admin || (r.role === 'tenant_admin' && !callerIsSuperAdmin)
+          const isLastAdmin = isLastApprovedAdmin(r, approvedAdminCount)
+          const cannotDelete = isSelf || r.is_super_admin || isLastAdmin || (r.role === 'tenant_admin' && !callerIsSuperAdmin)
           const status = r.status
           return (
             <Card key={String(r.user_id)} variant="outlined">
@@ -316,7 +346,7 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
                   <Chip label={status ? t($ => $.members.status[status]) : ''} color={STATUS_COLOR[r.status ?? ''] || 'default'} size="small" />
                 </Stack>
                 <Stack spacing={1}>
-                  <RoleSelect r={r} callerIsSuperAdmin={callerIsSuperAdmin} isSelf={isSelf} onRole={onRole} />
+                  <RoleSelect r={r} callerIsSuperAdmin={callerIsSuperAdmin} isSelf={isSelf} isLastAdmin={isLastAdmin} onRole={onRole} />
                   <FormControl size="small" fullWidth>
                     <Select
                       value={linked ?? ''}
@@ -337,6 +367,7 @@ function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onSt
                   r={r}
                   callerIsSuperAdmin={callerIsSuperAdmin}
                   isSelf={isSelf}
+                  isLastAdmin={isLastAdmin}
                   cannotDelete={cannotDelete}
                   onStatus={onStatus}
                   onDelete={onDelete}

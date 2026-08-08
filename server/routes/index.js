@@ -34,6 +34,7 @@ import tenantsSelfRouter from './tenantsSelf.js'
 import bandDirectoryRouter from './bandDirectory.js'
 import meRouter from './me.js'
 import meAvailabilityRouter from './meAvailability.js'
+import meMembershipsRouter from './meMemberships.js'
 import platformSettingsRouter from './platformSettings.js'
 import adminUsersRouter from './adminUsers.js'
 import adminPlansRouter from './adminPlans.js'
@@ -211,6 +212,9 @@ router.use('/band-directory', currentTermsUser, bandDirectoryLimiter, bandDirect
 // tenant at all — mounted before the agenda router so `/me/availability` is not
 // swallowed by it.
 router.use('/me/availability', currentTermsUser, meAvailabilityRouter)
+// Leaving a band is user-level too: no active tenant, no membership admin.
+// Mounted before the agenda router so it is not swallowed by it.
+router.use('/me/memberships', currentTermsUser, meMembershipsRouter)
 router.use('/me', currentTermsUser, resolveMemberTenantIds, meRouter)
 // User-level billing (subscription owner acts regardless of active tenant).
 router.use('/billing', requireApproved, billingRouter)

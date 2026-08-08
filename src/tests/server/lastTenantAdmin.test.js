@@ -80,6 +80,19 @@ describe('the last tenant_admin cannot be removed', () => {
 
     expect(await countAdmins()).toBe(1)
   })
+
+  it('refuses the last admin leaving via the user-level self-leave route', async () => {
+    await makeSoleAdmin(seed.userA.id)
+
+    const res = await request(app)
+      .delete(`/api/me/memberships/${seed.tenantA.id}`)
+      .set('x-test-user-id', String(seed.userA.id))
+      .set('x-test-tenant-id', 'null')
+      .expect(409)
+
+    expect(res.body.code).toBe('last_tenant_admin')
+    expect(await countAdmins()).toBe(1)
+  })
 })
 
 describe('the last tenant_admin cannot be demoted', () => {
