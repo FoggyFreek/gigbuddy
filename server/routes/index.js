@@ -36,6 +36,7 @@ import meRouter from './me.js'
 import meAvailabilityRouter from './meAvailability.js'
 import meMembershipsRouter from './meMemberships.js'
 import bandProfilesRouter from './bandProfiles.js'
+import myBandsRouter from './myBands.js'
 import platformSettingsRouter from './platformSettings.js'
 import adminUsersRouter from './adminUsers.js'
 import adminPlansRouter from './adminPlans.js'
@@ -213,6 +214,7 @@ const setlists = requireTenantCapability(TENANT_CAPABILITIES.SETLISTS)
 const merch = requireTenantCapability(TENANT_CAPABILITIES.MERCH)
 const bandPromotion = requireTenantCapability(TENANT_CAPABILITIES.BAND_PROMOTION_INTEGRATIONS)
 const bandLinkpage = requireTenantCapability(TENANT_CAPABILITIES.BAND_LINKPAGE)
+const myBands = requireTenantCapability(TENANT_CAPABILITIES.MY_BANDS)
 
 router.use('/invites/redeem', redeemLimiter, loadUser, invitesRedeemRouter)
 // Self-service owned tenants: user-level (no active-tenant resolution).
@@ -256,6 +258,9 @@ router.use('/availability', tenantMember, bandAvailability, availabilityRouter)
 router.use('/rehearsals', tenantMember, rehearsalsRouter)
 router.use('/achievements', tenantMember, achievementsRouter)
 router.use('/band-events', tenantMember, bandEventsRouter)
+// The bands an artist plays in that aren't on gigbuddy. Personal-only: a band
+// workspace's events are already the band's.
+router.use('/my-bands', tenantMember, myBands, myBandsRouter)
 router.use('/email-templates', tenantMember, emailTemplatesRouter)
 router.use('/venues', tenantMember, venuesRouter)
 router.use('/contacts', tenantMember, contactsRouter)

@@ -30,6 +30,10 @@ import {
   deleteTenantRow,
   markTenantDeletionState,
 } from '../repositories/tenantRepository.js'
+import { lockBandProfiles } from '../repositories/bandProfileRepository.js'
+import { listProfileIdsHeldByTenant } from '../repositories/myBandRepository.js'
+import { listProfileIdsClaimedByTenant } from '../repositories/bandProfileClaimRepository.js'
+import { sweepAbandonedProfiles } from './myBandService.js'
 import { deleteTenantObjects } from './storageService.js'
 import { enforceMemberCap } from './limitService.js'
 import { logger } from '../utils/logger.js'
@@ -220,7 +224,34 @@ export async function deleteTenant(db, tenantId, confirmationSlug) {
     const tenant = await fetchTenantForDeletion(client, tenantId)
     if (!tenant) abortTransaction(notFound('Tenant not found'))
     if (tenant.deletion_status !== 'pending') abortTransaction(conflict('Tenant deletion is not pending'))
+
+    // Global band profiles survive only while somebody holds them or a claim is
+    // live, and the foreign keys are about to take both away without running any
+    // service code: a personal workspace's my_bands rows cascade, and a claiming
+    // tenant's pending claim cascades with it. Collect and lock the affected
+    // profiles BEFORE the delete (the rows are gone afterwards), then sweep once
+    // it has run — all in this transaction, so it commits with the tenant or not
+    // at all.
+    //
+    // fetchTenantForDeletion already holds the tenant row lock, and the profiles
+    // are locked ascending by id, which is the feature's global lock order.
+    const profileIds = await collectProfileIdsForTenant(client, tenantId)
+    await lockBandProfiles(client, profileIds)
+
     await deleteTenantRow(client, tenantId)
+
+    await sweepAbandonedProfiles(client, profileIds)
+
     return { audit: { action: 'tenant.delete', details: { tenantId } } }
   }, { db })
+}
+
+// Every profile this tenant's deletion can strand: the ones its collection holds
+// and the one it is claiming.
+async function collectProfileIdsForTenant(client, tenantId) {
+  const [held, claimed] = await Promise.all([
+    listProfileIdsHeldByTenant(client, tenantId),
+    listProfileIdsClaimedByTenant(client, tenantId),
+  ])
+  return [...new Set([...held, ...claimed])].sort((a, b) => a - b)
 }

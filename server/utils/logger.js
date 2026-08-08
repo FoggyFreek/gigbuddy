@@ -18,6 +18,8 @@ const CONTEXT_KEYS = new Set([
   'audience', 'pendingPlanSlug', 'pendingAudience', 'crossAudiencePending',
   'jobName', 'feature', 'ownerUserId', 'opType', 'revokedTokens',
   'achievementKey', 'shopifyResponseJson',
+  // Server-computed counters for the abandoned-band-profile sweep.
+  'bandProfileId', 'sweptProfiles',
   // VAT scheme / issued-document snapshot audit counters. All server-computed
   // integers, never anything off a request.
   'missingInvoiceSnapshots', 'missingPurchaseSnapshots', 'overlappingEnrolments',

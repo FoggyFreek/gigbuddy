@@ -48,6 +48,9 @@ const INPUT_MESSAGES = Object.freeze({
   website_url_too_long: 'Website address is too long',
   invalid_email: 'That is not a valid email address',
   band_profile_needs_link: 'A band profile needs a Spotify link or a website',
+  invalid_band_profile_id: 'Invalid band profile id',
+  band_profile_required: 'Provide a band profile id or a new band profile',
+  invalid_mode: 'mode must be "keep" or "delete"',
 })
 
 export function invalidInput(code) {

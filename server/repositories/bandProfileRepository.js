@@ -30,7 +30,9 @@ const STATUS_SQL = `
 // leaking it for an invite-only band would disclose the existence of a private
 // tenant. `claimed` stays true either way — the profile name was already public,
 // so "this band is on gigbuddy now" reveals nothing new.
-const CLAIMED_TENANT_JOIN = `
+// Exported so the My Bands read can nest a profile without restating the
+// disclosure rule — a second copy is how a private tenant starts leaking.
+export const CLAIMED_TENANT_JOIN = `
   LEFT JOIN tenants ct
     ON ct.id = bp.claimed_by_tenant_id AND ${discoverableSql('ct')}`
 
@@ -39,7 +41,7 @@ const CLAIMED_TENANT_SQL = `
     'id', ct.id, 'slug', ct.slug, 'displayName', ct.display_name, 'logoPath', ct.logo_path
   ) END AS claimed_tenant`
 
-const PROFILE_PROJECTION = `
+export const PROFILE_PROJECTION = `
   bp.id, bp.name, bp.country_code, bp.spotify_url, bp.website_url, bp.contact_email,
   bp.created_by_user_id, bp.claimed_by_tenant_id, bp.created_at,
   (bp.claimed_by_tenant_id IS NOT NULL) AS claimed,
@@ -171,8 +173,23 @@ export async function countProfilesCreatedByUser(executor, userId) {
   return rows[0].count
 }
 
-export async function deleteBandProfile(executor, profileId) {
-  const { rowCount } = await executor.query('DELETE FROM band_profiles WHERE id = $1', [profileId])
+// Terminal deletion. A profile exists only while somebody holds it or a claim
+// is live; the moment neither is true it is gone, so the table cannot silt up
+// with rows nobody can reach.
+//
+// One statement, so it is atomic on its own; callers still take the profile row
+// lock first, because they have already read the state they are acting on.
+export async function deleteBandProfileIfAbandoned(executor, profileId) {
+  const { rowCount } = await executor.query(
+    `DELETE FROM band_profiles bp
+      WHERE bp.id = $1
+        AND NOT EXISTS (SELECT 1 FROM my_bands mb WHERE mb.band_profile_id = bp.id)
+        AND NOT EXISTS (
+          SELECT 1 FROM band_profile_claims c
+           WHERE c.band_profile_id = bp.id AND c.status = 'pending'
+        )`,
+    [profileId],
+  )
   return rowCount > 0
 }
 
