@@ -53,6 +53,7 @@ import {
   touchGig,
   deleteGig as deleteGigRow,
   getGigBannerRow,
+  listGigStorageKeys,
   setGigBannerPath,
   clearGigBannerPath,
   insertGigAttachment,
@@ -412,15 +413,28 @@ export async function setGigTags(db, tenantId, gigId, body) {
   }, { db })
 }
 
-// Deletes the gig and removes its banner object from storage.
+// Deletes the gig and reclaims every object it owns — the banner and each
+// attachment, whose rows cascade away with the gig and whose keys are therefore
+// unreachable once it is gone.
+//
+// Rows go in one transaction; objects are removed only after it commits. The
+// order matters both ways: reading the keys inside the transaction stops a
+// concurrent upload from being missed, and removing the objects outside it
+// stops a rollback from leaving a surviving gig pointing at deleted files.
 export async function deleteGig(db, tenantId, gigId) {
-  const row = await getGigBannerRow(db, gigId, tenantId)
-  if (!row) return NOT_FOUND
+  const result = await withTransaction(async (client) => {
+    const keys = await listGigStorageKeys(client, gigId, tenantId)
+    if (keys === null) abortTransaction(NOT_FOUND)
 
-  const deleted = await deleteGigRow(db, gigId, tenantId)
-  if (!deleted) return NOT_FOUND
+    const deleted = await deleteGigRow(client, gigId, tenantId)
+    if (!deleted) abortTransaction(NOT_FOUND)
 
-  safeRemove(row.banner_path, 'Failed to delete gig banner object:')
+    return { keys }
+  }, { db })
+
+  if (result.error) return result
+
+  for (const key of result.keys) safeRemove(key, 'Failed to delete gig object:')
   return {}
 }
 

@@ -639,6 +639,27 @@ export async function getGigBannerRow(executor, gigId, tenantId) {
   return rows[0] ?? null
 }
 
+// Every object-store key the gig owns, for reclamation before it is deleted.
+// Attachments cascade away with the gig row (composite FK), so their keys are
+// unreachable afterwards and must be collected here or leak forever.
+// Returns null when the gig does not exist, distinguishing that from a gig
+// that simply owns no objects.
+export async function listGigStorageKeys(executor, gigId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT g.banner_path,
+            COALESCE((
+              SELECT array_agg(ga.object_key)
+                FROM gig_attachments ga
+               WHERE ga.gig_id = g.id AND ga.tenant_id = g.tenant_id
+            ), '{}') AS attachment_keys
+       FROM gigs g
+      WHERE g.id = $1 AND g.tenant_id = $2`,
+    [gigId, tenantId],
+  )
+  if (!rows[0]) return null
+  return [rows[0].banner_path, ...rows[0].attachment_keys].filter(Boolean)
+}
+
 export async function setGigBannerPath(executor, gigId, tenantId, objectKey) {
   const { rows } = await executor.query(
     `UPDATE gigs SET banner_path = $1, updated_at = NOW()
