@@ -91,7 +91,7 @@ const BAND_ITEMS: NavItemDef[] = [
   // A workspace of one has no roster to manage and nobody to invite into it.
   { id: 'members', labelKey: 'membersAndInvites', icon: GroupIcon, permission: PERMISSIONS.MEMBERS_MANAGE, capability: TENANT_CAPABILITIES.BAND_MEMBERSHIP_ADMIN },
   // The personal counterpart: the bands I'm in, not the people in this band.
-  { id: 'bands', labelKey: 'bands', icon: GroupIcon, capability: TENANT_CAPABILITIES.EXTERNAL_ENSEMBLES },
+  { id: 'bands', labelKey: 'bands', icon: GroupIcon, capability: TENANT_CAPABILITIES.MY_BANDS },
   { id: 'storage', labelKey: 'storage', icon: StorageIcon, permission: PERMISSIONS.TENANT_MANAGE },
   { id: 'integrations', labelKey: 'integrations', icon: ExtensionOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
 ]

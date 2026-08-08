@@ -474,8 +474,8 @@ export async function insertGigWithRelations(executor, tenantId, data) {
   const { rows } = await executor.query(
     `WITH inserted AS (
        INSERT INTO gigs (tenant_id, event_date, event_description, venue_id, festival_id, start_time, end_time, status,
-                         has_pa_system, has_drumkit, has_stage_lights, ensemble_contact_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                         has_pa_system, has_drumkit, has_stage_lights)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *
      )
      SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}
@@ -487,7 +487,6 @@ export async function insertGigWithRelations(executor, tenantId, data) {
       data.event_date, data.event_description, data.venueId, data.festivalId,
       data.start_time, data.end_time, data.status,
       data.has_pa_system, data.has_drumkit, data.has_stage_lights,
-      data.ensembleContactId ?? null,
     ],
   )
   return rows[0]

@@ -131,7 +131,7 @@ describe('SettingsPage — nav gating', () => {
     expect(screen.queryByText('Accent color')).not.toBeInTheDocument()
   })
 
-  it('replaces roster management with the external-bands section in a personal workspace', async () => {
+  it('replaces roster management with the my-bands section in a personal workspace', async () => {
     wrap('/settings', { activeTenantKind: 'personal' })
     expect(await screen.findAllByText('Bands')).not.toHaveLength(0)
     expect(screen.queryByText('Members and invites')).not.toBeInTheDocument()

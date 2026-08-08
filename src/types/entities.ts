@@ -34,12 +34,6 @@ export interface Venue {
 }
 
 export interface Gig {
-  /**
-   * The ensemble this gig was played with — an 'ensemble' contact in the same
-   * tenant. Only meaningful in a personal workspace; a band's gigs are the
-   * band's already.
-   */
-  ensemble_contact_id?: Id | null
   id?: Id
   event_date?: string | Date
   event_description?: string

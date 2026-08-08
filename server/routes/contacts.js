@@ -3,9 +3,6 @@ import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { requireParam, sendError } from './routeHelpers.js'
-import { requireTenantCapabilityWhen } from '../middleware/tenant.js'
-import { TENANT_CAPABILITIES } from '../../shared/tenantCapabilities.js'
-import { ENSEMBLE_CATEGORY } from '../validators/contactValidators.js'
 import {
   listContacts,
   searchContacts,
@@ -23,15 +20,6 @@ import {
 } from '../services/contactService.js'
 
 const router = Router()
-const externalEnsembleWrite = requireTenantCapabilityWhen(
-  TENANT_CAPABILITIES.EXTERNAL_ENSEMBLES,
-  (req) => req.body?.category === ENSEMBLE_CATEGORY,
-)
-const externalEnsembleImport = requireTenantCapabilityWhen(
-  TENANT_CAPABILITIES.EXTERNAL_ENSEMBLES,
-  (req) => Array.isArray(req.body)
-    && req.body.some((row) => row?.category === ENSEMBLE_CATEGORY),
-)
 
 router.get('/', async (req, res) => {
   const result = await listContacts(pool, req.tenantId, req.query)
@@ -54,13 +42,13 @@ router.get('/:id', async (req, res) => {
   res.json(result.contact)
 })
 
-router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), externalEnsembleWrite, async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await createContact(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.contact)
 })
 
-router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), externalEnsembleWrite, async (req, res) => {
+router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await patchContact(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
@@ -120,7 +108,7 @@ router.delete('/:id/venues/:venueId', requirePermission(PERMISSIONS.PLANNING_WRI
 
 // ---------- import ----------
 
-router.post('/import', requirePermission(PERMISSIONS.PLANNING_WRITE), externalEnsembleImport, async (req, res) => {
+router.post('/import', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await importContacts(req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.summary)

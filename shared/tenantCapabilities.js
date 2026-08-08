@@ -13,7 +13,7 @@ export const TENANT_CAPABILITIES = Object.freeze({
   BAND_PROMOTION_INTEGRATIONS: 'band_promotion_integrations',
   BAND_SHARE: 'band_share',
   BAND_LINKPAGE: 'band_linkpage',
-  EXTERNAL_ENSEMBLES: 'external_ensembles',
+  MY_BANDS: 'my_bands',
   ARTIST_CALENDAR: 'artist_calendar',
 })
 
@@ -32,7 +32,7 @@ const CAPABILITIES_BY_KIND = Object.freeze({
     TENANT_CAPABILITIES.BAND_LINKPAGE,
   ]),
   personal: new Set([
-    TENANT_CAPABILITIES.EXTERNAL_ENSEMBLES,
+    TENANT_CAPABILITIES.MY_BANDS,
     TENANT_CAPABILITIES.ARTIST_CALENDAR,
   ]),
 })

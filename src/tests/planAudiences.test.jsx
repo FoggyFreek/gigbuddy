@@ -47,7 +47,7 @@ describe('audienceForTenantKind', () => {
   it('throws rather than defaulting on an unknown kind', () => {
     expect(() => be.audienceForTenantKind(undefined)).toThrow(/Unknown tenant kind/)
     expect(() => be.audienceForTenantKind(null)).toThrow(/Unknown tenant kind/)
-    expect(() => be.audienceForTenantKind('ensemble')).toThrow(/Unknown tenant kind/)
+    expect(() => be.audienceForTenantKind('orchestra')).toThrow(/Unknown tenant kind/)
   })
 })
 

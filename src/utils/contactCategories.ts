@@ -3,14 +3,12 @@ import type { ChipProps } from '@mui/material/Chip'
 import type { Contact } from '../types/entities.ts'
 
 export type ContactCategory = 'press' | 'radio & tv' | 'booker' | 'promotion' | 'network'
-export type AllContactCategory = ContactCategory | 'supplier' | 'ensemble'
+export type AllContactCategory = ContactCategory | 'supplier'
 type ChipColor = NonNullable<ChipProps['color']>
 
 export const CONTACT_CATEGORIES: ContactCategory[] = ['press', 'radio & tv', 'booker', 'promotion', 'network']
 export const SUPPLIER_CATEGORY = 'supplier' as const
-/** A band that isn't a gigbuddy customer — it lives only in this address book. */
-export const ENSEMBLE_CATEGORY = 'ensemble' as const
-export const ALL_CONTACT_CATEGORIES: AllContactCategory[] = [...CONTACT_CATEGORIES, SUPPLIER_CATEGORY, ENSEMBLE_CATEGORY]
+export const ALL_CONTACT_CATEGORIES: AllContactCategory[] = [...CONTACT_CATEGORIES, SUPPLIER_CATEGORY]
 
 export const CONTACT_CATEGORY_LABELS: Record<AllContactCategory, string> = {
   'press': 'Press',
@@ -19,7 +17,6 @@ export const CONTACT_CATEGORY_LABELS: Record<AllContactCategory, string> = {
   'promotion': 'Promotion',
   'network': 'Network',
   'supplier': 'Supplier',
-  'ensemble': 'Band',
 }
 
 export const CONTACT_CATEGORY_COLORS: Record<AllContactCategory, ChipColor> = {
@@ -29,7 +26,6 @@ export const CONTACT_CATEGORY_COLORS: Record<AllContactCategory, ChipColor> = {
   'promotion': 'warning',
   'network': 'success',
   'supplier': 'info',
-  'ensemble': 'secondary',
 }
 
 function isContactCategory(category: string | null | undefined): category is AllContactCategory {

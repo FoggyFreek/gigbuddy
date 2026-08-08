@@ -65,11 +65,11 @@ One Node process in production: Express serves `/api`, the built `dist/` assets,
 
 ## Tenant kinds — shared architecture, capability split
 
-`tenants.kind` is `band` or `personal`. A personal workspace is an ordinary tenant — same routes, services, repositories, tables, permissions and isolation — that happens to have one member. Profile, planning, contacts, finance and files are identical for both kinds and are absent from the capability registry. What differs is the ends of the range: band-shaped concepts (roster, membership admin, band availability, setlists, merch, discovery, promotion integrations, share, link page) are band-only, while external ensembles and the artist calendar are personal-only. **Shared is the default** — never fork a domain into band/personal implementations just for wording or visibility.
+`tenants.kind` is `band` or `personal`. A personal workspace is an ordinary tenant — same routes, services, repositories, tables, permissions and isolation — that happens to have one member. Profile, planning, contacts, finance and files are identical for both kinds and are absent from the capability registry. What differs is the ends of the range: band-shaped concepts (roster, membership admin, band availability, setlists, merch, discovery, promotion integrations, share, link page) are band-only, while the artist calendar and the "bands I'm in" settings section are personal-only. **Shared is the default** — never fork a domain into band/personal implementations just for wording or visibility.
 
 - Genuine differences are named capabilities in `shared/tenantCapabilities.js`. Prefer capability checks over scattered `kind === …` comparisons.
 - Backend is authoritative: `requireTenantCapability`, `requireTenantCapabilityForBodyFields`, `requireTenantCapabilityWhen` (`server/middleware/tenant.js`). The field/predicate variants keep a shared endpoint shared when only one subtype is kind-specific. Frontend `useTenantKind().supports(…)` / `RequireTenantCapability` are UX only.
-- A personal tenant is unique per owner and does not consume the `bands` limit — only active owned `band` tenants count. External bands are `ensemble` contacts inside the personal tenant, never shell tenants.
+- A personal tenant is unique per owner and does not consume the `bands` limit — only active owned `band` tenants count.
 - `tenants.display_name` is the kind-neutral name; `band_name` is a synced alias with `tenantRepository` as the single writer. Prefer kind-neutral vocabulary.
 - Read `docs/tenant-kind-architecture.md` before adding kind-specific behavior; add a capability, not a parallel feature stack.
 

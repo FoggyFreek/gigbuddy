@@ -5,8 +5,6 @@ import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/gigValidators.js'
 import { requireParam, sendError, viewerOf } from './routeHelpers.js'
-import { requireTenantCapabilityWhen } from '../middleware/tenant.js'
-import { TENANT_CAPABILITIES } from '../../shared/tenantCapabilities.js'
 import {
   listGigs,
   listUpcomingGigs,
@@ -61,10 +59,6 @@ const attachmentUpload = multer({
 })
 
 const router = Router()
-const externalEnsembleTag = requireTenantCapabilityWhen(
-  TENANT_CAPABILITIES.EXTERNAL_ENSEMBLES,
-  (req) => req.body?.ensemble_contact_id != null,
-)
 
 // List all gigs with open task count and member availability
 router.get('/', async (req, res) => {
@@ -136,7 +130,7 @@ router.post('/import', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req
 })
 
 // Create gig
-router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), externalEnsembleTag, async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const result = await createGig(req.tenantId, req.user.id, req.body)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.gig)
@@ -144,7 +138,7 @@ router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), externalEnsemble
 })
 
 // Update gig (partial)
-router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), externalEnsembleTag, async (req, res) => {
+router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await patchGig(pool, req.tenantId, id, req.body || {})
   if (result.error) return sendError(res, result.error)

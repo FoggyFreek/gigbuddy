@@ -12,10 +12,6 @@ export const GIG_PATCH_FIELDS = [
   'start_time', 'end_time', 'status', 'booking_fee_cents', 'admission',
   'ticket_link', 'notes', 'merchandise_cut', 'percentage_of_sales',
   'has_pa_system', 'has_drumkit', 'has_stage_lights',
-  // Which ensemble this gig was played with — an 'ensemble' contact in the
-  // same tenant. Only meaningful in a personal workspace, where the musician's
-  // own gigs live; the service verifies the contact's tenant and category.
-  'ensemble_contact_id',
 ]
 
 // Percentage fields stored as NUMERIC(5,2). Accepted from the client as a number
@@ -60,7 +56,7 @@ export function normalizeGigTagNames(tags) {
 // malformed, otherwise { body: normalizedBody }.
 export function normalizeGigVenueRefs(body) {
   const normalized = { ...body }
-  for (const key of ['venue_id', 'festival_id', 'ensemble_contact_id']) {
+  for (const key of ['venue_id', 'festival_id']) {
     if (key in normalized && normalized[key] !== null) {
       const parsed = parseId(normalized[key])
       if (parsed === null) return { error: `Invalid ${key}` }
