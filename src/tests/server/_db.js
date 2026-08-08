@@ -56,6 +56,7 @@ const TRUNCATE_SQL = `
       rehearsal_participants, rehearsals,
       band_event_participants, band_events, availability_slots,
       band_members,
+      band_profile_claims, my_bands, band_profiles,
       profile_links,
       email_templates, venue_contacts, venues, contact_notes, contacts, share_photos,
       setlist_items, setlist_sets, setlists,
