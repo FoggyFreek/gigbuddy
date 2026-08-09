@@ -60,6 +60,19 @@
     },
     "searchLabel": "Band name",
     "searchHint": "Type at least 3 characters.",
+    "workflow": {
+      "intro": "Add a band by first searching for existing bands. If your band isn't on gigBuddy and has no public profile yet, you can create a new band or public band profile.",
+      "createBand": {
+        "title": "Create a new band",
+        "body": "If you manage this band and want to invite more members. This will count towards your gigBuddy bands limit.",
+        "action": "Create band"
+      },
+      "createProfile": {
+        "title": "Create a public band profile",
+        "body": "For a band you take part in, but is not (yet) on gigBuddy. You can link events to this band so you stay organized.",
+        "action": "Create public profile"
+      }
+    },
     "groups": {
       "onGigbuddy": "On gigbuddy",
       "offGigbuddy": "Not on gigbuddy"

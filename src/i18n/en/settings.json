@@ -18,13 +18,40 @@
       "defaultAccounts": "Accounting Settings",
       "financialProfile": "Financial profile",
       "accountingProfile": "Accounting profile",
-      "bandProfile": "Band profile"
+      "bandProfile": "Public band profile",
+      "manageAccounts": "Manage account"
     },
     "workspaceSettings": "Workspace settings"
   },
   "subscription": {
     "current": "Current plan",
     "manage": "Manage subscription"
+  },
+  "tenantDeletion": {
+    "title": "Delete account permanently",
+    "description": "Permanently delete this workspace and all of its content.",
+    "open": "Delete account permanently",
+    "dialogTitle": "Delete {{name}} permanently?",
+    "warning": "This account and all of its content will be permanently deleted. This cannot be undone.",
+    "downloadWarning": "Download any financial records and other relevant data before continuing.",
+    "confirmationHelp": "Type the exact account name, {{name}}, to confirm.",
+    "confirmationLabel": "Type {{name}} to confirm",
+    "acknowledgement": "I understand that this account and all its content will be permanently deleted.",
+    "confirm": "Delete permanently",
+    "failed": "Account deletion failed. Please try again."
+  },
+  "tenantSlug": {
+    "title": "Change band slug",
+    "description": "Change the unique name used in your band's public web address. The old address stops working immediately.",
+    "label": "Slug name",
+    "helper": "Use 1–64 lowercase letters, numbers, or hyphens. It must start and end with a letter or number.",
+    "save": "Save slug name",
+    "success": "Band slug updated.",
+    "errors": {
+      "invalid": "Enter a valid slug name.",
+      "inUse": "That slug name is already in use.",
+      "failed": "Could not update the slug. Please try again."
+    }
   },
   "financeWizard": {
     "title": "Finance setup wizard",
@@ -480,8 +507,8 @@
     "toggle": "Findable in the band directory"
   },
   "bandProfileClaim": {
-    "title": "Band profile",
-    "description": "Musicians who aren't on gigbuddy yet may already be tagging their events with your band. Claim that profile so it becomes yours.",
+    "title": "Global band profile",
+    "description": "Musicians can create public band profiles for bands that aren't yet on gigBuddy. They may already be tagging their events with your global band profile. Claim that profile so it becomes yours.",
     "searchLabel": "Find your band",
     "searchHint": "Type at least 3 characters.",
     "noResults": "No unclaimed band profiles match that name.",
@@ -490,7 +517,7 @@
     "submit": "Claim this profile",
     "withdraw": "Withdraw claim",
     "pendingHelp": "We're verifying your claim. We may email you for proof.",
-    "approvedHelp": "This profile is yours. Musicians tagging events with it can now join your band.",
+    "approvedHelp": "This profile is yours. Musicians that have added you as their band and have been tagging events with it, can now join your band.",
     "tryAgain": "You can claim a different profile.",
     "status": {
       "pending": "Under review",

@@ -18,13 +18,40 @@
       "defaultAccounts": "Boekhoudinstellingen",
       "financialProfile": "Financieel profiel",
       "accountingProfile": "Boekhoudprofiel",
-      "bandProfile": "Bandprofiel"
+      "bandProfile": "Openbaar bandprofiel",
+      "manageAccounts": "Toegang en beheer"
     },
     "workspaceSettings": "Werkruimte-instellingen"
   },
   "subscription": {
     "current": "Huidig abonnement",
     "manage": "Abonnement beheren"
+  },
+  "tenantDeletion": {
+    "title": "Account permanent verwijderen",
+    "description": "Verwijder deze werkruimte en alle inhoud permanent.",
+    "open": "Account permanent verwijderen",
+    "dialogTitle": "{{name}} permanent verwijderen?",
+    "warning": "Dit account en alle inhoud worden permanent verwijderd. Dit kan niet ongedaan worden gemaakt.",
+    "downloadWarning": "Download alle financiële gegevens en andere relevante data voordat je doorgaat.",
+    "confirmationHelp": "Typ de exacte accountnaam, {{name}}, ter bevestiging.",
+    "confirmationLabel": "Typ {{name}} ter bevestiging",
+    "acknowledgement": "Ik begrijp dat dit account en alle inhoud permanent worden verwijderd.",
+    "confirm": "Permanent verwijderen",
+    "failed": "Het verwijderen van het account is mislukt. Probeer het opnieuw."
+  },
+  "tenantSlug": {
+    "title": "Band slug wijzigen",
+    "description": "Wijzig de unieke naam in het openbare webadres van je band. Het oude adres werkt daarna direct niet meer.",
+    "label": "Slug naam",
+    "helper": "Gebruik 1–64 kleine letters, cijfers of koppeltekens. Begin en eindig met een letter of cijfer.",
+    "save": "Slug naam opslaan",
+    "success": "Band slug bijgewerkt.",
+    "errors": {
+      "invalid": "Voer een geldige slug in.",
+      "inUse": "Deze slug is al in gebruik.",
+      "failed": "De band slug kon niet worden bijgewerkt. Probeer het opnieuw."
+    }
   },
   "financeWizard": {
     "title": "Financiële setup-wizard",
@@ -480,8 +507,8 @@
     "toggle": "Vindbaar in de bandengids"
   },
   "bandProfileClaim": {
-    "title": "Bandprofiel",
-    "description": "Muzikanten die nog niet op gigbuddy zitten koppelen hun evenementen misschien al aan jouw band. Claim dat profiel zodat het van jullie wordt.",
+    "title": "Openbaar bandprofiel",
+    "description": "Muzikanten kunnen voor bands die nog niet op gigBuddy zitten een openbaar profiel aanmaken. Muzikanten koppelen hun evenementen misschien al dit bandprofiel. Claim dat profiel zodat het van jullie wordt.",
     "searchLabel": "Zoek je band",
     "searchHint": "Typ minstens 3 tekens.",
     "noResults": "Geen niet-geclaimde bandprofielen met die naam.",
@@ -490,7 +517,7 @@
     "submit": "Dit profiel claimen",
     "withdraw": "Claim intrekken",
     "pendingHelp": "We controleren je claim. Mogelijk mailen we je om bewijs.",
-    "approvedHelp": "Dit profiel is van jullie. Muzikanten die het gebruiken kunnen nu lid worden van je band.",
+    "approvedHelp": "Dit profiel is nu van jullie. Muzikanten die jullie als openbaar bandprofiel hebben toegevoegd kunnen nu lid worden van je band.",
     "tryAgain": "Je kunt een ander profiel claimen.",
     "status": {
       "pending": "In behandeling",

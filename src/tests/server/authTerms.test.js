@@ -246,4 +246,13 @@ describe('POST /api/auth/onboarding-complete', () => {
     const me = await asUserA(request(app).get('/api/auth/me')).expect(200)
     expect(me.body.onboardingTenantId).toBe(seed.tenantA.id)
   })
+
+  it('/me exposes the current band-subscription capacity', async () => {
+    await pool.query('UPDATE tenants SET owner_user_id = $1 WHERE id = $2', [
+      seed.userA.id,
+      seed.tenantA.id,
+    ])
+    const me = await asUserA(request(app).get('/api/auth/me')).expect(200)
+    expect(me.body.bandCapacity).toEqual({ used: 1, limit: 1 })
+  })
 })

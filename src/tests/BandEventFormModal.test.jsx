@@ -24,6 +24,10 @@ vi.mock('../api/availability.ts', () => ({
   getAvailabilitySpan: vi.fn().mockResolvedValue({ members: [], days: [] }),
 }))
 
+vi.mock('../api/myBands.ts', () => ({
+  listMyBands: vi.fn().mockResolvedValue({ items: [] }),
+}))
+
 import BandEventFormModal from '../components/BandEventFormModal.tsx'
 import { createBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
 import { getAvailabilitySpan } from '../api/availability.ts'
@@ -101,6 +105,33 @@ describe('BandEventFormModal — create mode', () => {
     await user.click(screen.getByRole('button', { name: /cancel/i }))
     expect(onClose).toHaveBeenCalled()
     expect(createBandEvent).not.toHaveBeenCalled()
+  })
+
+  // Regression: my_band_id is personal-workspace-only. The server 403s if the
+  // field is present at all outside one, so a band workspace must omit it —
+  // sending it as null used to trip that gate on every band event creation.
+  it('omits my_band_id when creating from a band workspace', async () => {
+    const user = userEvent.setup()
+    wrap(<BandEventFormModal mode="create" onClose={() => {}} />, 'band')
+
+    await user.type(screen.getByLabelText(/title/i), 'Photo shoot')
+    await user.type(screen.getByLabelText(/start date\s*\*?/i), '2099-09-01')
+    await user.click(screen.getByRole('button', { name: /add event/i }))
+
+    await waitFor(() => expect(createBandEvent).toHaveBeenCalled())
+    expect(createBandEvent.mock.calls[0][0]).not.toHaveProperty('my_band_id')
+  })
+
+  it('includes my_band_id when creating from a personal workspace', async () => {
+    const user = userEvent.setup()
+    wrap(<BandEventFormModal mode="create" onClose={() => {}} />, 'personal')
+
+    await user.type(screen.getByLabelText(/title/i), 'Photo shoot')
+    await user.type(screen.getByLabelText(/start date\s*\*?/i), '2099-09-01')
+    await user.click(screen.getByRole('button', { name: /add event/i }))
+
+    await waitFor(() => expect(createBandEvent).toHaveBeenCalled())
+    expect(createBandEvent.mock.calls[0][0]).toHaveProperty('my_band_id', null)
   })
 
   it('checks lead availability across the event span before creation', async () => {

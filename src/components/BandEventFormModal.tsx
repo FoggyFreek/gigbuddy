@@ -50,6 +50,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
   // A personal workspace has no roster, and /api/availability is gated on the
   // band_availability capability — asking there would 403.
   const showAvailability = useTenantKind().supports(TENANT_CAPABILITIES.BAND_AVAILABILITY)
+  const supportsMyBand = useTenantKind().supports(TENANT_CAPABILITIES.MY_BANDS)
   const [form, setForm] = useState(() =>
     mode === 'create' && initialDate
       ? { ...EMPTY_FORM, start_date: initialDate, end_date: initialDate }
@@ -120,7 +121,8 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
       title: form.title.trim(),
       start_date: form.start_date,
       end_date: form.end_date || null,
-      ...({ start_time: form.start_time || null, end_time: form.end_time || null, location: form.location || null, notes: form.notes || null, my_band_id: form.my_band_id || null } as Partial<BandEventDetail>),
+      ...({ start_time: form.start_time || null, end_time: form.end_time || null, location: form.location || null, notes: form.notes || null } as Partial<BandEventDetail>),
+      ...(supportsMyBand ? ({ my_band_id: form.my_band_id || null } as Partial<BandEventDetail>) : {}),
     } as Partial<BandEventDetail>)
     onClose()
   }

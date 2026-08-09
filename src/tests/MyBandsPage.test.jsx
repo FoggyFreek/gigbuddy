@@ -5,6 +5,8 @@ import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import theme from '../theme.ts'
 import MyBandsPage from '../pages/MyBandsPage.tsx'
+import { ThemeModeContext } from '../contexts/themeModeContext.ts'
+import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
 
 vi.mock('../api/myBands.ts', () => ({
   listMyBands: vi.fn(),
@@ -74,10 +76,14 @@ const AUTH = {
   refreshUser: vi.fn(),
 }
 
-const wrap = () => render(
-  <ThemeProvider theme={theme}>
-    <MemoryRouter><MyBandsPage /></MemoryRouter>
-  </ThemeProvider>,
+const wrap = ({ mode = 'light', compact = false } = {}) => render(
+  <ThemeModeContext.Provider value={{ mode, toggleTheme: vi.fn(), variant: 'default', setVariant: vi.fn() }}>
+    <CompactLayoutContext.Provider value={compact}>
+      <ThemeProvider theme={theme}>
+        <MemoryRouter><MyBandsPage /></MemoryRouter>
+      </ThemeProvider>
+    </CompactLayoutContext.Provider>
+  </ThemeModeContext.Provider>,
 )
 
 describe('MyBandsPage', () => {
@@ -98,6 +104,67 @@ describe('MyBandsPage', () => {
     expect(screen.getAllByText('Real Band').length).toBeGreaterThan(0)
     // The personal workspace itself is not one of the artist's bands.
     expect(screen.queryByText('My workspace')).toBeNull()
+  })
+
+  it('explains the search-first workflow and presents both creation options', async () => {
+    const user = userEvent.setup()
+    wrap()
+
+    await user.click(screen.getByRole('button', { name: 'Add band' }))
+    const dialog = await screen.findByRole('dialog')
+
+    expect(within(dialog).getByText(
+      "Add a band by first searching for existing bands. If your band isn't on gigBuddy and has no public profile yet, you can create a new band or public band profile.",
+    )).toBeInTheDocument()
+    expect(within(dialog).getByRole('heading', { name: 'Create a new band' })).toBeInTheDocument()
+    expect(within(dialog).getByText(
+      'If you manage this band and want to invite more members. This will count towards your gigBuddy bands limit.',
+    )).toBeInTheDocument()
+    expect(within(dialog).getByRole('heading', { name: 'Create a public band profile' })).toBeInTheDocument()
+    expect(within(dialog).getByText(
+      'For a band you take part in, but is not (yet) on gigBuddy. You can link events to this band so you stay organized.',
+    )).toBeInTheDocument()
+
+    const createBand = within(dialog).getByRole('button', { name: 'Create band' })
+    const createProfile = within(dialog).getByRole('button', { name: 'Create public profile' })
+    expect(createBand).toBeDisabled()
+    expect(createProfile).toBeDisabled()
+
+    await user.type(within(dialog).getByRole('textbox', { name: 'Band name' }), 'Fresh Band')
+    await waitFor(() => expect(createBand).toBeEnabled())
+    expect(createProfile).toBeEnabled()
+  })
+
+  it('shows GigBuddy membership with a logo and tooltip', async () => {
+    const user = userEvent.setup()
+    wrap()
+
+    const logo = await screen.findByRole('img', { name: 'On gigbuddy' })
+    expect(logo).toHaveAttribute('src', '/icons/gb_light_128.png')
+    await user.hover(logo)
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('On gigbuddy')
+  })
+
+  it('uses the dark-theme GigBuddy status icon', async () => {
+    wrap({ mode: 'dark' })
+
+    const logo = await screen.findByRole('img', { name: 'On gigbuddy' })
+    expect(logo).toHaveAttribute('src', '/icons/gb_dark_128.png')
+  })
+
+  it('centers compact GigBuddy status and actions in the card body', async () => {
+    wrap({ compact: true })
+
+    const bandName = await screen.findByText('Real Band')
+    const card = bandName.closest('.MuiCard-root')
+    const content = card.querySelector('.MuiCardContent-root')
+    const logo = within(card).getByRole('img', { name: 'On gigbuddy' })
+
+    expect(content.firstElementChild.firstElementChild).toBe(logo)
+    expect(within(content).getByRole('button', { name: 'Open band' })).toBeInTheDocument()
+    expect(within(content).getByRole('button', { name: 'Leave band' })).toBeInTheDocument()
+    expect(card.querySelector('.MuiCardActions-root')).toBeNull()
   })
 
   // The two halves behave differently, and the row has to say which it is.

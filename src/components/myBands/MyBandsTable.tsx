@@ -1,10 +1,12 @@
 import { useTranslation } from 'react-i18next'
+import type { ReactNode } from 'react'
+import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Card from '@mui/material/Card'
-import CardActions from '@mui/material/CardActions'
 import CardContent from '@mui/material/CardContent'
 import Chip from '@mui/material/Chip'
+import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Table from '@mui/material/Table'
@@ -13,9 +15,15 @@ import TableCell from '@mui/material/TableCell'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
+import Typography, { type TypographyProps } from '@mui/material/Typography'
+import SyncIcon from '@mui/icons-material/Sync'
+import LogoutIcon from '@mui/icons-material/Logout'
+import EditIcon from '@mui/icons-material/Edit'
+import DeleteIcon from '@mui/icons-material/Delete'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
+import { useThemeMode } from '../../contexts/themeModeContext.ts'
 import { countryLabel } from '../../utils/countries.ts'
+import { tenantAvatarUrl } from '../../utils/tenantAvatarUrl.ts'
 import type { Id, MyBand } from '../../types/entities.ts'
 
 /**
@@ -31,6 +39,7 @@ export type MyBandsRow =
     tenantId: Id
     membershipStatus: string
     avatarPath: string | null
+    accountingCountryCode: string | null
   }
   | {
     key: string
@@ -60,6 +69,24 @@ interface MyBandsTableProps {
 const totalEvents = (band: MyBand) =>
   band.eventCounts.gigs + band.eventCounts.rehearsals + band.eventCounts.bandEvents
 
+const hasGigBuddyStatusIcon = (row: MyBandsRow) =>
+  row.onGigbuddy === true && row.membershipStatus === 'approved'
+
+function GigBuddyStatusIcon({ label }: Readonly<{ label: string }>) {
+  const { mode } = useThemeMode()
+
+  return (
+    <Tooltip title={label}>
+      <Box
+        component="img"
+        src={mode === 'dark' ? '/icons/gb_dark_128.png' : '/icons/gb_light_128.png'}
+        alt={label}
+        sx={{ width: 28, height: 28, objectFit: 'contain', flexShrink: 0 }}
+      />
+    </Tooltip>
+  )
+}
+
 export default function MyBandsTable({
   rows, onOpen, onEdit, onRemove, onLeave, onWithdraw,
 }: Readonly<MyBandsTableProps>) {
@@ -72,11 +99,14 @@ export default function MyBandsTable({
     }
     if (row.onGigbuddy) {
       const pending = row.membershipStatus !== 'approved'
+      if (!pending) {
+        const label = t($ => $.status.onGigbuddy)
+        return <GigBuddyStatusIcon label={label} />
+      }
       return (
         <Chip
           size="small"
-          color={pending ? 'default' : 'success'}
-          label={pending ? t($ => $.status.pendingMembership) : t($ => $.status.onGigbuddy)}
+          label={t($ => $.status.pendingMembership)}
         />
       )
     }
@@ -85,8 +115,21 @@ export default function MyBandsTable({
   }
 
   function countryOf(row: MyBandsRow) {
-    if (row.onGigbuddy !== false) return ''
+    if (row.onGigbuddy === true) {
+      return row.accountingCountryCode ? countryLabel(row.accountingCountryCode, i18n.language) : ''
+    }
+    if (row.onGigbuddy === 'requested') return ''
     return countryLabel(row.myBand.bandProfile.countryCode, i18n.language)
+  }
+
+  function nameOf(row: MyBandsRow, typographyProps: TypographyProps): ReactNode {
+    const avatarSrc = row.onGigbuddy === true ? tenantAvatarUrl(row.tenantId, row.avatarPath) : undefined
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+        {avatarSrc && <Avatar src={avatarSrc} alt={row.name} sx={{ width: 24, height: 24 }} />}
+        <Typography noWrap {...typographyProps}>{row.name}</Typography>
+      </Box>
+    )
   }
 
   function eventsOf(row: MyBandsRow) {
@@ -108,12 +151,28 @@ export default function MyBandsTable({
       const pending = row.membershipStatus !== 'approved'
       return (
         <>
-          <Button size="small" disabled={pending} onClick={() => onOpen(row.tenantId)}>
-            {t($ => $.actions.open)}
-          </Button>
-          <Button size="small" color="error" onClick={() => onLeave(row.tenantId, row.name)}>
-            {t($ => $.actions.leave)}
-          </Button>
+          <Tooltip title={t($ => $.actions.open)}>
+            <span>
+              <IconButton
+                size="small"
+                aria-label={t($ => $.actions.open)}
+                disabled={pending}
+                onClick={() => onOpen(row.tenantId)}
+              >
+                <SyncIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title={t($ => $.actions.leave)}>
+            <IconButton
+              size="small"
+              color="error"
+              aria-label={t($ => $.actions.leave)}
+              onClick={() => onLeave(row.tenantId, row.name)}
+            >
+              <LogoutIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </>
       )
     }
@@ -122,16 +181,28 @@ export default function MyBandsTable({
     const editable = bandProfile.canEdit !== false && bandProfile.status === 'claimable'
     return (
       <>
-        <Tooltip title={editable ? '' : t($ => $.readOnly)}>
+        <Tooltip title={editable ? t($ => $.actions.edit) : t($ => $.readOnly)}>
           <span>
-            <Button size="small" disabled={!editable} onClick={() => onEdit(bandProfile.id)}>
-              {t($ => $.actions.edit)}
-            </Button>
+            <IconButton
+              size="small"
+              aria-label={t($ => $.actions.edit)}
+              disabled={!editable}
+              onClick={() => onEdit(bandProfile.id)}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
           </span>
         </Tooltip>
-        <Button size="small" color="error" onClick={() => onRemove(row.myBand)}>
-          {t($ => $.actions.remove)}
-        </Button>
+        <Tooltip title={t($ => $.actions.remove)}>
+          <IconButton
+            size="small"
+            color="error"
+            aria-label={t($ => $.actions.remove)}
+            onClick={() => onRemove(row.myBand)}
+          >
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </>
     )
   }
@@ -141,23 +212,28 @@ export default function MyBandsTable({
       <Stack spacing={1.5}>
         {rows.map((row) => (
           <Card key={row.key} variant="outlined">
-            <CardContent sx={{ pb: 1 }}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-                <Typography sx={{ fontWeight: 600, flexGrow: 1 }}>{row.name}</Typography>
-                {statusChip(row)}
+            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                {hasGigBuddyStatusIcon(row) && statusChip(row)}
+                <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, mb: 0.5 }}>
+                    {nameOf(row, { sx: { fontWeight: 600 } })}
+                    {!hasGigBuddyStatusIcon(row) && statusChip(row)}
+                  </Box>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {[countryOf(row), eventsOf(row)].filter(Boolean).join(' · ')}
+                  </Typography>
+                  {row.onGigbuddy === false && row.myBand.bandProfile.status === 'claimed' && (
+                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
+                      {t($ => $.claimedHint)}
+                    </Typography>
+                  )}
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+                  {actions(row)}
+                </Box>
               </Stack>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                {[countryOf(row), eventsOf(row)].filter(Boolean).join(' · ')}
-              </Typography>
-              {row.onGigbuddy === false && row.myBand.bandProfile.status === 'claimed' && (
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
-                  {t($ => $.claimedHint)}
-                </Typography>
-              )}
             </CardContent>
-            <CardActions sx={{ justifyContent: 'flex-end', px: 1, py: 0.5, gap: 0.5 }}>
-              {actions(row)}
-            </CardActions>
           </Card>
         ))}
       </Stack>
@@ -180,7 +256,7 @@ export default function MyBandsTable({
           {rows.map((row) => (
             <TableRow key={row.key}>
               <TableCell>
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>{row.name}</Typography>
+                {nameOf(row, { variant: 'body2', sx: { fontWeight: 500 } })}
                 {row.onGigbuddy === false && row.myBand.bandProfile.status === 'claimed' && (
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     {t($ => $.claimedHint)}

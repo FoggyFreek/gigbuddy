@@ -81,6 +81,52 @@ export async function fetchBandProfile(executor, profileId) {
   return rows[0] ?? null
 }
 
+// Super-admin table of profiles that have not been claimed by a tenant yet.
+// A pending claim does not make a profile claimed: that state is derived only
+// from claimed_by_tenant_id. My Bands rows are the current profile holders and
+// therefore the member count shown to the reviewer.
+export async function listUnclaimedBandProfiles(executor, { limit, cursor }) {
+  const params = [limit]
+  let cursorClause = ''
+  if (cursor) {
+    params.push(cursor.at, cursor.id)
+    cursorClause = `WHERE (cursor_at, id) < ($2, $3)`
+  }
+
+  const { rows } = await executor.query(
+    `WITH matching AS (
+       SELECT bp.id, bp.name, bp.created_at,
+              date_trunc('milliseconds', bp.created_at) AS cursor_at,
+              COUNT(mb.id)::int AS member_count
+         FROM band_profiles bp
+         LEFT JOIN my_bands mb ON mb.band_profile_id = bp.id
+        WHERE bp.claimed_by_tenant_id IS NULL
+        GROUP BY bp.id, bp.name, bp.created_at
+     ), page AS (
+       SELECT * FROM matching
+        ${cursorClause}
+        ORDER BY cursor_at DESC, id DESC
+        LIMIT $1
+     ), totals AS (
+       SELECT COUNT(*)::int AS total FROM matching
+     )
+     SELECT page.id, page.name, page.created_at, page.cursor_at,
+            page.member_count, totals.total
+       FROM totals
+       LEFT JOIN page ON TRUE
+      ORDER BY page.cursor_at DESC NULLS LAST, page.id DESC NULLS LAST`,
+    params,
+  )
+
+  const total = rows[0]?.total ?? 0
+  return {
+    items: rows
+      .filter((row) => row.id !== null)
+      .map(({ total: _total, ...row }) => row),
+    total,
+  }
+}
+
 // Takes the profile row lock. band_profiles is the parent in this feature's
 // lock order (tenants -> band_profiles -> claims/my_bands/events), so anything
 // that reads derived claim state and then writes takes this first.

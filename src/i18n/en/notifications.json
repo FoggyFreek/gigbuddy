@@ -44,6 +44,13 @@
     "types": {
       "title": "Notification types",
       "description": "Choose which notifications you receive.",
+      "groups": {
+        "events": "Events",
+        "tasks": "Tasks",
+        "management": "Management",
+        "financial": "Financial",
+        "other": "Other"
+      },
       "labels": {
         "gigNew": "New gig options",
         "gigConfirmed": "Confirmed gigs",

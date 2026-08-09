@@ -23,6 +23,8 @@ type TypeLabelKey =
   | 'achievementUnlocked'
   | 'bandProfileClaimed' | 'bandProfileClaimDecided'
 
+type TypeGroupKey = 'events' | 'tasks' | 'management' | 'financial' | 'other'
+
 const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
   'gig-new': 'gigNew',
   'gig-confirmed': 'gigConfirmed',
@@ -38,6 +40,25 @@ const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
   'achievement-unlocked': 'achievementUnlocked',
   'band-profile-claimed': 'bandProfileClaimed',
   'band-profile-claim-decided': 'bandProfileClaimDecided',
+}
+
+const TYPE_GROUP_ORDER: TypeGroupKey[] = ['events', 'tasks', 'management', 'financial', 'other']
+
+const TYPE_GROUP_KEYS: Record<string, TypeGroupKey> = {
+  'gig-new': 'events',
+  'gig-confirmed': 'events',
+  'gig-import': 'events',
+  'rehearsal-new': 'events',
+  'rehearsal-confirmed': 'events',
+  'option-member-unavailable': 'events',
+  'option-all-responded': 'events',
+  'task-assigned': 'tasks',
+  'invite-redeemed': 'management',
+  'membership-requested': 'management',
+  'band-profile-claimed': 'management',
+  'band-profile-claim-decided': 'management',
+  'invoice-paid': 'financial',
+  'achievement-unlocked': 'other',
 }
 
 // The generic app logo is the fallback when no picture is uploaded.
@@ -56,6 +77,10 @@ export default function NotificationSettingsSection() {
   }, [])
 
   const pushDisabled = pushStatus !== 'subscribed' && pushStatus !== 'unsubscribed'
+  const groupedTypePrefs = TYPE_GROUP_ORDER.map((key) => ({
+    key,
+    entries: prefs?.types.filter(({ type }) => (TYPE_GROUP_KEYS[type] ?? 'other') === key) ?? [],
+  })).filter(({ entries }) => entries.length > 0)
 
   const handlePushToggle = () => {
     if (pushStatus === 'subscribed') void unsubscribe()
@@ -135,23 +160,34 @@ export default function NotificationSettingsSection() {
           {t($ => $.settings.types.description)}
         </Typography>
 
-        <Box sx={{ display: 'flex', ml: 2, flexDirection: 'column' }}>
-          {prefs?.types.map(({ type, enabled }) => {
-            const labelKey = TYPE_LABEL_KEYS[type]
-            return (
-              <FormControlLabel
-                key={type}
-                control={
-                  <Switch
-                    sx={{ mr: 1 }}
-                    checked={enabled}
-                    onChange={(_e, checked) => saveTypePref(type, checked)}
+        <Box sx={{ display: 'flex', ml: 2, flexDirection: 'column', gap: 2 }}>
+          {groupedTypePrefs.map(({ key, entries }) => (
+            <Box
+              component="fieldset"
+              key={key}
+              sx={{ border: 0, display: 'flex', flexDirection: 'column', m: 0, p: 0 }}
+            >
+              <Typography component="legend" variant="subtitle2" sx={{ color: 'text.secondary', mb: 0.5 }}>
+                {t($ => $.settings.types.groups[key])}
+              </Typography>
+              {entries.map(({ type, enabled }) => {
+                const labelKey = TYPE_LABEL_KEYS[type]
+                return (
+                  <FormControlLabel
+                    key={type}
+                    control={
+                      <Switch
+                        sx={{ mr: 1 }}
+                        checked={enabled}
+                        onChange={(_e, checked) => saveTypePref(type, checked)}
+                      />
+                    }
+                    label={labelKey ? t($ => $.settings.types.labels[labelKey]) : type}
                   />
-                }
-                label={labelKey ? t($ => $.settings.types.labels[labelKey]) : type}
-              />
-            )
-          })}
+                )
+              })}
+            </Box>
+          ))}
         </Box>
       </Paper>
 

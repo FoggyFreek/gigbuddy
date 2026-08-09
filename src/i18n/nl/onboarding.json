@@ -50,6 +50,7 @@
     "loadFailed": "De abonnementen konden niet worden geladen. Probeer het opnieuw.",
     "onboardingDisabled": "Nieuwe tenant-onboarding is momenteel uitgeschakeld. Je kunt nog steeds met een uitnodigingscode aansluiten bij een bestaande band.",
     "bandCapNoPointer": "Je hebt al een band, dus onboarding is niet nodig. Abonnementen beheer je via Instellingen.",
+    "bandCapReached": "Je huidige abonnement heeft de bandlimiet bereikt. Upgrade je abonnement om nog een band toe te voegen.",
     "logoUploadFailed": "Het logo kon niet worden geüpload — je kunt het later toevoegen via Profiel.",
     "generic": "Er ging iets mis. Probeer het opnieuw.",
     "claimFailed": "We konden je bandprofielclaim niet versturen. Probeer het opnieuw via Instellingen."

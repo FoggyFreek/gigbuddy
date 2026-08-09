@@ -30,6 +30,7 @@
     "customization": "Custom branding",
     "public_promotion": "Public promotion",
     "linkpage": "Link & release pages",
+    "custom_slug": "Custom web address",
     "calendar_sync": "Calendar sync"
   },
   "limits": {

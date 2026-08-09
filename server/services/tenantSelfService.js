@@ -1,12 +1,18 @@
 // Self-service tenant management: any approved user can create tenants they
-// own, list them, and archive/unarchive them. The owner's subscription band
+// own, list them, archive/unarchive them, and permanently delete a managed
+// workspace. The owner's subscription band
 // limit caps how many ACTIVE (non-archived) tenants a user owns; archived
 // tenants keep their data but don't count. Super-admin tenant management
 // (uncapped, ownerless creation) stays in tenantService.js.
 //
-// Ownership checks return 404, never 403, so tenant existence isn't leaked.
+// Missing ownership/membership checks return 404 so tenant existence isn't leaked.
 import { randomBytes } from 'node:crypto'
-import { validSlug, slugFromBandName, parseTenantCountryCode } from '../validators/tenantValidators.js'
+import {
+  validSlug,
+  slugFromBandName,
+  parseTenantCountryCode,
+  parseTenantDeletionConfirmation,
+} from '../validators/tenantValidators.js'
 import { seedTenantAccounting } from '../db/defaultChartOfAccounts.js'
 import { createAccountingProfileForTenant } from './accountingProfileService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
@@ -19,13 +25,15 @@ import {
   fetchOwnedTenant,
   fetchPersonalTenant,
   fetchTenantAvatarPathForMember,
+  fetchTenantDeletionAccess,
   setTenantArchived,
 } from '../repositories/tenantRepository.js'
 import { lockUserForCapCheck } from '../repositories/limitRepository.js'
 import { setOnboardingTenant } from '../repositories/authRepository.js'
 import { enforceBandCap } from './limitService.js'
 import { isTenantOnboardingEnabled } from './platformSettingsService.js'
-import { badRequest, notFound } from './serviceErrors.js'
+import { deleteTenant } from './tenantService.js'
+import { badRequest, forbidden, notFound } from './serviceErrors.js'
 
 const NOT_FOUND = notFound('Tenant not found')
 
@@ -198,6 +206,63 @@ export async function archiveOwnedTenant(db, userId, tenantId) {
     tenant: archived,
     audit: { action: 'tenant.archive', details: { tenantId } },
   }
+}
+
+// Permanent deletion is user-level so the second phase can still run after the
+// first phase archives the workspace. Bands require an approved tenant_admin;
+// a personal workspace additionally belongs to its sole owner. The existing
+// super-admin endpoint remains the global recovery path.
+export async function deleteManagedTenant(db, userId, tenantId, body) {
+  const prepared = await withTransaction(async (client) => {
+    const tenant = await fetchTenantDeletionAccess(client, tenantId, userId)
+    if (!tenant) abortTransaction(NOT_FOUND)
+    if (tenant.membership_status !== 'approved') {
+      abortTransaction(forbidden('Forbidden'))
+    }
+    if (tenant.role !== 'tenant_admin') {
+      abortTransaction(forbidden('Forbidden'))
+    }
+    if (tenant.kind === PERSONAL && tenant.owner_user_id !== userId) {
+      abortTransaction(NOT_FOUND)
+    }
+
+    const parsed = parseTenantDeletionConfirmation(body)
+    if (parsed.error) {
+      abortTransaction(badRequest(parsed.error, { code: parsed.code }))
+    }
+
+    const visibleName = tenant.display_name ?? tenant.band_name ?? tenant.slug
+    if (parsed.confirmationName !== visibleName) {
+      abortTransaction(badRequest('Confirmation name does not match', {
+        code: 'confirmation_name_mismatch',
+      }))
+    }
+
+    let archived = false
+    if (!tenant.archived_at) {
+      const row = await setTenantArchived(client, tenantId, true)
+      if (!row) abortTransaction({
+        error: {
+          status: 409,
+          body: { error: 'Tenant deletion is already in progress' },
+        },
+      })
+      archived = true
+    }
+    return { tenant, archived }
+  }, { db })
+
+  if (prepared.error) return prepared
+
+  // Archive commits before the existing storage + database purge begins. A
+  // storage failure therefore leaves an inert, retryable archived tenant.
+  const deleted = await deleteTenant(db, tenantId, prepared.tenant.slug)
+  const audits = []
+  if (prepared.archived) {
+    audits.push({ action: 'tenant.archive', details: { tenantId } })
+  }
+  if (deleted.audit) audits.push(deleted.audit)
+  return { ...deleted, audits }
 }
 
 // Unarchiving makes the tenant active again, so the band cap is re-checked —

@@ -103,7 +103,7 @@ describe('active subscriptions', () => {
     expect(resolved.locked).toBe(false)
     expect(resolved.planSlug).toBe('artist_gold')
     for (const key of FEATURE_KEYS) {
-      expect(resolved.entitlements.features[key]).toBe(key !== 'linkpage')
+      expect(resolved.entitlements.features[key]).toBe(!['linkpage', 'custom_slug'].includes(key))
     }
     expect(resolved.entitlements.limits).toEqual({
       storage_mb: 250, members: 1, bands: 0, linkpage_pages: 0, linkpage_stats_days: 30,

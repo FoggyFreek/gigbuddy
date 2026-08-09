@@ -87,6 +87,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
   // A personal workspace has no roster, and /api/availability is gated on the
   // band_availability capability — asking there would 403.
   const showAvailability = useTenantKind().supports(TENANT_CAPABILITIES.BAND_AVAILABILITY)
+  const supportsMyBand = useTenantKind().supports(TENANT_CAPABILITIES.MY_BANDS)
 
   // ── Create mode state ──────────────────────────────────────────────────────
   const [form, setForm] = useState<GigFormShape>(() =>
@@ -128,7 +129,8 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
       end_time: form.end_time || null,
       status: form.status,
       // Extra fields not in base Gig type — server accepts them
-      ...({ has_pa_system: form.has_pa_system, has_drumkit: form.has_drumkit, has_stage_lights: form.has_stage_lights, my_band_id: form.my_band_id || null } as Partial<Gig>),
+      ...({ has_pa_system: form.has_pa_system, has_drumkit: form.has_drumkit, has_stage_lights: form.has_stage_lights } as Partial<Gig>),
+      ...(supportsMyBand ? ({ my_band_id: form.my_band_id || null } as Partial<Gig>) : {}),
     })
     onClose()
   }

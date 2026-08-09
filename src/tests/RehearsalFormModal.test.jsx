@@ -40,6 +40,10 @@ vi.mock('../api/availability.ts', () => ({
   getAvailabilityOn: vi.fn().mockResolvedValue({ members: [], bandWide: null }),
 }))
 
+vi.mock('../api/myBands.ts', () => ({
+  listMyBands: vi.fn().mockResolvedValue({ items: [] }),
+}))
+
 import {
   addParticipant,
   createRehearsal,
@@ -49,12 +53,23 @@ import {
   updateRehearsal,
 } from '../api/rehearsals.ts'
 import { getAvailabilityOn } from '../api/availability.ts'
+import { AuthContext } from '../contexts/authContext.ts'
 
-function wrap(ui) {
+const AUTH_VALUE = {
+  user: { id: 1, permissions: ['app.view', 'planning.write'], activeTenantRole: 'contributor' },
+  setUser: () => {},
+  logout: async () => {},
+  switchTenant: async () => undefined,
+  refreshUser: async () => undefined,
+}
+
+function wrap(ui, tenantKind = 'band') {
   return render(
-    <ThemeProvider theme={theme}>
-      <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
-    </ThemeProvider>
+    <AuthContext.Provider value={{ ...AUTH_VALUE, user: { ...AUTH_VALUE.user, activeTenantKind: tenantKind } }}>
+      <ThemeProvider theme={theme}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+      </ThemeProvider>
+    </AuthContext.Provider>
   )
 }
 
@@ -108,6 +123,35 @@ describe('RehearsalFormModal — create mode', () => {
       })
     )
     await waitFor(() => expect(onClose).toHaveBeenCalled())
+  })
+
+  // Regression: my_band_id is personal-workspace-only. The server 403s if the
+  // field is present at all outside one, so a band workspace must omit it —
+  // sending it as null used to trip that gate on every rehearsal creation.
+  it('omits my_band_id when creating from a band workspace', async () => {
+    const user = userEvent.setup()
+    wrap(<RehearsalFormModal mode="create" onClose={() => {}} />, 'band')
+
+    await waitFor(() => screen.getByText(/Sam/))
+    const dateInput = screen.getByLabelText(/^date\s*\*?$/i)
+    await user.type(dateInput, '2099-08-01')
+    await user.click(screen.getByRole('button', { name: /propose/i }))
+
+    await waitFor(() => expect(createRehearsal).toHaveBeenCalled())
+    expect(createRehearsal.mock.calls[0][0]).not.toHaveProperty('my_band_id')
+  })
+
+  it('includes my_band_id when creating from a personal workspace', async () => {
+    const user = userEvent.setup()
+    wrap(<RehearsalFormModal mode="create" onClose={() => {}} />, 'personal')
+
+    await waitFor(() => screen.getByText(/Sam/))
+    const dateInput = screen.getByLabelText(/^date\s*\*?$/i)
+    await user.type(dateInput, '2099-08-01')
+    await user.click(screen.getByRole('button', { name: /propose/i }))
+
+    await waitFor(() => expect(createRehearsal).toHaveBeenCalled())
+    expect(createRehearsal.mock.calls[0][0]).toHaveProperty('my_band_id', null)
   })
 
   it('warns when a selected member is unavailable and proposes anyway after confirm', async () => {

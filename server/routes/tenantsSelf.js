@@ -1,6 +1,6 @@
 // Self-service tenant endpoints, mounted at /api/tenants behind requireApproved
 // (no active-tenant resolution — creating and managing owned tenants is a
-// cross-tenant, user-level concern).
+// cross-tenant, user-level concern, including deletion retries after archive).
 import { Router } from 'express'
 import pool from '../db/index.js'
 import { auditLog } from '../utils/auditLog.js'
@@ -12,6 +12,7 @@ import {
   listOwnedTenants,
   archiveOwnedTenant,
   unarchiveOwnedTenant,
+  deleteManagedTenant,
 } from '../services/tenantSelfService.js'
 import { getTenantOnboardingStatus } from '../services/platformSettingsService.js'
 import { tenantAvatarHandler } from './tenantAvatar.js'
@@ -60,6 +61,16 @@ router.post('/:id/unarchive', requireCurrentTerms, async (req, res) => {
   if (result.error) return sendError(res, result.error)
   if (result.audit) auditLog(req, result.audit.action, result.audit.details)
   res.json(result.tenant)
+})
+
+router.delete('/:id', requireCurrentTerms, async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await deleteManagedTenant(pool, req.user.id, id, req.body)
+  for (const audit of result.audits ?? []) {
+    auditLog(req, audit.action, audit.details)
+  }
+  if (result.error) return sendError(res, result.error)
+  res.status(204).end()
 })
 
 export default router

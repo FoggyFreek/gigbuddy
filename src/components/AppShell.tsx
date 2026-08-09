@@ -72,6 +72,7 @@ import UserMenu from './appShell/UserMenu.tsx'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
 import { TENANT_CAPABILITIES, type TenantCapability } from '../auth/tenantCapabilities.ts'
 import CreatePersonalWorkspaceDialog from './appShell/CreatePersonalWorkspaceDialog.tsx'
+import AddBandDialog from './myBands/AddBandDialog.tsx'
 import type { Id } from '../types/entities.ts'
 
 // Local type for NAV_GROUPS. Group/item display labels come from the `navigation`
@@ -118,6 +119,8 @@ const NAV_GROUPS: NavGroupEntry[] = [
       { to: '/', i18nKey: 'dashboard', icon: DashboardOutlined },
       { to: '/financial', i18nKey: 'financial', icon: QueryStatsOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
       { to: '/profile', i18nKey: 'profile', icon: PersonOutlined },
+      // Personal-only: a band workspace's bands are itself.
+      { to: '/my-bands', i18nKey: 'myBands', icon: GroupsOutlined, capability: TENANT_CAPABILITIES.MY_BANDS },
     ],
   },
   {
@@ -148,8 +151,6 @@ const NAV_GROUPS: NavGroupEntry[] = [
       { to: '/contacts', i18nKey: 'contacts', icon: ContactsOutlined },
       { to: '/suppliers', i18nKey: 'suppliers', icon: StorefrontOutlined },
       { to: '/venues', i18nKey: 'venues', icon: LocationOnOutlined },
-      // Personal-only: a band workspace's bands are itself.
-      { to: '/my-bands', i18nKey: 'myBands', icon: GroupsOutlined, capability: TENANT_CAPABILITIES.MY_BANDS },
       { to: '/email-templates', i18nKey: 'emailTemplates', icon: EmailOutlined },
     ],
   },
@@ -181,7 +182,7 @@ export default function AppShell() {
   const { t } = useTranslation('navigation')
   const { pathname } = useLocation()
   const { bandName } = useProfile()
-  const { user, logout, switchTenant } = useAuth()
+  const { user, logout, switchTenant, refreshUser } = useAuth()
   const { mode, toggleTheme } = useThemeMode()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
@@ -191,6 +192,7 @@ export default function AppShell() {
   const [navCollapsed, setNavCollapsed] = useState(false)
   const [userMenuAnchor, setUserMenuAnchor] = useState<HTMLElement | null>(null)
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
+  const [createBandOpen, setCreateBandOpen] = useState(false)
   const [settingsMenuAnchor, setSettingsMenuAnchor] = useState<HTMLElement | null>(null)
   // When a SplitView opens its master-detail layout it asks for full width;
   // otherwise content stays capped and centered (see CONTENT_MAX_WIDTH).
@@ -291,6 +293,9 @@ export default function AppShell() {
       role: m.role,
     }))
   const activeTenantId: Id | null = user?.activeTenantId ?? null
+  const bandLimit = user?.bandCapacity?.limit
+  const bandCreationDisabled = bandLimit !== null && bandLimit !== undefined
+    && (user?.bandCapacity?.used ?? 0) >= bandLimit
 
   const handleSwitch = async (tenantId: Id) => {
     setUserMenuAnchor(null)
@@ -462,6 +467,11 @@ export default function AppShell() {
                 activeTenantId={activeTenantId ?? undefined}
                 onSwitch={handleSwitch}
                 onLogout={() => { setUserMenuAnchor(null); logout() }}
+                onCreateBand={() => {
+                  setUserMenuAnchor(null)
+                  setCreateBandOpen(true)
+                }}
+                bandCreationDisabled={bandCreationDisabled}
                 onCreatePersonalWorkspace={() => {
                   setUserMenuAnchor(null)
                   setCreateWorkspaceOpen(true)
@@ -510,6 +520,21 @@ export default function AppShell() {
         onCreated={(tenantId) => { void handleSwitch(tenantId) }}
         defaultName={user?.name ?? ''}
       />
+
+      {createBandOpen && (
+        <AddBandDialog
+          onClose={() => setCreateBandOpen(false)}
+          onAdded={() => setCreateBandOpen(false)}
+          onJoined={() => {
+            setCreateBandOpen(false)
+            void refreshUser()
+          }}
+          onCreated={(tenantId) => {
+            setCreateBandOpen(false)
+            void handleSwitch(tenantId)
+          }}
+        />
+      )}
 
       {isMobile ? (
         <Drawer

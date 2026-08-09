@@ -1,5 +1,6 @@
 import { request } from '../_client.ts'
 import type { BandProfileClaim, ClaimStatus, Id } from '../../types/entities.ts'
+import type { Role } from '../../auth/permissions.ts'
 import type { TenantKind } from '../../utils/businessRegistry.ts'
 
 const api = <T = unknown>(path: string, options?: RequestInit) =>
@@ -11,6 +12,15 @@ export interface AdminClaimTenant {
   displayName: string
   kind: TenantKind | null
   archived: boolean
+  socials: AdminClaimSocials
+}
+
+export interface AdminClaimSocials {
+  instagram: string | null
+  facebook: string | null
+  tiktok: string | null
+  youtube: string | null
+  spotify: string | null
 }
 
 export interface AdminClaimProfile {
@@ -22,11 +32,36 @@ export interface AdminClaimProfile {
   contactEmail: string | null
 }
 
+export interface AdminClaimProfileUser {
+  id: Id
+  name: string | null
+  email: string
+  requestingTenantMembership: {
+    status: 'pending' | 'approved' | 'rejected'
+    role: Role
+  } | null
+}
+
 export interface AdminBandProfileClaim extends BandProfileClaim {
   tenant: AdminClaimTenant
   requestedBy: { email: string; name: string | null } | null
+  profileUsers: AdminClaimProfileUser[]
+  decidedBy: { email: string; name: string | null } | null
   /** Null once the profile has been deleted; the claim outlives it. */
   bandProfile: AdminClaimProfile | null
+}
+
+export interface AdminUnclaimedBandProfile {
+  id: Id
+  name: string
+  memberCount: number
+  createdAt: string
+}
+
+interface CursorPageMeta {
+  limit: number
+  returned: number
+  nextCursor: string | null
 }
 
 /**
@@ -39,7 +74,17 @@ export const listClaimQueue = (params: { status?: ClaimStatus; limit?: number; c
   if (params.status) qs.set('status', params.status)
   if (params.limit != null) qs.set('limit', String(params.limit))
   if (params.cursor) qs.set('cursor', params.cursor)
-  return api<{ items: AdminBandProfileClaim[]; meta: { limit: number; returned: number; nextCursor: string | null } }>(`/?${qs}`)
+  return api<{ items: AdminBandProfileClaim[]; meta: CursorPageMeta }>(`/?${qs}`)
+}
+
+export const listUnclaimedProfiles = (params: { limit?: number; cursor?: string | null } = {}) => {
+  const qs = new URLSearchParams()
+  if (params.limit != null) qs.set('limit', String(params.limit))
+  if (params.cursor) qs.set('cursor', params.cursor)
+  return api<{
+    items: AdminUnclaimedBandProfile[]
+    meta: CursorPageMeta & { total: number }
+  }>(`/unclaimed?${qs}`)
 }
 
 export const approveClaim = (id: Id) =>

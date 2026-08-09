@@ -44,6 +44,13 @@
     "types": {
       "title": "Soorten meldingen",
       "description": "Kies welke meldingen je ontvangt.",
+      "groups": {
+        "events": "Evenementen",
+        "tasks": "Taken",
+        "management": "Beheer",
+        "financial": "Financieel",
+        "other": "Overig"
+      },
       "labels": {
         "gigNew": "Nieuwe optreden-opties",
         "gigConfirmed": "Bevestigde optredens",

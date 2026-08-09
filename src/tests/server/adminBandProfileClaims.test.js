@@ -35,6 +35,7 @@ const asAdmin = (req) => as(seed.superUser.id, seed.tenantA.id)(req)
 const asA = (req) => as(seed.userA.id, seed.tenantA.id)(req)
 
 const queue = (qs = '') => request(app).get(`/api/admin/band-profile-claims${qs}`)
+const unclaimed = (qs = '') => request(app).get(`/api/admin/band-profile-claims/unclaimed${qs}`)
 const approve = (id) => request(app).post(`/api/admin/band-profile-claims/${id}/approve`).send({})
 const reject = (id, body) => request(app).post(`/api/admin/band-profile-claims/${id}/reject`).send(body)
 
@@ -76,13 +77,81 @@ describe('authorization', () => {
     const claimId = await makeClaim()
 
     await asA(queue()).expect(403)
+    await asA(unclaimed()).expect(403)
     await asA(approve(claimId)).expect(403)
     await asA(reject(claimId, { reason: 'no' })).expect(403)
   })
 })
 
+describe('unclaimed profiles', () => {
+  it('returns current unclaimed profiles with member counts and excludes claimed profiles', async () => {
+    await addHolder('holder-a')
+    await addHolder('holder-b')
+    await makeClaim()
+
+    const other = await insertProfile(pool, {
+      name: 'Another Band', website_key: 'another.example', website_url: 'https://another.example',
+    })
+    await addHolder('holder-c', other.id)
+
+    const claimed = await insertProfile(pool, {
+      name: 'Claimed Band', website_key: 'claimed.example', website_url: 'https://claimed.example',
+    })
+    await addHolder('holder-d', claimed.id)
+    await pool.query('UPDATE band_profiles SET claimed_by_tenant_id = $2 WHERE id = $1', [claimed.id, seed.tenantB.id])
+
+    const res = await asAdmin(unclaimed('?limit=10')).expect(200)
+
+    expect(res.body.meta).toMatchObject({ limit: 10, returned: 2, total: 2, nextCursor: null })
+    expect(res.body.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: profile.id, name: 'Off Platform', memberCount: 2 }),
+      expect.objectContaining({ id: other.id, name: 'Another Band', memberCount: 1 }),
+    ]))
+    expect(res.body.items.map((item) => item.id)).not.toContain(claimed.id)
+  })
+
+  it('paginates profiles without duplicates and keeps the full total', async () => {
+    for (let i = 0; i < 3; i += 1) {
+      await insertProfile(pool, {
+        name: `Band ${i}`,
+        website_key: `unclaimed-${i}.example`,
+        website_url: `https://unclaimed-${i}.example`,
+      })
+    }
+
+    const seen = []
+    let cursor = null
+    for (let page = 0; page < 6; page += 1) {
+      const qs = `?limit=1${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`
+      const res = await asAdmin(unclaimed(qs)).expect(200)
+      expect(res.body.meta.total).toBe(4)
+      seen.push(...res.body.items.map((item) => item.id))
+      cursor = res.body.meta.nextCursor
+      if (!cursor) break
+    }
+
+    expect(seen).toHaveLength(4)
+    expect(new Set(seen).size).toBe(4)
+  })
+
+  it('rejects malformed pagination input', async () => {
+    await asAdmin(unclaimed('?limit=0')).expect(400)
+    await asAdmin(unclaimed('?cursor=not-a-cursor')).expect(400)
+  })
+})
+
 describe('the queue', () => {
-  it('shows the claim with the band that made it', async () => {
+  it('shows the claim with the requester and the claiming band socials', async () => {
+    await pool.query(
+      `UPDATE tenants
+          SET instagram_handle = 'offplatformband',
+              facebook_handle = 'offplatform.music',
+              tiktok_handle = 'offplatform',
+              youtube_handle = '@offplatformband',
+              spotify_handle = 'claiming-spotify-artist'
+        WHERE id = $1`,
+      [seed.tenantA.id],
+    )
     await makeClaim()
 
     const res = await asAdmin(queue('?status=pending')).expect(200)
@@ -91,9 +160,56 @@ describe('the queue', () => {
     expect(res.body.items[0]).toMatchObject({
       status: 'pending',
       bandProfileName: 'Off Platform',
-      tenant: { id: seed.tenantA.id, slug: seed.tenantA.slug },
+      tenant: {
+        id: seed.tenantA.id,
+        slug: seed.tenantA.slug,
+        socials: {
+          instagram: 'offplatformband',
+          facebook: 'offplatform.music',
+          tiktok: 'offplatform',
+          youtube: '@offplatformband',
+          spotify: 'claiming-spotify-artist',
+        },
+      },
+      requestedBy: { email: seed.userA.email, name: 'Alpha User' },
     })
     expect(res.body.items[0].bandProfile).toMatchObject({ id: profile.id })
+  })
+
+  it('shows who uses the profile and whether they belong to the claiming band', async () => {
+    await addHolder('matched-holder')
+    await addHolder('outside-holder')
+    const { rows: [matched] } = await pool.query(
+      `UPDATE users SET name = 'Matched Musician'
+        WHERE email = 'matched-holder@test.local' RETURNING id, email, name`,
+    )
+    const { rows: [outside] } = await pool.query(
+      `UPDATE users SET name = 'Outside Musician'
+        WHERE email = 'outside-holder@test.local' RETURNING id, email, name`,
+    )
+    await pool.query(
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+       VALUES ($1, $2, 'reader', 'approved', NOW(), 'invite')`,
+      [matched.id, seed.tenantA.id],
+    )
+    await makeClaim()
+
+    const res = await asAdmin(queue('?status=pending')).expect(200)
+
+    expect(res.body.items[0].profileUsers).toEqual([
+      {
+        id: matched.id,
+        email: matched.email,
+        name: matched.name,
+        requestingTenantMembership: { status: 'approved', role: 'reader' },
+      },
+      {
+        id: outside.id,
+        email: outside.email,
+        name: outside.name,
+        requestingTenantMembership: null,
+      },
+    ])
   })
 
   // The case a day-granular cursor would break: several claims on one calendar
@@ -189,6 +305,7 @@ describe('approval', () => {
       bandProfileName: 'Off Platform',
       bandProfile: null,
       status: 'approved',
+      decidedBy: { email: seed.superUser.email, name: 'Super User' },
     })
 
     const own = await asA(request(app).get('/api/band-profile-claims')).expect(200)

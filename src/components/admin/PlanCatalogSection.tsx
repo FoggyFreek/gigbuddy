@@ -56,6 +56,7 @@ function labelFor(key: string): string {
 // through to labelFor().
 const FEATURE_LABELS: Record<string, string> = {
   linkpage: 'Link & release pages',
+  custom_slug: 'Custom web address',
 }
 
 const LIMIT_LABELS: Record<string, string> = {

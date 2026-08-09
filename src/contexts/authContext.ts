@@ -13,6 +13,7 @@ export interface UserMembership {
   kind?: TenantKind
   role?: string
   status?: string
+  accountingCountryCode?: string | null
 }
 
 /** The authenticated user shape returned by /api/auth/me (camelCase, from buildMePayload). */
@@ -25,7 +26,6 @@ export interface User {
   isSuperAdmin?: boolean
   activeTenantId?: Id | null
   activeTenantRole?: string | null
-  /** Kind of the active tenant, so the UI can branch without a second fetch. */
   activeTenantKind?: TenantKind | null
   /** Permission keys for the active tenant, sent by /auth/me (see src/auth/permissions.ts). */
   permissions?: string[]
@@ -41,6 +41,8 @@ export interface User {
   onboardingTenantId?: Id | null
   /** Tutorial keys this user has dismissed (per-user, global). See src/tutorials. */
   dismissedTutorials?: string[]
+  /** Active owned bands against the effective cap from the user's band subscription. */
+  bandCapacity?: { used: number; limit: number | null }
   memberships?: UserMembership[]
 }
 

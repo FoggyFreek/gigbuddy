@@ -7,6 +7,8 @@ import ListSubheader from '@mui/material/ListSubheader'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import CheckIcon from '@mui/icons-material/Check'
+import AddIcon from '@mui/icons-material/Add'
+import DiamondOutlined from '@mui/icons-material/DiamondOutlined'
 import LogoutIcon from '@mui/icons-material/Logout'
 import PersonOutlined from '@mui/icons-material/PersonOutlined'
 import PersonAddAltOutlined from '@mui/icons-material/PersonAddAltOutlined'
@@ -28,12 +30,15 @@ interface UserMenuProps {
   activeTenantId?: Id
   onSwitch: (tenantId: Id) => void
   onLogout: () => void
+  onCreateBand?: () => void
+  bandCreationDisabled?: boolean
   /** Absent while creating one isn't offered (already owns one, or onboarding is off). */
   onCreatePersonalWorkspace?: () => void
 }
 
 export default function UserMenu({
   anchorEl, open, onClose, approvedMemberships, activeTenantId, onSwitch, onLogout,
+  onCreateBand, bandCreationDisabled = false,
   onCreatePersonalWorkspace,
 }: Readonly<UserMenuProps>) {
   const { t } = useTranslation('navigation')
@@ -89,7 +94,28 @@ export default function UserMenu({
           {t($ => $.userMenu.switchBand)}
         </ListSubheader>,
         ...bands.map((m) => membershipItem(m)),
-        <Divider key="div" />,
+      ]}
+      {bands.length > 0 && !onCreateBand && <Divider />}
+      {onCreateBand && [
+        <MenuItem key="create-band" onClick={onCreateBand} disabled={bandCreationDisabled}>
+          <ListItemIcon>
+            {bandCreationDisabled
+              ? <DiamondOutlined fontSize="small" />
+              : <AddIcon fontSize="small" />}
+          </ListItemIcon>
+          <ListItemText primary={t($ => $.userMenu.addBand)}
+          slotProps={{
+                    primary: {
+                      variant: 'subtitle1',
+                      sx: {
+                        fontSize: 14,
+                        color: 'text.secondary',
+                      },
+                    },
+                  }}
+            />
+        </MenuItem>,
+        <Divider key="band-div" />,
       ]}
       <MenuItem onClick={onLogout}>
         <ListItemIcon>

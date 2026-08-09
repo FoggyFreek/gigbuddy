@@ -6,6 +6,7 @@ import { auditLog } from '../utils/auditLog.js'
 import { requireParam, sendError } from './routeHelpers.js'
 import {
   listQueue,
+  listUnclaimedProfiles,
   approveClaim,
   rejectClaim,
 } from '../services/adminBandProfileClaimService.js'
@@ -14,6 +15,12 @@ const router = Router()
 
 router.get('/', async (req, res) => {
   const result = await listQueue(pool, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.get('/unclaimed', async (req, res) => {
+  const result = await listUnclaimedProfiles(pool, req.query)
   if (result.error) return sendError(res, result.error)
   res.json(result)
 })

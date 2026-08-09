@@ -85,6 +85,7 @@ export default function MyBandsPage() {
         tenantId: m.tenantId as Id,
         membershipStatus: m.status ?? 'approved',
         avatarPath: m.tenantAvatarPath ?? null,
+        accountingCountryCode: m.accountingCountryCode ?? null,
       }))
 
     const profiles = (state?.bands ?? []).map((band): MyBandsRow => ({

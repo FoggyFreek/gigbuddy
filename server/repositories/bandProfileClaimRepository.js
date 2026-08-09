@@ -108,16 +108,45 @@ export async function listClaims(executor, { status, limit, cursor }) {
     `SELECT ${CLAIM_COLUMNS},
             t.slug AS tenant_slug, t.display_name AS tenant_display_name,
             t.kind AS tenant_kind, t.archived_at AS tenant_archived_at,
+            t.instagram_handle AS tenant_instagram_handle,
+            t.facebook_handle AS tenant_facebook_handle,
+            t.tiktok_handle AS tenant_tiktok_handle,
+            t.youtube_handle AS tenant_youtube_handle,
+            t.spotify_handle AS tenant_spotify_handle,
             u.email AS requested_by_email, u.name AS requested_by_name,
+            reviewer.email AS decided_by_email, reviewer.name AS decided_by_name,
             bp.country_code, bp.spotify_url, bp.website_url, bp.contact_email
        FROM band_profile_claims c
        JOIN tenants t ON t.id = c.tenant_id
        LEFT JOIN users u ON u.id = c.requested_by_user_id
+       LEFT JOIN users reviewer ON reviewer.id = c.decided_by_user_id
        LEFT JOIN band_profiles bp ON bp.id = c.band_profile_id
       WHERE ($1::text IS NULL OR c.status = $1) ${cursorClause}
       ORDER BY c.created_at DESC, c.id DESC
       LIMIT $2`,
     params,
+  )
+  return rows
+}
+
+// The owners of personal workspaces that currently hold a profile in My Bands,
+// enriched with how each owner stands with the band making that claim. The
+// claim page is bounded, and a profile has at most five holders, so this remains
+// a small batch rather than an N+1 query per queue row.
+export async function listProfileUsersForClaims(executor, claimIds) {
+  if (claimIds.length === 0) return []
+  const { rows } = await executor.query(
+    `SELECT c.id AS claim_id,
+            u.id AS user_id, u.name AS user_name, u.email AS user_email,
+            m.status AS membership_status, m.role AS membership_role
+       FROM band_profile_claims c
+       JOIN my_bands mb ON mb.band_profile_id = c.band_profile_id
+       JOIN tenants holder_t ON holder_t.id = mb.tenant_id AND holder_t.kind = 'personal'
+       JOIN users u ON u.id = holder_t.owner_user_id
+       LEFT JOIN memberships m ON m.user_id = u.id AND m.tenant_id = c.tenant_id
+      WHERE c.id = ANY($1::int[])
+      ORDER BY c.id, lower(COALESCE(NULLIF(u.name, ''), u.email)), u.id`,
+    [claimIds],
   )
   return rows
 }

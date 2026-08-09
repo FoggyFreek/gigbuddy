@@ -46,6 +46,17 @@ export const createPersonalTenant = (payload: CreatePersonalTenantPayload) =>
 
 export const listOwnedTenants = () => request<Tenant[]>('/api/tenants/owned')
 
+export interface DeleteManagedTenantPayload {
+  confirmationName: string
+  acknowledged: true
+}
+
+export const deleteManagedTenant = (id: Id, payload: DeleteManagedTenantPayload) =>
+  request<void>(`/api/tenants/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify(payload),
+  })
+
 export interface TenantOnboardingStatus {
   tenantOnboardingEnabled: boolean
 }
@@ -57,6 +68,16 @@ export const updateTenantOnboardingStatus = (tenantOnboardingEnabled: boolean) =
   request<TenantOnboardingStatus>('/api/admin/platform-settings/tenant-onboarding', {
     method: 'PATCH',
     body: JSON.stringify({ tenantOnboardingEnabled }),
+  })
+
+export interface TenantSlugResponse {
+  slug: string
+}
+
+export const updateActiveTenantSlug = (slug: string) =>
+  request<TenantSlugResponse>('/api/tenant/slug', {
+    method: 'PATCH',
+    body: JSON.stringify({ slug }),
   })
 
 export const listTenants = () => api<Tenant[]>('/')

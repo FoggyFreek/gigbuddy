@@ -87,7 +87,8 @@
   "userMenu": {
     "me": "Me",
     "switchBand": "Switch band",
-    "createPersonalWorkspace": "Create my artist workspace",
+    "addBand": "Add band",
+    "createPersonalWorkspace": "Artist profile",
     "admin": "admin",
     "logout": "Log out"
   }

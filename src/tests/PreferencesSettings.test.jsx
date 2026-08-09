@@ -30,6 +30,7 @@ const PREFS = {
     { type: 'invoice-paid', enabled: true },
     { type: 'task-assigned', enabled: true },
     { type: 'invite-redeemed', enabled: true },
+    { type: 'achievement-unlocked', enabled: true },
   ],
   tenants: [
     { tenantId: 1, tenantName: 'Alpha Band', avatarPath: null, enabled: true },
@@ -113,6 +114,16 @@ describe('My preferences — notifications', () => {
         types: [{ type: 'gig-new', enabled: false }],
       }),
     )
+  })
+
+  it('groups notification types by category', async () => {
+    wrapNotifications()
+
+    expect(await screen.findByRole('group', { name: 'Events' })).toHaveTextContent('New gig options')
+    expect(screen.getByRole('group', { name: 'Tasks' })).toHaveTextContent('Tasks assigned to you')
+    expect(screen.getByRole('group', { name: 'Management' })).toHaveTextContent('New members awaiting approval')
+    expect(screen.getByRole('group', { name: 'Financial' })).toHaveTextContent('Paid invoices')
+    expect(screen.getByRole('group', { name: 'Other' })).toHaveTextContent('Unlocked achievements')
   })
 
   it('renders the per-band switches and saves a toggle', async () => {

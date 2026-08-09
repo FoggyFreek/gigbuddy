@@ -53,6 +53,7 @@ function completeEntitlements() {
       chordpro: true,
       public_promotion: false,
       linkpage: true,
+      custom_slug: true,
       calendar_sync: true,
     },
     limits: { storage_mb: 250, members: 10, bands: 2, linkpage_pages: 5, linkpage_stats_days: 30 },

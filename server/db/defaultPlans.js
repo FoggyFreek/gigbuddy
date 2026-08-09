@@ -28,6 +28,7 @@ export const DEFAULT_PLANS = Object.freeze([
         chordpro: false,
         public_promotion: false,
         linkpage: false,
+        custom_slug: false,
         calendar_sync: false,
       },
       limits: { storage_mb: 50, members: 5, bands: 1, linkpage_pages: 0, linkpage_stats_days: 30 },
@@ -52,6 +53,7 @@ export const DEFAULT_PLANS = Object.freeze([
         chordpro: true,
         public_promotion: true,
         linkpage: true,
+        custom_slug: false,
         calendar_sync: true,
       },
       limits: { storage_mb: 150, members: null, bands: 3, linkpage_pages: 3, linkpage_stats_days: 30 },
@@ -75,6 +77,7 @@ export const DEFAULT_PLANS = Object.freeze([
         chordpro: true,
         public_promotion: true,
         linkpage: true,
+        custom_slug: true,
         calendar_sync: true,
       },
       limits: { storage_mb: 500, members: null, bands: null, linkpage_pages: 30, linkpage_stats_days: 90 },
@@ -102,6 +105,7 @@ export const DEFAULT_PLANS = Object.freeze([
         chordpro: false,
         public_promotion: false,
         linkpage: false,
+        custom_slug: false,
         calendar_sync: false,
       },
       limits: { storage_mb: 50, members: 1, bands: 0, linkpage_pages: 0, linkpage_stats_days: 30 },
@@ -134,6 +138,7 @@ export const DEFAULT_PLANS = Object.freeze([
         // Link pages are a band surface (BAND_LINKPAGE capability) and this
         // plan owns no band, so the feature would never be reachable.
         linkpage: false,
+        custom_slug: false,
         calendar_sync: true,
       },
       // Storage sits below band gold; `members: 1` matches a workspace of one.

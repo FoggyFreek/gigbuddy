@@ -11,9 +11,11 @@ export async function fetchUserById(executor, userId) {
 export async function listMembershipsForMe(executor, userId) {
   const { rows } = await executor.query(
     `SELECT m.tenant_id, m.role, m.status, t.slug AS tenant_slug, t.kind AS tenant_kind,
-            t.band_name AS tenant_name, t.display_name, t.avatar_path
+            t.band_name AS tenant_name, t.display_name, t.avatar_path,
+            tap.country_code AS accounting_country_code
      FROM memberships m
      JOIN tenants t ON t.id = m.tenant_id
+     LEFT JOIN tenant_accounting_profiles tap ON tap.tenant_id = t.id
      WHERE m.user_id = $1
        AND m.status IN ('pending', 'approved')
        AND t.archived_at IS NULL

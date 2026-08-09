@@ -61,6 +61,10 @@ vi.mock('../api/venues.ts', async (importOriginal) => ({
   listVenueContacts: vi.fn().mockResolvedValue([]),
 }))
 
+vi.mock('../api/myBands.ts', () => ({
+  listMyBands: vi.fn().mockResolvedValue({ items: [] }),
+}))
+
 import { createGig, getGig, updateGig } from '../api/gigs.ts'
 import { getAvailabilityOn } from '../api/availability.ts'
 import { AuthContext } from '../contexts/authContext.ts'
@@ -128,6 +132,35 @@ describe('GigFormModal — create mode', () => {
       expect.objectContaining({ has_pa_system: false, has_drumkit: false })
     )
     await waitFor(() => expect(onClose).toHaveBeenCalled())
+  })
+
+  // Regression: my_band_id is personal-workspace-only. The server 403s if the
+  // field is present at all outside one, so a band workspace must omit it —
+  // sending it as null used to trip that gate on every gig creation.
+  it('omits my_band_id when creating from a band workspace', async () => {
+    createGig.mockClear()
+    const user = userEvent.setup()
+    wrap(<GigFormModal mode="create" onClose={() => {}} />, 'band')
+
+    await user.type(screen.getByLabelText(/event description/i), 'Rock Show')
+    await user.type(screen.getByLabelText(/^date$/i), '2026-08-01')
+    await user.click(screen.getByRole('button', { name: /create/i }))
+
+    await waitFor(() => expect(createGig).toHaveBeenCalled())
+    expect(createGig.mock.calls[0][0]).not.toHaveProperty('my_band_id')
+  })
+
+  it('includes my_band_id when creating from a personal workspace', async () => {
+    createGig.mockClear()
+    const user = userEvent.setup()
+    wrap(<GigFormModal mode="create" onClose={() => {}} />, 'personal')
+
+    await user.type(screen.getByLabelText(/event description/i), 'Rock Show')
+    await user.type(screen.getByLabelText(/^date$/i), '2026-08-01')
+    await user.click(screen.getByRole('button', { name: /create/i }))
+
+    await waitFor(() => expect(createGig).toHaveBeenCalled())
+    expect(createGig.mock.calls[0][0]).toHaveProperty('my_band_id', null)
   })
 
   it('calls onClose when Cancel is clicked', async () => {

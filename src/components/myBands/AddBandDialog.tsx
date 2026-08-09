@@ -13,6 +13,7 @@ import Divider from '@mui/material/Divider'
 import List from '@mui/material/List'
 import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
+import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Tab from '@mui/material/Tab'
 import Tabs from '@mui/material/Tabs'
@@ -26,7 +27,8 @@ import { addMyBand } from '../../api/myBands.ts'
 import { redeemInvite } from '../../api/invites.ts'
 import { parseInviteCode } from '../../utils/inviteCode.ts'
 import { isApiError } from '../../types/api.ts'
-import type { BandProfile } from '../../types/entities.ts'
+import type { BandProfile, Id } from '../../types/entities.ts'
+import CreateBandDialog from '../appShell/CreateBandDialog.tsx'
 import BandProfileFields from './BandProfileFields.tsx'
 import { EMPTY_BAND_PROFILE_FORM, hasBandProfileLink } from './bandProfileForm.ts'
 import type { BandProfileForm } from './bandProfileForm.ts'
@@ -34,7 +36,7 @@ import type { BandProfileForm } from './bandProfileForm.ts'
 const MIN_QUERY = 3
 const DEBOUNCE_MS = 300
 
-type Step = 'search' | 'create'
+type Step = 'search' | 'createProfile' | 'createBand'
 type Mode = 'search' | 'invite'
 
 // The two halves of a search, merged into one list so a single hook can own the
@@ -47,6 +49,7 @@ interface AddBandDialogProps {
   onClose: () => void
   onAdded: () => void
   onJoined: () => void
+  onCreated?: (tenantId: Id) => void
 }
 
 /**
@@ -54,7 +57,9 @@ interface AddBandDialogProps {
  * already exists — on gigbuddy or as a global profile — must be reused rather
  * than duplicated, so creating is only offered once a search has come back.
  */
-export default function AddBandDialog({ onClose, onAdded, onJoined }: Readonly<AddBandDialogProps>) {
+export default function AddBandDialog({
+  onClose, onAdded, onJoined, onCreated,
+}: Readonly<AddBandDialogProps>) {
   const { t } = useTranslation(['myBands', 'common'])
   const [mode, setMode] = useState<Mode>('search')
   const [step, setStep] = useState<Step>('search')
@@ -208,8 +213,22 @@ export default function AddBandDialog({ onClose, onAdded, onJoined }: Readonly<A
     )
   }
 
+  if (step === 'createBand') {
+    return (
+      <CreateBandDialog
+        open
+        defaultBandName={trimmed}
+        onClose={() => setStep('search')}
+        onCreated={(tenantId) => {
+          if (onCreated) onCreated(tenantId)
+          else onJoined()
+        }}
+      />
+    )
+  }
+
   return (
-    <Dialog open fullWidth maxWidth="sm" onClose={onClose}>
+    <Dialog open fullWidth maxWidth="md" onClose={onClose}>
       <DialogTitle>{t($ => $.add.title)}</DialogTitle>
       <DialogContent>
         {step === 'search' && (
@@ -242,6 +261,10 @@ export default function AddBandDialog({ onClose, onAdded, onJoined }: Readonly<A
 
         {step === 'search' && mode === 'search' && (
           <Stack spacing={2} sx={{ pt: 1 }}>
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              {t($ => $.add.workflow.intro)}
+            </Typography>
+
             <TextField
               label={t($ => $.add.searchLabel)}
               value={search.inputValue}
@@ -308,24 +331,53 @@ export default function AddBandDialog({ onClose, onAdded, onJoined }: Readonly<A
               <Alert severity="info">{t($ => $.add.noResults)}</Alert>
             )}
 
-            {!search.loading && !search.tooShort && (
-              <>
-                <Divider />
+            <Divider />
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                gap: 2,
+              }}
+            >
+              <Paper variant="outlined" sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
+                <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                  {t($ => $.add.workflow.createBand.title)}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary', flexGrow: 1, mb: 2 }}>
+                  {t($ => $.add.workflow.createBand.body)}
+                </Typography>
                 <Button
                   variant="outlined"
+                  disabled={search.tooShort || search.loading}
+                  onClick={() => setStep('createBand')}
+                >
+                  {t($ => $.add.workflow.createBand.action)}
+                </Button>
+              </Paper>
+
+              <Paper variant="outlined" sx={{ p: 2, display: 'flex', flexDirection: 'column' }}>
+                <Typography component="h3" variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
+                  {t($ => $.add.workflow.createProfile.title)}
+                </Typography>
+                <Typography variant="body2" sx={{ color: 'text.secondary', flexGrow: 1, mb: 2 }}>
+                  {t($ => $.add.workflow.createProfile.body)}
+                </Typography>
+                <Button
+                  variant="outlined"
+                  disabled={search.tooShort || search.loading}
                   onClick={() => {
                     setForm({ ...EMPTY_BAND_PROFILE_FORM, name: trimmed })
-                    setStep('create')
+                    setStep('createProfile')
                   }}
                 >
-                  {t($ => $.add.createInstead, { name: trimmed })}
+                  {t($ => $.add.workflow.createProfile.action)}
                 </Button>
-              </>
-            )}
+              </Paper>
+            </Box>
           </Stack>
         )}
 
-        {step === 'create' && (
+        {step === 'createProfile' && (
           <Box sx={{ pt: 1 }}>
             {websiteMatch && (
               <Alert
@@ -350,14 +402,14 @@ export default function AddBandDialog({ onClose, onAdded, onJoined }: Readonly<A
         )}
       </DialogContent>
       <DialogActions>
-        {step === 'create' && (
+        {step === 'createProfile' && (
           <Button onClick={() => { setStep('search'); setWebsiteMatch(null) }}>
             {t($ => $.common.actions.back)}
           </Button>
         )}
         <Box sx={{ flexGrow: 1 }} />
         <Button onClick={onClose}>{t($ => $.common.actions.cancel)}</Button>
-        {step === 'create' && (
+        {step === 'createProfile' && (
           <Button variant="contained" disabled={busy} onClick={handleCreate}>
             {t($ => $.add.create)}
           </Button>

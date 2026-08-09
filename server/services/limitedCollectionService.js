@@ -79,6 +79,26 @@ export async function limitedCollectionWithTimestampCursor(rawLimit, fetchItems,
   return { items: result.items, meta: { ...result.meta, nextCursor } }
 }
 
+// Timestamp-cursor variant for tables that also render MUI's known-total
+// pagination controls. The repository returns the page and total from one
+// statement, so both describe the same snapshot.
+export async function limitedCollectionWithTimestampCursorAndTotal(
+  rawLimit,
+  fetchPage,
+  atOf,
+  maxLimit = MAX_LIST_LIMIT,
+) {
+  const result = await limitedCollectionWithTotal(rawLimit, fetchPage, maxLimit)
+  if (result.error) return result
+
+  const last = result.items[result.items.length - 1]
+  const nextCursor = last && result.items.length === result.meta.limit
+    ? encodeTimestampCursor(atOf(last), last.id)
+    : null
+
+  return { items: result.items, meta: { ...result.meta, nextCursor } }
+}
+
 // Shared contract for endpoints that return every item inside an inclusive
 // day window (`?from=&to=`). Same envelope family as limitedCollection; meta
 // echoes the window the server actually applied.

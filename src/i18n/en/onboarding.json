@@ -50,6 +50,7 @@
     "loadFailed": "Could not load the subscription plans. Please try again.",
     "onboardingDisabled": "New tenant onboarding is currently disabled. You can still join an existing band with an invite code.",
     "bandCapNoPointer": "You already own a band, so onboarding isn't needed. You can manage plans in Settings.",
+    "bandCapReached": "Your current subscription has reached its band limit. Upgrade your plan to add another band.",
     "logoUploadFailed": "The logo could not be uploaded — you can add it later under Profile.",
     "generic": "Something went wrong. Please try again.",
     "claimFailed": "We couldn't submit your band profile claim. You can try again from Settings."

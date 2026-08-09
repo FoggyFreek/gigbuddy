@@ -62,10 +62,10 @@ function mockUser(activeTenantKind) {
   })
 }
 
-function renderShell() {
+function renderShell(initialPath = '/') {
   return render(
     <ThemeProvider theme={theme}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[initialPath]}>
         <AppShell />
       </MemoryRouter>
     </ThemeProvider>,
@@ -115,6 +115,19 @@ describe('AppShell — nav filtered by tenant kind', () => {
 
     expect(await itemsInGroup(user, 'Financial group')).toEqual([
       'Invoices', 'Purchases', 'Reimbursements',
+    ])
+  })
+
+  it('lists My bands after Profile in Overview', async () => {
+    mockUser('personal')
+    const user = userEvent.setup()
+    renderShell('/gigs')
+
+    expect(await itemsInGroup(user, 'Overview group')).toEqual([
+      'Dashboard', 'Financial', 'Profile', 'My bands',
+    ])
+    expect(await itemsInGroup(user, 'Network group')).toEqual([
+      'Contacts', 'Suppliers', 'Venues', 'Email Templates',
     ])
   })
 

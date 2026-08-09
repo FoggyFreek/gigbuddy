@@ -28,6 +28,8 @@ import { listMembers } from '../api/bandMembers.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { toDateInput, toTimeInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 import MyBandSelect from './myBands/MyBandSelect.tsx'
 import RehearsalFields from './RehearsalFields.tsx'
 import RehearsalParticipantsSection from './RehearsalParticipantsSection.tsx'
@@ -63,6 +65,7 @@ interface RehearsalFormModalProps {
 
 export default function RehearsalFormModal({ mode, rehearsalId, onClose, initialDate }: Readonly<RehearsalFormModalProps>) {
   const { t } = useTranslation(['rehearsals', 'common'])
+  const supportsMyBand = useTenantKind().supports(TENANT_CAPABILITIES.MY_BANDS)
   const [form, setForm] = useState<RehearsalForm>(() =>
     mode === 'create' && initialDate ? { ...EMPTY_FORM, proposed_date: initialDate } : EMPTY_FORM,
   )
@@ -149,7 +152,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
       end_time: form.end_time || null,
       location: form.location || null,
       notes: form.notes || null,
-      my_band_id: form.my_band_id || null,
+      ...(supportsMyBand ? { my_band_id: form.my_band_id || null } : {}),
       extra_member_ids: extraMemberIds,
     })
     onClose()

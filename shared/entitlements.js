@@ -18,6 +18,9 @@ export const FEATURES = Object.freeze({
   CHORDPRO: 'chordpro',
   PUBLIC_PROMOTION: 'public_promotion',
   LINKPAGE: 'linkpage',
+  // Changing the public tenant slug. Existing slugs survive a downgrade; this
+  // flag gates only subsequent changes, so there is no purge behavior.
+  CUSTOM_SLUG: 'custom_slug',
   // Subscribing an external calendar to the ICS feed. Split out of
   // `integrations` so "planning, but no calendar sync" is expressible — the
   // shape a free artist workspace takes.

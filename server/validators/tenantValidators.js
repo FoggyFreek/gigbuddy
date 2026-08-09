@@ -7,6 +7,13 @@ export function validSlug(slug) {
   return typeof slug === 'string' && SLUG_RE.test(slug)
 }
 
+export function parseTenantSlugChange(body) {
+  if (!validSlug(body?.slug)) {
+    return { error: 'Invalid slug', code: 'invalid_slug' }
+  }
+  return { slug: body.slug }
+}
+
 // Room for a dedupe suffix ("-2".."-25" or "-xxxxxx") within the 64-char slug
 // limit enforced by SLUG_RE.
 const SLUG_BASE_MAX = 56
@@ -73,6 +80,25 @@ export function parseTenantCountryCode(body) {
   const countryCode = normalizeVatCountry(raw)
   if (!countryCode) return { error: 'invalid_country_code' }
   return { countryCode }
+}
+
+// Permanent tenant deletion is deliberately stricter than an ordinary write:
+// the caller must send an explicit boolean acknowledgement and the exact
+// visible tenant name. The service compares that name against the locked row.
+export function parseTenantDeletionConfirmation(body) {
+  if (body?.acknowledged !== true) {
+    return {
+      error: 'Deletion acknowledgement is required',
+      code: 'deletion_acknowledgement_required',
+    }
+  }
+  if (typeof body?.confirmationName !== 'string') {
+    return {
+      error: 'Confirmation name does not match',
+      code: 'confirmation_name_mismatch',
+    }
+  }
+  return { confirmationName: body.confirmationName }
 }
 
 // Resolves the seed-admin user id for a new tenant. Absent field → the creating

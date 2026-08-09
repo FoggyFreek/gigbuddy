@@ -18,6 +18,7 @@ import { useAuth } from '../../contexts/authContext.ts'
 import { unlinkProvider } from '../../api/auth.ts'
 import type { AuthProvider } from '../../api/auth.ts'
 import { GoogleIcon, MicrosoftIcon } from '../shared/ProviderIcons.tsx'
+import TenantDeletionSection from '../settings/TenantDeletionSection.tsx'
 
 const PROVIDERS: AuthProvider[] = ['google', 'microsoft']
 
@@ -76,13 +77,14 @@ export default function ConnectedAccountsSection() {
   }
 
   return (
-    <Paper variant="outlined" sx={{ p: 3 }}>
-      <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+    <Stack spacing={2}>
+      <Paper variant="outlined" sx={{ p: 3 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
         {t($ => $.connectedAccounts.title)}
-      </Typography>
-      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+        </Typography>
+        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
         {t($ => $.connectedAccounts.description)}
-      </Typography>
+        </Typography>
 
       {linkedParam && (PROVIDERS as readonly string[]).includes(linkedParam) && (
         <Alert severity="success" sx={{ mb: 2 }}>
@@ -196,6 +198,8 @@ export default function ConnectedAccountsSection() {
           </>
         )}
       </Dialog>
-    </Paper>
+      </Paper>
+      {user?.activeTenantKind === 'personal' && <TenantDeletionSection />}
+    </Stack>
   )
 }

@@ -27,7 +27,9 @@ import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined'
 import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined'
 import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined'
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined'
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import { usePermissions } from '../hooks/usePermissions.ts'
+import { useAuth } from '../contexts/authContext.ts'
 import { PERMISSIONS, type Permission } from '../auth/permissions.ts'
 import SubscriptionSummaryCard from '../components/settings/SubscriptionSummaryCard.tsx'
 import FinanceWizardCard from '../components/settings/FinanceWizardCard.tsx'
@@ -46,6 +48,8 @@ import FinancialProfileSection from '../components/settings/FinancialProfileSect
 import BandProfileClaimSection from '../components/settings/BandProfileClaimSection.tsx'
 import MyAvailabilitySection from '../components/settings/MyAvailabilitySection.tsx'
 import DiscoverabilitySection from '../components/settings/DiscoverabilitySection.tsx'
+import TenantDeletionSection from '../components/settings/TenantDeletionSection.tsx'
+import TenantSlugSection from '../components/settings/TenantSlugSection.tsx'
 import InvitesSection from '../components/InvitesSection.tsx'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
 import { TENANT_CAPABILITIES, type TenantCapability } from '../auth/tenantCapabilities.ts'
@@ -59,14 +63,14 @@ type SectionId =
   | 'preferences' | 'billing' | 'connected-accounts' | 'my-availability'
   | 'accent' | 'members' | 'band-profile' | 'storage'
   | 'integrations' | 'chart-of-accounts' | 'default-accounts'
-  | 'financial-profile' | 'accounting-profile'
+  | 'financial-profile' | 'accounting-profile' | 'delete-account'
 
 // camelCase leaf keys under settings.nav.items — a literal union so the typed
 // selector index (`t($ => $.nav.items[labelKey])`) stays compile-checked.
 type ItemLabelKey =
   | 'preferences' | 'billing' | 'connectedAccounts' | 'myAvailability' | 'accent' | 'membersAndInvites' | 'bandProfile'
   | 'storage' | 'integrations' | 'chartOfAccounts' | 'defaultAccounts'
-  | 'financialProfile' | 'accountingProfile'
+  | 'financialProfile' | 'accountingProfile' | 'manageAccounts'
 
 interface NavItemDef {
   id: SectionId
@@ -108,18 +112,28 @@ const FINANCE_ITEMS: NavItemDef[] = [
   { id: 'chart-of-accounts', labelKey: 'chartOfAccounts', icon: AccountTreeOutlinedIcon, permission: PERMISSIONS.FINANCE_MANAGE },
 ]
 
+const MANAGE_ACCOUNT_ITEMS: NavItemDef[] = [
+  { id: 'delete-account', labelKey: 'manageAccounts', icon: ManageAccountsIcon },
+]
+
 export default function SettingsPage() {
   const { t } = useTranslation('settings')
   const navigate = useNavigate()
   const { section } = useParams()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
-  const { can, isSuperAdmin } = usePermissions()
+  const { can, isSuperAdmin, role } = usePermissions()
+  const { user } = useAuth()
   const { supports, isPersonal } = useTenantKind()
 
   const visible = (items: NavItemDef[]) =>
     items.filter((i) => (!i.permission || can(i.permission)) && (!i.capability || supports(i.capability)))
-  const bandItems = visible(BAND_ITEMS)
+  // This self-service destructive path is deliberately narrower than the
+  // super-admin tenant console: only the band's tenant_admin may use it.
+  const bandItems = [
+    ...visible(BAND_ITEMS),
+    ...(!isPersonal && role === 'tenant_admin' ? MANAGE_ACCOUNT_ITEMS : []),
+  ]
   const financeItems = visible(FINANCE_ITEMS)
   const accessible = [...ACCOUNT_ITEMS, ...bandItems, ...financeItems]
 
@@ -167,6 +181,13 @@ export default function SettingsPage() {
         return <AccountingSettingsSection />
       case 'chart-of-accounts':
         return <ChartOfAccountsSection />
+      case 'delete-account':
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <TenantSlugSection key={String(user?.activeTenantId ?? '')} />
+            <TenantDeletionSection />
+          </Box>
+        )
       default:
         return null
     }

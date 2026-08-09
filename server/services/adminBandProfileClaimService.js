@@ -9,8 +9,12 @@
 //   - the artists who have been tagging events against the profile need telling
 //     that the band is on gigbuddy now, because their next step is to join it.
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
-import { limitedCollectionWithTimestampCursor } from './limitedCollectionService.js'
+import {
+  limitedCollectionWithTimestampCursor,
+  limitedCollectionWithTimestampCursorAndTotal,
+} from './limitedCollectionService.js'
 import { parseTimestampCursor, parseListLimit } from '../validators/common.js'
+import { parseUnclaimedProfileListQuery } from '../validators/adminBandProfileClaimValidators.js'
 import { logger } from '../utils/logger.js'
 import { CLAIM_STATUSES } from '../domain/bandProfiles.js'
 import { parseDecisionReason } from '../validators/bandProfileValidators.js'
@@ -20,10 +24,12 @@ import {
   setClaimedTenant,
   deleteBandProfileIfAbandoned,
   fetchBandProfile,
+  listUnclaimedBandProfiles,
 } from '../repositories/bandProfileRepository.js'
 import { listHolderTenantIds } from '../repositories/myBandRepository.js'
 import {
   listClaims,
+  listProfileUsersForClaims,
   fetchClaim,
   lockClaim,
   peekClaimTargets,
@@ -40,7 +46,18 @@ const VALID_STATUS_FILTERS = new Set(Object.values(CLAIM_STATUSES))
 // The admin view may name the tenant — that is the whole point of a review
 // queue — but it stays separate from the public shaper so the two can never be
 // confused for one another.
-function shapeAdminClaim(row) {
+function shapeProfileUser(row) {
+  return {
+    id: row.user_id,
+    name: row.user_name,
+    email: row.user_email,
+    requestingTenantMembership: row.membership_status
+      ? { status: row.membership_status, role: row.membership_role }
+      : null,
+  }
+}
+
+function shapeAdminClaim(row, profileUsers = []) {
   return {
     ...shapeClaim(row),
     tenant: {
@@ -49,9 +66,20 @@ function shapeAdminClaim(row) {
       displayName: row.tenant_display_name,
       kind: row.tenant_kind,
       archived: row.tenant_archived_at !== null,
+      socials: {
+        instagram: row.tenant_instagram_handle,
+        facebook: row.tenant_facebook_handle,
+        tiktok: row.tenant_tiktok_handle,
+        youtube: row.tenant_youtube_handle,
+        spotify: row.tenant_spotify_handle,
+      },
     },
     requestedBy: row.requested_by_email
       ? { email: row.requested_by_email, name: row.requested_by_name }
+      : null,
+    profileUsers,
+    decidedBy: row.decided_by_email
+      ? { email: row.decided_by_email, name: row.decided_by_name }
       : null,
     // Present only while the profile still exists; a decided claim outlives it.
     bandProfile: row.band_profile_id === null ? null : {
@@ -81,7 +109,41 @@ export async function listQueue(db, query) {
     (row) => row.created_at,
   )
   if (result.error) return result
-  return { ...result, items: result.items.map(shapeAdminClaim) }
+
+  const profileUserRows = await listProfileUsersForClaims(db, result.items.map((row) => row.id))
+  const profileUsersByClaim = new Map()
+  for (const row of profileUserRows) {
+    const users = profileUsersByClaim.get(row.claim_id) ?? []
+    users.push(shapeProfileUser(row))
+    profileUsersByClaim.set(row.claim_id, users)
+  }
+
+  return {
+    ...result,
+    items: result.items.map((row) => shapeAdminClaim(row, profileUsersByClaim.get(row.id) ?? [])),
+  }
+}
+
+export async function listUnclaimedProfiles(db, query) {
+  const parsed = parseUnclaimedProfileListQuery(query)
+  if (parsed.error) return invalidInput(parsed.error)
+
+  const result = await limitedCollectionWithTimestampCursorAndTotal(
+    parsed.limit,
+    (limit) => listUnclaimedBandProfiles(db, { limit, cursor: parsed.cursor }),
+    (row) => row.cursor_at,
+  )
+  if (result.error) return result
+
+  return {
+    ...result,
+    items: result.items.map((row) => ({
+      id: row.id,
+      name: row.name,
+      memberCount: row.member_count,
+      createdAt: row.created_at,
+    })),
+  }
 }
 
 export async function approveClaim(db, adminUser, claimId) {

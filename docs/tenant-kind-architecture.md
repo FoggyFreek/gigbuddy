@@ -62,6 +62,7 @@ values through `src/auth/tenantCapabilities.ts` and
 | `band_share` | `band` | Client-side tour sharing, tour export, and banner-mosaic tools on the gigs page |
 | `band_linkpage` | `band` | Link-page editor handoff and public link-page content export |
 | `band_profile_claim` | `band` | Claiming a global band profile, plus the settings section for it |
+| `band_slug_change` | `band` | Changing the tenant slug from the band account settings |
 | `my_bands` | `personal` | The My Bands page, its collection API, and the `my_band_id` field on planning writes |
 | `artist_calendar` | `personal` | Cross-tenant dashboard, planning feeds, map, and artist calendar |
 

@@ -60,6 +60,19 @@
     },
     "searchLabel": "Bandnaam",
     "searchHint": "Typ minstens 3 tekens.",
+    "workflow": {
+      "intro": "Voeg een band toe door eerst naar bestaande bands te zoeken. Als je band nog niet op gigBuddy staat en nog geen openbaar profiel heeft, kun je een nieuwe band of een openbaar bandprofiel aanmaken.",
+      "createBand": {
+        "title": "Een nieuwe band aanmaken",
+        "body": "Als je deze band beheert en meer leden wilt uitnodigen. Dit telt mee voor je gigBuddy-bandlimiet.",
+        "action": "Band aanmaken"
+      },
+      "createProfile": {
+        "title": "Een openbaar bandprofiel aanmaken",
+        "body": "Voor een band waarin je speelt, maar die (nog) niet op gigBuddy staat. Je kunt evenementen aan deze band koppelen om overzicht te houden.",
+        "action": "Openbaar profiel aanmaken"
+      }
+    },
     "groups": {
       "onGigbuddy": "Op gigbuddy",
       "offGigbuddy": "Niet op gigbuddy"

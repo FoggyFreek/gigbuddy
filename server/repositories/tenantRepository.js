@@ -141,6 +141,24 @@ export async function fetchOwnedTenant(executor, tenantId, ownerUserId) {
   return rows[0] || null
 }
 
+// Self-service deletion access survives the archive phase, so unlike the
+// ordinary active-tenant middleware this lookup intentionally includes
+// archived/deletion-failed tenants. Absence of a membership returns null and
+// lets the service conceal the tenant with a 404.
+export async function fetchTenantDeletionAccess(executor, tenantId, userId) {
+  const { rows } = await executor.query(
+    `SELECT t.id, t.slug, t.kind, t.display_name, t.band_name,
+            t.owner_user_id, t.archived_at, t.deletion_status,
+            m.role, m.status AS membership_status
+       FROM tenants t
+       JOIN memberships m ON m.tenant_id = t.id AND m.user_id = $2
+      WHERE t.id = $1
+      FOR UPDATE OF t`,
+    [tenantId, userId],
+  )
+  return rows[0] || null
+}
+
 // Ensures the new tenant always has a stats row (reads also COALESCE as a
 // backstop, but this keeps the row present from creation).
 export async function ensureTenantStatistics(executor, tenantId) {
@@ -182,6 +200,20 @@ export async function updateTenantFields(executor, tenantId, fields, values) {
        AND deletion_status IS NULL
      RETURNING ${tenantSafeProjection()}`,
     [...values, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function updateTenantSlug(executor, tenantId, slug) {
+  const { rows } = await executor.query(
+    `UPDATE tenants
+        SET slug = $2, updated_at = NOW()
+      WHERE id = $1
+        AND kind = 'band'
+        AND archived_at IS NULL
+        AND deletion_status IS NULL
+     RETURNING slug`,
+    [tenantId, slug],
   )
   return rows[0] || null
 }

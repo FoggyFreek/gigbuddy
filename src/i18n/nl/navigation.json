@@ -87,7 +87,8 @@
   "userMenu": {
     "me": "Ik",
     "switchBand": "Wissel van band",
-    "createPersonalWorkspace": "Mijn artiestenwerkruimte aanmaken",
+    "addBand": "Band toevoegen",
+    "createPersonalWorkspace": "Artist profiel",
     "admin": "beheerder",
     "logout": "Uitloggen"
   }
