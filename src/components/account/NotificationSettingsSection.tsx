@@ -21,6 +21,7 @@ type TypeLabelKey =
   | 'optionMemberUnavailable' | 'optionAllResponded'
   | 'invoicePaid' | 'taskAssigned' | 'inviteRedeemed' | 'membershipRequested'
   | 'achievementUnlocked'
+  | 'bandProfileClaimed' | 'bandProfileClaimDecided'
 
 const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
   'gig-new': 'gigNew',
@@ -35,6 +36,8 @@ const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
   'invite-redeemed': 'inviteRedeemed',
   'membership-requested': 'membershipRequested',
   'achievement-unlocked': 'achievementUnlocked',
+  'band-profile-claimed': 'bandProfileClaimed',
+  'band-profile-claim-decided': 'bandProfileClaimDecided',
 }
 
 // The generic app logo is the fallback when no picture is uploaded.

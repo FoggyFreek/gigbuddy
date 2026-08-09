@@ -56,7 +56,9 @@
         "taskAssigned": "Aan jou toegewezen taken",
         "inviteRedeemed": "Nieuwe leden in afwachting van goedkeuring",
         "membershipRequested": "Muzikanten die zich willen aansluiten",
-        "achievementUnlocked": "Behaalde prestaties"
+        "achievementUnlocked": "Behaalde prestaties",
+        "bandProfileClaimed": "Bands die op gigbuddy zijn gekomen",
+        "bandProfileClaimDecided": "Beslissingen over je bandprofielclaim"
       }
     },
     "bands": {

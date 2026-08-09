@@ -56,7 +56,9 @@
         "taskAssigned": "Tasks assigned to you",
         "inviteRedeemed": "New members awaiting approval",
         "membershipRequested": "Musicians asking to join",
-        "achievementUnlocked": "Unlocked achievements"
+        "achievementUnlocked": "Unlocked achievements",
+        "bandProfileClaimed": "Bands that joined gigbuddy",
+        "bandProfileClaimDecided": "Decisions on your band profile claim"
       }
     },
     "bands": {

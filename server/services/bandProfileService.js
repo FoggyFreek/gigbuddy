@@ -52,6 +52,11 @@ const INPUT_MESSAGES = Object.freeze({
   band_profile_required: 'Provide a band profile id or a new band profile',
   invalid_mode: 'mode must be "keep" or "delete"',
   invalid_my_band_id: 'Invalid band reference',
+  invalid_claim_message: 'Message is too long',
+  invalid_decision_reason: 'Reason is too long',
+  reason_required: 'A reason is required when rejecting a claim',
+  invalid_status: 'Unknown claim status',
+  invalid_cursor: 'cursor must be a value returned as meta.nextCursor',
 })
 
 export function invalidInput(code) {

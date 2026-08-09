@@ -37,6 +37,8 @@ import meAvailabilityRouter from './meAvailability.js'
 import meMembershipsRouter from './meMemberships.js'
 import bandProfilesRouter from './bandProfiles.js'
 import myBandsRouter from './myBands.js'
+import bandProfileClaimsRouter from './bandProfileClaims.js'
+import adminBandProfileClaimsRouter from './adminBandProfileClaims.js'
 import platformSettingsRouter from './platformSettings.js'
 import adminUsersRouter from './adminUsers.js'
 import adminPlansRouter from './adminPlans.js'
@@ -216,6 +218,7 @@ const merch = requireTenantCapability(TENANT_CAPABILITIES.MERCH)
 const bandPromotion = requireTenantCapability(TENANT_CAPABILITIES.BAND_PROMOTION_INTEGRATIONS)
 const bandLinkpage = requireTenantCapability(TENANT_CAPABILITIES.BAND_LINKPAGE)
 const myBands = requireTenantCapability(TENANT_CAPABILITIES.MY_BANDS)
+const bandProfileClaim = requireTenantCapability(TENANT_CAPABILITIES.BAND_PROFILE_CLAIM)
 // Tagging an event with a band is personal-only, but the planning endpoints
 // themselves are shared. The field variant keeps them shared: it gates only the
 // requests that actually mention my_band_id.
@@ -249,6 +252,7 @@ router.use('/admin/plans', superAdmin, adminPlansRouter)
 router.use('/admin/subscriptions', superAdmin, adminSubscriptionsRouter)
 router.use('/admin/statistics', superAdmin, adminStatisticsRouter)
 router.use('/admin/storage', superAdmin, adminStorageRouter)
+router.use('/admin/band-profile-claims', superAdmin, adminBandProfileClaimsRouter)
 router.use('/invites', membersManage, bandMembershipAdmin, invitesAdminRouter)
 router.use('/users', membersManage, bandMembershipAdmin, usersRouter)
 router.use('/statistics', tenantManage, statisticsRouter)
@@ -266,6 +270,8 @@ router.use('/band-events', tenantMember, myBandField, bandEventsRouter)
 // The bands an artist plays in that aren't on gigbuddy. Personal-only: a band
 // workspace's events are already the band's.
 router.use('/my-bands', tenantMember, myBands, myBandsRouter)
+// Claiming a global band profile: band-only, and an administrative act.
+router.use('/band-profile-claims', tenantManage, bandProfileClaim, bandProfileClaimsRouter)
 router.use('/email-templates', tenantMember, emailTemplatesRouter)
 router.use('/venues', tenantMember, venuesRouter)
 router.use('/contacts', tenantMember, contactsRouter)
