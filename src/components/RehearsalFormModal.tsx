@@ -28,6 +28,7 @@ import { listMembers } from '../api/bandMembers.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { toDateInput, toTimeInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
+import MyBandSelect from './myBands/MyBandSelect.tsx'
 import RehearsalFields from './RehearsalFields.tsx'
 import RehearsalParticipantsSection from './RehearsalParticipantsSection.tsx'
 import SaveStatusLabel from './SaveStatusLabel.tsx'
@@ -40,6 +41,8 @@ interface RehearsalForm {
   end_time: string
   location: string
   notes: string
+  /** Which of the artist's bands; personal workspaces only. */
+  my_band_id: Id | null
 }
 
 const EMPTY_FORM: RehearsalForm = {
@@ -48,6 +51,7 @@ const EMPTY_FORM: RehearsalForm = {
   end_time: '',
   location: '',
   notes: '',
+  my_band_id: null,
 }
 
 interface RehearsalFormModalProps {
@@ -108,6 +112,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
       end_time: toTimeInput((r as Record<string, unknown>).end_time as string),
       location: r.location || '',
       notes: (r as Record<string, unknown>).notes as string || '',
+      my_band_id: r.my_band?.id ?? null,
     })
   }, [mode, rehearsalId])
 
@@ -122,6 +127,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
           end_time: toTimeInput((r as Record<string, unknown>).end_time as string),
           location: r.location || '',
           notes: (r as Record<string, unknown>).notes as string || '',
+          my_band_id: r.my_band?.id ?? null,
         })
       })
       .finally(() => setLoading(false))
@@ -143,6 +149,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
       end_time: form.end_time || null,
       location: form.location || null,
       notes: form.notes || null,
+      my_band_id: form.my_band_id || null,
       extra_member_ids: extraMemberIds,
     })
     onClose()
@@ -228,6 +235,13 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
               onChange={handleChange}
               errors={mode === 'edit' ? { ...getRequiredErrors(form as unknown as Record<string, unknown>, REQUIRED_FIELDS), ...errors } : errors}
             />
+
+            <Grid size={12}>
+              <MyBandSelect
+                value={form.my_band_id}
+                onChange={(id) => handleChange('my_band_id', id === null ? null : String(id))}
+              />
+            </Grid>
 
             {mode === 'create' && createExtras.length > 0 && (
               <Grid size={12}>

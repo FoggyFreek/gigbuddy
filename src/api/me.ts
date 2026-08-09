@@ -123,3 +123,13 @@ export const setMyTaskDone = (id: Id, done: boolean) =>
   request<MyTask>(`/api/me/tasks/${id}/done`, {
     method: 'PATCH', body: JSON.stringify({ done }),
   })
+
+/**
+ * Leave a band. User-level, so it works from a personal workspace with no band
+ * selected — which is the only place an ordinary member can reach it. Every
+ * miss is a 404: a band the caller is not in must be indistinguishable from one
+ * that does not exist. 409 `last_tenant_admin` when the caller is the band's
+ * only admin.
+ */
+export const leaveTenant = (tenantId: Id) =>
+  request<void>(`/api/me/memberships/${tenantId}`, { method: 'DELETE' })

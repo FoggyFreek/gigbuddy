@@ -19,6 +19,7 @@ import GigAvailabilityPanel, { type AvailabilityData } from './gigdetails/GigAva
 import GigDetailContent, { type GigDetailHandle } from './gigdetails/GigDetailContent.tsx'
 import _SaveStatusLabelRaw from './SaveStatusLabel.tsx'
 const SaveStatusLabel = _SaveStatusLabelRaw as React.ComponentType<{ status: string; sx?: unknown }>
+import MyBandSelect from './myBands/MyBandSelect.tsx'
 import _VenuePickerRaw from './VenuePicker.tsx'
 interface _VenuePickerProps {
   categoryFilter?: string
@@ -53,6 +54,8 @@ interface GigFormShape {
   has_pa_system: boolean
   has_drumkit: boolean
   has_stage_lights: boolean
+  /** Which of the artist's bands; personal workspaces only. */
+  my_band_id: Id | null
 }
 
 const EMPTY_FORM: GigFormShape = {
@@ -67,6 +70,7 @@ const EMPTY_FORM: GigFormShape = {
   has_pa_system: false,
   has_drumkit: false,
   has_stage_lights: false,
+  my_band_id: null,
 }
 
 interface GigFormModalProps {
@@ -124,7 +128,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
       end_time: form.end_time || null,
       status: form.status,
       // Extra fields not in base Gig type — server accepts them
-      ...({ has_pa_system: form.has_pa_system, has_drumkit: form.has_drumkit, has_stage_lights: form.has_stage_lights } as Partial<Gig>),
+      ...({ has_pa_system: form.has_pa_system, has_drumkit: form.has_drumkit, has_stage_lights: form.has_stage_lights, my_band_id: form.my_band_id || null } as Partial<Gig>),
     })
     onClose()
   }
@@ -174,6 +178,12 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
                 onChange={(e) => handleChange('event_description', e.target.value)}
                 error={!!errors.event_description}
                 helperText={errors.event_description}
+              />
+            </Grid>
+            <Grid size={12}>
+              <MyBandSelect
+                value={form.my_band_id}
+                onChange={(id) => handleChange('my_band_id', id)}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>

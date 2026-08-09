@@ -1,0 +1,107 @@
+{
+  "title": "My bands",
+  "subtitle": "The bands you play in — on gigbuddy or not.",
+  "empty": "You haven't added any bands yet.",
+  "selectLabel": "Band",
+  "selectNone": "No band",
+  "addButton": "Add band",
+  "table": {
+    "columns": {
+      "band": "Band",
+      "country": "Country",
+      "status": "Status",
+      "events": "Events",
+      "actions": "Actions"
+    }
+  },
+  "status": {
+    "onGigbuddy": "On gigbuddy",
+    "offGigbuddy": "Not on gigbuddy",
+    "pendingMembership": "Awaiting approval",
+    "claimable": "Not on gigbuddy",
+    "pending_claim": "Claim under review",
+    "claimed": "Now on gigbuddy"
+  },
+  "eventCount_one": "{{count}} event",
+  "eventCount_other": "{{count}} events",
+  "actions": {
+    "open": "Open band",
+    "edit": "Edit",
+    "remove": "Remove",
+    "leave": "Leave band",
+    "askToJoin": "Ask to join"
+  },
+  "readOnly": "Someone else added this band, so only they can edit it.",
+  "claimedHint": "This band is on gigbuddy now. Ask to join it to get their events automatically.",
+  "fields": {
+    "name": "Band name",
+    "country": "Country of origin",
+    "spotify": "Spotify artist link",
+    "spotifyHint": "Paste the artist page link from Spotify.",
+    "website": "Website",
+    "linkHint": "A Spotify link or a website is required.",
+    "contactEmail": "Contact email",
+    "contactEmailHint": "Optional."
+  },
+  "errors": {
+    "nameRequired": "A band name is required",
+    "countryRequired": "Pick a country",
+    "needsLink": "Add a Spotify link or a website",
+    "loadFailed": "Could not load your bands",
+    "removeFailed": "Could not remove this band"
+  },
+  "add": {
+    "title": "Add a band",
+    "tabs": {
+      "search": "Search",
+      "invite": "Invite code"
+    },
+    "searchLabel": "Band name",
+    "searchHint": "Type at least 3 characters.",
+    "groups": {
+      "onGigbuddy": "On gigbuddy",
+      "offGigbuddy": "Not on gigbuddy"
+    },
+    "askToJoin": "Ask to join this band",
+    "alreadyRequested": "You already asked to join",
+    "nowOnGigbuddy": "On gigbuddy",
+    "noResults": "No bands found. You can add this one yourself.",
+    "createInstead": "Add \"{{name}}\" as a new band",
+    "create": "Add band",
+    "useExisting": "Use this one",
+    "websiteMatch": "\"{{name}}\" already uses this website. Is that the same band?",
+    "inviteHelp": "Got an invite code from a band on gigbuddy? Redeem it here.",
+    "inviteCode": "Invite code",
+    "join": "Join band",
+    "errors": {
+      "noCode": "Enter a valid invite code"
+    },
+    "full": {
+      "title": "This band is full",
+      "body": "Five musicians already track this band, which is as many as a band profile holds.",
+      "invite": "Ask to join them on gigbuddy instead, or invite the band to sign up."
+    }
+  },
+  "editProfile": {
+    "title": "Edit band",
+    "locked": "This band is being claimed by its owners, so it can't be edited right now."
+  },
+  "remove": {
+    "title": "Remove {{name}}?",
+    "body": "This band will be removed from your list.",
+    "noEvents": "No events are linked to it.",
+    "linked": "{{count}} of your events are linked to this band.",
+    "keep": "Keep my events",
+    "keepHint": "The events stay, without a band.",
+    "delete": "Delete my events",
+    "deleteHint": "The events are permanently removed.",
+    "confirmDelete": "Yes, delete {{count}} events",
+    "confirm": "Remove band"
+  },
+  "leave": {
+    "title": "Leave {{name}}?",
+    "body": "You'll lose access to this band's gigs, rehearsals and files.",
+    "confirm": "Leave band",
+    "lastAdmin": "You're this band's only admin. Make someone else an admin first, or archive the band from its settings."
+  }
+}

@@ -38,6 +38,7 @@ import ChecklistOutlined from '@mui/icons-material/ChecklistOutlined'
 import EventNoteOutlined from '@mui/icons-material/EventNoteOutlined'
 import EmailOutlined from '@mui/icons-material/EmailOutlined'
 import LocationOnOutlined from '@mui/icons-material/LocationOnOutlined'
+import GroupsOutlined from '@mui/icons-material/GroupsOutlined'
 import ContactsOutlined from '@mui/icons-material/ContactsOutlined'
 import StorefrontOutlined from '@mui/icons-material/StorefrontOutlined'
 import ReceiptLongOutlined from '@mui/icons-material/ReceiptLongOutlined'
@@ -82,7 +83,7 @@ type NavGroupKey = 'overview' | 'planning' | 'repertoire' | 'network' | 'financi
 type NavItemKey =
   | 'dashboard' | 'financial' | 'profile' | 'availability' | 'gigs' | 'rehearsals'
   | 'bandEvents' | 'tasks' | 'songs' | 'setlists' | 'contacts' | 'suppliers'
-  | 'venues' | 'emailTemplates' | 'invoices' | 'purchases' | 'merch' | 'reimbursements'
+  | 'venues' | 'myBands' | 'emailTemplates' | 'invoices' | 'purchases' | 'merch' | 'reimbursements'
   | 'journal' | 'ledger' | 'ledgerEntries' | 'vatReturns' | 'reports'
 
 interface NavChildEntry {
@@ -147,6 +148,8 @@ const NAV_GROUPS: NavGroupEntry[] = [
       { to: '/contacts', i18nKey: 'contacts', icon: ContactsOutlined },
       { to: '/suppliers', i18nKey: 'suppliers', icon: StorefrontOutlined },
       { to: '/venues', i18nKey: 'venues', icon: LocationOnOutlined },
+      // Personal-only: a band workspace's bands are itself.
+      { to: '/my-bands', i18nKey: 'myBands', icon: GroupsOutlined, capability: TENANT_CAPABILITIES.MY_BANDS },
       { to: '/email-templates', i18nKey: 'emailTemplates', icon: EmailOutlined },
     ],
   },

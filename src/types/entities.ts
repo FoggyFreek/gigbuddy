@@ -48,6 +48,76 @@ export interface MyBandRef {
   country_code: string
 }
 
+/**
+ * The claiming band, disclosed ONLY when that band opted into discovery — its
+ * id is the input to the join-request and avatar endpoints, so emitting it for
+ * an invite-only band would reveal a private tenant. `claimed` stays true
+ * either way.
+ */
+export interface ClaimedTenantRef {
+  id: Id
+  slug: string
+  displayName: string
+  logoPath: string | null
+}
+
+export type BandProfileStatus = 'claimable' | 'pending_claim' | 'claimed'
+
+/**
+ * A band that is not a gigbuddy customer: one shared, global row, held by the
+ * musicians who play in it. Deliberately thin — no avatar, no roster.
+ */
+export interface BandProfile {
+  id: Id
+  name: string
+  countryCode: string
+  spotifyUrl: string | null
+  websiteUrl: string | null
+  contactEmail: string | null
+  /** Derived server-side from the claim state; never stored. */
+  status: BandProfileStatus
+  claimed: boolean
+  claimedTenant: ClaimedTenantRef | null
+  createdAt: string
+  /** Search only: this hit matched the website the caller typed, not the name. */
+  websiteMatch?: boolean
+  /** Detail only: the caller created it and nobody is claiming it. */
+  canEdit?: boolean
+}
+
+export interface MyBandEventCounts {
+  gigs: number
+  rehearsals: number
+  bandEvents: number
+}
+
+/** One entry in a personal workspace's My Bands collection. */
+export interface MyBand {
+  id: Id
+  bandProfile: BandProfile
+  eventCounts: MyBandEventCounts
+  addedAt: string
+}
+
+export type ClaimStatus = 'pending' | 'approved' | 'rejected'
+
+/**
+ * A band tenant's request to be recognised as the owner of a global profile.
+ * `bandProfileId` is null once the profile has been deleted — a decided claim
+ * is the record of a super admin's decision and outlives it, which is what
+ * `bandProfileName` is for.
+ */
+export interface BandProfileClaim {
+  id: Id
+  bandProfileId: Id | null
+  bandProfileName: string
+  status: ClaimStatus
+  message: string | null
+  decisionReason: string | null
+  createdAt: string
+  decidedAt: string | null
+}
+
 export interface Gig {
   id?: Id
   event_date?: string | Date

@@ -18,6 +18,7 @@ import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 import { toDateInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import BandEventFields from './BandEventFields.tsx'
+import MyBandSelect from './myBands/MyBandSelect.tsx'
 import BandEventAvailabilitySection from './BandEventAvailabilitySection.tsx'
 import SaveStatusLabel from './SaveStatusLabel.tsx'
 import type { AvailabilitySummary, Id, BandEvent } from '../types/entities.ts'
@@ -41,6 +42,7 @@ const EMPTY_FORM = {
   end_time: '',
   location: '',
   notes: '',
+  my_band_id: null as Id | null,
 }
 
 export default function BandEventFormModal({ mode, bandEventId, onClose, initialDate }: Readonly<BandEventFormModalProps>) {
@@ -76,6 +78,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
         const detail = ev as BandEventDetail
         setForm({
           title: detail.title || '',
+          my_band_id: detail.my_band?.id ?? null,
           start_date: toDateInput(detail.start_date),
           end_date: toDateInput(detail.end_date),
           start_time: detail.start_time ? String(detail.start_time).slice(0, 5) : '',
@@ -117,7 +120,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
       title: form.title.trim(),
       start_date: form.start_date,
       end_date: form.end_date || null,
-      ...({ start_time: form.start_time || null, end_time: form.end_time || null, location: form.location || null, notes: form.notes || null } as Partial<BandEventDetail>),
+      ...({ start_time: form.start_time || null, end_time: form.end_time || null, location: form.location || null, notes: form.notes || null, my_band_id: form.my_band_id || null } as Partial<BandEventDetail>),
     } as Partial<BandEventDetail>)
     onClose()
   }
@@ -163,6 +166,12 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
               onChange={handleChange}
               errors={mode === 'edit' ? { ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors } : errors}
             />
+            <Grid size={12}>
+              <MyBandSelect
+                value={form.my_band_id}
+                onChange={(id) => handleChange('my_band_id', id === null ? null : String(id))}
+              />
+            </Grid>
             {mode === 'create' && showAvailability && form.start_date && (
               <Grid size={12}>
                 <Divider sx={{ my: 1 }} />

@@ -29,6 +29,7 @@ import enEmailTemplates from './en/emailTemplates.json'
 import enInvoices from './en/invoices.json'
 import enPurchases from './en/purchases.json'
 import enMerch from './en/merch.json'
+import enMyBands from './en/myBands.json'
 import enReimbursements from './en/reimbursements.json'
 import enJournal from './en/journal.json'
 import enLedger from './en/ledger.json'
@@ -65,6 +66,7 @@ import nlEmailTemplates from './nl/emailTemplates.json'
 import nlInvoices from './nl/invoices.json'
 import nlPurchases from './nl/purchases.json'
 import nlMerch from './nl/merch.json'
+import nlMyBands from './nl/myBands.json'
 import nlReimbursements from './nl/reimbursements.json'
 import nlJournal from './nl/journal.json'
 import nlLedger from './nl/ledger.json'
@@ -104,6 +106,7 @@ const en = {
   invoices: enInvoices,
   purchases: enPurchases,
   merch: enMerch,
+  myBands: enMyBands,
   reimbursements: enReimbursements,
   journal: enJournal,
   ledger: enLedger,
@@ -150,6 +153,7 @@ const nl = {
   invoices: nlInvoices,
   purchases: nlPurchases,
   merch: nlMerch,
+  myBands: nlMyBands,
   reimbursements: nlReimbursements,
   journal: nlJournal,
   ledger: nlLedger,

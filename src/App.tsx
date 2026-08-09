@@ -23,6 +23,7 @@ const SongDetailPage = lazy(() => import('./pages/SongDetailPage.tsx'))
 const SetlistsPage = lazy(() => import('./pages/SetlistsPage.tsx'))
 const SetlistEditorPage = lazy(() => import('./pages/SetlistEditorPage.tsx'))
 const EmailTemplatesPage = lazy(() => import('./pages/EmailTemplatesPage.tsx'))
+const MyBandsPage = lazy(() => import('./pages/MyBandsPage.tsx'))
 const GigDetailPage = lazy(() => import('./pages/GigDetailPage.tsx'))
 const GigMapPage = lazy(() => import('./pages/GigMapPage.tsx'))
 const GigsPage = lazy(() => import('./pages/GigsPage.tsx'))
@@ -149,6 +150,9 @@ export default function App() {
               <Route path="events/:id" element={<BandEventDetailPage />} />
             </Route>
             <Route path="/email-templates" element={<EmailTemplatesPage />} />
+            <Route element={<RequireTenantCapability capability={TENANT_CAPABILITIES.MY_BANDS} />}>
+              <Route path="/my-bands" element={<MyBandsPage />} />
+            </Route>
             <Route element={<RequireSuperAdmin />}>
               <Route path="/admin/tenants" element={<TenantsPage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
