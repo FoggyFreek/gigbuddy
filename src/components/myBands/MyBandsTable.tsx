@@ -38,6 +38,15 @@ export type MyBandsRow =
     onGigbuddy: false
     myBand: MyBand
   }
+  // A band the artist asked to join and is still waiting on. Withdrawing
+  // matters: outstanding requests are capped, so without it an artist whose
+  // requests go unanswered is stuck.
+  | {
+    key: string
+    name: string
+    onGigbuddy: 'requested'
+    tenantId: Id
+  }
 
 interface MyBandsTableProps {
   rows: MyBandsRow[]
@@ -45,18 +54,22 @@ interface MyBandsTableProps {
   onEdit: (profileId: Id) => void
   onRemove: (band: MyBand) => void
   onLeave: (tenantId: Id, bandName: string) => void
+  onWithdraw: (tenantId: Id) => void
 }
 
 const totalEvents = (band: MyBand) =>
   band.eventCounts.gigs + band.eventCounts.rehearsals + band.eventCounts.bandEvents
 
 export default function MyBandsTable({
-  rows, onOpen, onEdit, onRemove, onLeave,
+  rows, onOpen, onEdit, onRemove, onLeave, onWithdraw,
 }: Readonly<MyBandsTableProps>) {
   const { t, i18n } = useTranslation(['myBands', 'common'])
   const isCompact = useCompactLayout()
 
   function statusChip(row: MyBandsRow) {
+    if (row.onGigbuddy === 'requested') {
+      return <Chip size="small" color="warning" label={t($ => $.status.requested)} />
+    }
     if (row.onGigbuddy) {
       const pending = row.membershipStatus !== 'approved'
       return (
@@ -72,18 +85,25 @@ export default function MyBandsTable({
   }
 
   function countryOf(row: MyBandsRow) {
-    if (row.onGigbuddy) return ''
+    if (row.onGigbuddy !== false) return ''
     return countryLabel(row.myBand.bandProfile.countryCode, i18n.language)
   }
 
   function eventsOf(row: MyBandsRow) {
-    if (row.onGigbuddy) return ''
+    if (row.onGigbuddy !== false) return ''
     return t($ => $.eventCount, { count: totalEvents(row.myBand) })
   }
 
   // A gigbuddy band is entered by switching workspace; a profile is edited in
   // place, and only by whoever created it.
   function actions(row: MyBandsRow) {
+    if (row.onGigbuddy === 'requested') {
+      return (
+        <Button size="small" color="error" onClick={() => onWithdraw(row.tenantId)}>
+          {t($ => $.actions.withdraw)}
+        </Button>
+      )
+    }
     if (row.onGigbuddy) {
       const pending = row.membershipStatus !== 'approved'
       return (
@@ -129,7 +149,7 @@ export default function MyBandsTable({
               <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                 {[countryOf(row), eventsOf(row)].filter(Boolean).join(' · ')}
               </Typography>
-              {!row.onGigbuddy && row.myBand.bandProfile.status === 'claimed' && (
+              {row.onGigbuddy === false && row.myBand.bandProfile.status === 'claimed' && (
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
                   {t($ => $.claimedHint)}
                 </Typography>
@@ -161,7 +181,7 @@ export default function MyBandsTable({
             <TableRow key={row.key}>
               <TableCell>
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>{row.name}</Typography>
-                {!row.onGigbuddy && row.myBand.bandProfile.status === 'claimed' && (
+                {row.onGigbuddy === false && row.myBand.bandProfile.status === 'claimed' && (
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     {t($ => $.claimedHint)}
                   </Typography>

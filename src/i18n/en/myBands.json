@@ -17,6 +17,7 @@
   "status": {
     "onGigbuddy": "On gigbuddy",
     "offGigbuddy": "Not on gigbuddy",
+    "requested": "Waiting for approval",
     "pendingMembership": "Awaiting approval",
     "claimable": "Not on gigbuddy",
     "pending_claim": "Claim under review",
@@ -29,6 +30,7 @@
     "edit": "Edit",
     "remove": "Remove",
     "leave": "Leave band",
+    "withdraw": "Withdraw",
     "askToJoin": "Ask to join"
   },
   "readOnly": "Someone else added this band, so only they can edit it.",

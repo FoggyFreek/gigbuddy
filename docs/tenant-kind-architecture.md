@@ -61,7 +61,8 @@ values through `src/auth/tenantCapabilities.ts` and
 | `band_promotion_integrations` | `band` | Bandsintown routes and profile fields, plus Bandsintown and Shopify credentials |
 | `band_share` | `band` | Client-side tour sharing, tour export, and banner-mosaic tools on the gigs page |
 | `band_linkpage` | `band` | Link-page editor handoff and public link-page content export |
-| `my_bands` | `personal` | The musician's band-memberships settings section |
+| `band_profile_claim` | `band` | Claiming a global band profile, plus the settings section for it |
+| `my_bands` | `personal` | The My Bands page, its collection API, and the `my_band_id` field on planning writes |
 | `artist_calendar` | `personal` | Cross-tenant dashboard, planning feeds, map, and artist calendar |
 
 Features absent from this table are shared unless another access mechanism,
@@ -232,6 +233,40 @@ declare `kinds`, and `useTenantKind().allowsKind(...)` selects eligible content.
 Direct kind branching is also appropriate for intrinsic mappings such as plan
 audience, personal-workspace lifecycle, and planning-feed selection. Product
 applicability for an API or UI surface belongs in the capability registry.
+
+## Bands that are not gigbuddy customers
+
+A musician plays in bands that have never signed up. Those bands are **global
+band profiles** (`band_profiles`): one shared row per band, created by whichever
+artist needs it first, visible to everyone, owned by nobody.
+
+A profile is deliberately **not** a shell tenant. A shell would consume the
+owner's `bands` cap, appear in admin listings, and have no administrator.
+Migration 162 tried the opposite extreme — an `'ensemble'` contact private to one
+artist — and 167 removed it, because a per-tenant row is invisible to the band it
+describes, so the band can never correct it or grow into a real tenant.
+
+- A personal workspace curates its own `my_bands` collection, which IS
+  tenant-owned and scoped like any other resource. Planning rows carry
+  `my_band_id` with a composite FK back to it, so tenant isolation still has its
+  database backstop.
+- **Claim state is derived, never stored.** `band_profiles.claimed_by_tenant_id`
+  and the claim rows are the only facts, so deleting a band tenant releases its
+  profile through the foreign keys alone — no code in the delete path has to
+  remember this feature exists.
+- **A profile is self-cleaning**: it lives only while somebody holds it or a
+  claim is live. The foreign keys are the exception, since a cascade runs no
+  service code, so `deleteTenant` collects and locks the affected profiles before
+  deleting and sweeps them afterwards, inside the same transaction.
+- Locks are taken **`tenants` → `band_profiles` (ascending id) → claims /
+  `my_bands` / event rows**. The order is global rather than local to this
+  feature because tenant deletion already holds the tenant row and then cascades
+  into both of the others; taking the profile first would deadlock against it.
+- A claiming band's identity is disclosed only when that band opted into
+  discovery — its tenant id is the input to the join-request and avatar
+  endpoints, so emitting it for an invite-only band would reveal a private
+  tenant. `bandProfileService.shapeBandProfile` is the single exit for a profile
+  payload, and the tests assert the id appears nowhere on any non-admin surface.
 
 ## Extension checklist
 

@@ -25,6 +25,8 @@ vi.mock('../api/tenants.ts', async (importOriginal) => ({
   getTenantOnboardingStatus: vi.fn(),
   listOwnedTenants: vi.fn(),
 }))
+vi.mock('../api/bandProfiles.ts', () => ({ searchBandProfiles: vi.fn() }))
+vi.mock('../api/bandProfileClaims.ts', () => ({ requestClaim: vi.fn() }))
 vi.mock('../api/profile.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   uploadLogo: vi.fn(),
@@ -34,6 +36,8 @@ vi.mock('../contexts/authContext.ts', () => ({
 }))
 
 import { acceptTerms, onboardingComplete } from '../api/auth.ts'
+import { searchBandProfiles } from '../api/bandProfiles.ts'
+import { requestClaim } from '../api/bandProfileClaims.ts'
 import { getBillingState, subscribe, syncSubscription } from '../api/billing.ts'
 import {
   createOwnedTenant,
@@ -440,5 +444,60 @@ describe('OnboardingPage — checkout return', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('OnboardingPage — claiming a band profile', () => {
+  beforeEach(() => {
+    searchBandProfiles.mockResolvedValue({
+      items: [{
+        id: 5001, name: 'Off Platform', countryCode: 'nl', spotifyUrl: null,
+        websiteUrl: 'https://offplatform.example', contactEmail: null,
+        status: 'claimable', claimed: false, claimedTenant: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }],
+      meta: { limit: 10, returned: 1 },
+    })
+  })
+
+  // The regression guard for the reason this is NOT a payload field on tenant
+  // creation: a resumed onboarding short-circuits ensureOnboardingTenant, so a
+  // claim carried in that call would be skipped for exactly the people most
+  // likely to have been interrupted.
+  it('submits the claim on a RESUMED onboarding too', async () => {
+    mockAuth({ onboardingTenantId: 42, termsVersion: TERMS_VERSION })
+    listOwnedTenants.mockResolvedValue([
+      { id: 42, slug: 'the-band', band_name: 'The Band', accounting_country: 'nl', archived_at: null },
+    ])
+    requestClaim.mockResolvedValue({ id: 1, status: 'pending' })
+    const user = userEvent.setup()
+    wrap()
+
+    await completeWelcomeStep(user, 'Bronze')
+    await user.type(await screen.findByLabelText('Search for your band'), 'Off Platform')
+    await user.click(await screen.findByRole('button', { name: /Off Platform/ }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(await screen.findByRole('button', { name: /create|finish|start/i }))
+
+    await waitFor(() => expect(requestClaim).toHaveBeenCalledWith(5001))
+    expect(createOwnedTenant).not.toHaveBeenCalled()
+  })
+
+  it('never blocks workspace creation when the claim fails', async () => {
+    mockAuth({ onboardingTenantId: 42, termsVersion: TERMS_VERSION })
+    listOwnedTenants.mockResolvedValue([
+      { id: 42, slug: 'the-band', band_name: 'The Band', accounting_country: 'nl', archived_at: null },
+    ])
+    requestClaim.mockRejectedValue(new Error('claim_pending_elsewhere'))
+    const user = userEvent.setup()
+    wrap()
+
+    await completeWelcomeStep(user, 'Bronze')
+    await user.type(await screen.findByLabelText('Search for your band'), 'Off Platform')
+    await user.click(await screen.findByRole('button', { name: /Off Platform/ }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(await screen.findByRole('button', { name: /create|finish|start/i }))
+
+    await waitFor(() => expect(onboardingComplete).toHaveBeenCalled())
   })
 })

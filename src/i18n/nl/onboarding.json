@@ -51,7 +51,8 @@
     "onboardingDisabled": "Nieuwe tenant-onboarding is momenteel uitgeschakeld. Je kunt nog steeds met een uitnodigingscode aansluiten bij een bestaande band.",
     "bandCapNoPointer": "Je hebt al een band, dus onboarding is niet nodig. Abonnementen beheer je via Instellingen.",
     "logoUploadFailed": "Het logo kon niet worden geüpload — je kunt het later toevoegen via Profiel.",
-    "generic": "Er ging iets mis. Probeer het opnieuw."
+    "generic": "Er ging iets mis. Probeer het opnieuw.",
+    "claimFailed": "We konden je bandprofielclaim niet versturen. Probeer het opnieuw via Instellingen."
   },
   "workspace": {
     "band": {
@@ -97,5 +98,12 @@
       "label": "Mijn eigen artiestenwerkruimte",
       "help": "Je eigen agenda, contacten en boekhouding, als muzikant. Je kunt je later bij bands aansluiten."
     }
+  },
+  "claimProfile": {
+    "title": "Al bekend als deze band?",
+    "description": "Muzikanten die nog niet op gigbuddy zitten koppelen hun evenementen misschien al aan jouw band. Claim dat profiel zodat het van jullie wordt. Optioneel — we controleren het daarna.",
+    "searchLabel": "Zoek je band",
+    "searchHint": "Typ minstens 3 tekens.",
+    "pendingReview": "We beoordelen deze claim nadat je werkruimte is aangemaakt."
   }
 }

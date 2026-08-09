@@ -17,7 +17,12 @@ vi.mock('../api/bandProfiles.ts', () => ({
   getBandProfile: vi.fn(),
   updateBandProfile: vi.fn(),
 }))
-vi.mock('../api/bandDirectory.ts', () => ({ searchBands: vi.fn(), requestToJoinBand: vi.fn() }))
+vi.mock('../api/bandDirectory.ts', () => ({
+  searchBands: vi.fn(),
+  requestToJoinBand: vi.fn(),
+  listJoinRequests: vi.fn(),
+  withdrawJoinRequest: vi.fn(),
+}))
 vi.mock('../api/invites.ts', () => ({ redeemInvite: vi.fn() }))
 vi.mock('../api/me.ts', () => ({ leaveTenant: vi.fn() }))
 vi.mock('../contexts/authContext.ts', () => ({
@@ -28,7 +33,7 @@ vi.mock('../hooks/useCrossTenantNavigate.ts', () => ({ useCrossTenantNavigate: v
 
 import { listMyBands, getRemovalPreview, removeMyBand } from '../api/myBands.ts'
 import { searchBandProfiles } from '../api/bandProfiles.ts'
-import { searchBands } from '../api/bandDirectory.ts'
+import { searchBands, listJoinRequests, withdrawJoinRequest } from '../api/bandDirectory.ts'
 import { leaveTenant } from '../api/me.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { useCrossTenantNavigate } from '../hooks/useCrossTenantNavigate.ts'
@@ -83,6 +88,7 @@ describe('MyBandsPage', () => {
     listMyBands.mockResolvedValue({ items: [myBand()], meta: { limit: 50, returned: 1 } })
     searchBandProfiles.mockResolvedValue({ items: [], meta: { limit: 10, returned: 0 } })
     searchBands.mockResolvedValue({ items: [], meta: { limit: 10 } })
+    listJoinRequests.mockResolvedValue({ items: [] })
   })
 
   it('lists gigbuddy bands and off-platform profiles together', async () => {
@@ -132,6 +138,7 @@ describe('removing a band', () => {
     useAuth.mockReturnValue(AUTH)
     useCrossTenantNavigate.mockReturnValue(vi.fn())
     listMyBands.mockResolvedValue({ items: [myBand()], meta: { limit: 50, returned: 1 } })
+    listJoinRequests.mockResolvedValue({ items: [] })
     getRemovalPreview.mockResolvedValue({ gigs: 2, rehearsals: 1, bandEvents: 0 })
     removeMyBand.mockResolvedValue({ removed: true, mode: 'keep' })
   })
@@ -174,6 +181,7 @@ describe('leaving a band', () => {
     useAuth.mockReturnValue(AUTH)
     useCrossTenantNavigate.mockReturnValue(vi.fn())
     listMyBands.mockResolvedValue({ items: [], meta: { limit: 50, returned: 0 } })
+    listJoinRequests.mockResolvedValue({ items: [] })
   })
 
   it('explains the last-admin rule instead of showing a raw error', async () => {
@@ -191,5 +199,40 @@ describe('leaving a band', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Leave band' }))
 
     expect(await screen.findByText(/only admin/i)).toBeInTheDocument()
+  })
+})
+
+// Outstanding join requests are capped and this is the only place to withdraw
+// one, so an artist whose requests go unanswered would otherwise be stuck.
+describe('pending join requests', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    useAuth.mockReturnValue(AUTH)
+    useCrossTenantNavigate.mockReturnValue(vi.fn())
+    listMyBands.mockResolvedValue({ items: [], meta: { limit: 50, returned: 0 } })
+    listJoinRequests.mockResolvedValue({
+      items: [{ tenantId: 99, slug: 'hopeful', displayName: 'Hopeful Band', requestMessage: null, createdAt: '2026-01-01T00:00:00.000Z' }],
+    })
+    withdrawJoinRequest.mockResolvedValue(undefined)
+  })
+
+  it('shows a band the artist asked to join, and withdraws it', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await waitFor(() => expect(screen.getAllByText('Hopeful Band').length).toBeGreaterThan(0))
+
+    await user.click(screen.getAllByRole('button', { name: 'Withdraw' })[0])
+
+    expect(withdrawJoinRequest).toHaveBeenCalledWith(99)
+  })
+
+  it('does not list a band twice when the membership already exists', async () => {
+    listJoinRequests.mockResolvedValue({
+      items: [{ tenantId: 7, slug: 'real-band', displayName: 'Real Band', requestMessage: null, createdAt: '2026-01-01T00:00:00.000Z' }],
+    })
+    wrap()
+    await waitFor(() => expect(screen.getAllByText('Real Band').length).toBeGreaterThan(0))
+
+    expect(screen.queryAllByRole('button', { name: 'Withdraw' })).toHaveLength(0)
   })
 })

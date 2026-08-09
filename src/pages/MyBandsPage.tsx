@@ -12,6 +12,8 @@ import BandProfileFormModal from '../components/myBands/BandProfileFormModal.tsx
 import RemoveMyBandDialog from '../components/myBands/RemoveMyBandDialog.tsx'
 import LeaveBandDialog from '../components/myBands/LeaveBandDialog.tsx'
 import { listMyBands } from '../api/myBands.ts'
+import { listJoinRequests, withdrawJoinRequest } from '../api/bandDirectory.ts'
+import type { JoinRequest } from '../api/bandDirectory.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { useCrossTenantNavigate } from '../hooks/useCrossTenantNavigate.ts'
 import type { Id, MyBand } from '../types/entities.ts'
@@ -41,6 +43,7 @@ export default function MyBandsPage() {
   const [reloadNonce, setReloadNonce] = useState(0)
   const reload = useCallback(() => setReloadNonce((n) => n + 1), [])
   const [state, setState] = useState<{ key: number; bands: MyBand[]; error: string | null } | null>(null)
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([])
   const loading = state?.key !== reloadNonce
   const error = state?.key === reloadNonce ? state.error : null
 
@@ -56,6 +59,17 @@ export default function MyBandsPage() {
           error: e instanceof Error ? e.message : String(e),
         }))
       })
+    return () => { cancelled = true }
+  }, [reloadNonce])
+
+  // Bands the artist has asked to join and is still waiting on. Withdrawing is
+  // only possible here, and outstanding requests are capped — so an artist
+  // whose requests go unanswered would otherwise be stuck.
+  useEffect(() => {
+    let cancelled = false
+    listJoinRequests()
+      .then(({ items }) => { if (!cancelled) setJoinRequests(items) })
+      .catch(() => { if (!cancelled) setJoinRequests([]) })
     return () => { cancelled = true }
   }, [reloadNonce])
 
@@ -80,8 +94,22 @@ export default function MyBandsPage() {
       myBand: band,
     }))
 
-    return [...memberships, ...profiles].sort((a, b) => a.name.localeCompare(b.name))
-  }, [user?.memberships, state?.bands])
+    const membershipTenantIds = new Set(
+      memberships.flatMap((row) => (row.onGigbuddy === true ? [String(row.tenantId)] : [])),
+    )
+    const requested = joinRequests
+      // A pending membership already shows as a band row; the same band must
+      // not appear twice.
+      .filter((request) => !membershipTenantIds.has(String(request.tenantId)))
+      .map((request): MyBandsRow => ({
+        key: `request-${request.tenantId}`,
+        name: request.displayName,
+        onGigbuddy: 'requested',
+        tenantId: request.tenantId,
+      }))
+
+    return [...memberships, ...requested, ...profiles].sort((a, b) => a.name.localeCompare(b.name))
+  }, [user?.memberships, state?.bands, joinRequests])
 
   async function handleAdded() {
     setModal(null)
@@ -93,6 +121,11 @@ export default function MyBandsPage() {
     // A redeemed invite or an approved request changes the session's
     // memberships, which is where the gigbuddy half of this list comes from.
     await refreshUser()
+    reload()
+  }
+
+  async function handleWithdraw(tenantId: Id) {
+    await withdrawJoinRequest(tenantId)
     reload()
   }
 
@@ -132,6 +165,7 @@ export default function MyBandsPage() {
           onEdit={(profileId) => setModal({ kind: 'edit', profileId })}
           onRemove={(band) => setModal({ kind: 'remove', band })}
           onLeave={(tenantId, bandName) => setModal({ kind: 'leave', tenantId, bandName })}
+          onWithdraw={(tenantId) => { void handleWithdraw(tenantId) }}
         />
       )}
 

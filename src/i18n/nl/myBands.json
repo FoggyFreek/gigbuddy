@@ -17,6 +17,7 @@
   "status": {
     "onGigbuddy": "Op gigbuddy",
     "offGigbuddy": "Niet op gigbuddy",
+    "requested": "Wacht op goedkeuring",
     "pendingMembership": "Wacht op goedkeuring",
     "claimable": "Niet op gigbuddy",
     "pending_claim": "Claim in behandeling",
@@ -29,6 +30,7 @@
     "edit": "Bewerken",
     "remove": "Verwijderen",
     "leave": "Band verlaten",
+    "withdraw": "Intrekken",
     "askToJoin": "Vraag om lid te worden"
   },
   "readOnly": "Iemand anders heeft deze band toegevoegd, alleen zij kunnen hem bewerken.",

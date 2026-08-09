@@ -18,7 +18,7 @@
       "defaultAccounts": "Accounting Settings",
       "financialProfile": "Financial profile",
       "accountingProfile": "Accounting profile",
-      "bands": "Bands"
+      "bandProfile": "Band profile"
     },
     "workspaceSettings": "Workspace settings"
   },
@@ -478,5 +478,24 @@
     "title": "Let musicians find us",
     "help": "When this is on, musicians can find this band by name and ask to join. Their request lands here for you to approve or decline. Off by default.",
     "toggle": "Findable in the band directory"
+  },
+  "bandProfileClaim": {
+    "title": "Band profile",
+    "description": "Musicians who aren't on gigbuddy yet may already be tagging their events with your band. Claim that profile so it becomes yours.",
+    "searchLabel": "Find your band",
+    "searchHint": "Type at least 3 characters.",
+    "noResults": "No unclaimed band profiles match that name.",
+    "messageLabel": "Message for the reviewer",
+    "messageHint": "Optional. Tell us how we can verify you're this band.",
+    "submit": "Claim this profile",
+    "withdraw": "Withdraw claim",
+    "pendingHelp": "We're verifying your claim. We may email you for proof.",
+    "approvedHelp": "This profile is yours. Musicians tagging events with it can now join your band.",
+    "tryAgain": "You can claim a different profile.",
+    "status": {
+      "pending": "Under review",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    }
   }
 }

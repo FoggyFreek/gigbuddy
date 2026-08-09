@@ -20,6 +20,7 @@ import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
 import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined'
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined'
 import GroupIcon from '@mui/icons-material/Group'
+import VerifiedOutlinedIcon from '@mui/icons-material/VerifiedOutlined'
 import StorageIcon from '@mui/icons-material/Storage'
 import ExtensionOutlinedIcon from '@mui/icons-material/ExtensionOutlined'
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined'
@@ -42,7 +43,7 @@ import ChartOfAccountsSection from '../components/settings/ChartOfAccountsSectio
 import AccountingSettingsSection from '../components/settings/AccountingSettingsSection.tsx'
 import AccountingProfileSection from '../components/settings/AccountingProfileSection.tsx'
 import FinancialProfileSection from '../components/settings/FinancialProfileSection.tsx'
-import BandsSection from '../components/settings/BandsSection.tsx'
+import BandProfileClaimSection from '../components/settings/BandProfileClaimSection.tsx'
 import MyAvailabilitySection from '../components/settings/MyAvailabilitySection.tsx'
 import DiscoverabilitySection from '../components/settings/DiscoverabilitySection.tsx'
 import InvitesSection from '../components/InvitesSection.tsx'
@@ -56,14 +57,14 @@ import { TENANT_CAPABILITIES, type TenantCapability } from '../auth/tenantCapabi
 // when the active tenant role grants the matching permission.
 type SectionId =
   | 'preferences' | 'billing' | 'connected-accounts' | 'my-availability'
-  | 'accent' | 'members' | 'bands' | 'storage'
+  | 'accent' | 'members' | 'band-profile' | 'storage'
   | 'integrations' | 'chart-of-accounts' | 'default-accounts'
   | 'financial-profile' | 'accounting-profile'
 
 // camelCase leaf keys under settings.nav.items — a literal union so the typed
 // selector index (`t($ => $.nav.items[labelKey])`) stays compile-checked.
 type ItemLabelKey =
-  | 'preferences' | 'billing' | 'connectedAccounts' | 'myAvailability' | 'accent' | 'membersAndInvites' | 'bands'
+  | 'preferences' | 'billing' | 'connectedAccounts' | 'myAvailability' | 'accent' | 'membersAndInvites' | 'bandProfile'
   | 'storage' | 'integrations' | 'chartOfAccounts' | 'defaultAccounts'
   | 'financialProfile' | 'accountingProfile'
 
@@ -90,8 +91,9 @@ const BAND_ITEMS: NavItemDef[] = [
   { id: 'accent', labelKey: 'accent', icon: PaletteOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
   // A workspace of one has no roster to manage and nobody to invite into it.
   { id: 'members', labelKey: 'membersAndInvites', icon: GroupIcon, permission: PERMISSIONS.MEMBERS_MANAGE, capability: TENANT_CAPABILITIES.BAND_MEMBERSHIP_ADMIN },
-  // The personal counterpart: the bands I'm in, not the people in this band.
-  { id: 'bands', labelKey: 'bands', icon: GroupIcon, capability: TENANT_CAPABILITIES.MY_BANDS },
+  // Claiming the global profile musicians have been tagging events against.
+  // Band-only, and an administrative act — see docs/tenant-kind-architecture.md.
+  { id: 'band-profile', labelKey: 'bandProfile', icon: VerifiedOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE, capability: TENANT_CAPABILITIES.BAND_PROFILE_CLAIM },
   { id: 'storage', labelKey: 'storage', icon: StorageIcon, permission: PERMISSIONS.TENANT_MANAGE },
   { id: 'integrations', labelKey: 'integrations', icon: ExtensionOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
 ]
@@ -153,8 +155,8 @@ export default function SettingsPage() {
         )
       case 'storage':
         return <StorageUsageSection />
-      case 'bands':
-        return <BandsSection />
+      case 'band-profile':
+        return <BandProfileClaimSection />
       case 'integrations':
         return <IntegrationsSection />
       case 'financial-profile':

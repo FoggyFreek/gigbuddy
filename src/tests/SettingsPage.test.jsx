@@ -131,10 +131,18 @@ describe('SettingsPage — nav gating', () => {
     expect(screen.queryByText('Accent color')).not.toBeInTheDocument()
   })
 
-  it('replaces roster management with the my-bands section in a personal workspace', async () => {
+  // The bands an artist plays in now live on their own page under Network;
+  // what remains here is band-only and administrative.
+  it('hides the band-only sections in a personal workspace', async () => {
     wrap('/settings', { activeTenantKind: 'personal' })
-    expect(await screen.findAllByText('Bands')).not.toHaveLength(0)
+    expect(await screen.findAllByText('My preferences')).not.toHaveLength(0)
     expect(screen.queryByText('Members and invites')).not.toBeInTheDocument()
+    expect(screen.queryByText('Band profile')).not.toBeInTheDocument()
+  })
+
+  it('offers the band profile claim to a band admin', async () => {
+    wrap('/settings')
+    expect(await screen.findAllByText('Band profile')).not.toHaveLength(0)
   })
 })
 

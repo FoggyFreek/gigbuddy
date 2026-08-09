@@ -30,14 +30,16 @@ import {
   listOwnedTenants,
 } from '../api/tenants.ts'
 import { uploadLogo } from '../api/profile.ts'
+import { requestClaim } from '../api/bandProfileClaims.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
-import type { Tenant } from '../types/entities.ts'
+import type { BandProfile, Tenant } from '../types/entities.ts'
 import type { TenantKind } from '../utils/businessRegistry.ts'
 import { ladderPlans } from '../utils/planLadder.ts'
 import { audienceForTenantKind, isPlanAudience } from '../auth/planAudiences.ts'
 import type { PlanAudience } from '../auth/planAudiences.ts'
 import WelcomeStep from '../components/onboarding/WelcomeStep.tsx'
 import BandStep from '../components/onboarding/BandStep.tsx'
+import ClaimBandProfileField from '../components/onboarding/ClaimBandProfileField.tsx'
 import SummaryStep from '../components/onboarding/SummaryStep.tsx'
 import TermsDialog from '../components/onboarding/TermsDialog.tsx'
 
@@ -125,6 +127,8 @@ function CheckoutReturn({ audience }: Readonly<{ audience: PlanAudience | null }
 }
 
 interface StepContentProps {
+  claimProfile: BandProfile | null
+  onClaimProfileChange: (profile: BandProfile | null) => void
   activeStep: number
   kind: TenantKind
   onKindChange: (kind: TenantKind) => void
@@ -154,6 +158,7 @@ function StepContent({
   selectedPlanId, onSelectPlan,
   selectedPlan, termsAgreed, onTermsAgreedChange, onOpenTerms, bandName, onBandNameChange,
   countryCode, onCountryCodeChange, onboardingTenant, logo, onLogoFileChange,
+  claimProfile, onClaimProfileChange,
 }: Readonly<StepContentProps>) {
   if (!ready) {
     if (loadError) return null
@@ -196,6 +201,10 @@ function StepContent({
           logoPreviewUrl={logo?.previewUrl ?? null}
           onLogoFileChange={onLogoFileChange}
         />
+        {/* Band workspaces only: a personal workspace has no profile to claim. */}
+        {kind === 'band' && (
+          <ClaimBandProfileField selected={claimProfile} onChange={onClaimProfileChange} />
+        )}
       </Stack>
     )
   }
@@ -422,6 +431,9 @@ export default function OnboardingPage() {
     }
   }, [onboardingTenant, kind, bandName, countryCode, navigate])
 
+  // Carried as wizard state and submitted only once the workspace exists.
+  const [claimProfile, setClaimProfile] = useState<BandProfile | null>(null)
+
   const handleConfirm = useCallback(async () => {
     if (!selectedPlan) return
     setBusy(true)
@@ -435,6 +447,18 @@ export default function OnboardingPage() {
           await uploadLogo(logo.file)
         } catch {
           setError(t($ => $.errors.logoUploadFailed)) // non-fatal, keep going
+        }
+      }
+      // After the switch, not as a payload field on tenant creation: a resumed
+      // onboarding short-circuits ensureOnboardingTenant, so a claim carried in
+      // that call would be silently skipped for exactly the people most likely
+      // to have been interrupted. Non-fatal for the same reason as the logo — a
+      // rejectable, offline-verified request must never kill workspace creation.
+      if (claimProfile) {
+        try {
+          await requestClaim(claimProfile.id)
+        } catch {
+          setError(t($ => $.errors.claimFailed))
         }
       }
       if (selectedPlan.is_fallback) {
@@ -455,7 +479,7 @@ export default function OnboardingPage() {
     } finally {
       setBusy(false)
     }
-  }, [selectedPlan, ensureOnboardingTenant, logo, interval, switchTenant, refreshUser, navigate, t])
+  }, [selectedPlan, ensureOnboardingTenant, logo, claimProfile, interval, switchTenant, refreshUser, navigate, t])
 
   const loadErrorAlert = loadError && (
     <Alert severity="error">{t($ => $.errors.loadFailed)}</Alert>
@@ -486,6 +510,8 @@ export default function OnboardingPage() {
         onboardingTenant={onboardingTenant}
         logo={logo}
         onLogoFileChange={handleLogoFileChange}
+        claimProfile={claimProfile}
+        onClaimProfileChange={setClaimProfile}
       />
 
       {error && <Alert severity="error">{error}</Alert>}

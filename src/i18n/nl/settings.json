@@ -18,7 +18,7 @@
       "defaultAccounts": "Boekhoudinstellingen",
       "financialProfile": "Financieel profiel",
       "accountingProfile": "Boekhoudprofiel",
-      "bands": "Bands"
+      "bandProfile": "Bandprofiel"
     },
     "workspaceSettings": "Werkruimte-instellingen"
   },
@@ -478,5 +478,24 @@
     "title": "Laat muzikanten ons vinden",
     "help": "Als dit aanstaat, kunnen muzikanten deze band op naam vinden en zich aanmelden. Hun verzoek komt hier binnen om goed te keuren of af te wijzen. Standaard uit.",
     "toggle": "Vindbaar in de bandengids"
+  },
+  "bandProfileClaim": {
+    "title": "Bandprofiel",
+    "description": "Muzikanten die nog niet op gigbuddy zitten koppelen hun evenementen misschien al aan jouw band. Claim dat profiel zodat het van jullie wordt.",
+    "searchLabel": "Zoek je band",
+    "searchHint": "Typ minstens 3 tekens.",
+    "noResults": "Geen niet-geclaimde bandprofielen met die naam.",
+    "messageLabel": "Bericht voor de beoordelaar",
+    "messageHint": "Optioneel. Vertel hoe we kunnen controleren dat jullie deze band zijn.",
+    "submit": "Dit profiel claimen",
+    "withdraw": "Claim intrekken",
+    "pendingHelp": "We controleren je claim. Mogelijk mailen we je om bewijs.",
+    "approvedHelp": "Dit profiel is van jullie. Muzikanten die het gebruiken kunnen nu lid worden van je band.",
+    "tryAgain": "Je kunt een ander profiel claimen.",
+    "status": {
+      "pending": "In behandeling",
+      "approved": "Goedgekeurd",
+      "rejected": "Afgewezen"
+    }
   }
 }
