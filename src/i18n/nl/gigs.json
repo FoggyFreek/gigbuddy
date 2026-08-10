@@ -153,7 +153,7 @@
     "tabs": {
       "event": "Evenement",
       "terms": "Afspraken",
-      "availability": "Beschikbaarheid",
+      "participants": "Deelnemers",
       "tasks": "Taken"
     },
     "banner": {
@@ -206,6 +206,7 @@
     "drumkit": "Drumstel",
     "stageLight": "Podiumverlichting",
     "memberAvailability": "Beschikbaarheid",
+    "participants": "Deelnemers",
     "contacts": "Contacten",
     "tasks": "Taken",
     "attachments": "Bijlagen",

@@ -150,7 +150,7 @@ describe('BandEventFormModal — create mode', () => {
     await user.type(screen.getByLabelText(/^end date/i), '2099-09-03')
 
     await waitFor(() => expect(getAvailabilitySpan).toHaveBeenCalledWith('2099-09-01', '2099-09-03'))
-    expect(screen.getByText('Ann Bell')).toBeInTheDocument()
+    expect(await screen.findByText(/Ann Bell.*Holiday/)).toBeInTheDocument()
     expect(screen.queryByText('Sam Kerr')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /add event/i }))

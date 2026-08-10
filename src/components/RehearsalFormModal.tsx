@@ -1,5 +1,5 @@
 import type { Rehearsal, Member, Id } from '../types/entities.ts'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -12,7 +12,6 @@ import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
 import Stack from '@mui/material/Stack'
-import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import {
   addParticipant,
@@ -22,8 +21,7 @@ import {
   setVote,
   updateRehearsal,
 } from '../api/rehearsals.ts'
-import { getAvailabilityOn } from '../api/availability.ts'
-import type { AvailabilityData } from './gigdetails/GigAvailabilityPanel.tsx'
+import BandAvailabilityPanel, { type AvailabilityData } from './BandAvailabilityPanel.tsx'
 import { listMembers } from '../api/bandMembers.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { toDateInput, toTimeInput } from '../utils/eventFormUtils.ts'
@@ -66,6 +64,9 @@ interface RehearsalFormModalProps {
 export default function RehearsalFormModal({ mode, rehearsalId, onClose, initialDate }: Readonly<RehearsalFormModalProps>) {
   const { t } = useTranslation(['rehearsals', 'common'])
   const supportsMyBand = useTenantKind().supports(TENANT_CAPABILITIES.MY_BANDS)
+  // A personal workspace has no roster, and /api/availability is gated on the
+  // band_availability capability — asking there would 403.
+  const showAvailability = useTenantKind().supports(TENANT_CAPABILITIES.BAND_AVAILABILITY)
   const [form, setForm] = useState<RehearsalForm>(() =>
     mode === 'create' && initialDate ? { ...EMPTY_FORM, proposed_date: initialDate } : EMPTY_FORM,
   )
@@ -77,7 +78,6 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
   const [addMemberId, setAddMemberId] = useState<Id | ''>('')
   const [availabilityData, setAvailabilityData] = useState<AvailabilityData | null>(null)
   const [confirmCreate, setConfirmCreate] = useState(false)
-  const availTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const saveFn = useCallback(
     async (patch: Record<string, unknown>) => { await updateRehearsal(rehearsalId!, patch) },
@@ -88,22 +88,6 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
   useEffect(() => {
     listMembers().then(setMembers).catch(() => {})
   }, [])
-
-  // Fetch member availability on the proposed date (create mode only), debounced.
-  // The render and create-guard both gate on form.proposed_date, so stale data
-  // when the date is cleared is harmless (matches GigAvailabilityPanel).
-  useEffect(() => {
-    if (mode !== 'create' || !form.proposed_date) return
-    clearTimeout(availTimerRef.current ?? undefined)
-    availTimerRef.current = setTimeout(() => {
-      getAvailabilityOn(form.proposed_date)
-        .then((d) => setAvailabilityData(d as unknown as AvailabilityData))
-        .catch(() => setAvailabilityData(null))
-    }, 300)
-    return () => {
-      if (availTimerRef.current) clearTimeout(availTimerRef.current)
-    }
-  }, [mode, form.proposed_date])
 
   const refresh = useCallback(async () => {
     if (mode !== 'edit') return
@@ -273,27 +257,16 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
               </Grid>
             )}
 
-            {mode === 'create' && form.proposed_date && unavailableSelected.length > 0 && (
+            {mode === 'create' && showAvailability && (
               <Grid size={12}>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                   {t($ => $.form.memberAvailability)}
                 </Typography>
-                <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', minWidth: 0 }}>
-                  {unavailableSelected.map((m) => {
-                    const label = m.reason ? `${m.name} — ${m.reason}` : m.name
-                    return (
-                      <Tooltip key={String(m.member_id)} title={label ?? ''}>
-                        <Chip
-                          label={label}
-                          color="error"
-                          size="small"
-                          sx={{ maxWidth: { xs: '100%', sm: 200 } }}
-                        />
-                      </Tooltip>
-                    )
-                  })}
-                </Stack>
+                <BandAvailabilityPanel
+                  eventDate={form.proposed_date}
+                  onDataLoad={setAvailabilityData}
+                />
               </Grid>
             )}
 

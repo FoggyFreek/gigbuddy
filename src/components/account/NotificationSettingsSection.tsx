@@ -44,6 +44,8 @@ const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
 
 const TYPE_GROUP_ORDER: TypeGroupKey[] = ['events', 'tasks', 'management', 'financial', 'other']
 
+const FIRST_COLUMN_GROUPS: TypeGroupKey[] = ['events', 'tasks']
+
 const TYPE_GROUP_KEYS: Record<string, TypeGroupKey> = {
   'gig-new': 'events',
   'gig-confirmed': 'events',
@@ -160,32 +162,52 @@ export default function NotificationSettingsSection() {
           {t($ => $.settings.types.description)}
         </Typography>
 
-        <Box sx={{ display: 'flex', ml: 2, flexDirection: 'column', gap: 2 }}>
-          {groupedTypePrefs.map(({ key, entries }) => (
+        <Box
+          sx={{
+            display: 'flex',
+            ml: 2,
+            flexDirection: compact ? 'column' : 'row',
+            gap: compact ? 2 : 4,
+          }}
+        >
+          {(compact
+            ? [groupedTypePrefs]
+            : [
+              groupedTypePrefs.filter(({ key }) => FIRST_COLUMN_GROUPS.includes(key)),
+              groupedTypePrefs.filter(({ key }) => !FIRST_COLUMN_GROUPS.includes(key)),
+            ]
+          ).map((column, columnIndex) => (
             <Box
-              component="fieldset"
-              key={key}
-              sx={{ border: 0, display: 'flex', flexDirection: 'column', m: 0, p: 0 }}
+              key={columnIndex}
+              sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}
             >
-              <Typography component="legend" variant="subtitle2" sx={{ color: 'text.secondary', mb: 0.5 }}>
-                {t($ => $.settings.types.groups[key])}
-              </Typography>
-              {entries.map(({ type, enabled }) => {
-                const labelKey = TYPE_LABEL_KEYS[type]
-                return (
-                  <FormControlLabel
-                    key={type}
-                    control={
-                      <Switch
-                        sx={{ mr: 1 }}
-                        checked={enabled}
-                        onChange={(_e, checked) => saveTypePref(type, checked)}
+              {column.map(({ key, entries }) => (
+                <Box
+                  component="fieldset"
+                  key={key}
+                  sx={{ border: 0, display: 'flex', flexDirection: 'column', m: 0, p: 0 }}
+                >
+                  <Typography component="legend" variant="subtitle2" sx={{ color: 'text.secondary', mb: 0.5 }}>
+                    {t($ => $.settings.types.groups[key])}
+                  </Typography>
+                  {entries.map(({ type, enabled }) => {
+                    const labelKey = TYPE_LABEL_KEYS[type]
+                    return (
+                      <FormControlLabel
+                        key={type}
+                        control={
+                          <Switch
+                            sx={{ mr: 1 }}
+                            checked={enabled}
+                            onChange={(_e, checked) => saveTypePref(type, checked)}
+                          />
+                        }
+                        label={labelKey ? t($ => $.settings.types.labels[labelKey]) : type}
                       />
-                    }
-                    label={labelKey ? t($ => $.settings.types.labels[labelKey]) : type}
-                  />
-                )
-              })}
+                    )
+                  })}
+                </Box>
+              ))}
             </Box>
           ))}
         </Box>

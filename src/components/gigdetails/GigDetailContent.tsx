@@ -30,6 +30,8 @@ import GigTerms from './GigTerms.tsx'
 import type { GigDetail, GigDetailForm, GigDetailTabKey } from './types.ts'
 import useDebouncedSave from '../../hooks/useDebouncedSave.ts'
 import { useCrossTenantRow } from '../../hooks/useCrossTenantRow.ts'
+import { useTenantKind } from '../../hooks/useTenantKind.ts'
+import { TENANT_CAPABILITIES } from '../../auth/tenantCapabilities.ts'
 import { useAuth } from '../../contexts/authContext.ts'
 import { addGigParticipant, deleteGigBanner, getGig, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../../api/gigs.ts'
 import { getBannerPath } from '../../api/profile.ts'
@@ -50,7 +52,7 @@ export type TabKey = GigDetailTabKey
 const TABS: { key: TabKey; Icon: SvgIconComponent }[] = [
   { key: 'event', Icon: FestivalIcon },
   { key: 'terms', Icon: HandshakeIcon },
-  { key: 'availability', Icon: PeopleIcon },
+  { key: 'participants', Icon: PeopleIcon },
   { key: 'tasks', Icon: ChecklistIcon },
 ]
 
@@ -74,7 +76,7 @@ interface GigDetailContentProps {
   // tenant's /api/gigs — set by the page when the active tenant is personal, so
   // gigs from the musician's other bands resolve at all. Those arrive labelled
   // with their band, which is what makes them read-only (useCrossTenantRow) and
-  // drops the Terms and Availability tabs, band-scoped and unreachable here.
+  // drops the Terms and Participants tabs, band-scoped and unreachable here.
   source?: 'tenant' | 'me'
 }
 
@@ -192,6 +194,11 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   // A gig the personal workspace doesn't own: served read-only by /api/me, with
   // no band roster, availability, contacts, merch or invoices reachable.
   const { isCrossBand, canWrite: editable } = useCrossTenantRow(gig, { canWrite })
+  // Band-wide availability is scoped to the active tenant's roster, so it means
+  // nothing for a foreign band's gig, and /api/availability 403s a personal
+  // workspace outright — gate on both like the create-form panels do.
+  const tenantKind = useTenantKind()
+  const showAvailability = !isCrossBand && tenantKind.supports(TENANT_CAPABILITIES.BAND_AVAILABILITY)
 
   useEffect(() => {
     const ac = new AbortController()
@@ -563,6 +570,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           selectedVenue={selectedVenue}
           selectedFestival={selectedFestival}
           hideVenueOpenAction={isCrossBand}
+          showAvailability={showAvailability}
           onChange={handleChange}
           onVenueChange={(venue) => {
             setSelectedVenue(venue)
@@ -590,11 +598,9 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
 
       {!isCrossBand && (
         <GigAvailability
-          active={shownTab === 'availability'}
+          active={shownTab === 'participants'}
           editable={editable}
           gigId={gigId}
-          eventDate={form.event_date}
-          status={form.status}
           participants={gig?.participants ?? []}
           candidateMembers={candidateMembers}
           addMemberId={addMemberId}

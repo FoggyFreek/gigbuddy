@@ -145,7 +145,7 @@ function wrap(ui) {
   )
 }
 
-// The detail body is split across tabbed panels (Event/Terms/Availability/
+// The detail body is split across tabbed panels (Event/Terms/Participants/
 // Tasks). Panels stay mounted but inactive ones are display:none, so a test
 // must activate the owning tab before interacting with (or role-querying) its
 // fields. Label/text/display-value queries still match across hidden panels.
@@ -381,7 +381,7 @@ describe('GigDetailContent — reader mode (canWrite=false)', () => {
   })
 })
 
-describe('GigDetailContent — availability voting', () => {
+describe('GigDetailContent — participants voting', () => {
   const GIG_WITH_VOTE = (vote) => ({
     id: 1,
     event_date: '2026-06-15',
@@ -414,7 +414,7 @@ describe('GigDetailContent — availability voting', () => {
     getGig.mockResolvedValueOnce(GIG_WITH_VOTE('yes'))
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
-    await openTab(user, 'Availability')
+    await openTab(user, 'Participants')
     await user.click(screen.getByRole('button', { name: 'Yes' }))
     expect(setGigVote).not.toHaveBeenCalled()
     expect(getGig).toHaveBeenCalledTimes(1)
@@ -425,7 +425,7 @@ describe('GigDetailContent — availability voting', () => {
     getGig.mockResolvedValueOnce(GIG_WITH_VOTE('no'))
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
-    await openTab(user, 'Availability')
+    await openTab(user, 'Participants')
     await user.click(screen.getByRole('button', { name: 'Yes' }))
     await waitFor(() => expect(setGigVote).toHaveBeenCalledWith(1, 1, 'yes'))
   })
@@ -435,7 +435,7 @@ describe('GigDetailContent — availability voting', () => {
     getGig.mockResolvedValueOnce(GIG_WITH_VOTE('no'))
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
-    await openTab(user, 'Availability')
+    await openTab(user, 'Participants')
     await user.click(screen.getByRole('button', { name: 'No' }))
     expect(setGigVote).not.toHaveBeenCalled()
     expect(getGig).toHaveBeenCalledTimes(1)
@@ -446,9 +446,41 @@ describe('GigDetailContent — availability voting', () => {
     getGig.mockResolvedValueOnce(GIG_WITH_VOTE('yes'))
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
-    await openTab(user, 'Availability')
+    await openTab(user, 'Participants')
     await user.click(screen.getByRole('button', { name: 'No' }))
     await waitFor(() => expect(setGigVote).toHaveBeenCalledWith(1, 1, 'no'))
+  })
+
+  it('shows the participant roster on the Participants tab even when status is not "option"', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce({ ...GIG_WITH_VOTE('yes'), status: 'confirmed' })
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
+    await openTab(user, 'Participants')
+    expect(screen.getByText('Alice')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Participants' })).toBeInTheDocument()
+  })
+})
+
+describe('GigDetailContent — event tab band availability', () => {
+  beforeEach(() => {
+    getGig.mockClear()
+    getAvailabilityOn.mockClear()
+    getAvailabilityOn.mockResolvedValue({ bandWide: null, members: [] })
+  })
+
+  it('renders the band availability panel below the venue/event-link row', async () => {
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
+
+    const heading = await screen.findByRole('heading', { name: /member availability/i })
+    expect(heading).toBeInTheDocument()
+
+    // Below the venue/event-link row in DOM order.
+    const eventLinkField = screen.getByLabelText(/event link/i)
+    expect(eventLinkField.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    await waitFor(() => expect(getAvailabilityOn).toHaveBeenCalledWith('2026-06-15'), { timeout: 1000 })
   })
 })
 
@@ -835,7 +867,7 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
 })
 
 // source="me" reads through the cross-tenant hub instead of the active tenant.
-// A gig owned by another band is read-only and loses the Terms and Availability
+// A gig owned by another band is read-only and loses the Terms and Participants
 // tabs; a gig owned by the personal workspace itself behaves like any other.
 describe('GigDetailContent — personal workspace (source="me")', () => {
   const ARTIST_USER = {
@@ -858,8 +890,9 @@ describe('GigDetailContent — personal workspace (source="me")', () => {
     event_link: '',
     start_time: '20:00:00',
     end_time: '23:00:00',
-    // Not 'option', so the availability tab would render GigAvailabilityPanel
-    // (and fetch tenant-scoped availability) if it were mounted at all.
+    // Status no longer gates anything: the Participants tab always renders
+    // GigParticipantsSection, and the Event tab's BandAvailabilityPanel is
+    // gated on tenant kind/cross-band, not status.
     status: 'confirmed',
     booking_fee_cents: 15000,
     admission: 'free',
@@ -913,12 +946,15 @@ describe('GigDetailContent — personal workspace (source="me")', () => {
     expect(screen.getByRole('button', { name: 'Event' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tasks' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Terms' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Availability' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Participants' })).not.toBeInTheDocument()
 
-    // The panels are unmounted, not merely hidden, so their fields are gone too.
+    // The Terms/Participants panels are unmounted, not merely hidden, so their
+    // fields are gone too. The Event tab's band-availability panel is gated on
+    // tenant kind (personal here) regardless, so it never mounts either.
     expect(screen.queryByLabelText(/paid admission/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/guaranteed fee/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/member availability/i)).not.toBeInTheDocument()
+    expect(getAvailabilityOn).not.toHaveBeenCalled()
   })
 
   it('gives the event-banner slot to the source band', async () => {
@@ -987,7 +1023,7 @@ describe('GigDetailContent — personal workspace (source="me")', () => {
     await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
 
     expect(screen.getByRole('button', { name: 'Terms' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Availability' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Participants' })).toBeInTheDocument()
     expect(screen.queryByTestId('source-tenant-switch')).not.toBeInTheDocument()
     expect(listMembers).toHaveBeenCalled()
 

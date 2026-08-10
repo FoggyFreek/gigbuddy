@@ -15,7 +15,7 @@ import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 import DateEntryField from './DateEntryField.tsx'
-import GigAvailabilityPanel, { type AvailabilityData } from './gigdetails/GigAvailabilityPanel.tsx'
+import BandAvailabilityPanel, { type AvailabilityData } from './BandAvailabilityPanel.tsx'
 import GigDetailContent, { type GigDetailHandle } from './gigdetails/GigDetailContent.tsx'
 import _SaveStatusLabelRaw from './SaveStatusLabel.tsx'
 const SaveStatusLabel = _SaveStatusLabelRaw as React.ComponentType<{ status: string; sx?: unknown }>
@@ -246,7 +246,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                   {t($ => $.form.memberAvailability)}
                 </Typography>
-                <GigAvailabilityPanel
+                <BandAvailabilityPanel
                   eventDate={form.event_date}
                   onDataLoad={setAvailabilityData}
                 />

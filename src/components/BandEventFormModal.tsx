@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -11,7 +11,6 @@ import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
 import Typography from '@mui/material/Typography'
 import { createBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
-import { getAvailabilitySpan } from '../api/availability.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
 import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
@@ -19,9 +18,9 @@ import { toDateInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import BandEventFields from './BandEventFields.tsx'
 import MyBandSelect from './myBands/MyBandSelect.tsx'
-import BandEventAvailabilitySection from './BandEventAvailabilitySection.tsx'
+import BandAvailabilityPanel, { type AvailabilityData } from './BandAvailabilityPanel.tsx'
 import SaveStatusLabel from './SaveStatusLabel.tsx'
-import type { AvailabilitySummary, Id, BandEvent } from '../types/entities.ts'
+import type { Id, BandEvent } from '../types/entities.ts'
 
 type BandEventDetail = BandEvent & { start_time?: string; end_time?: string; notes?: string }
 
@@ -58,13 +57,8 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
   )
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})
   const [loading, setLoading] = useState(mode === 'edit')
-  const [availabilityResult, setAvailabilityResult] = useState<{
-    from: string
-    to: string
-    data: AvailabilitySummary | null
-  } | null>(null)
+  const [availabilityData, setAvailabilityData] = useState<AvailabilityData | null>(null)
   const [confirmCreate, setConfirmCreate] = useState(false)
-  const availabilityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const saveFn = useCallback(
     async (patch: Partial<BandEventDetail>) => { await updateBandEvent(bandEventId!, patch as Partial<BandEventDetail>) },
@@ -91,22 +85,6 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
       .finally(() => setLoading(false))
   }, [mode, bandEventId])
 
-  useEffect(() => {
-    if (mode !== 'create' || !showAvailability || !form.start_date) return
-    const end = form.end_date || form.start_date
-    if (end < form.start_date) return
-
-    clearTimeout(availabilityTimerRef.current ?? undefined)
-    availabilityTimerRef.current = setTimeout(() => {
-      getAvailabilitySpan(form.start_date, end)
-        .then((data) => setAvailabilityResult({ from: form.start_date, to: end, data }))
-        .catch(() => setAvailabilityResult({ from: form.start_date, to: end, data: null }))
-    }, 300)
-    return () => {
-      if (availabilityTimerRef.current) clearTimeout(availabilityTimerRef.current)
-    }
-  }, [mode, showAvailability, form.start_date, form.end_date])
-
   function handleChange(field: string, value: string | boolean | null) {
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
@@ -127,12 +105,9 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
     onClose()
   }
 
-  const availabilityEnd = form.end_date || form.start_date
-  const availability = availabilityResult?.from === form.start_date && availabilityResult.to === availabilityEnd
-    ? availabilityResult.data
-    : null
-  const leadAvailability = (availability?.members ?? []).filter((member) => member.position === 'lead')
-  const unavailableLeads = leadAvailability.filter((member) => member.status === 'unavailable')
+  const unavailableLeads = (availabilityData?.members ?? []).filter(
+    (member) => member.position === 'lead' && member.status === 'unavailable'
+  )
 
   async function handleCreate() {
     const errs: Record<string, string> = {}
@@ -180,9 +155,10 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                   {t($ => $.availability.title)}
                 </Typography>
-                <BandEventAvailabilitySection
-                  members={leadAvailability}
-                  days={availability?.days}
+                <BandAvailabilityPanel
+                  eventDate={form.start_date}
+                  endDate={form.end_date || form.start_date}
+                  onDataLoad={setAvailabilityData}
                 />
               </Grid>
             )}

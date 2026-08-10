@@ -3,17 +3,19 @@ import Chip from '@mui/material/Chip'
 import Stack from '@mui/material/Stack'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
-import { getAvailabilityOn } from '../../api/availability.ts'
-import type { AvailabilitySummary } from '../../types/entities.ts'
+import { getAvailabilityOn, getAvailabilitySpan } from '../api/availability.ts'
+import type { AvailabilitySummary } from '../types/entities.ts'
 
 export type AvailabilityData = AvailabilitySummary
 
-interface GigAvailabilityPanelProps {
+interface BandAvailabilityPanelProps {
   eventDate?: string
+  /** Present for a multi-day span (e.g. a band event); omitted or equal to eventDate for a single day. */
+  endDate?: string
   onDataLoad?: (data: AvailabilityData | null) => void
 }
 
-export default function GigAvailabilityPanel({ eventDate, onDataLoad }: Readonly<GigAvailabilityPanelProps>) {
+export default function BandAvailabilityPanel({ eventDate, endDate, onDataLoad }: Readonly<BandAvailabilityPanelProps>) {
   const [data, setData] = useState<AvailabilityData | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -22,7 +24,15 @@ export default function GigAvailabilityPanel({ eventDate, onDataLoad }: Readonly
 
     clearTimeout(timerRef.current ?? undefined)
     timerRef.current = setTimeout(() => {
-      getAvailabilityOn(eventDate)
+      if (endDate && endDate < eventDate) {
+        setData(null)
+        onDataLoad?.(null)
+        return
+      }
+      const request = endDate && endDate !== eventDate
+        ? getAvailabilitySpan(eventDate, endDate)
+        : getAvailabilityOn(eventDate)
+      request
         .then((data) => { setData(data); onDataLoad?.(data) })
         .catch(() => { setData(null); onDataLoad?.(null) })
     }, 300)
@@ -30,7 +40,7 @@ export default function GigAvailabilityPanel({ eventDate, onDataLoad }: Readonly
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [eventDate, onDataLoad])
+  }, [eventDate, endDate, onDataLoad])
 
   if (!eventDate || !data?.members?.length) return null
 
@@ -41,7 +51,7 @@ export default function GigAvailabilityPanel({ eventDate, onDataLoad }: Readonly
   return (
     <Stack spacing={0.5}>
       {data.bandWide && (
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           Band-wide: {data.bandWide.status}{data.bandWide.reason ? ` — ${data.bandWide.reason}` : ''}
         </Typography>
       )}

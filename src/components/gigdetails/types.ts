@@ -7,7 +7,7 @@ import type {
 } from '../../types/entities.ts'
 import type { MaybeCrossTenant } from '../../types/api.ts'
 
-export type GigDetailTabKey = 'event' | 'terms' | 'availability' | 'tasks'
+export type GigDetailTabKey = 'event' | 'terms' | 'participants' | 'tasks'
 
 // Read through `/api/me/gigs/:id` when the detail is opened on another band's
 // gig, so the band label fields may be present.

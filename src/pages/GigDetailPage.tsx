@@ -31,7 +31,7 @@ export default function GigDetailPage() {
   const { isPersonal } = useTenantKind()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const TAB_KEYS: TabKey[] = ['event', 'terms', 'availability', 'tasks']
+  const TAB_KEYS: TabKey[] = ['event', 'terms', 'participants', 'tasks']
   const tabParam = searchParams.get('tab')
   const initialTab = TAB_KEYS.find((k) => k === tabParam) ?? 'event'
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>

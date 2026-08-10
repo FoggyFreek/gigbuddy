@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -10,6 +11,7 @@ import Typography from '@mui/material/Typography'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import { useTranslation } from 'react-i18next'
+import BandAvailabilityPanel from '../BandAvailabilityPanel.tsx'
 import DateEntryField from '../DateEntryField.tsx'
 import VenuePicker from '../VenuePicker.tsx'
 import { geocodePlace } from '../../utils/geocode.ts'
@@ -30,6 +32,7 @@ interface Props {
   selectedVenue: Venue | null
   selectedFestival: Venue | null
   hideVenueOpenAction: boolean
+  showAvailability: boolean
   onChange: (field: string, value: unknown) => void
   onVenueChange: (venue: Venue | null) => void
   onFestivalChange: (festival: Venue | null) => void
@@ -43,6 +46,7 @@ export default function GigEventDetails({
   selectedVenue,
   selectedFestival,
   hideVenueOpenAction,
+  showAvailability,
   onChange,
   onVenueChange,
   onFestivalChange,
@@ -200,6 +204,15 @@ export default function GigEventDetails({
           }}
         />
       </Grid>
+      {showAvailability && (
+        <Grid size={12}>
+          <Divider sx={{ my: 1 }} />
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+            {t($ => $.detail.memberAvailability)}
+          </Typography>
+          <BandAvailabilityPanel eventDate={form.event_date} />
+        </Grid>
+      )}
       {active && mapCoords && (
         <Grid size={12}>
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>

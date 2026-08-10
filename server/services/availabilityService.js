@@ -1,5 +1,5 @@
 // Availability domain logic. Route handlers stay thin and delegate here.
-// Functions that can fail with a specific HTTP outcome return
+// Functions that can fail with a /clarspecific HTTP outcome return
 // { error: { status, body } }; success returns a domain payload.
 import { validateSlot, buildSlotUpdateFields } from '../validators/availabilityValidators.js'
 import {
