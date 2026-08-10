@@ -296,13 +296,32 @@ describe('linkpage handoff', () => {
 
     const token = decodeURIComponent(res.body.url.split('#gbtoken=')[1])
     const payload = verifyPayload(token)
-    expect(payload).toMatchObject({ t: 'handoff', slug: 'alpha', tenantId: seed.tenantA.id })
+    expect(payload).toMatchObject({
+      t: 'handoff', slug: 'alpha', slugRevision: 0, tenantId: seed.tenantA.id,
+    })
     expect(payload.exp * 1000).toBeGreaterThan(Date.now())
   })
 
   it('reports status with the public page URL', async () => {
     const res = await asUserA(request(app).get('/api/linkpage/status'))
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ configured: true, publicUrl: 'https://link.test.local/alpha' })
+    expect(res.body).toEqual({
+      configured: true,
+      publicUrl: 'https://link.test.local/alpha',
+      linkpageSync: 'synced',
+    })
+  })
+
+  it('reports a pending namespace migration until the outbox operation completes', async () => {
+    await pool.query(
+      `INSERT INTO linkpage_slug_sync_operations
+         (tenant_id, old_slug, new_slug, slug_revision)
+       VALUES ($1, 'alpha-old', 'alpha', 1)`,
+      [seed.tenantA.id],
+    )
+
+    const res = await asUserA(request(app).get('/api/linkpage/status'))
+    expect(res.status).toBe(200)
+    expect(res.body.linkpageSync).toBe('pending')
   })
 })

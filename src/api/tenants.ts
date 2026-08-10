@@ -72,6 +72,7 @@ export const updateTenantOnboardingStatus = (tenantOnboardingEnabled: boolean) =
 
 export interface TenantSlugResponse {
   slug: string
+  linkpageSync?: 'synced' | 'pending'
 }
 
 export const updateActiveTenantSlug = (slug: string) =>

@@ -1,12 +1,14 @@
 import './_envSetup.js'
 // @vitest-environment node
-import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
+import { describe, it, beforeAll, beforeEach, afterAll, expect, vi } from 'vitest'
 import request from 'supertest'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants, billing
 let seed
 
 beforeAll(async () => {
+  process.env.LINKPAGE_SECRET = ''
+  process.env.LINKPAGE_URL = ''
   const dbMod = await import('./_db.js')
   const appMod = await import('./_app.js')
   pool = dbMod.pool
@@ -48,12 +50,39 @@ describe('PATCH /api/tenant/slug', () => {
       tenantId: seed.tenantB.id,
     }).expect(200)
 
-    expect(res.body).toEqual({ slug: 'alpha-live' })
-    const { rows } = await pool.query('SELECT id, slug FROM tenants ORDER BY id')
+    expect(res.body).toEqual({ slug: 'alpha-live', linkpageSync: 'pending' })
+    const { rows } = await pool.query('SELECT id, slug, slug_revision FROM tenants ORDER BY id')
     expect(rows).toEqual([
-      { id: seed.tenantA.id, slug: 'alpha-live' },
-      { id: seed.tenantB.id, slug: 'beta' },
+      { id: seed.tenantA.id, slug: 'alpha-live', slug_revision: '1' },
+      { id: seed.tenantB.id, slug: 'beta', slug_revision: '0' },
     ])
+    const { rows: operations } = await pool.query(
+      `SELECT tenant_id, old_slug, new_slug, slug_revision, status, attempt_count, last_error_code
+         FROM linkpage_slug_sync_operations`,
+    )
+    expect(operations).toEqual([{
+      tenant_id: seed.tenantA.id,
+      old_slug: 'alpha',
+      new_slug: 'alpha-live',
+      slug_revision: '1',
+      status: 'pending',
+      attempt_count: 1,
+      last_error_code: 'not_configured',
+    }])
+  })
+
+  it('treats the current normalized slug as a no-op', async () => {
+    await grantGold(seed.tenantA, seed.userA)
+
+    const res = await patchSlug(seed.userA.id, seed.tenantA.id, 'alpha').expect(200)
+
+    expect(res.body).toEqual({ slug: 'alpha' })
+    const { rows: [tenant] } = await pool.query(
+      'SELECT slug, slug_revision FROM tenants WHERE id = $1',
+      [seed.tenantA.id],
+    )
+    expect(tenant).toEqual({ slug: 'alpha', slug_revision: '0' })
+    expect((await pool.query('SELECT 1 FROM linkpage_slug_sync_operations')).rowCount).toBe(0)
   })
 
   it('requires the custom_slug entitlement', async () => {
@@ -88,6 +117,60 @@ describe('PATCH /api/tenant/slug', () => {
 
     const { rows: [tenant] } = await pool.query('SELECT slug FROM tenants WHERE id = $1', [seed.tenantA.id])
     expect(tenant.slug).toBe(seed.tenantA.slug)
+    expect((await pool.query('SELECT 1 FROM linkpage_slug_sync_operations')).rowCount).toBe(0)
+  })
+
+  it('keeps the committed slug and queues a retry when LinkBuddy is unavailable', async () => {
+    await grantGold(seed.tenantA, seed.userA)
+    process.env.LINKPAGE_SECRET = 'test-linkpage-secret'
+    process.env.LINKPAGE_URL = 'https://link.test.local'
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('offline'))
+
+    try {
+      const res = await patchSlug(seed.userA.id, seed.tenantA.id, 'alpha-offline').expect(200)
+      expect(res.body).toEqual({ slug: 'alpha-offline', linkpageSync: 'pending' })
+      expect(fetchSpy).toHaveBeenCalledOnce()
+      expect(await pool.query("SELECT 1 FROM tenants WHERE id = $1 AND slug = 'alpha-offline'", [seed.tenantA.id]))
+        .toHaveProperty('rowCount', 1)
+      const { rows: [operation] } = await pool.query(
+        'SELECT status, attempt_count, last_error_code FROM linkpage_slug_sync_operations WHERE tenant_id = $1',
+        [seed.tenantA.id],
+      )
+      expect(operation).toEqual({ status: 'pending', attempt_count: 1, last_error_code: 'network_error' })
+    } finally {
+      fetchSpy.mockRestore()
+      process.env.LINKPAGE_SECRET = ''
+      process.env.LINKPAGE_URL = ''
+    }
+  })
+
+  it('does not immediately deliver a later revision while an earlier one is unresolved', async () => {
+    await grantGold(seed.tenantA, seed.userA)
+    process.env.LINKPAGE_SECRET = 'test-linkpage-secret'
+    process.env.LINKPAGE_URL = 'https://link.test.local'
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('offline'))
+
+    try {
+      await patchSlug(seed.userA.id, seed.tenantA.id, 'alpha-one').expect(200)
+      await patchSlug(seed.userA.id, seed.tenantA.id, 'alpha-two').expect(200)
+
+      expect(fetchSpy).toHaveBeenCalledOnce()
+      const { rows } = await pool.query(
+        `SELECT slug_revision, status, attempt_count
+           FROM linkpage_slug_sync_operations
+          WHERE tenant_id = $1
+          ORDER BY slug_revision`,
+        [seed.tenantA.id],
+      )
+      expect(rows).toEqual([
+        { slug_revision: '1', status: 'pending', attempt_count: 1 },
+        { slug_revision: '2', status: 'pending', attempt_count: 0 },
+      ])
+    } finally {
+      fetchSpy.mockRestore()
+      process.env.LINKPAGE_SECRET = ''
+      process.env.LINKPAGE_URL = ''
+    }
   })
 
   it('releases the old slug for immediate reuse', async () => {

@@ -10,6 +10,7 @@ const LOG_LEVELS = ['debug', 'info', 'warn', 'error']
 const CONTEXT_KEYS = new Set([
   'tenantId', 'invoiceId', 'purchaseId', 'userId', 'gigId', 'taskId', 'rehearsalId',
   'operation', 'status', 'method', 'path', 'durationMs', 'endpointHost',
+  'operationId', 'revision', 'attemptCount', 'errorCode',
   'mode', 'migrated', 'reEncrypted', 'port',
   'filename', 'aborted',
   'tenants', 'encrypted', 'corrupt',

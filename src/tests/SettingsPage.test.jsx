@@ -250,12 +250,12 @@ describe('SettingsPage — plan gating', () => {
   it('shows a locked slug editor above account deletion without the Gold feature', async () => {
     wrap('/settings/delete-account', { entitlements: lockedEntitlements })
 
-    const title = await screen.findByText('Change web address')
+    const title = await screen.findByText('Change band slug')
     const deleteTitle = screen.getByRole('heading', { name: 'Delete account permanently' })
     expect(title.compareDocumentPosition(deleteTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole('link', { name: /premium feature/i })).toHaveAttribute('href', '/upgrade/custom_slug')
-    expect(screen.getByLabelText('Web address name')).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Save web address' })).toBeDisabled()
+    expect(screen.getByLabelText('Slug name')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save slug name' })).toBeDisabled()
   })
 
   it('changes the slug and refreshes the auth payload for an entitled admin', async () => {
@@ -269,15 +269,35 @@ describe('SettingsPage — plan gating', () => {
     }
     wrap('/settings/delete-account', { entitlements, refreshUser })
 
-    const input = await screen.findByLabelText('Web address name')
+    const input = await screen.findByLabelText('Slug name')
     expect(input).toHaveValue('test-band')
     await user.clear(input)
     await user.type(input, 'new-stage-name')
-    await user.click(screen.getByRole('button', { name: 'Save web address' }))
+    await user.click(screen.getByRole('button', { name: 'Save slug name' }))
 
     expect(updateActiveTenantSlug).toHaveBeenCalledWith('new-stage-name')
     expect(refreshUser).toHaveBeenCalledOnce()
-    expect(await screen.findByText('Web address updated.')).toBeInTheDocument()
+    expect(await screen.findByText('Band slug updated.')).toBeInTheDocument()
+  })
+
+  it('reports LinkBuddy synchronization as a non-blocking pending update', async () => {
+    updateActiveTenantSlug.mockResolvedValue({ slug: 'new-stage-name', linkpageSync: 'pending' })
+    const user = userEvent.setup()
+    const entitlements = {
+      ...lockedEntitlements,
+      planSlug: 'gold',
+      flags: { ...lockedEntitlements.flags, custom_slug: true },
+    }
+    wrap('/settings/delete-account', { entitlements, refreshUser: vi.fn().mockResolvedValue(undefined) })
+
+    const input = await screen.findByLabelText('Slug name')
+    await user.clear(input)
+    await user.type(input, 'new-stage-name')
+    await user.click(screen.getByRole('button', { name: 'Save slug name' }))
+
+    expect(await screen.findByText(
+      'Your GigBuddy address changed. Your LinkBuddy pages are still updating.',
+    )).toBeInTheDocument()
   })
 
   it('shows the localized uniqueness error returned by the server', async () => {
@@ -293,11 +313,11 @@ describe('SettingsPage — plan gating', () => {
     }
     wrap('/settings/delete-account', { entitlements })
 
-    const input = await screen.findByLabelText('Web address name')
+    const input = await screen.findByLabelText('Slug name')
     await user.clear(input)
     await user.type(input, 'existing-band')
-    await user.click(screen.getByRole('button', { name: 'Save web address' }))
+    await user.click(screen.getByRole('button', { name: 'Save slug name' }))
 
-    expect(await screen.findByText('That web address name is already in use.')).toBeInTheDocument()
+    expect(await screen.findByText('That slug name is already in use.')).toBeInTheDocument()
   })
 })

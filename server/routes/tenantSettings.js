@@ -9,8 +9,11 @@ const router = Router()
 router.patch('/slug', async (req, res) => {
   const result = await changeTenantSlug(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
-  auditLog(req, result.audit.action)
-  res.json({ slug: result.slug })
+  if (result.audit) auditLog(req, result.audit.action)
+  res.json({
+    slug: result.slug,
+    ...(result.linkpageSync ? { linkpageSync: result.linkpageSync } : {}),
+  })
 })
 
 export default router

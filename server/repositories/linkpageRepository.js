@@ -20,6 +20,14 @@ export async function getTenantSlug(executor, tenantId) {
   return rows[0]?.slug || null
 }
 
+export async function getTenantSlugState(executor, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT slug, slug_revision FROM tenants WHERE id = $1',
+    [tenantId],
+  )
+  return rows[0] ?? null
+}
+
 export async function listProfileLinks(executor, tenantId) {
   const { rows } = await executor.query(
     `SELECT id, label, url

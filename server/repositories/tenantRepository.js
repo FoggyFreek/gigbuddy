@@ -204,15 +204,31 @@ export async function updateTenantFields(executor, tenantId, fields, values) {
   return rows[0] || null
 }
 
-export async function updateTenantSlug(executor, tenantId, slug) {
+export async function lockTenantSlug(executor, tenantId) {
   const { rows } = await executor.query(
-    `UPDATE tenants
-        SET slug = $2, updated_at = NOW()
+    `SELECT id, slug, slug_revision
+       FROM tenants
       WHERE id = $1
         AND kind = 'band'
         AND archived_at IS NULL
         AND deletion_status IS NULL
-     RETURNING slug`,
+      FOR UPDATE`,
+    [tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function advanceTenantSlug(executor, tenantId, slug) {
+  const { rows } = await executor.query(
+    `UPDATE tenants
+        SET slug = $2,
+            slug_revision = slug_revision + 1,
+            updated_at = NOW()
+      WHERE id = $1
+        AND kind = 'band'
+        AND archived_at IS NULL
+        AND deletion_status IS NULL
+     RETURNING slug, slug_revision`,
     [tenantId, slug],
   )
   return rows[0] || null

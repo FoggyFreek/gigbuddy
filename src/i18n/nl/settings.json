@@ -47,6 +47,7 @@
     "helper": "Gebruik 1–64 kleine letters, cijfers of koppeltekens. Begin en eindig met een letter of cijfer.",
     "save": "Slug naam opslaan",
     "success": "Band slug bijgewerkt.",
+    "linkpagePending": "Je GigBuddy-adres is gewijzigd. Je LinkBuddy-pagina's worden nog bijgewerkt.",
     "errors": {
       "invalid": "Voer een geldige slug in.",
       "inUse": "Deze slug is al in gebruik.",

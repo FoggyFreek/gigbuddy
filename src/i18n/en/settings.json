@@ -47,6 +47,7 @@
     "helper": "Use 1–64 lowercase letters, numbers, or hyphens. It must start and end with a letter or number.",
     "save": "Save slug name",
     "success": "Band slug updated.",
+    "linkpagePending": "Your GigBuddy address changed. Your LinkBuddy pages are still updating.",
     "errors": {
       "invalid": "Enter a valid slug name.",
       "inUse": "That slug name is already in use.",

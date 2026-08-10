@@ -26,6 +26,7 @@ export default function TenantSlugSection() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [linkpageSyncPending, setLinkpageSyncPending] = useState(false)
 
   if (!currentSlug) return null
 
@@ -39,12 +40,14 @@ export default function TenantSlugSection() {
     setSaving(true)
     setError(null)
     setSuccess(false)
+    setLinkpageSyncPending(false)
     try {
       const result = await updateActiveTenantSlug(candidate)
       setSavedSlug(result.slug)
       setSlug(result.slug)
       await refreshUser().catch(() => undefined)
       setSuccess(true)
+      setLinkpageSyncPending(result.linkpageSync === 'pending')
     } catch (caught) {
       if (isApiError(caught) && caught.code === 'slug_in_use') {
         setError(t($ => $.tenantSlug.errors.inUse))
@@ -79,6 +82,7 @@ export default function TenantSlugSection() {
             setSlug(event.target.value)
             setError(null)
             setSuccess(false)
+            setLinkpageSyncPending(false)
           }}
           disabled={!entitled || saving}
           error={candidate.length > 0 && !valid}
@@ -88,6 +92,9 @@ export default function TenantSlugSection() {
         />
         {error && <Alert severity="error">{error}</Alert>}
         {success && <Alert severity="success">{t($ => $.tenantSlug.success)}</Alert>}
+        {linkpageSyncPending && (
+          <Alert severity="info">{t($ => $.tenantSlug.linkpagePending)}</Alert>
+        )}
         <Button variant="contained" onClick={handleSave} disabled={!canSave} sx={{ alignSelf: 'flex-start' }}>
           {t($ => $.tenantSlug.save)}
         </Button>

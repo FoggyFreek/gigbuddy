@@ -3,6 +3,7 @@
 import {
   getTenantBySlug,
   getTenantSlug,
+  getTenantSlugState,
   listProfileLinks,
   listSongsWithLinks,
   listActiveProducts,
@@ -13,6 +14,7 @@ import { TENANT_CAPABILITIES, tenantKindSupports } from '../../shared/tenantCapa
 import { resolveTenantEntitlements } from './entitlementService.js'
 import { FEATURES, LIMITS } from '../auth/entitlements.js'
 import { notFound, serviceError } from './serviceErrors.js'
+import { hasPendingSlugSync } from '../repositories/linkpageSlugSyncRepository.js'
 
 const NOT_FOUND = notFound('Not found')
 const NOT_CONFIGURED = serviceError(503, 'Link page integration is not configured')
@@ -135,10 +137,16 @@ export function resolveImageToken(token) {
 // editor for the active tenant, and the URL to send the browser to.
 export async function createHandoff(db, tenantId) {
   if (!linkpageConfigured()) return NOT_CONFIGURED
-  const slug = await getTenantSlug(db, tenantId)
-  if (!slug) return NOT_FOUND
+  const state = await getTenantSlugState(db, tenantId)
+  if (!state) return NOT_FOUND
   const exp = Math.floor(Date.now() / 1000) + HANDOFF_TTL_SECONDS
-  const token = signPayload({ t: 'handoff', slug, tenantId, exp })
+  const token = signPayload({
+    t: 'handoff',
+    slug: state.slug,
+    slugRevision: Number(state.slug_revision),
+    tenantId,
+    exp,
+  })
   // The token rides in the fragment so it never hits server logs on the way in.
   return { url: `${linkpageEditorUrl()}/edit#gbtoken=${encodeURIComponent(token)}` }
 }
@@ -147,5 +155,10 @@ export async function getStatus(db, tenantId) {
   if (!linkpageConfigured()) return { configured: false, publicUrl: null }
   const slug = await getTenantSlug(db, tenantId)
   if (!slug) return NOT_FOUND
-  return { configured: true, publicUrl: `${linkpageEditorUrl()}/${slug}` }
+  const pending = await hasPendingSlugSync(db, tenantId)
+  return {
+    configured: true,
+    publicUrl: `${linkpageEditorUrl()}/${slug}`,
+    linkpageSync: pending ? 'pending' : 'synced',
+  }
 }
