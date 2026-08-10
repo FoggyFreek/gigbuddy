@@ -121,9 +121,9 @@ describe('band event availability', () => {
     expect(res.body.availability_days.map((d) => d.date)).toEqual([
       '2027-09-10', '2027-09-11', '2027-09-12',
     ])
-    expect(dayEntry(res.body, '2027-09-10', seed.memberA.id)).toMatchObject({ status: 'default', reason: null })
+    expect(dayEntry(res.body, '2027-09-10', seed.memberA.id)).toMatchObject({ status: 'available', reason: null })
     expect(dayEntry(res.body, '2027-09-11', seed.memberA.id)).toMatchObject({ status: 'unavailable', reason: 'Dentist' })
-    expect(dayEntry(res.body, '2027-09-12', seed.memberA.id)).toMatchObject({ status: 'default' })
+    expect(dayEntry(res.body, '2027-09-12', seed.memberA.id)).toMatchObject({ status: 'available' })
   })
 
   it('lets a band-wide slot win over a member slot', async () => {

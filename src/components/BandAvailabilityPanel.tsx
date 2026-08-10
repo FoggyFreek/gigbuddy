@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
 import Chip from '@mui/material/Chip'
 import Stack from '@mui/material/Stack'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
-import { getAvailabilityOn, getAvailabilitySpan } from '../api/availability.ts'
-import type { AvailabilitySummary } from '../types/entities.ts'
+import useEventAvailability from '../hooks/useEventAvailability.ts'
+import type { AvailabilitySummary, Id } from '../types/entities.ts'
 
 export type AvailabilityData = AvailabilitySummary
 
@@ -12,39 +11,40 @@ interface BandAvailabilityPanelProps {
   eventDate?: string
   /** Present for a multi-day span (e.g. a band event); omitted or equal to eventDate for a single day. */
   endDate?: string
+  eventType?: 'gig' | 'rehearsal' | 'band_event'
+  eventId?: Id
+  startTime?: string | null
+  endTime?: string | null
+  participantIds?: Id[]
   onDataLoad?: (data: AvailabilityData | null) => void
 }
 
-export default function BandAvailabilityPanel({ eventDate, endDate, onDataLoad }: Readonly<BandAvailabilityPanelProps>) {
-  const [data, setData] = useState<AvailabilityData | null>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    if (!eventDate) return
-
-    clearTimeout(timerRef.current ?? undefined)
-    timerRef.current = setTimeout(() => {
-      if (endDate && endDate < eventDate) {
-        setData(null)
-        onDataLoad?.(null)
-        return
-      }
-      const request = endDate && endDate !== eventDate
-        ? getAvailabilitySpan(eventDate, endDate)
-        : getAvailabilityOn(eventDate)
-      request
-        .then((data) => { setData(data); onDataLoad?.(data) })
-        .catch(() => { setData(null); onDataLoad?.(null) })
-    }, 300)
-
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
-    }
-  }, [eventDate, endDate, onDataLoad])
+export default function BandAvailabilityPanel({
+  eventDate,
+  endDate,
+  eventType = 'band_event',
+  eventId,
+  startTime,
+  endTime,
+  participantIds,
+  onDataLoad,
+}: Readonly<BandAvailabilityPanelProps>) {
+  const data = useEventAvailability({
+    eventDate,
+    endDate,
+    eventType,
+    eventId,
+    startTime,
+    endTime,
+    participantIds,
+    onDataLoad,
+  })
 
   if (!eventDate || !data?.members?.length) return null
 
-  const visible = data.members.filter((m) => m.position === 'lead')
+  const visible = participantIds === undefined && eventId === undefined
+    ? data.members.filter((member) => member.position === 'lead')
+    : data.members
 
   if (!visible.length) return null
 
@@ -69,15 +69,23 @@ export default function BandAvailabilityPanel({ eventDate, endDate, onDataLoad }
             )
           }
           if (m.status === 'unavailable') {
-            const label = m.reason ? `${m.name} — ${m.reason}` : m.name
+            const tooltip = m.reason ? `${m.name} — ${m.reason}` : m.name
             return (
-              <Tooltip key={String(m.member_id)} title={label}>
+              <Tooltip key={String(m.member_id)} title={tooltip}>
                 <Chip
-                  label={label}
+                  label={m.name}
                   color="error"
                   size="small"
                   sx={{ maxWidth: { xs: '100%', sm: 200 } }}
                 />
+              </Tooltip>
+            )
+          }
+          if (m.status === 'travel_margin') {
+            const tooltip = m.reason ? `${m.name} — ${m.reason}` : m.name
+            return (
+              <Tooltip key={String(m.member_id)} title={tooltip}>
+                <Chip label={m.name} color="warning" size="small" sx={{ maxWidth: { xs: '100%', sm: 200 } }} />
               </Tooltip>
             )
           }

@@ -10,6 +10,7 @@ import theme from '../theme.ts'
 
 vi.mock('../api/availability.ts', () => ({
   getAvailabilityOn: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
+  evaluateEventAvailability: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
   listAvailability: vi.fn().mockResolvedValue([]),
   createSlot: vi.fn(),
   updateSlot: vi.fn(),
@@ -107,7 +108,7 @@ vi.mock('../components/map/GigLocationMap.tsx', () => ({
 
 import { getGig, getGigMerchSummary, setGigTags, setGigVote, updateGig, updateTask } from '../api/gigs.ts'
 import { createInvoice, draftFromGig, listInvoicesByGig } from '../api/invoices.ts'
-import { getAvailabilityOn } from '../api/availability.ts'
+import { evaluateEventAvailability, getAvailabilityOn } from '../api/availability.ts'
 import { listMembers } from '../api/bandMembers.ts'
 import { getMyGig, setMyTaskDone } from '../api/me.ts'
 import { AuthContext } from '../contexts/authContext.ts'
@@ -384,7 +385,7 @@ describe('GigDetailContent — reader mode (canWrite=false)', () => {
 describe('GigDetailContent — participants voting', () => {
   const GIG_WITH_VOTE = (vote) => ({
     id: 1,
-    event_date: '2026-06-15',
+    event_date: '2099-06-15',
     event_description: 'Jazz Night',
     venue: { id: 11, name: 'Bimhuis', category: 'venue', city: 'Amsterdam' },
     event_link: '',
@@ -462,25 +463,42 @@ describe('GigDetailContent — participants voting', () => {
   })
 })
 
-describe('GigDetailContent — event tab band availability', () => {
+describe('GigDetailContent — participant availability', () => {
   beforeEach(() => {
     getGig.mockClear()
-    getAvailabilityOn.mockClear()
-    getAvailabilityOn.mockResolvedValue({ bandWide: null, members: [] })
+    evaluateEventAvailability.mockClear()
+    evaluateEventAvailability.mockResolvedValue({ bandWide: null, members: [] })
   })
 
-  it('renders the band availability panel below the venue/event-link row', async () => {
+  it('renders availability inside the matching participant row', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce({
+      ...GIG_PAID,
+      admission: 'free',
+      participants: [
+        { band_member_id: 1, name: 'Alice', position: 'guitar', color: '#f00', vote: 'yes' },
+      ],
+    })
+    evaluateEventAvailability.mockResolvedValueOnce({
+      bandWide: null,
+      members: [
+        { member_id: 1, name: 'Alice', position: 'guitar', status: 'available', reason: null },
+      ],
+    })
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
+    await openTab(user, 'Participants')
 
-    const heading = await screen.findByRole('heading', { name: /member availability/i })
-    expect(heading).toBeInTheDocument()
-
-    // Below the venue/event-link row in DOM order.
-    const eventLinkField = screen.getByLabelText(/event link/i)
-    expect(eventLinkField.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-
-    await waitFor(() => expect(getAvailabilityOn).toHaveBeenCalledWith('2026-06-15'), { timeout: 1000 })
+    const participantSection = screen.getByRole('heading', { name: 'Participants' }).parentElement
+    expect(participantSection).not.toBeNull()
+    expect(await within(participantSection).findByText('Available')).toBeInTheDocument()
+    expect(within(participantSection).getByText('Alice')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /member availability/i })).not.toBeInTheDocument()
+    await waitFor(() => expect(evaluateEventAvailability).toHaveBeenCalledWith(expect.objectContaining({
+      event_type: 'gig',
+      event_id: 1,
+      start_date: '2026-06-15',
+    })), { timeout: 1000 })
   })
 })
 
@@ -891,8 +909,8 @@ describe('GigDetailContent — personal workspace (source="me")', () => {
     start_time: '20:00:00',
     end_time: '23:00:00',
     // Status no longer gates anything: the Participants tab always renders
-    // GigParticipantsSection, and the Event tab's BandAvailabilityPanel is
-    // gated on tenant kind/cross-band, not status.
+    // BandParticipantsSection, whose inline availability is gated on tenant
+    // kind/cross-band rather than status.
     status: 'confirmed',
     booking_fee_cents: 15000,
     admission: 'free',

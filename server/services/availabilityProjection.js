@@ -12,9 +12,8 @@
 //   booking in another band   | unavailable, no band/title  | band + title
 //   the musician's own row    | full detail, always
 //
-// Bookings in the VIEWING band are not projected at all: its grid already shows
-// its own gigs, rehearsals and events, so a busy block for them would duplicate
-// what is on screen.
+// Bookings from the viewing tenant are projected with full detail for event
+// evaluation. Calendar consumers may suppress duplicate visual booking blocks.
 //
 // `availability_detail_visible` governs the first row, `cross_band_gig_detail_visible`
 // the second. A personal workspace counts as "another band" for redaction.
@@ -65,26 +64,26 @@ export function projectBooking(booking, owner, viewer) {
     id: `${booking.source}-${booking.source_id}`,
     source: SOURCE_BOOKING,
     bookingType: booking.source,
+    source_id: booking.source_id,
     userId: owner.userId,
     start_date: booking.start_date,
     end_date: booking.end_date,
+    start_time: booking.start_time ?? null,
+    end_time: booking.end_time ?? null,
+    travel_margin_hours: owner.travelMarginHours ?? 2,
     createdByUserId: null,
     createdInTenantId: booking.tenant_id,
   }
   const full = {
     ...base,
     status: 'unavailable',
-    reason: null,
+    reason: [booking.title, booking.tenant_name].filter(Boolean).join(' — ') || null,
     title: booking.title ?? null,
     description: [booking.title, booking.tenant_name].filter(Boolean).join(' — ') || null,
     tenantName: booking.tenant_name ?? null,
     redacted: false,
   }
 
-  if (viewer.userId === owner.userId) return full
-  // Bookings from the viewing band never reach here — they are excluded by the
-  // query, because its own grid already renders them from their own endpoints.
-  // So everything projected here is another band's, and the cross-band flag
-  // decides whether it is named.
+  if (viewer.userId === owner.userId || viewer.tenantId === booking.tenant_id) return full
   return owner.crossBandGigDetailVisible ? full : redactedEntry(base)
 }

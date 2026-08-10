@@ -50,6 +50,8 @@
     "create": "Create",
     "required": "Required",
     "unavailableTitle": "Member unavailable",
+    "travelMarginTitle": "Travel margin warning",
+    "travelMarginBody": "{{names}} has another event inside the configured travel margin. Are you sure you want to create this gig?",
     "unavailableBody_one": "{{names}} is marked unavailable on this date. Are you sure you want to create this gig?",
     "unavailableBody_other": "{{names}} are marked unavailable on this date. Are you sure you want to create this gig?",
     "goBack": "Go back",

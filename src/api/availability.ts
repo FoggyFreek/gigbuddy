@@ -14,3 +14,16 @@ export const deleteSlot = (id: Id) => api<void>(`/${id}`, { method: 'DELETE' })
 export const getAvailabilityOn = (dateStr: string) => api<AvailabilitySummary>(`/on/${dateStr}`)
 export const getAvailabilitySpan = (from: string, to: string) =>
   api<AvailabilitySummary>(`/span?${new URLSearchParams({ from, to })}`)
+
+export interface EventAvailabilityRequest {
+  event_type: 'gig' | 'rehearsal' | 'band_event'
+  event_id?: Id
+  start_date: string
+  end_date?: string | null
+  start_time?: string | null
+  end_time?: string | null
+  participant_ids?: Id[]
+}
+
+export const evaluateEventAvailability = (body: EventAvailabilityRequest) =>
+  api<AvailabilitySummary>('/evaluate', { method: 'POST', body: JSON.stringify(body) })

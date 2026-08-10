@@ -24,7 +24,7 @@ export async function listMemberships(executor, tenantId) {
        FROM memberships m
        JOIN users u            ON u.id = m.user_id
        LEFT JOIN band_members bm
-         ON bm.user_id = u.id AND bm.tenant_id = m.tenant_id
+         ON bm.user_id = u.id AND bm.tenant_id = m.tenant_id AND bm.deleted_at IS NULL
       WHERE m.tenant_id = $1
       ORDER BY
         CASE m.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,
@@ -40,7 +40,7 @@ export async function readMembershipRow(executor, tenantId, userId) {
        FROM memberships m
        JOIN users u            ON u.id = m.user_id
        LEFT JOIN band_members bm
-         ON bm.user_id = u.id AND bm.tenant_id = m.tenant_id
+         ON bm.user_id = u.id AND bm.tenant_id = m.tenant_id AND bm.deleted_at IS NULL
       WHERE m.tenant_id = $1 AND m.user_id = $2`,
     [tenantId, userId],
   )
@@ -84,7 +84,8 @@ export async function countOtherApprovedTenantAdmins(executor, tenantId, exclude
 // Returns the row (or null if it doesn't belong to the tenant).
 export async function lockBandMember(executor, bandMemberId, tenantId) {
   const { rows } = await executor.query(
-    'SELECT user_id FROM band_members WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
+    `SELECT user_id FROM band_members
+      WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL FOR UPDATE`,
     [bandMemberId, tenantId],
   )
   return rows[0] || null
@@ -92,14 +93,16 @@ export async function lockBandMember(executor, bandMemberId, tenantId) {
 
 export async function clearUserBandMember(executor, userId, tenantId) {
   await executor.query(
-    'UPDATE band_members SET user_id = NULL WHERE user_id = $1 AND tenant_id = $2',
+    `UPDATE band_members SET user_id = NULL
+      WHERE user_id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
     [userId, tenantId],
   )
 }
 
 export async function assignBandMember(executor, userId, bandMemberId, tenantId) {
   await executor.query(
-    'UPDATE band_members SET user_id = $1 WHERE id = $2 AND tenant_id = $3',
+    `UPDATE band_members SET user_id = $1
+      WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL`,
     [userId, bandMemberId, tenantId],
   )
 }

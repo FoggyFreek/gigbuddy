@@ -7,6 +7,7 @@ import {
   listRange,
   listOnDate,
   listSpan,
+  evaluateEvent,
   createSlot,
   patchSlot,
   deleteSlot,
@@ -39,6 +40,12 @@ router.get('/on/:date', async (req, res) => {
 
 router.get('/span', async (req, res) => {
   const result = await listSpan(pool, req.tenantId, req.query, viewerOf(req))
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.post('/evaluate', async (req, res) => {
+  const result = await evaluateEvent(pool, req.tenantId, req.body, viewerOf(req))
   if (result.error) return sendError(res, result.error)
   res.json(result)
 })

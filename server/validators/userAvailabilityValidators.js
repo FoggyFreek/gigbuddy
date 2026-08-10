@@ -51,5 +51,13 @@ export function buildVisibilityUpdate(body) {
     fields.push(`${key} = $${idx++}`)
     values.push(body[key])
   }
+  if ('travel_margin_hours' in (body ?? {})) {
+    const margin = body.travel_margin_hours
+    if (!Number.isInteger(margin) || margin < 0 || margin > 24) {
+      return { error: 'travel_margin_hours must be an integer from 0 to 24' }
+    }
+    fields.push(`availability_travel_margin_hours = $${idx++}`)
+    values.push(margin)
+  }
   return { fields, values }
 }

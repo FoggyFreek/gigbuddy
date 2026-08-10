@@ -94,6 +94,7 @@ export async function getAvailabilitySettings(db, userId) {
   return {
     availabilityDetailVisible: flags?.availability_detail_visible ?? false,
     crossBandGigDetailVisible: flags?.cross_band_gig_detail_visible ?? false,
+    travelMarginHours: flags?.availability_travel_margin_hours ?? 2,
     delegations: delegations.map((d) => ({
       tenantId: d.tenant_id,
       displayName: d.display_name,

@@ -12,6 +12,7 @@ vi.mock('../api/userAvailability.ts', () => ({
 }))
 
 const SETTINGS = {
+  travelMarginHours: 2,
   availabilityDetailVisible: false,
   crossBandGigDetailVisible: false,
   delegations: [
@@ -62,6 +63,20 @@ describe('MyAvailabilitySection', () => {
     await user.click(await screen.findByRole('switch', { name: /booked for elsewhere/i }))
     await waitFor(() => expect(updateAvailabilitySettings).toHaveBeenCalledWith({
       cross_band_gig_detail_visible: true,
+    }))
+  })
+
+  it('saves a whole-hour travel margin', async () => {
+    const user = userEvent.setup()
+    wrap()
+
+    const margin = await screen.findByRole('spinbutton', { name: /travel margin/i })
+    await user.clear(margin)
+    await user.type(margin, '4')
+    await user.tab()
+
+    await waitFor(() => expect(updateAvailabilitySettings).toHaveBeenCalledWith({
+      travel_margin_hours: 4,
     }))
   })
 

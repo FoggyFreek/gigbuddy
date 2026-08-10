@@ -121,13 +121,15 @@ export async function loadBandEventParticipantIds(executor, eventIds, tenantId) 
   if (!eventIds.length) return byEvent
 
   const { rows } = await executor.query(
-    `SELECT band_event_id, band_member_id
-       FROM band_event_participants
-      WHERE tenant_id = $1 AND band_event_id = ANY($2)
-      ORDER BY id ASC`,
+    `SELECT bep.band_event_id, bep.band_member_id,
+            bm.name, bm.color, bm.position, bm.deleted_at
+       FROM band_event_participants bep
+       JOIN band_members bm ON bm.id = bep.band_member_id AND bm.tenant_id = bep.tenant_id
+      WHERE bep.tenant_id = $1 AND bep.band_event_id = ANY($2)
+      ORDER BY bep.id ASC`,
     [tenantId, eventIds],
   )
-  for (const row of rows) byEvent.get(row.band_event_id)?.push(row.band_member_id)
+  for (const row of rows) byEvent.get(row.band_event_id)?.push(row)
   return byEvent
 }
 

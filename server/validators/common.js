@@ -48,6 +48,15 @@ export function parseDateRange(query) {
   return { from, to }
 }
 
+const LOCAL_TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/
+
+export function validateDailyTimeRange(startTime, endTime) {
+  if (startTime != null && startTime !== '' && !LOCAL_TIME_RE.test(startTime)) return 'start_time must be HH:mm'
+  if (endTime != null && endTime !== '' && !LOCAL_TIME_RE.test(endTime)) return 'end_time must be HH:mm'
+  if (startTime && endTime && endTime <= startTime) return 'end_time must be after start_time'
+  return null
+}
+
 // Optional keyset cursor for "load more" pagination on bounded feeds
 // (`?cursorDate=YYYY-MM-DD&cursorId=123`), keyed on (date, id) to match the
 // feed's ORDER BY tiebreak. Both params are required together; omitting both

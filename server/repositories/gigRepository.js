@@ -444,7 +444,8 @@ export async function listGigAttachments(executor, gigId, tenantId) {
 
 export async function getLeadMemberIds(executor, tenantId) {
   const { rows } = await executor.query(
-    `SELECT id FROM band_members WHERE tenant_id = $1 AND position = 'lead'`,
+    `SELECT id FROM band_members
+      WHERE tenant_id = $1 AND position = 'lead' AND deleted_at IS NULL`,
     [tenantId],
   )
   return rows.map((r) => r.id)
@@ -794,4 +795,3 @@ export async function updateGigFields(executor, tenantId, gigId, fields, values)
   )
   return rows[0] || null
 }
-

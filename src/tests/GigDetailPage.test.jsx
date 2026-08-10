@@ -10,6 +10,7 @@ import theme from '../theme.ts'
 
 vi.mock('../api/availability.ts', () => ({
   getAvailabilityOn: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
+  evaluateEventAvailability: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
   listAvailability: vi.fn().mockResolvedValue([]),
   createSlot: vi.fn(),
   updateSlot: vi.fn(),

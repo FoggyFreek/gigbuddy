@@ -119,7 +119,8 @@ export async function resolveAudience(executor, tenantId, type, { userId = null,
 
 export async function getUserIdForBandMember(executor, bandMemberId, tenantId) {
   const { rows } = await executor.query(
-    'SELECT user_id FROM band_members WHERE id = $1 AND tenant_id = $2 AND user_id IS NOT NULL',
+    `SELECT user_id FROM band_members
+      WHERE id = $1 AND tenant_id = $2 AND user_id IS NOT NULL AND deleted_at IS NULL`,
     [bandMemberId, tenantId],
   )
   return rows[0]?.user_id ?? null

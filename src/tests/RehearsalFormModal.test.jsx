@@ -37,7 +37,7 @@ vi.mock('../api/rehearsals.ts', () => ({
 }))
 
 vi.mock('../api/availability.ts', () => ({
-  getAvailabilityOn: vi.fn().mockResolvedValue({ members: [], bandWide: null }),
+  evaluateEventAvailability: vi.fn().mockResolvedValue({ members: [], bandWide: null }),
 }))
 
 vi.mock('../api/myBands.ts', () => ({
@@ -52,7 +52,7 @@ import {
   setVote,
   updateRehearsal,
 } from '../api/rehearsals.ts'
-import { getAvailabilityOn } from '../api/availability.ts'
+import { evaluateEventAvailability } from '../api/availability.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 
 const AUTH_VALUE = {
@@ -76,8 +76,8 @@ function wrap(ui, tenantKind = 'band') {
 describe('RehearsalFormModal — create mode', () => {
   beforeEach(() => {
     createRehearsal.mockClear()
-    getAvailabilityOn.mockClear()
-    getAvailabilityOn.mockResolvedValue({ members: [], bandWide: null })
+    evaluateEventAvailability.mockClear()
+    evaluateEventAvailability.mockResolvedValue({ members: [], bandWide: null })
   })
 
   it('renders the propose rehearsal dialog', async () => {
@@ -155,7 +155,7 @@ describe('RehearsalFormModal — create mode', () => {
   })
 
   it('warns when a selected member is unavailable and proposes anyway after confirm', async () => {
-    getAvailabilityOn.mockResolvedValue({
+    evaluateEventAvailability.mockResolvedValue({
       members: [
         { member_id: 10, name: 'Alice', position: 'lead', status: 'unavailable', reason: 'On holiday' },
         { member_id: 11, name: 'Bob', position: 'lead', status: 'available' },
@@ -172,7 +172,8 @@ describe('RehearsalFormModal — create mode', () => {
     await user.type(dateInput, '2099-08-01')
 
     // The unavailability panel surfaces the unavailable lead.
-    await waitFor(() => screen.getByText(/Alice — On holiday/))
+    await waitFor(() => screen.getByText('Alice'))
+    expect(screen.queryByText('On holiday')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /^propose$/i }))
 
@@ -193,6 +194,8 @@ describe('RehearsalFormModal — edit mode', () => {
     setVote.mockClear()
     addParticipant.mockClear()
     removeParticipant.mockClear()
+    evaluateEventAvailability.mockReset()
+    evaluateEventAvailability.mockResolvedValue({ members: [], bandWide: null })
   })
 
   it('loads rehearsal and renders participants', async () => {
@@ -201,6 +204,23 @@ describe('RehearsalFormModal — edit mode', () => {
     await waitFor(() => screen.getByDisplayValue('Studio A'))
     expect(screen.getByText('Alice')).toBeInTheDocument()
     expect(screen.getByText('Bob')).toBeInTheDocument()
+  })
+
+  it('renders availability inside the matching participant row', async () => {
+    evaluateEventAvailability.mockResolvedValueOnce({
+      bandWide: null,
+      members: [
+        { member_id: 10, name: 'Alice', position: 'lead', status: 'available', reason: null },
+        { member_id: 11, name: 'Bob', position: 'lead', status: 'unavailable', reason: 'Holiday' },
+      ],
+    })
+
+    wrap(<RehearsalFormModal mode="edit" rehearsalId={1} onClose={() => {}} />)
+    await waitFor(() => screen.getByDisplayValue('Studio A'))
+
+    expect(await screen.findByText('Available')).toBeInTheDocument()
+    expect(screen.getByText('Unavailable')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /member availability/i })).not.toBeInTheDocument()
   })
 
   it('disables "Plan this rehearsal" until all votes are yes', async () => {
@@ -268,7 +288,7 @@ describe('RehearsalFormModal — edit mode', () => {
     )
   })
 
-  it('shows planned rehearsal participants as name chips without required participant controls', async () => {
+  it('shows planned rehearsal participants without required participant controls', async () => {
     getRehearsal.mockResolvedValueOnce({
       id: 1,
       proposed_date: '2099-05-10',
@@ -290,9 +310,8 @@ describe('RehearsalFormModal — edit mode', () => {
     expect(screen.queryByLabelText(/add participant/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /remove alice/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^yes$/i })).not.toBeInTheDocument()
-    expect(screen.getByText('Alice').closest('.MuiChip-root')).toBeTruthy()
-    expect(screen.getByText('Bob').closest('.MuiChip-root')).toBeTruthy()
-    expect(document.body.querySelectorAll('.MuiChip-root')).toHaveLength(3)
+    expect(screen.getByText('Alice')).toBeInTheDocument()
+    expect(screen.getByText('Bob')).toBeInTheDocument()
   })
 
   it('adds a participant via the add-participant select + button', async () => {

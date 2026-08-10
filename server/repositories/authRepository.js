@@ -27,7 +27,7 @@ export async function listMembershipsForMe(executor, userId) {
 
 export async function getBandMemberId(executor, userId, tenantId) {
   const { rows } = await executor.query(
-    'SELECT id FROM band_members WHERE user_id = $1 AND tenant_id = $2',
+    'SELECT id FROM band_members WHERE user_id = $1 AND tenant_id = $2 AND deleted_at IS NULL',
     [userId, tenantId],
   )
   return rows[0]?.id ?? null

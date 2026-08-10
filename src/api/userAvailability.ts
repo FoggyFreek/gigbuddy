@@ -29,6 +29,8 @@ export interface AvailabilitySettings {
   availabilityDetailVisible: boolean
   /** Bands may see which band, and what, I'm booked for elsewhere. */
   crossBandGigDetailVisible: boolean
+  /** Required total gap between consecutive events. */
+  travelMarginHours: number
   delegations: AvailabilityDelegation[]
 }
 
@@ -59,6 +61,7 @@ export const getAvailabilitySettings = () =>
 export interface AvailabilitySettingsPatch {
   availability_detail_visible?: boolean
   cross_band_gig_detail_visible?: boolean
+  travel_margin_hours?: number
   delegations?: { tenantId: Id; managedByBand: boolean }[]
 }
 

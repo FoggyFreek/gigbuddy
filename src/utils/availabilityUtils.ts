@@ -13,12 +13,10 @@ export const REHEARSAL_STATUS_COLORS: Record<string, string> = {
 
 export const BAND_EVENT_COLOR = 'warning.main'
 
-// Per-member availability, as rendered anywhere it is summarised: 'default'
-// means nothing was recorded, which is deliberately neutral rather than green.
 export const AVAILABILITY_STATUS_COLORS: Record<string, string> = {
   available: 'success.main',
+  travel_margin: 'warning.main',
   unavailable: 'error.main',
-  default: 'grey.500',
 }
 
 export function toIsoDate(date: Date): string {
@@ -46,6 +44,12 @@ export function getMemberColor(
   unassignedColor: string = UNASSIGNED_SLOT_COLOR,
 ): string {
   if (slot.band_member_id == null) return unassignedColor
-  const m = members.find((m) => m.id === slot.band_member_id)
+  const m = members.find((member) => String(member.id) === String(slot.band_member_id))
   return m?.color || UNASSIGNED_SLOT_COLOR
+}
+
+export function canManageAvailabilityForMember(member: Member | null | undefined): boolean {
+  return member != null && (
+    member.user_id == null || member.availability_managed_by_band === true
+  )
 }

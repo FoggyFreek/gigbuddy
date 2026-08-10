@@ -74,7 +74,7 @@ import {
 } from '../repositories/gigRepository.js'
 import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
 import { getTaskById } from '../repositories/taskRepository.js'
-import { INVALID_CURSOR, INVALID_TODAY, parseLocalDate, parseListCursor } from '../validators/common.js'
+import { INVALID_CURSOR, INVALID_TODAY, parseLocalDate, parseListCursor, validateDailyTimeRange } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
 import { assertMyBandWritable } from './myBandService.js'
 import {
@@ -194,12 +194,23 @@ export async function enrichGigsWithAvailability(db, tenantId, gigs, viewer = nu
   const minDate = dates.reduce((a, b) => (a < b ? a : b))
   const maxDate = dates.reduce((a, b) => (a > b ? a : b))
 
-  const matrix = await loadAvailabilityMatrix(db, tenantId, minDate, maxDate, viewer)
+  const [matrix, participantsByGig] = await Promise.all([
+    loadAvailabilityMatrix(db, tenantId, minDate, maxDate, viewer),
+    loadParticipants(db, gigs.map((gig) => gig.id), tenantId),
+  ])
 
   return gigs.map((gig) => {
     const dateStr = toDateStr(gig.event_date)
     if (!dateStr) return { ...gig, members_availability: [] }
-    return { ...gig, members_availability: summarizeSpan(matrix, dateStr, dateStr).members }
+    const selected = new Set((participantsByGig.get(gig.id) ?? []).map((participant) => participant.band_member_id))
+    const members = summarizeSpan(matrix, dateStr, dateStr, {
+      start_date: dateStr,
+      end_date: dateStr,
+      start_time: gig.start_time,
+      end_time: gig.end_time,
+      exclude: { type: 'gig', id: gig.id },
+    }).members.filter((member) => selected.has(member.member_id))
+    return { ...gig, members_availability: members }
   })
 }
 
@@ -339,6 +350,8 @@ export async function createGig(tenantId, userId, body) {
   if (!event_date || !event_description) {
     return { error: { status: 400, body: { error: 'event_date and event_description are required' } } }
   }
+  const timeError = validateDailyTimeRange(start_time, end_time)
+  if (timeError) return badRequest(timeError)
   const refs = normalizeGigVenueRefs(body)
   if (refs.error) return { error: { status: 400, body: { error: refs.error } } }
   const venueId = refs.body.venue_id ?? null
@@ -380,6 +393,16 @@ export async function patchGig(db, tenantId, gigId, body) {
   const refs = normalizeGigVenueRefs(body)
   if (refs.error) return { error: { status: 400, body: { error: refs.error } } }
   const normalizedBody = refs.body
+
+  if ('start_time' in normalizedBody || 'end_time' in normalizedBody) {
+    const current = await fetchGigWithRelations(db, gigId, tenantId)
+    if (!current) return NOT_FOUND
+    const timeError = validateDailyTimeRange(
+      'start_time' in normalizedBody ? normalizedBody.start_time : current.start_time,
+      'end_time' in normalizedBody ? normalizedBody.end_time : current.end_time,
+    )
+    if (timeError) return badRequest(timeError)
+  }
 
   const venueCheck = await validateVenueAndFestivalForTenant(db, normalizedBody, tenantId)
   if (venueCheck.error) return { error: { status: venueCheck.status, body: { error: venueCheck.error } } }

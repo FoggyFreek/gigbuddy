@@ -35,6 +35,8 @@
     "endDateError": "Must be on or after start date",
     "addEvent": "Add event",
     "unavailableTitle": "Lead member unavailable",
+    "travelMarginTitle": "Travel margin warning",
+    "travelMarginBody": "{{names}} has another event inside the configured travel margin. Add the event anyway?",
     "unavailableBody": "{{names}} cannot attend during this event. Add the event anyway?",
     "goBack": "Go back",
     "createAnyway": "Add anyway"
@@ -43,6 +45,7 @@
     "title": "Availability",
     "bandWide": "Whole band on {{date}}: {{status}}",
     "available": "Available",
+    "travelMargin": "Travel margin",
     "unavailable": "Unavailable",
     "unknown": "No answer",
     "noMembers": "No band members have been added to this event.",

@@ -34,6 +34,7 @@ import type { MaybeCrossTenant } from '../types/api.ts'
 import { getMyRehearsal, setMyRehearsalVote } from '../api/me.ts'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
 import { SourceTenantSwitch } from '../components/SourceTenantIdentity.tsx'
+import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 
 interface RehearsalDetailOutletContext {
   insideSplitView?: boolean
@@ -64,7 +65,8 @@ export default function RehearsalDetailPage() {
   const rehearsalId = Number(id)
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { isPersonal } = useTenantKind()
+  const tenantKind = useTenantKind()
+  const { isPersonal } = tenantKind
   const outletCtx = (useOutletContext<RehearsalDetailOutletContext>() || {}) as RehearsalDetailOutletContext
   const insideSplitView = !!outletCtx.insideSplitView
   const onRehearsalDetailLoaded = outletCtx.onRehearsalDetailLoaded
@@ -223,6 +225,7 @@ export default function RehearsalDetailPage() {
             onChange={handleChange}
             errors={getRequiredErrors(form as unknown as Record<string, unknown>, REQUIRED_FIELDS)}
             readOnly={!detailCanWrite}
+            dateTimeFirst
           />
           {rehearsal && (
             <>
@@ -238,6 +241,7 @@ export default function RehearsalDetailPage() {
                 onDemote={handleDemote}
                 canWrite={detailCanWrite}
                 currentMemberId={rehearsal.viewerBandMemberId ?? user?.bandMemberId ?? null}
+                showAvailability={!isCrossBand && tenantKind.supports(TENANT_CAPABILITIES.BAND_AVAILABILITY)}
               />
               <RehearsalSongsSection
                 songs={rehearsal.songs ?? []}

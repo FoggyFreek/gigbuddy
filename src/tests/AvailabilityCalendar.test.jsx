@@ -332,4 +332,103 @@ describe('AvailabilityCalendar', () => {
     await user.click(booking)
     expect(onSlotClick).not.toHaveBeenCalled()
   })
+
+  it('keeps a single explicit summarized slot editable', async () => {
+    const user = userEvent.setup()
+    const onSlotClick = vi.fn()
+    const { container } = wrap(<AvailabilityCalendar {...makeProps({ onSlotClick })} />)
+    const slot = container.querySelector('[data-date="2026-04-05"] [data-slot-id="10"]')
+
+    expect(slot).not.toHaveAttribute('aria-disabled')
+    await user.click(slot)
+    expect(onSlotClick).toHaveBeenCalledWith(expect.objectContaining({ id: 10 }))
+  })
+
+  it('keeps a linked member slot read-only until availability management is delegated', async () => {
+    const user = userEvent.setup()
+    const onSlotClick = vi.fn()
+    const members = [{ ...MEMBERS[0], user_id: 42, availability_managed_by_band: false }]
+    const { container } = wrap(<AvailabilityCalendar {...makeProps({ members, onSlotClick })} />)
+    const slot = container.querySelector('[data-date="2026-04-05"] [data-slot-id="10"]')
+
+    expect(slot).toHaveAttribute('aria-disabled', 'true')
+    await user.click(slot)
+    expect(onSlotClick).not.toHaveBeenCalled()
+  })
+
+  it('allows editing a linked member slot after availability management is delegated', async () => {
+    const user = userEvent.setup()
+    const onSlotClick = vi.fn()
+    const members = [{ ...MEMBERS[0], user_id: 42, availability_managed_by_band: true }]
+    const { container } = wrap(<AvailabilityCalendar {...makeProps({ members, onSlotClick })} />)
+    const slot = container.querySelector('[data-date="2026-04-05"] [data-slot-id="10"]')
+
+    expect(slot).not.toHaveAttribute('aria-disabled')
+    await user.click(slot)
+    expect(onSlotClick).toHaveBeenCalledWith(expect.objectContaining({ id: 10 }))
+  })
+
+  it('keeps a slot read-only when its member is missing from the current band roster', async () => {
+    const user = userEvent.setup()
+    const onSlotClick = vi.fn()
+    const { container } = wrap(<AvailabilityCalendar {...makeProps({ members: [], onSlotClick })} />)
+    const slot = container.querySelector('[data-date="2026-04-05"] [data-slot-id="10"]')
+
+    expect(slot).toHaveAttribute('aria-disabled', 'true')
+    await user.click(slot)
+    expect(onSlotClick).not.toHaveBeenCalled()
+  })
+
+  it('renders available slots filled and unavailable slots dashed in the member color', () => {
+    const slots = [
+      { id: 21, band_member_id: 1, start_date: '2026-04-20', end_date: '2026-04-20', status: 'available' },
+      { id: 22, band_member_id: 1, start_date: '2026-04-21', end_date: '2026-04-21', status: 'unavailable' },
+    ]
+    const { container } = wrap(<AvailabilityCalendar {...makeProps({ slots })} />)
+    const available = container.querySelector('[data-slot-id="21"]')
+    const unavailable = container.querySelector('[data-slot-id="22"]')
+
+    expect(available).toHaveAttribute('data-member-color', '#e53935')
+    expect(available).toHaveAttribute('data-availability-appearance', 'filled')
+    expect(unavailable).toHaveAttribute('data-member-color', '#e53935')
+    expect(unavailable).toHaveAttribute('data-availability-appearance', 'dashed')
+  })
+
+  it('uses the same member-color availability styling for compact calendar dots', () => {
+    const slots = [
+      { id: 31, band_member_id: 1, start_date: '2026-04-20', end_date: '2026-04-20', status: 'available' },
+      { id: 32, band_member_id: 1, start_date: '2026-04-21', end_date: '2026-04-21', status: 'unavailable' },
+    ]
+    const { container } = wrap(<AvailabilityCalendar {...makeProps({ slots, mobile: true })} />)
+
+    expect(container.querySelector('[data-slot-id="31"]')).toHaveAttribute('data-availability-appearance', 'filled')
+    expect(container.querySelector('[data-slot-id="32"]')).toHaveAttribute('data-availability-appearance', 'dashed')
+  })
+
+  it('summarizes multiple explicit slots into one editable member block per day', async () => {
+    const user = userEvent.setup()
+    const onSlotClick = vi.fn()
+    const slots = [
+      { id: 1, band_member_id: 1, start_date: '2026-04-20', end_date: '2026-04-20', status: 'available' },
+      { id: 2, band_member_id: 1, start_date: '2026-04-20', end_date: '2026-04-20', status: 'unavailable' },
+    ]
+    const { container } = wrap(<AvailabilityCalendar {...makeProps({ slots, onSlotClick })} />)
+    const cell = container.querySelector('[data-date="2026-04-20"]')
+    expect(cell.querySelectorAll('[data-slot-id]')).toHaveLength(1)
+    await user.click(cell.querySelector('[data-slot-id]'))
+    expect(onSlotClick).toHaveBeenCalledWith(expect.objectContaining({ id: 2 }))
+  })
+
+  it('does not show travel-margin spillover on the calendar', () => {
+    const slots = [{
+      id: 'gig-8', source: 'booking', bookingType: 'gig', band_member_id: 1,
+      start_date: '2026-04-19', end_date: '2026-04-19', start_time: '21:00', end_time: '23:00',
+      travel_margin_hours: 2, status: 'unavailable',
+    }]
+    const { container } = wrap(<AvailabilityCalendar {...makeProps({ slots })} />)
+    const bookedDay = container.querySelector('[data-date="2026-04-19"]')
+    const nextDay = container.querySelector('[data-date="2026-04-20"]')
+    expect(bookedDay.querySelector('[data-slot-id="gig-8"]')).not.toBeNull()
+    expect(nextDay.querySelector('[data-slot-id="gig-8"]')).toBeNull()
+  })
 })

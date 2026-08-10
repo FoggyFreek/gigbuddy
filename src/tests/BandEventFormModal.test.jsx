@@ -21,7 +21,7 @@ vi.mock('../api/bandEvents.ts', () => ({
 }))
 
 vi.mock('../api/availability.ts', () => ({
-  getAvailabilitySpan: vi.fn().mockResolvedValue({ members: [], days: [] }),
+  evaluateEventAvailability: vi.fn().mockResolvedValue({ members: [], days: [] }),
 }))
 
 vi.mock('../api/myBands.ts', () => ({
@@ -30,7 +30,7 @@ vi.mock('../api/myBands.ts', () => ({
 
 import BandEventFormModal from '../components/BandEventFormModal.tsx'
 import { createBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
-import { getAvailabilitySpan } from '../api/availability.ts'
+import { evaluateEventAvailability } from '../api/availability.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 import theme from '../theme.ts'
 
@@ -53,8 +53,8 @@ function wrap(ui, tenantKind = 'band') {
 describe('BandEventFormModal — create mode', () => {
   beforeEach(() => {
     createBandEvent.mockClear()
-    getAvailabilitySpan.mockReset()
-    getAvailabilitySpan.mockResolvedValue({ members: [], days: [] })
+    evaluateEventAvailability.mockReset()
+    evaluateEventAvailability.mockResolvedValue({ members: [], days: [] })
   })
 
   it('renders the add event dialog title', () => {
@@ -135,7 +135,7 @@ describe('BandEventFormModal — create mode', () => {
   })
 
   it('checks lead availability across the event span before creation', async () => {
-    getAvailabilitySpan.mockResolvedValueOnce({
+    evaluateEventAvailability.mockResolvedValueOnce({
       members: [
         { member_id: 1, name: 'Ann Bell', position: 'lead', status: 'unavailable', reason: 'Holiday' },
         { member_id: 2, name: 'Sam Kerr', position: 'optional', status: 'available', reason: null },
@@ -149,8 +149,13 @@ describe('BandEventFormModal — create mode', () => {
     await user.type(screen.getByLabelText(/start date\s*\*?/i), '2099-09-01')
     await user.type(screen.getByLabelText(/^end date/i), '2099-09-03')
 
-    await waitFor(() => expect(getAvailabilitySpan).toHaveBeenCalledWith('2099-09-01', '2099-09-03'))
-    expect(await screen.findByText(/Ann Bell.*Holiday/)).toBeInTheDocument()
+    await waitFor(() => expect(evaluateEventAvailability).toHaveBeenCalledWith(expect.objectContaining({
+      event_type: 'band_event',
+      start_date: '2099-09-01',
+      end_date: '2099-09-03',
+    })))
+    expect(await screen.findByText('Ann Bell')).toBeInTheDocument()
+    expect(screen.queryByText('Holiday')).not.toBeInTheDocument()
     expect(screen.queryByText('Sam Kerr')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /add event/i }))
@@ -169,7 +174,7 @@ describe('BandEventFormModal — create mode', () => {
       vi.useRealTimers()
     }
 
-    expect(getAvailabilitySpan).not.toHaveBeenCalled()
+    expect(evaluateEventAvailability).not.toHaveBeenCalled()
     expect(screen.queryByText('Availability')).not.toBeInTheDocument()
   })
 })

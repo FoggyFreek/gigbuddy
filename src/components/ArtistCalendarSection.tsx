@@ -211,6 +211,7 @@ export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<A
     <Box>
       {loadFailed && <Alert severity="error" sx={{ mb: 2 }}>{t($ => $.mine.loadFailed)}</Alert>}
       <AvailabilityCalendar
+        summarizeAvailability={false}
         year={viewYear}
         month={viewMonth}
         slots={slots}

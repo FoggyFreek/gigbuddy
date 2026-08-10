@@ -54,12 +54,12 @@ describe('summarizeSpan', () => {
       expect.objectContaining({ member_id: 2, name: 'Beta', status: 'available', reason: null, source: 'member' }),
     ])
     expect(days.map((d) => d.date)).toEqual(['2099-07-10', '2099-07-11', '2099-07-12'])
-    expect(days[0].members[0]).toEqual({ member_id: 1, status: 'default', reason: null, source: 'default' })
+    expect(days[0].members[0]).toEqual({ member_id: 1, status: 'available', reason: null, source: 'default' })
     expect(days[1].members[0]).toEqual({ member_id: 1, status: 'unavailable', reason: 'Dentist', source: 'member' })
-    expect(days[2].members[0].status).toBe('default')
+    expect(days[2].members[0].status).toBe('available')
   })
 
-  it('ranks an unknown day above an available one, so a partly-known span is not green', () => {
+  it('treats days without an explicit slot as available', () => {
     const matrix = {
       members: [MEMBERS[0]],
       slots: [slot(1, '2099-07-10', '2099-07-10', 'available')],
@@ -67,7 +67,7 @@ describe('summarizeSpan', () => {
 
     const { members } = summarizeSpan(matrix, '2099-07-10', '2099-07-11')
 
-    expect(members[0].status).toBe('default')
+    expect(members[0].status).toBe('available')
   })
 
   it('lets a band-wide slot win over a member slot on the days it covers', () => {
@@ -119,10 +119,10 @@ describe('summarizeSpan', () => {
     expect(summarizeSpan(matrix, '2099-07-10', '2099-07-12').days[1].members[0].status).toBe('unavailable')
   })
 
-  it('reports every member as unknown when there are no slots', () => {
+  it('reports every member as available when there are no slots', () => {
     const { members, days } = summarizeSpan({ members: MEMBERS, slots: [] }, '2099-07-10', '2099-07-10')
 
-    expect(members.map((m) => m.status)).toEqual(['default', 'default'])
+    expect(members.map((m) => m.status)).toEqual(['available', 'available'])
     expect(days[0].bandWide).toBeNull()
   })
 
@@ -131,5 +131,143 @@ describe('summarizeSpan', () => {
       members: [],
       days: [{ date: '2099-07-10', bandWide: null, members: [] }],
     })
+  })
+
+  it('marks an actual timed booking overlap unavailable', () => {
+    const matrix = {
+      members: [MEMBERS[0]],
+      slots: [{
+        id: 'gig-9', source: 'booking', source_id: 9, band_member_id: 1,
+        start_date: '2099-07-10', end_date: '2099-07-10',
+        start_time: '18:00', end_time: '20:00', travel_margin_hours: 2,
+        status: 'unavailable', reason: 'Show',
+      }],
+    }
+
+    const result = summarizeSpan(matrix, '2099-07-10', '2099-07-10', {
+      start_date: '2099-07-10', end_date: '2099-07-10', start_time: '19:00', end_time: '21:00',
+    })
+
+    expect(result.members[0]).toEqual(expect.objectContaining({ status: 'unavailable', source: 'booking' }))
+  })
+
+  it('marks a gap inside the configured travel margin orange', () => {
+    const matrix = {
+      members: [MEMBERS[0]],
+      slots: [{
+        id: 'gig-9', source: 'booking', source_id: 9, band_member_id: 1,
+        start_date: '2099-07-10', end_date: '2099-07-10',
+        start_time: '18:00', end_time: '20:00', travel_margin_hours: 2,
+        status: 'unavailable', reason: 'Show',
+      }],
+    }
+
+    const result = summarizeSpan(matrix, '2099-07-10', '2099-07-10', {
+      start_date: '2099-07-10', end_date: '2099-07-10', start_time: '21:00', end_time: '22:00',
+    })
+
+    expect(result.members[0]).toEqual(expect.objectContaining({ status: 'travel_margin', source: 'booking' }))
+  })
+
+  it('allows an event exactly at the configured margin boundary', () => {
+    const matrix = {
+      members: [MEMBERS[0]],
+      slots: [{
+        id: 'gig-9', source: 'booking', source_id: 9, band_member_id: 1,
+        start_date: '2099-07-10', end_date: '2099-07-10',
+        start_time: '18:00', end_time: '20:00', travel_margin_hours: 2,
+        status: 'unavailable', reason: 'Show',
+      }],
+    }
+
+    const result = summarizeSpan(matrix, '2099-07-10', '2099-07-10', {
+      start_date: '2099-07-10', end_date: '2099-07-10', start_time: '22:00', end_time: '23:00',
+    })
+
+    expect(result.members[0].status).toBe('available')
+  })
+
+  it.each([
+    { start_time: null, end_time: null },
+    { start_time: '20:00', end_time: null },
+    { start_time: null, end_time: '20:00' },
+  ])('starts an event with incomplete times at 06:00 for conflict calculation', (times) => {
+    const matrix = {
+      members: [MEMBERS[0]],
+      slots: [{
+        id: 'gig-9', source: 'booking', source_id: 9, band_member_id: 1,
+        start_date: '2099-07-10', end_date: '2099-07-10',
+        start_time: '03:00', end_time: '05:00', travel_margin_hours: 2,
+        status: 'unavailable', reason: 'Late show',
+      }],
+    }
+
+    const result = summarizeSpan(matrix, '2099-07-10', '2099-07-10', {
+      start_date: '2099-07-10', end_date: '2099-07-10', ...times,
+    })
+
+    expect(result.members[0]).toEqual(expect.objectContaining({
+      status: 'travel_margin', source: 'booking',
+    }))
+  })
+
+  it('does not add a travel margin after a late booking for an untimed event the next day', () => {
+    const matrix = {
+      members: [MEMBERS[0]],
+      slots: [{
+        id: 'gig-9', source: 'booking', source_id: 9, band_member_id: 1,
+        start_date: '2099-07-09', end_date: '2099-07-09',
+        start_time: '22:00', end_time: '23:30', travel_margin_hours: 2,
+        status: 'unavailable', reason: 'Late show',
+      }],
+    }
+
+    const result = summarizeSpan(matrix, '2099-07-10', '2099-07-10', {
+      start_date: '2099-07-10', end_date: '2099-07-10', start_time: null, end_time: null,
+    })
+
+    expect(result.members[0].status).toBe('available')
+  })
+
+  it.each([
+    { start_time: null, end_time: null },
+    { start_time: '20:00', end_time: null },
+    { start_time: null, end_time: '20:00' },
+  ])('starts a booking with incomplete times at 06:00 for conflict calculation', (times) => {
+    const matrix = {
+      members: [MEMBERS[0]],
+      slots: [{
+        id: 'gig-9', source: 'booking', source_id: 9, band_member_id: 1,
+        start_date: '2099-07-10', end_date: '2099-07-10', ...times,
+        travel_margin_hours: 2, status: 'unavailable', reason: 'Untimed show',
+      }],
+    }
+
+    const result = summarizeSpan(matrix, '2099-07-10', '2099-07-10', {
+      start_date: '2099-07-10', end_date: '2099-07-10', start_time: '03:00', end_time: '05:00',
+    })
+
+    expect(result.members[0]).toEqual(expect.objectContaining({
+      status: 'travel_margin', source: 'booking',
+    }))
+  })
+
+  it('excludes the event currently being edited', () => {
+    const matrix = {
+      members: [MEMBERS[0]],
+      slots: [{
+        id: 'gig-9', source: 'booking', bookingType: 'gig', source_id: 9, band_member_id: 1,
+        start_date: '2099-07-10', end_date: '2099-07-10',
+        start_time: '18:00', end_time: '20:00', travel_margin_hours: 2,
+        status: 'unavailable', reason: 'This event',
+      }],
+    }
+
+    const result = summarizeSpan(matrix, '2099-07-10', '2099-07-10', {
+      start_date: '2099-07-10', end_date: '2099-07-10', start_time: '18:00', end_time: '20:00',
+      exclude: { type: 'gig', id: 9 },
+    })
+
+    expect(result.members[0].status).toBe('available')
   })
 })

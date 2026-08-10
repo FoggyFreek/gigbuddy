@@ -184,7 +184,8 @@ export async function loadSongs(executor, rehearsalId, tenantId) {
 
 export async function getLeadMemberIds(executor, tenantId) {
   const { rows } = await executor.query(
-    `SELECT id FROM band_members WHERE tenant_id = $1 AND position = 'lead'`,
+    `SELECT id FROM band_members
+      WHERE tenant_id = $1 AND position = 'lead' AND deleted_at IS NULL`,
     [tenantId],
   )
   return rows.map((r) => r.id)
@@ -193,7 +194,7 @@ export async function getLeadMemberIds(executor, tenantId) {
 export async function filterMemberIdsInTenant(executor, memberIds, tenantId) {
   if (!memberIds.length) return []
   const { rows } = await executor.query(
-    'SELECT id FROM band_members WHERE id = ANY($1) AND tenant_id = $2',
+    'SELECT id FROM band_members WHERE id = ANY($1) AND tenant_id = $2 AND deleted_at IS NULL',
     [memberIds, tenantId],
   )
   return rows.map((r) => r.id)

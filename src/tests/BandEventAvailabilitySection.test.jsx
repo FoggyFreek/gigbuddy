@@ -20,7 +20,7 @@ const SPAN_DAYS = [
     date: '2099-06-15',
     bandWide: null,
     members: [
-      { member_id: 1, status: 'default', reason: null, source: 'default' },
+      { member_id: 1, status: 'available', reason: null, source: 'default' },
       { member_id: 2, status: 'available', reason: null, source: 'member' },
     ],
   },
@@ -37,16 +37,22 @@ const SPAN_DAYS = [
 const SINGLE_DAY = [{ date: '2099-06-15', bandWide: null, members: SPAN_DAYS[1].members }]
 
 describe('BandEventAvailabilitySection', () => {
-  it('shows every member with their worst-day summary', () => {
-    wrap(<BandEventAvailabilitySection members={MEMBERS} days={SPAN_DAYS} />)
+  it('shows status in the chip and keeps conflict details in its tooltip', async () => {
+    const user = userEvent.setup()
+    wrap(<BandEventAvailabilitySection members={MEMBERS} days={SINGLE_DAY} />)
     expect(screen.getByText('Ann Bell')).toBeInTheDocument()
-    expect(screen.getByText('Unavailable — Holiday')).toBeInTheDocument()
+    const unavailableChip = screen.getByText('Unavailable')
+    expect(screen.queryByText('Holiday')).not.toBeInTheDocument()
+    await user.hover(unavailableChip)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/Ann Bell.*Holiday/i)
     expect(screen.getByText('Available')).toBeInTheDocument()
   })
 
   it('breaks a multi-day span down per day, labelled with date and status', () => {
     wrap(<BandEventAvailabilitySection members={MEMBERS} days={SPAN_DAYS} />)
-    expect(screen.getByLabelText('Jun 15 — No answer')).toBeInTheDocument()
+    expect(screen.queryByText('Unavailable')).not.toBeInTheDocument()
+    expect(screen.queryByText('Available')).not.toBeInTheDocument()
+    expect(screen.getAllByLabelText('Jun 15 — Available')).toHaveLength(2)
     expect(screen.getByLabelText('Jun 16 — Unavailable — Holiday')).toBeInTheDocument()
   })
 

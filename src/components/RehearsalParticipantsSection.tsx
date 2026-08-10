@@ -1,20 +1,15 @@
-import type { Rehearsal, Member, Id } from '../types/entities.ts'
+import type { AvailabilityStatus, Rehearsal, Member, Id, Participant } from '../types/entities.ts'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import Divider from '@mui/material/Divider'
-import FormControl from '@mui/material/FormControl'
 import Grid from '@mui/material/Grid'
-import IconButton from '@mui/material/IconButton'
-import InputLabel from '@mui/material/InputLabel'
-import MenuItem from '@mui/material/MenuItem'
-import Select from '@mui/material/Select'
-import Stack from '@mui/material/Stack'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
-import DeleteIcon from '@mui/icons-material/Delete'
-import VoteToggle from './VoteToggle.tsx'
+import BandParticipantsSection from './BandParticipantsSection.tsx'
+import useEventAvailability from '../hooks/useEventAvailability.ts'
 
 interface RehearsalParticipantsSectionProps {
   rehearsal: Rehearsal
@@ -30,6 +25,7 @@ interface RehearsalParticipantsSectionProps {
   // vote control is shown; all add/remove/promote/demote controls are hidden.
   canWrite?: boolean
   currentMemberId?: Id | null
+  showAvailability?: boolean
 }
 
 export default function RehearsalParticipantsSection({
@@ -44,8 +40,10 @@ export default function RehearsalParticipantsSection({
   onDemote,
   canWrite = true,
   currentMemberId = null,
+  showAvailability = false,
 }: Readonly<RehearsalParticipantsSectionProps>) {
   const { t } = useTranslation(['rehearsals', 'common'])
+  const { t: tAvailability } = useTranslation('availability')
   const participantIds = useMemo(
     () => new Set((rehearsal.participants ?? []).map((p) => p.band_member_id)),
     [rehearsal],
@@ -56,6 +54,47 @@ export default function RehearsalParticipantsSection({
     rehearsal.participants?.every((p) => p.vote === 'yes')
   const isPlanned = rehearsal.status === 'planned'
   const statusKey = isPlanned ? 'planned' : 'option'
+  const availability = useEventAvailability({
+    eventDate: showAvailability ? rehearsal.proposed_date : undefined,
+    eventType: 'rehearsal',
+    eventId: rehearsal.id,
+    startTime: rehearsal.start_time,
+    endTime: rehearsal.end_time,
+    participantIds: [...participantIds].flatMap((id) => id === undefined ? [] : [id]),
+  })
+
+  function availabilityLabel(status: AvailabilityStatus | undefined) {
+    if (status === 'available') return tAvailability($ => $.status.available)
+    if (status === 'travel_margin') return tAvailability($ => $.status.travel_margin)
+    if (status === 'unavailable') return tAvailability($ => $.status.unavailable)
+    return null
+  }
+
+  function renderAvailability(participant: Participant) {
+    const member = availability?.members.find(
+      (candidate) => candidate.member_id === participant.band_member_id,
+    )
+    const label = availabilityLabel(member?.status)
+    if (!member || !label) return null
+
+    const chip = (
+      <Chip
+        size="small"
+        label={label}
+        color={member.status === 'available'
+          ? 'success'
+          : member.status === 'unavailable'
+            ? 'error'
+            : 'warning'}
+      />
+    )
+
+    return member.reason ? (
+      <Tooltip title={`${participant.name} — ${member.reason}`}>{chip}</Tooltip>
+    ) : chip
+  }
+
+  const bandWideLabel = availabilityLabel(availability?.bandWide?.status)
 
   return (
     <>
@@ -86,96 +125,40 @@ export default function RehearsalParticipantsSection({
         )}
       </Grid>
 
-      {isPlanned ? (
-        <Grid size={12}>
-          <Divider sx={{ my: 1 }} />
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap' }}>
-            {rehearsal.participants?.map((p) => (
-              <Chip key={String(p.band_member_id)} size="small" label={p.name} />
-            ))}
-          </Stack>
-        </Grid>
-      ) : (
-        <Grid size={12}>
-          <Divider sx={{ my: 1 }} />
+      <Grid size={12}>
+        <Divider sx={{ my: 1 }} />
+        {!isPlanned && (
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
             {t($ => $.participants.requiredParticipants)}
           </Typography>
-          <Stack spacing={1}>
-            {(rehearsal.participants?.length ?? 0) === 0 && (
-              <Typography variant="body2" color="text.secondary">
-                {t($ => $.participants.noParticipants)}
-              </Typography>
-            )}
-            {rehearsal.participants?.map((p) => (
-              <Box
-                key={String(p.band_member_id)}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  p: 1,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: 1,
-                }}
-              >
-                <Box
-                  sx={{
-                    width: 14,
-                    height: 14,
-                    borderRadius: '50%',
-                    bgcolor: p.color || 'grey.400',
-                  }}
-                />
-                <Typography variant="body2" sx={{ fontWeight: 600, minWidth: 120 }}>
-                  {p.name}
-                </Typography>
-                <Chip size="small" label={p.position} variant="outlined" />
-                <Box sx={{ flexGrow: 1 }} />
-                {(canWrite || p.band_member_id === currentMemberId) && (
-                  <VoteToggle
-                    vote={p.vote}
-                    onChange={(v) => onVote?.(p.band_member_id, v)}
-                  />
-                )}
-                {canWrite && (
-                  <IconButton
-                    size="small"
-                    aria-label={t($ => $.participants.removeParticipant, { name: p.name })}
-                    onClick={() => onRemoveParticipant?.(p.band_member_id)}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                )}
-              </Box>
-            ))}
-          </Stack>
-
-          {canWrite && candidateMembers.length > 0 && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
-              <FormControl size="small" sx={{ minWidth: 220 }}>
-                <InputLabel id="add-participant-label">{t($ => $.participants.addParticipant)}</InputLabel>
-                <Select
-                  labelId="add-participant-label"
-                  label={t($ => $.participants.addParticipant)}
-                  value={addMemberId ?? ''}
-                  onChange={(e) => onAddMemberIdChange?.(e.target.value as Id | '')}
-                >
-                  {candidateMembers.map((m) => (
-                    <MenuItem key={String(m.id)} value={m.id}>
-                      {m.name} ({m.position})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <Button variant="outlined" disabled={!addMemberId} onClick={onAddParticipant}>
-                {t($ => $.actions.add, { ns: 'common' })}
-              </Button>
-            </Box>
-          )}
-        </Grid>
-      )}
+        )}
+        <BandParticipantsSection
+          participants={rehearsal.participants ?? []}
+          eventDate={rehearsal.proposed_date}
+          eventStatus={rehearsal.status}
+          candidateMembers={isPlanned ? [] : candidateMembers}
+          addMemberId={addMemberId}
+          emptyText={t($ => $.participants.noParticipants)}
+          addParticipantLabel={t($ => $.participants.addParticipant)}
+          getRemoveParticipantLabel={(participant) => t($ => $.participants.removeParticipant, { name: participant.name })}
+          onAddMemberChange={onAddMemberIdChange}
+          onAddParticipant={onAddParticipant}
+          onRemoveParticipant={onRemoveParticipant
+            ? (memberId) => onRemoveParticipant(memberId)
+            : undefined}
+          onVote={onVote ? (memberId, vote) => onVote(memberId, vote) : undefined}
+          canWrite={canWrite && !isPlanned}
+          shouldShowVote={(participant) => canWrite || participant.band_member_id === currentMemberId}
+          canVote={(participant) => canWrite || participant.band_member_id === currentMemberId}
+          headerContent={showAvailability && availability?.bandWide && bandWideLabel ? (
+            <Typography variant="caption" color="text.secondary">
+              {tAvailability($ => $.events.bandWide)}: {bandWideLabel}
+              {availability.bandWide.reason ? ` — ${availability.bandWide.reason}` : ''}
+            </Typography>
+          ) : null}
+          renderParticipantEnd={showAvailability ? renderAvailability : undefined}
+        />
+      </Grid>
     </>
   )
 }

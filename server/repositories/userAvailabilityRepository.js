@@ -74,7 +74,8 @@ export async function deleteUserSlot(executor, slotId, userId) {
 
 export async function fetchAvailabilitySettings(executor, userId) {
   const { rows } = await executor.query(
-    `SELECT availability_detail_visible, cross_band_gig_detail_visible
+    `SELECT availability_detail_visible, cross_band_gig_detail_visible,
+            availability_travel_margin_hours
        FROM users WHERE id = $1`,
     [userId],
   )
@@ -85,7 +86,8 @@ export async function updateAvailabilitySettings(executor, userId, fields, value
   const whereIdx = values.length + 1
   const { rows } = await executor.query(
     `UPDATE users SET ${fields.join(', ')} WHERE id = $${whereIdx}
-     RETURNING availability_detail_visible, cross_band_gig_detail_visible`,
+     RETURNING availability_detail_visible, cross_band_gig_detail_visible,
+               availability_travel_margin_hours`,
     [...values, userId],
   )
   return rows[0] || null
@@ -131,7 +133,8 @@ export async function isManagedByBand(executor, userId, tenantId) {
 // The privacy flags of several musicians at once, for the band-side grid.
 export async function fetchVisibilityForUsers(executor, userIds) {
   const { rows } = await executor.query(
-    `SELECT id, availability_detail_visible, cross_band_gig_detail_visible
+    `SELECT id, availability_detail_visible, cross_band_gig_detail_visible,
+            availability_travel_margin_hours
        FROM users WHERE id = ANY($1)`,
     [userIds],
   )
@@ -139,61 +142,60 @@ export async function fetchVisibilityForUsers(executor, userIds) {
 }
 
 // Bookings that make a musician busy without anyone entering a slot: gigs,
-// rehearsals and band events in the OTHER tenants they are an approved member
-// of. The tenant set is derived here from memberships — never supplied by a
-// caller.
-//
-// `excludeTenantId` is the band doing the looking: its own gigs, rehearsals and
-// events are already on its grid from their own endpoints, so projecting them
-// again as busy blocks would render each one twice.
-export async function listBookingsForUsersInRange(executor, userIds, from, to, excludeTenantId = null) {
+// rehearsals and band events in every tenant where they are an approved member.
+// The tenant set is derived from memberships, never supplied by a caller. The
+// viewing band may consume its own bookings while evaluating a proposed event.
+export async function listBookingsForUsersInRange(executor, userIds, from, to) {
   const { rows } = await executor.query(
     `WITH member_tenants AS (
        SELECT m.user_id, m.tenant_id, t.kind, bm.id AS band_member_id
          FROM memberships m
          JOIN tenants t ON t.id = m.tenant_id
          LEFT JOIN band_members bm ON bm.user_id = m.user_id AND bm.tenant_id = m.tenant_id
+          AND bm.deleted_at IS NULL
         WHERE m.user_id = ANY($1) AND m.status = 'approved' AND t.archived_at IS NULL
           AND t.deletion_status IS NULL
-          AND ($4::int IS NULL OR m.tenant_id <> $4)
      )
      SELECT mt.user_id, 'gig' AS source, g.tenant_id, t.display_name AS tenant_name,
             g.id AS source_id, g.event_date AS start_date, g.event_date AS end_date,
+            g.start_time, g.end_time,
             g.event_description AS title
        FROM member_tenants mt
        JOIN gigs g ON g.tenant_id = mt.tenant_id
        JOIN tenants t ON t.id = g.tenant_id
-      WHERE g.event_date BETWEEN $2 AND $3 AND g.status <> 'option'
+      WHERE g.event_date BETWEEN ($2::date - 1) AND ($3::date + 1)
         AND (mt.kind = 'personal' OR EXISTS (
           SELECT 1 FROM gig_participants gp
            WHERE gp.tenant_id = g.tenant_id AND gp.gig_id = g.id
              AND gp.band_member_id = mt.band_member_id
+             AND gp.vote IS DISTINCT FROM 'no'
         ))
      UNION ALL
      SELECT mt.user_id, 'rehearsal', r.tenant_id, t.display_name,
-            r.id, r.proposed_date, r.proposed_date, r.location
+            r.id, r.proposed_date, r.proposed_date, r.start_time, r.end_time, r.location
        FROM member_tenants mt
        JOIN rehearsals r ON r.tenant_id = mt.tenant_id
        JOIN tenants t ON t.id = r.tenant_id
-      WHERE r.proposed_date BETWEEN $2 AND $3 AND r.status <> 'option'
+      WHERE r.proposed_date BETWEEN ($2::date - 1) AND ($3::date + 1)
         AND (mt.kind = 'personal' OR EXISTS (
           SELECT 1 FROM rehearsal_participants rp
            WHERE rp.tenant_id = r.tenant_id AND rp.rehearsal_id = r.id
              AND rp.band_member_id = mt.band_member_id
+             AND rp.vote IS DISTINCT FROM 'no'
         ))
      UNION ALL
      SELECT mt.user_id, 'band_event', e.tenant_id, t.display_name,
-            e.id, e.start_date, e.end_date, e.title
+            e.id, e.start_date, e.end_date, e.start_time, e.end_time, e.title
        FROM member_tenants mt
        JOIN band_events e ON e.tenant_id = mt.tenant_id
        JOIN tenants t ON t.id = e.tenant_id
-      WHERE e.start_date <= $3 AND e.end_date >= $2
+      WHERE e.start_date <= ($3::date + 1) AND e.end_date >= ($2::date - 1)
         AND (mt.kind = 'personal' OR EXISTS (
           SELECT 1 FROM band_event_participants bep
            WHERE bep.tenant_id = e.tenant_id AND bep.band_event_id = e.id
              AND bep.band_member_id = mt.band_member_id
         ))`,
-    [userIds, from, to, excludeTenantId],
+    [userIds, from, to],
   )
   return rows
 }

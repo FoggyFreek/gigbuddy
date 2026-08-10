@@ -18,6 +18,7 @@ import {
   buildCalendarCellViewModel,
   indexByDate,
   indexByDateRange,
+  summarizeCalendarSlots,
 } from './calendar/calendarGrid.ts'
 import MonthMenu from './calendar/MonthMenu.tsx'
 import CalendarCell from './calendar/CalendarCell.tsx'
@@ -33,6 +34,8 @@ interface AvailabilityCalendarProps {
   members: Member[]
   /** Overrides how slots without a `band_member_id` render; defaults to band-wide. */
   unassignedLane?: UnassignedSlotLane
+  /** Personal calendars keep their own slots directly editable. */
+  summarizeAvailability?: boolean
   selectionStart?: string
   selectedDay?: string
   mobile?: boolean
@@ -59,6 +62,7 @@ export default function AvailabilityCalendar({
   bandEvents = [],
   members,
   unassignedLane,
+  summarizeAvailability = true,
   selectionStart,
   selectedDay,
   mobile = false,
@@ -138,8 +142,15 @@ export default function AvailabilityCalendar({
     [bandEvents, cells],
   )
   const slotsByDate = useMemo(
-    () => indexByDateRange(slots, (s) => s.start_date, (s) => s.end_date, cells),
-    [slots, cells],
+    () => summarizeAvailability
+      ? summarizeCalendarSlots(slots, cells.map((cell) => cell.iso))
+      : indexByDateRange(
+          slots,
+          (slot) => normalizeIsoDate(slot.start_date),
+          (slot) => normalizeIsoDate(slot.end_date) || normalizeIsoDate(slot.start_date),
+          cells,
+        ),
+    [slots, cells, summarizeAvailability],
   )
 
   const cellViewModels = useMemo(() => {

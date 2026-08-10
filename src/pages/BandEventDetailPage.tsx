@@ -96,7 +96,9 @@ export default function BandEventDetailPage() {
   }, [])
 
   const refreshAvailability = useCallback(async () => {
-    setEventAvailability(await (isPersonal ? getMyBandEvent(bandEventId) : getBandEvent(bandEventId)))
+    const updatedEvent = await (isPersonal ? getMyBandEvent(bandEventId) : getBandEvent(bandEventId))
+    setEventAvailability(updatedEvent)
+    return updatedEvent
   }, [bandEventId, setEventAvailability, isPersonal])
 
   const saveFn = useCallback(
@@ -111,7 +113,7 @@ export default function BandEventDetailPage() {
         outletCtx.onBandEventUpdate(bandEventId, patch)
       }
       // The span moved, so the worst-day summary no longer describes it.
-      if ('start_date' in patch || 'end_date' in patch) {
+      if ('start_date' in patch || 'end_date' in patch || 'start_time' in patch || 'end_time' in patch) {
         refreshAvailability().catch(() => {})
       }
     }
@@ -157,13 +159,23 @@ export default function BandEventDetailPage() {
   }
 
   async function handleAddMember(memberId: Id) {
-    const event = await addBandEventParticipant(bandEventId, memberId)
-    setEventAvailability(event)
+    const updatedEvent = await addBandEventParticipant(bandEventId, memberId)
+    setEventAvailability(updatedEvent)
+    if (typeof outletCtx.onBandEventUpdate === 'function') {
+      outletCtx.onBandEventUpdate(bandEventId, {
+        members_availability: updatedEvent.members_availability,
+      })
+    }
   }
 
   async function handleRemoveMember(memberId: Id) {
     await removeBandEventParticipant(bandEventId, memberId)
-    await refreshAvailability()
+    const updatedEvent = await refreshAvailability()
+    if (typeof outletCtx.onBandEventUpdate === 'function') {
+      outletCtx.onBandEventUpdate(bandEventId, {
+        members_availability: updatedEvent.members_availability,
+      })
+    }
   }
 
   const selectedMemberIds = new Set(availability.members_availability?.map((member) => member.member_id))

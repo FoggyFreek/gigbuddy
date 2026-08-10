@@ -40,7 +40,7 @@ import { listMembers } from '../../api/bandMembers.ts'
 import { compressBanner } from '../../utils/compressImage.ts'
 import { toDateInput, toTimeInput } from '../../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../../utils/requiredFields.ts'
-import type { Id, GigTag, Member, Venue, Task } from '../../types/entities.ts'
+import type { AvailabilitySummary, Id, GigTag, Member, Venue, Task } from '../../types/entities.ts'
 
 const REQUIRED_FIELDS = ['event_date', 'event_description']
 
@@ -223,6 +223,10 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     [gig]
   )
   const candidateMembers = members.filter((m) => !participantIds.has(m.id))
+
+  const handleAvailabilityChange = useCallback((availability: AvailabilitySummary | null) => {
+    onBannerUpdate?.(gigId, { members_availability: availability?.members ?? [] })
+  }, [gigId, onBannerUpdate])
 
   async function handleVote(memberId: Id, vote: string | null) {
     await setGigVote(gigId, memberId, vote ?? '')
@@ -570,7 +574,6 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           selectedVenue={selectedVenue}
           selectedFestival={selectedFestival}
           hideVenueOpenAction={isCrossBand}
-          showAvailability={showAvailability}
           onChange={handleChange}
           onVenueChange={(venue) => {
             setSelectedVenue(venue)
@@ -601,6 +604,11 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           active={shownTab === 'participants'}
           editable={editable}
           gigId={gigId}
+          showAvailability={showAvailability}
+          eventDate={form.event_date}
+          eventStatus={gig?.status}
+          startTime={form.start_time}
+          endTime={form.end_time}
           participants={gig?.participants ?? []}
           candidateMembers={candidateMembers}
           addMemberId={addMemberId}
@@ -611,6 +619,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           onAddParticipant={handleAddParticipant}
           onRemoveParticipant={handleRemoveParticipant}
           onVote={handleVote}
+          onAvailabilityChange={handleAvailabilityChange}
         />
       )}
 

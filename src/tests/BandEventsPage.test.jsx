@@ -37,7 +37,8 @@ vi.mock('../api/me.ts', () => ({
 
 import BandEventsPage from '../pages/BandEventsPage.tsx'
 import BandEventDetailPage from '../pages/BandEventDetailPage.tsx'
-import { deleteBandEvent, listBandEvents, listPastBandEvents, listUpcomingBandEvents, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
+import { addBandEventParticipant, deleteBandEvent, listBandEvents, listPastBandEvents, listUpcomingBandEvents, getBandEvent, removeBandEventParticipant, updateBandEvent } from '../api/bandEvents.ts'
+import { listMembers } from '../api/bandMembers.ts'
 import { getMyBandEvent } from '../api/me.ts'
 import theme from '../theme.ts'
 import { AuthContext } from '../contexts/authContext.ts'
@@ -95,6 +96,11 @@ describe('BandEventsPage', () => {
     listUpcomingBandEvents.mockResolvedValue({ items: EVENTS, meta: { limit: 100, returned: EVENTS.length } })
     listPastBandEvents.mockReset()
     listPastBandEvents.mockResolvedValue({ items: [], meta: { limit: 100, returned: 0, nextCursor: null } })
+    listMembers.mockReset()
+    listMembers.mockResolvedValue([])
+    addBandEventParticipant.mockReset()
+    addBandEventParticipant.mockResolvedValue({})
+    removeBandEventParticipant.mockClear()
     deleteBandEvent.mockClear()
   })
 
@@ -163,6 +169,85 @@ describe('BandEventsPage', () => {
     )
     expect(updateBandEvent).toHaveBeenCalledWith(1, expect.objectContaining({ title: 'Rehearsal day' }))
     expect(listUpcomingBandEvents).toHaveBeenCalledTimes(1)
+  })
+
+  it('updates the selected list row after adding a participant in the detail pane', async () => {
+    const user = userEvent.setup()
+    const eventDetail = {
+      id: 1,
+      title: 'Studio session',
+      start_date: '2099-06-15',
+      end_date: '2099-06-15',
+      start_time: null,
+      end_time: null,
+      location: null,
+      notes: '',
+      members_availability: [],
+      availability_days: [],
+    }
+    const alice = {
+      member_id: 7,
+      name: 'Alice',
+      position: 'lead',
+      color: '#e53935',
+      status: 'available',
+      reason: null,
+    }
+    getBandEvent.mockResolvedValueOnce(eventDetail)
+    listMembers.mockResolvedValueOnce([{ id: 7, name: 'Alice', position: 'lead', color: '#e53935' }])
+    addBandEventParticipant.mockResolvedValueOnce({
+      ...eventDetail,
+      members_availability: [alice],
+    })
+
+    wrapWithRoutes({ initialEntries: ['/events/1'] })
+
+    const participantSelect = await screen.findByRole('combobox', { name: /add band member/i })
+    await user.click(participantSelect)
+    await user.click(screen.getByRole('option', { name: /Alice/ }))
+    await user.click(screen.getAllByRole('button', { name: /^add$/i }).at(-1))
+
+    await waitFor(() => expect(addBandEventParticipant).toHaveBeenCalledWith(1, 7))
+    expect(await screen.findByText('A')).toBeInTheDocument()
+  })
+
+  it('updates the selected list row after removing a participant in the detail pane', async () => {
+    const user = userEvent.setup()
+    const alice = {
+      member_id: 7,
+      name: 'Alice',
+      position: 'lead',
+      color: '#e53935',
+      status: 'available',
+      reason: null,
+    }
+    const eventDetail = {
+      id: 1,
+      title: 'Studio session',
+      start_date: '2099-06-15',
+      end_date: '2099-06-15',
+      start_time: null,
+      end_time: null,
+      location: null,
+      notes: '',
+      members_availability: [alice],
+      availability_days: [],
+    }
+    listUpcomingBandEvents.mockResolvedValue({
+      items: [{ ...EVENTS[0], members_availability: [alice] }],
+      meta: { limit: 100, returned: 1 },
+    })
+    getBandEvent
+      .mockResolvedValueOnce(eventDetail)
+      .mockResolvedValueOnce({ ...eventDetail, members_availability: [] })
+
+    wrapWithRoutes({ initialEntries: ['/events/1'] })
+    expect(await screen.findByText('A')).toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: /remove Alice/i }))
+
+    await waitFor(() => expect(removeBandEventParticipant).toHaveBeenCalledWith(1, 7))
+    await waitFor(() => expect(screen.queryByText('A')).not.toBeInTheDocument())
   })
 
   it('renders detail alongside the list at /events/:id and the Close button returns to /events', async () => {

@@ -133,6 +133,8 @@ export interface Gig {
   open_task_count?: number
   venue_id?: Id | null
   festival_id?: Id | null
+  /** Participant availability summary rendered in gig list rows. */
+  members_availability?: MemberAvailability[]
   // Venue deal terms. NUMERIC(5,2) percentages arrive as strings over the wire
   // but may be set as numbers in code; null = not agreed.
   merchandise_cut?: number | string | null
@@ -154,6 +156,8 @@ export interface Member {
   sort_order?: number
   // Set when this band member is linked to an app (gigBuddy) user account.
   user_id?: Id | null
+  /** The linked user allowed this band to manage their availability. */
+  availability_managed_by_band?: boolean
 }
 
 export interface BandMemberInput {
@@ -211,8 +215,7 @@ export interface Rehearsal {
   viewerBandMemberId?: Id | null
 }
 
-/** 'available' | 'unavailable' | 'default' (nothing recorded). */
-export type AvailabilityStatus = 'available' | 'unavailable' | 'default'
+export type AvailabilityStatus = 'available' | 'travel_margin' | 'unavailable'
 
 /**
  * One member's availability for an event, derived server-side from the
@@ -228,7 +231,7 @@ export interface MemberAvailability {
   position?: string
   status?: AvailabilityStatus
   reason?: string | null
-  /** Which slot decided it: 'band' | 'member' | 'default'. */
+  /** Which source decided it: 'band' | 'member' | 'booking' | 'default'. */
   source?: string
 }
 
@@ -251,6 +254,8 @@ export interface BandEvent {
   start_date?: string
   my_band?: MyBandRef | null
   end_date?: string
+  start_time?: string
+  end_time?: string
   location?: string
   /** Absent in a personal workspace, which has no band roster. */
   members_availability?: MemberAvailability[]
@@ -270,7 +275,14 @@ export interface Slot {
    * user-level calendar (see server/services/availabilityProjection.js).
    * Band-local slots for members without an account carry none of them.
    */
-  source?: 'slot' | 'booking'
+  source?: 'slot' | 'booking' | 'summary'
+  /** Month-view aggregation marker; a single explicit source remains editable. */
+  calendar_summary?: boolean
+  bookingType?: 'gig' | 'rehearsal' | 'band_event'
+  source_id?: Id
+  start_time?: string | null
+  end_time?: string | null
+  travel_margin_hours?: number
   /** The viewer may not see this member's detail — show busy, not why. */
   redacted?: boolean
   /** A booking's title / band, present only when the owner allows it. */

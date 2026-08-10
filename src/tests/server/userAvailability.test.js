@@ -131,6 +131,7 @@ describe('privacy and delegation settings', () => {
     expect(res.body).toMatchObject({
       availabilityDetailVisible: false,
       crossBandGigDetailVisible: false,
+      travelMarginHours: 2,
     })
   })
 
@@ -151,6 +152,18 @@ describe('privacy and delegation settings', () => {
     ).expect(200)
     expect(res.body.availabilityDetailVisible).toBe(true)
     expect(res.body.delegations.find((d) => d.tenantId === seed.tenantA.id).managedByBand).toBe(true)
+  })
+
+  it('updates and validates the travel margin', async () => {
+    const updated = await asUser(seed.userA.id)(
+      request(app).patch('/api/me/availability/settings').send({ travel_margin_hours: 5 }),
+    ).expect(200)
+    expect(updated.body.travelMarginHours).toBe(5)
+
+    await asUser(seed.userA.id)(request(app).patch('/api/me/availability/settings')
+      .send({ travel_margin_hours: 2.5 })).expect(400)
+    await asUser(seed.userA.id)(request(app).patch('/api/me/availability/settings')
+      .send({ travel_margin_hours: 25 })).expect(400)
   })
 
   it('rejects non-boolean flags rather than coercing them', async () => {
@@ -368,19 +381,27 @@ describe('bookings in other bands project as busy', () => {
     expect(res.body.find((slot) => slot.source === 'booking')).toBeUndefined()
   })
 
-  // A booking in THIS band is this band's own data — the viewer can already see
-  // it on the gig itself, so hiding it in the grid would be theatre.
-  it('never redacts this band\'s own booking', async () => {
-    // seed.memberA already links userA into tenantA's roster.
-    await addMembership(seed.userB.id, seed.tenantA.id)
-    await pool.query(
-      `INSERT INTO gigs (tenant_id, event_description, event_date, status)
-       VALUES ($1, 'Our Own Show', '2099-07-15', 'confirmed')`,
+  it('omits a current-tenant band event from availability while keeping cross-tenant bookings', async () => {
+    // seed.memberA already links userA into tenantA's roster. The band event is
+    // rendered by the event calendar endpoint and must not become a second,
+    // derived availability block.
+    const { rows: [event] } = await pool.query(
+      `INSERT INTO band_events (tenant_id, title, start_date, end_date)
+       VALUES ($1, 'Our Own Event', '2099-07-15', '2099-07-15') RETURNING *`,
       [seed.tenantA.id],
     )
+    await pool.query(
+      `INSERT INTO band_event_participants (tenant_id, band_event_id, band_member_id)
+       VALUES ($1, $2, $3)`,
+      [seed.tenantA.id, event.id, seed.memberA.id],
+    )
+    await bookedElsewhere()
 
     const res = await bandGrid(seed.userB.id, seed.tenantA.id).expect(200)
-    expect(res.body.find((s) => s.source === 'booking')).toBeUndefined()
+    expect(res.body.some((slot) => slot.source === 'booking'
+      && slot.createdInTenantId === seed.tenantA.id)).toBe(false)
+    expect(res.body.some((slot) => slot.source === 'booking'
+      && slot.createdInTenantId === seed.tenantB.id)).toBe(true)
   })
 
   it('does not let a derived booking be patched or deleted as an availability slot', async () => {
@@ -395,6 +416,73 @@ describe('bookings in other bands project as busy', () => {
     await inTenant(seed.userA.id, seed.tenantA.id)(
       request(app).delete(`/api/availability/${booking.id}`),
     ).expect(400)
+  })
+})
+
+describe('event availability evaluation', () => {
+  async function addTimedOption(vote = null) {
+    const { rows: [gig] } = await pool.query(
+      `INSERT INTO gigs (tenant_id, event_description, event_date, start_time, end_time, status)
+       VALUES ($1, 'Timed option', '2099-07-15', '18:00', '20:00', 'option') RETURNING *`,
+      [seed.tenantA.id],
+    )
+    await pool.query(
+      `INSERT INTO gig_participants (tenant_id, gig_id, band_member_id, vote)
+       VALUES ($1, $2, $3, $4)`,
+      [seed.tenantA.id, gig.id, seed.memberA.id, vote],
+    )
+    return gig
+  }
+
+  const evaluate = (body) => inTenant(seed.userA.id, seed.tenantA.id)(
+    request(app).post('/api/availability/evaluate').send({
+      event_type: 'rehearsal',
+      start_date: '2099-07-15',
+      participant_ids: [seed.memberA.id],
+      ...body,
+    }),
+  )
+
+  it('uses every event status and distinguishes overlap, travel margin, and a sufficient gap', async () => {
+    await addTimedOption()
+
+    expect((await evaluate({ start_time: '19:00', end_time: '21:00' }).expect(200))
+      .body.members[0].status).toBe('unavailable')
+    expect((await evaluate({ start_time: '21:00', end_time: '22:00' }).expect(200))
+      .body.members[0].status).toBe('travel_margin')
+    expect((await evaluate({ start_time: '22:00', end_time: '23:00' }).expect(200))
+      .body.members[0].status).toBe('available')
+  })
+
+  it('uses the participant\'s configured travel margin', async () => {
+    await addTimedOption()
+    await asUser(seed.userA.id)(request(app).patch('/api/me/availability/settings')
+      .send({ travel_margin_hours: 4 })).expect(200)
+
+    expect((await evaluate({ start_time: '22:00', end_time: '23:00' }).expect(200))
+      .body.members[0].status).toBe('travel_margin')
+  })
+
+  it('does not reserve time for a participant who voted no', async () => {
+    await addTimedOption('no')
+    expect((await evaluate({ start_time: '19:00', end_time: '21:00' }).expect(200))
+      .body.members[0].status).toBe('available')
+  })
+
+  it('excludes the current event and validates its tenant scope', async () => {
+    const gig = await addTimedOption()
+    const own = await inTenant(seed.userA.id, seed.tenantA.id)(
+      request(app).post('/api/availability/evaluate').send({
+        event_type: 'gig', event_id: gig.id, start_date: '2099-07-15',
+        start_time: '18:00', end_time: '20:00', participant_ids: [seed.memberA.id],
+      }),
+    ).expect(200)
+    expect(own.body.members[0].status).toBe('available')
+
+    await inTenant(seed.userA.id, seed.tenantA.id)(request(app).post('/api/availability/evaluate').send({
+      event_type: 'gig', event_id: seed.gigB.id, start_date: '2099-07-15',
+      participant_ids: [seed.memberA.id],
+    })).expect(404)
   })
 })
 
@@ -479,6 +567,12 @@ describe('who may write a linked member\'s availability', () => {
       created_by_user_id: seed.userB.id,
       created_in_tenant_id: seed.tenantA.id,
     })
+
+    const roster = await inTenant(seed.userB.id, seed.tenantA.id)(
+      request(app).get('/api/band-members'),
+    ).expect(200)
+    expect(roster.body.find((member) => member.id === memberA.id))
+      .toMatchObject({ availability_managed_by_band: true })
   })
 
   // Delegation is per band: granting it to one grants nothing anywhere else.

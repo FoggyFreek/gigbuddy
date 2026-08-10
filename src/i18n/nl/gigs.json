@@ -50,6 +50,8 @@
     "create": "Aanmaken",
     "required": "Verplicht",
     "unavailableTitle": "Lid niet beschikbaar",
+    "travelMarginTitle": "Waarschuwing reistijdmarge",
+    "travelMarginBody": "{{names}} heeft een ander evenement binnen de ingestelde reistijdmarge. Weet je zeker dat je dit optreden wilt aanmaken?",
     "unavailableBody_one": "{{names}} is op deze datum als niet beschikbaar gemarkeerd. Weet je zeker dat je dit optreden wilt aanmaken?",
     "unavailableBody_other": "{{names}} zijn op deze datum als niet beschikbaar gemarkeerd. Weet je zeker dat je dit optreden wilt aanmaken?",
     "goBack": "Terug",

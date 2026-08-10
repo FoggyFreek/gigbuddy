@@ -12,6 +12,9 @@ import {
   insertBandMember,
   updateBandMemberFields,
   deleteBandMember as deleteBandMemberRow,
+  fetchBandMemberForUpdate,
+  syncLeadIntoCurrentEvents,
+  removeMemberFromCurrentEvents,
 } from '../repositories/bandMemberRepository.js'
 import { enforceMemberCap } from './limitService.js'
 import { withTransaction, abortTransaction } from '../db/withTransaction.js'
@@ -23,7 +26,7 @@ export async function listMembers(db, tenantId) {
   return listBandMembers(db, tenantId)
 }
 
-export async function createMember(db, tenantId, body) {
+export async function createMember(db, tenantId, body, actorUserId = null) {
   const { name, roles = [], color, position } = body
   if (!name) return badRequest('name is required')
   const rolesError = validateMemberRoles(roles)
@@ -46,11 +49,14 @@ export async function createMember(db, tenantId, body) {
       sortOrder,
       position: pos,
     })
+    if (member.position === 'lead') {
+      await syncLeadIntoCurrentEvents(client, tenantId, member.id, actorUserId)
+    }
     return { member }
   }, { db })
 }
 
-export async function patchMember(db, tenantId, memberId, body) {
+export async function patchMember(db, tenantId, memberId, body, actorUserId = null) {
   if ('roles' in body) {
     const rolesError = validateMemberRoles(body.roles)
     if (rolesError) return badRequest(rolesError)
@@ -58,12 +64,29 @@ export async function patchMember(db, tenantId, memberId, body) {
   const built = buildMemberUpdateFields(body)
   if (!built.fields.length) return badRequest('No valid fields to update')
 
-  const member = await updateBandMemberFields(db, tenantId, memberId, built.fields, built.values)
-  if (!member) return NOT_FOUND
-  return { member }
+  return withTransaction(async (client) => {
+    const previous = await fetchBandMemberForUpdate(client, memberId, tenantId)
+    if (!previous) abortTransaction(NOT_FOUND)
+    const member = await updateBandMemberFields(client, tenantId, memberId, built.fields, built.values)
+    if (!member) abortTransaction(NOT_FOUND)
+    if (previous.position !== member.position) {
+      if (member.position === 'lead') {
+        await syncLeadIntoCurrentEvents(client, tenantId, member.id, actorUserId)
+      } else if (previous.position === 'lead') {
+        await removeMemberFromCurrentEvents(client, tenantId, member.id)
+      }
+    }
+    return { member }
+  }, { db })
 }
 
 export async function deleteMember(db, tenantId, memberId) {
-  const deleted = await deleteBandMemberRow(db, memberId, tenantId)
-  return deleted ? {} : NOT_FOUND
+  return withTransaction(async (client) => {
+    const member = await fetchBandMemberForUpdate(client, memberId, tenantId)
+    if (!member) abortTransaction(NOT_FOUND)
+    await removeMemberFromCurrentEvents(client, tenantId, memberId)
+    const deleted = await deleteBandMemberRow(client, memberId, tenantId)
+    if (!deleted) abortTransaction(NOT_FOUND)
+    return {}
+  }, { db })
 }

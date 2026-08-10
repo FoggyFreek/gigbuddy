@@ -16,6 +16,7 @@ vi.mock('../api/bandMembers.ts', () => ({
 }))
 
 vi.mock('../api/availability.ts', () => ({
+  evaluateEventAvailability: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
   listAvailability: vi.fn().mockResolvedValue([]),
   createSlot: vi.fn(),
   updateSlot: vi.fn(),

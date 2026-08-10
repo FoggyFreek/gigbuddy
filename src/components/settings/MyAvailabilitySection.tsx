@@ -6,6 +6,7 @@ import FormControlLabel from '@mui/material/FormControlLabel'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Switch from '@mui/material/Switch'
+import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 import {
@@ -25,10 +26,14 @@ export default function MyAvailabilitySection() {
   const [settings, setSettings] = useState<AvailabilitySettings | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [marginInput, setMarginInput] = useState('2')
 
   useEffect(() => {
     getAvailabilitySettings()
-      .then(setSettings)
+      .then((loaded) => {
+        setSettings(loaded)
+        setMarginInput(String(loaded.travelMarginHours ?? 2))
+      })
       .catch(() => setError(t($ => $.mine.loadFailed)))
   }, [t])
 
@@ -60,6 +65,28 @@ export default function MyAvailabilitySection() {
 
       {/* Both default to off — private by default; sharing is opt-in. */}
       <Stack spacing={2}>
+        <Stack sx={{ maxWidth: 280 }}>
+          <TextField
+            type="number"
+            label={t($ => $.mine.travelMargin)}
+            value={marginInput}
+            disabled={settings === null || busy}
+            slotProps={{ htmlInput: { min: 0, max: 24, step: 1 } }}
+            onChange={(event) => setMarginInput(event.target.value)}
+            onBlur={() => {
+              const margin = Number(marginInput)
+              if (!Number.isInteger(margin) || margin < 0 || margin > 24) {
+                setMarginInput(String(settings?.travelMarginHours ?? 2))
+                return
+              }
+              if (margin !== settings?.travelMarginHours) void save({ travel_margin_hours: margin })
+            }}
+          />
+          <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5 }}>
+            {t($ => $.mine.travelMarginHelp)}
+          </Typography>
+        </Stack>
+
         <Stack>
           <FormControlLabel
             control={

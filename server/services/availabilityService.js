@@ -5,6 +5,8 @@ import { validateSlot, buildSlotUpdateFields } from '../validators/availabilityV
 import {
   listSlotsInRange,
   listBandMembers,
+  listBookingsForMembersInRange,
+  eventExistsInTenant,
   insertSlot,
   updateSlotFields,
   deleteSlot as deleteSlotRow,
@@ -26,7 +28,7 @@ import {
 } from './userAvailabilityService.js'
 import { bandMemberUserId } from '../repositories/bandMemberRepository.js'
 import { badRequest, forbidden, notFound } from './serviceErrors.js'
-import { parseDateRange } from '../validators/common.js'
+import { parseDateRange, validateDailyTimeRange } from '../validators/common.js'
 
 const NOT_FOUND = notFound('Not found')
 
@@ -50,12 +52,33 @@ export async function loadAvailabilityMatrix(db, tenantId, from, to, viewer = nu
   ])
 
   const linked = members.filter((m) => m.user_id !== null)
-  if (linked.length === 0) return { members, slots: bandLocal }
+  const unlinked = members.filter((m) => m.user_id === null)
+  const localBookings = await listBookingsForMembersInRange(
+    db, tenantId, unlinked.map((member) => member.id), from, to,
+  )
+  const projectedLocalBookings = localBookings.map((booking) => ({
+    id: `${booking.source}-${booking.source_id}`,
+    source: 'booking',
+    bookingType: booking.source,
+    source_id: booking.source_id,
+    band_member_id: booking.band_member_id,
+    tenant_id: tenantId,
+    start_date: booking.start_date,
+    end_date: booking.end_date,
+    start_time: booking.start_time,
+    end_time: booking.end_time,
+    travel_margin_hours: 2,
+    status: 'unavailable',
+    reason: booking.title ?? null,
+    title: booking.title ?? null,
+    redacted: false,
+  }))
+  if (linked.length === 0) return { members, slots: [...bandLocal, ...projectedLocalBookings] }
 
   const userIds = [...new Set(linked.map((m) => m.user_id))]
   const [userSlots, bookings, visibility] = await Promise.all([
     listSlotsForUsersInRange(db, userIds, from, to),
-    listBookingsForUsersInRange(db, userIds, from, to, tenantId),
+    listBookingsForUsersInRange(db, userIds, from, to),
     fetchVisibilityForUsers(db, userIds),
   ])
 
@@ -63,6 +86,7 @@ export async function loadAvailabilityMatrix(db, tenantId, from, to, viewer = nu
     userId: v.id,
     availabilityDetailVisible: v.availability_detail_visible,
     crossBandGigDetailVisible: v.cross_band_gig_detail_visible,
+    travelMarginHours: v.availability_travel_margin_hours ?? 2,
   }]))
   const memberIdByUser = new Map(linked.map((m) => [m.user_id, m.id]))
   const seenViewer = viewer ?? { userId: null, tenantId }
@@ -85,7 +109,7 @@ export async function loadAvailabilityMatrix(db, tenantId, from, to, viewer = nu
     // as band_member_id null, which the span rules read as band-wide.
     .filter((entry) => entry.band_member_id !== null)
 
-  return { members, slots: [...bandLocal, ...projected] }
+  return { members, slots: [...bandLocal, ...projectedLocalBookings, ...projected] }
 }
 
 export async function listRange(db, tenantId, query, viewer = null) {
@@ -93,7 +117,13 @@ export async function listRange(db, tenantId, query, viewer = null) {
   if (!from || !to) return badRequest('from and to are required')
 
   const { slots } = await loadAvailabilityMatrix(db, tenantId, from, to, viewer)
-  return { slots }
+  // Current-tenant events already have their own calendar blocks. Keep them in
+  // the evaluation matrix, but do not duplicate them as availability blocks.
+  // Explicit slots and cross-tenant bookings remain visible.
+  return {
+    slots: slots.filter((slot) => slot.source !== 'booking'
+      || String(slot.createdInTenantId ?? slot.tenant_id) !== String(tenantId)),
+  }
 }
 
 // Per-member availability for a single date — the span rules applied to a span
@@ -111,6 +141,52 @@ export async function listSpan(db, tenantId, query, viewer = null) {
 
   const matrix = await loadAvailabilityMatrix(db, tenantId, range.from, range.to, viewer)
   return summarizeSpan(matrix, range.from, range.to)
+}
+
+const EVENT_TYPES = new Set(['gig', 'rehearsal', 'band_event'])
+
+export async function evaluateEvent(db, tenantId, body, viewer = null) {
+  const type = body?.event_type
+  if (!EVENT_TYPES.has(type)) return badRequest('event_type must be gig, rehearsal, or band_event')
+  const start = body?.start_date
+  const end = body?.end_date || start
+  const range = parseDateRange({ from: start, to: end })
+  if (!range) return badRequest('start_date and end_date must be valid ISO dates with start_date <= end_date')
+
+  const startTime = body?.start_time || null
+  const endTime = body?.end_time || null
+  const timeError = validateDailyTimeRange(startTime, endTime)
+  if (timeError) return badRequest(timeError)
+
+  const eventId = body?.event_id == null ? null : Number(body.event_id)
+  if (eventId !== null) {
+    if (!Number.isInteger(eventId) || eventId <= 0) return badRequest('event_id must be a positive integer')
+    if (!(await eventExistsInTenant(db, tenantId, type, eventId))) return NOT_FOUND
+  }
+
+  let participantIds = null
+  if (body?.participant_ids !== undefined) {
+    if (!Array.isArray(body.participant_ids)) return badRequest('participant_ids must be an array')
+    participantIds = body.participant_ids.map(Number)
+    if (participantIds.some((id) => !Number.isInteger(id) || id <= 0)) {
+      return badRequest('participant_ids must contain positive integers')
+    }
+  }
+
+  const matrix = await loadAvailabilityMatrix(db, tenantId, range.from, range.to, viewer)
+  const selected = participantIds === null
+    ? new Set(matrix.members.filter((member) => member.position === 'lead').map((member) => member.id))
+    : new Set(participantIds)
+  if ([...selected].some((id) => !matrix.members.some((member) => member.id === id))) return NOT_FOUND
+
+  const filtered = { ...matrix, members: matrix.members.filter((member) => selected.has(member.id)) }
+  return summarizeSpan(filtered, range.from, range.to, {
+    start_date: range.from,
+    end_date: range.to,
+    start_time: startTime,
+    end_time: endTime,
+    ...(eventId === null ? {} : { exclude: { type, id: eventId } }),
+  })
 }
 
 // A write for a member who is LINKED to a user goes to that user's own

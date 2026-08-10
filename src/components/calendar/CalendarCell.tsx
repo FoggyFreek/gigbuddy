@@ -10,6 +10,7 @@ import {
   GIG_STATUS_COLORS,
   REHEARSAL_STATUS_COLORS,
   BAND_EVENT_COLOR,
+  canManageAvailabilityForMember,
   getMemberColor,
 } from '../../utils/availabilityUtils.ts'
 import { venueHeadline } from '../../utils/venueDisplay.ts'
@@ -83,11 +84,26 @@ function DayNumber({ date, mobile, isToday, isSelected, inMonth, theme }: Readon
 interface DotProps {
   bgcolor?: string
   opacity?: number
+  dashed?: boolean
   dataAttr?: Record<string, string | number>
 }
 
-function Dot({ bgcolor, opacity, dataAttr }: Readonly<DotProps>) {
-  return <Box {...dataAttr} sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor, opacity }} />
+function Dot({ bgcolor, opacity, dashed = false, dataAttr }: Readonly<DotProps>) {
+  return (
+    <Box
+      {...dataAttr}
+      sx={{
+        width: 7,
+        height: 7,
+        boxSizing: 'border-box',
+        borderRadius: '50%',
+        bgcolor: dashed ? 'transparent' : bgcolor,
+        border: dashed ? '1px dashed' : 'none',
+        borderColor: bgcolor,
+        opacity,
+      }}
+    />
+  )
 }
 
 interface MobileDotsProps {
@@ -108,9 +124,22 @@ function MobileDots({ cell, members, unassignedLane }: Readonly<MobileDotsProps>
       {(cell.cellBandEvents ?? []).map((ev) => (
         <Dot key={`be-${ev.id}`} dataAttr={{ 'data-band-event-id': String(ev.id) }} bgcolor={BAND_EVENT_COLOR} />
       ))}
-      {(cell.cellSlots ?? []).map((slot) => (
-        <Dot key={`s-${slot.id}`} dataAttr={{ 'data-slot-id': String(slot.id) }} bgcolor={getMemberColor(slot, members, unassignedLane?.color)} />
-      ))}
+      {(cell.cellSlots ?? []).map((slot) => {
+        const color = getMemberColor(slot, members, unassignedLane?.color)
+        const isUnavailable = slot.status === 'unavailable'
+        return (
+          <Dot
+            key={`s-${slot.id}`}
+            dataAttr={{
+              'data-slot-id': String(slot.id),
+              'data-member-color': color,
+              'data-availability-appearance': isUnavailable ? 'dashed' : 'filled',
+            }}
+            bgcolor={color}
+            dashed={isUnavailable}
+          />
+        )
+      })}
     </Stack>
   )
 }
@@ -249,16 +278,22 @@ interface SlotBarProps {
 function SlotBar({ slot, members, theme, unassignedLane, onSlotClick }: Readonly<SlotBarProps>) {
   const { t } = useTranslation('availability')
   const color = getMemberColor(slot, members, unassignedLane?.color)
+  const resolvedColor = resolvePaletteColor(theme, color)
   const isUnavailable = slot.status === 'unavailable'
   const isUnassigned = slot.band_member_id == null
   const unassignedName = unassignedLane?.name ?? t($ => $.events.band)
+  const member = isUnassigned
+    ? null
+    : members.find((m) => String(m.id) === String(slot.band_member_id))
   const memberName = isUnassigned
     ? unassignedName
-    : members.find((m) => m.id === slot.band_member_id)?.name || ''
+    : member?.name || ''
   const statusLabel = slot.status
     ? t($ => $.status[slot.status as 'available' | 'unavailable'])
     : null
-  const isDerivedBooking = slot.source === 'booking'
+  const isDerivedBooking = slot.source === 'booking' || slot.source === 'summary'
+  const isManageable = isUnassigned || canManageAvailabilityForMember(member)
+  const isReadOnly = isDerivedBooking || !isManageable
   // A redacted entry renders as a plain busy block with a "details hidden"
   // hint, so bandmates understand WHY they see nothing rather than assuming a
   // bug. The server already withheld the detail — there is nothing here to hide.
@@ -269,19 +304,20 @@ function SlotBar({ slot, members, theme, unassignedLane, onSlotClick }: Readonly
     <Tooltip title={[isUnassigned ? (unassignedLane?.name ?? t($ => $.events.bandWide)) : memberName, statusLabel, detail].filter(Boolean).join(' — ')}>
       <Box
         data-slot-id={slot.id}
-        aria-disabled={isDerivedBooking || undefined}
+        data-member-color={color}
+        data-availability-appearance={isUnavailable ? 'dashed' : 'filled'}
+        aria-disabled={isReadOnly || undefined}
         onClick={(e) => {
           e.stopPropagation()
-          if (!isDerivedBooking) onSlotClick(slot)
+          if (!isReadOnly) onSlotClick(slot)
         }}
         sx={{
           ...SLOT_BAR_SX,
-          bgcolor: color,
-          color: getEventTextColor(theme, color),
-          cursor: isDerivedBooking ? 'default' : 'pointer',
-          backgroundImage: isUnavailable
-            ? 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.35) 3px, rgba(0,0,0,0.35) 6px)'
-            : 'none',
+          boxSizing: 'border-box',
+          bgcolor: isUnavailable ? alpha(resolvedColor, 0.04) : color,
+          border: isUnavailable ? `2px dashed ${resolvedColor}` : 'none',
+          color: isUnavailable ? resolvedColor : getEventTextColor(theme, color),
+          cursor: isReadOnly ? 'default' : 'pointer',
         }}
       >
         {memberName}

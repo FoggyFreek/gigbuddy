@@ -32,6 +32,7 @@ vi.mock('../api/bandEvents.ts', () => ({
   updateBandEvent: vi.fn(),
 }))
 vi.mock('../api/availability.ts', () => ({
+  evaluateEventAvailability: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
   getAvailabilitySpan: vi.fn(),
   getAvailabilityOn: vi.fn(),
 }))

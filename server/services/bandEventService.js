@@ -15,7 +15,7 @@ import {
   updateBandEventFields,
   deleteBandEvent as deleteBandEventRow,
 } from '../repositories/bandEventRepository.js'
-import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate } from '../validators/common.js'
+import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate, validateDailyTimeRange } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
 import { assertMyBandWritable } from './myBandService.js'
 import {
@@ -58,11 +58,29 @@ export async function enrichEventsWithAvailability(db, tenantId, scope, events) 
 
   return events.map((event) => {
     const start = toDateStr(event.start_date)
-    const { members, days } = summarizeSpan(matrix, start, toDateStr(event.end_date) ?? start)
-    const selected = new Set(participantsByEvent.get(event.id) ?? [])
+    const { members, days } = summarizeSpan(matrix, start, toDateStr(event.end_date) ?? start, {
+      start_date: start,
+      end_date: toDateStr(event.end_date) ?? start,
+      start_time: event.start_time,
+      end_time: event.end_time,
+      exclude: { type: 'band_event', id: event.id },
+    })
+    const participants = participantsByEvent.get(event.id) ?? []
+    const selected = new Set(participants.map((participant) => participant.band_member_id))
+    const selectedMembers = members.filter((member) => selected.has(member.member_id))
+    const evaluatedIds = new Set(selectedMembers.map((member) => member.member_id))
+    const formerMembers = participants
+      .filter((participant) => participant.deleted_at && !evaluatedIds.has(participant.band_member_id))
+      .map((participant) => ({
+        member_id: participant.band_member_id,
+        name: participant.name,
+        color: participant.color,
+        position: participant.position,
+        source: 'former',
+      }))
     return {
       ...event,
-      members_availability: members.filter((member) => selected.has(member.member_id)),
+      members_availability: [...selectedMembers, ...formerMembers],
       // The per-day breakdown is detail-only — list feeds stay lean.
       ...(withDays ? {
         availability_days: days.map((day) => ({
@@ -115,6 +133,8 @@ export async function getEvent(db, tenantId, eventId, scope = {}) {
 export async function createEvent(db, tenantId, body) {
   const { title, start_date, end_date, start_time, end_time, location, notes } = body
   if (!title || !start_date) return badRequest('title and start_date are required')
+  const timeError = validateDailyTimeRange(start_time, end_time)
+  if (timeError) return badRequest(timeError)
 
   return withTransaction(async (client) => {
     // Holds the My Bands row for the rest of this transaction, so a concurrent
@@ -162,6 +182,15 @@ export async function removeParticipant(db, tenantId, eventId, memberId) {
 }
 
 export async function patchEvent(db, tenantId, eventId, body) {
+  if ('start_time' in body || 'end_time' in body) {
+    const current = await fetchBandEvent(db, eventId, tenantId)
+    if (!current) return NOT_FOUND
+    const timeError = validateDailyTimeRange(
+      'start_time' in body ? body.start_time : current.start_time,
+      'end_time' in body ? body.end_time : current.end_time,
+    )
+    if (timeError) return badRequest(timeError)
+  }
   const built = buildEventUpdateFields(body)
   if (!built.fields.length) return badRequest('No valid fields to update')
 

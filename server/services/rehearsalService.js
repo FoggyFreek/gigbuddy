@@ -45,7 +45,7 @@ import {
   getBandMemberIdForUser,
 } from '../repositories/bandMemberRepository.js'
 import { songExistsInTenant } from '../repositories/songRepository.js'
-import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate } from '../validators/common.js'
+import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate, validateDailyTimeRange } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
 import { assertMyBandWritable } from './myBandService.js'
 import {
@@ -193,6 +193,8 @@ export async function createRehearsal(tenantId, userId, body) {
   if (!body.proposed_date) {
     return { error: { status: 400, body: { error: 'proposed_date is required' } } }
   }
+  const timeError = validateDailyTimeRange(body.start_time, body.end_time)
+  if (timeError) return badRequest(timeError)
   const extras = normalizeExtraMemberIds(body.extra_member_ids)
 
   const rehearsal = await withTransaction(async (client) => {
@@ -226,6 +228,15 @@ export async function createRehearsal(tenantId, userId, body) {
 // { rehearsal, confirmed } — `confirmed` is true when this PATCH set the
 // status to planned; the caller fires the confirmed notification.
 export async function patchRehearsal(db, tenantId, rehearsalId, body) {
+  if ('start_time' in body || 'end_time' in body) {
+    const current = await fetchRehearsal(db, rehearsalId, tenantId)
+    if (!current) return NOT_FOUND
+    const timeError = validateDailyTimeRange(
+      'start_time' in body ? body.start_time : current.start_time,
+      'end_time' in body ? body.end_time : current.end_time,
+    )
+    if (timeError) return badRequest(timeError)
+  }
   if ('status' in body) {
     if (!VALID_STATUSES.has(body.status)) {
       return { error: { status: 400, body: { error: 'Invalid status value' } } }

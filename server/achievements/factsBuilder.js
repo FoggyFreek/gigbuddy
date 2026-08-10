@@ -60,7 +60,7 @@ async function memberFacts(db, tenantId) {
             COUNT(*) FILTER (WHERE position = 'optional')::int AS optional,
             COUNT(*) FILTER (WHERE position = 'sub')::int AS subs
        FROM band_members
-      WHERE tenant_id = $1`,
+      WHERE tenant_id = $1 AND deleted_at IS NULL`,
     [tenantId],
   )
   const invites = await db.query(

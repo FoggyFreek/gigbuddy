@@ -147,7 +147,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
     if (!form.proposed_date) errs.proposed_date = t($ => $.form.required)
     if (Object.keys(errs).length) { setErrors(errs); return }
 
-    if (unavailableSelected.length > 0) {
+    if (unavailableSelected.length > 0 || marginSelected.length > 0) {
       setConfirmCreate(true)
       return
     }
@@ -203,6 +203,9 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
   const unavailableSelected = (availabilityData?.members ?? []).filter(
     (m) => m.status === 'unavailable' && m.member_id !== undefined && selectedMemberIds.has(m.member_id),
   )
+  const marginSelected = (availabilityData?.members ?? []).filter(
+    (m) => m.status === 'travel_margin' && m.member_id !== undefined && selectedMemberIds.has(m.member_id),
+  )
 
   return (
     <Dialog open fullWidth maxWidth="md" onClose={mode === 'edit' ? handleClose : undefined}>
@@ -257,7 +260,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
               </Grid>
             )}
 
-            {mode === 'create' && showAvailability && (
+            {showAvailability && mode === 'create' && (
               <Grid size={12}>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
@@ -265,6 +268,10 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
                 </Typography>
                 <BandAvailabilityPanel
                   eventDate={form.proposed_date}
+                  eventType="rehearsal"
+                  startTime={form.start_time}
+                  endTime={form.end_time}
+                  participantIds={[...selectedMemberIds]}
                   onDataLoad={setAvailabilityData}
                 />
               </Grid>
@@ -281,6 +288,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
                 onAddParticipant={handleAddParticipant}
                 onPromote={handlePromote}
                 onDemote={handleDemote}
+                showAvailability={showAvailability}
               />
             )}
           </Grid>
@@ -303,14 +311,17 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
       </DialogActions>
 
       <Dialog open={confirmCreate} onClose={() => setConfirmCreate(false)}>
-        <DialogTitle>{t($ => $.form.unavailableTitle)}</DialogTitle>
+        <DialogTitle>{t($ => unavailableSelected.length > 0 ? $.form.unavailableTitle : $.form.travelMarginTitle)}</DialogTitle>
         <DialogContent>
-          <Typography>
+          {unavailableSelected.length > 0 && <Typography>
             {t($ => $.form.unavailableBody, {
               count: unavailableSelected.length,
               names: unavailableSelected.map((m) => m.name).join(', '),
             })}
-          </Typography>
+          </Typography>}
+          {marginSelected.length > 0 && <Typography sx={{ mt: unavailableSelected.length > 0 ? 1 : 0 }}>
+            {t($ => $.form.travelMarginBody, { names: marginSelected.map((m) => m.name).join(', ') })}
+          </Typography>}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmCreate(false)}>{t($ => $.form.goBack)}</Button>

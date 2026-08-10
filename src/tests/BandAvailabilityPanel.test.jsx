@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import BandAvailabilityPanel from '../components/BandAvailabilityPanel.tsx'
@@ -7,13 +8,14 @@ import theme from '../theme.ts'
 vi.mock('../api/availability.ts', () => ({
   getAvailabilityOn: vi.fn(),
   getAvailabilitySpan: vi.fn(),
+  evaluateEventAvailability: vi.fn(),
   listAvailability: vi.fn().mockResolvedValue([]),
   createSlot: vi.fn(),
   updateSlot: vi.fn(),
   deleteSlot: vi.fn(),
 }))
 
-import { getAvailabilityOn, getAvailabilitySpan } from '../api/availability.ts'
+import { evaluateEventAvailability, getAvailabilityOn, getAvailabilitySpan } from '../api/availability.ts'
 
 function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)
@@ -24,7 +26,7 @@ const RESPONSE_WITH_MEMBERS = {
   members: [
     { member_id: 1, name: 'Alice', position: 'lead', status: 'available', reason: null, source: 'member' },
     { member_id: 2, name: 'Bob', position: 'lead', status: 'unavailable', reason: 'Holiday', source: 'member' },
-    { member_id: 3, name: 'Carol', position: 'lead', status: 'default', reason: null, source: 'default' },
+    { member_id: 3, name: 'Carol', position: 'lead', status: 'available', reason: null, source: 'default' },
   ],
 }
 
@@ -32,6 +34,10 @@ describe('BandAvailabilityPanel', () => {
   beforeEach(() => {
     getAvailabilityOn.mockClear()
     getAvailabilitySpan.mockClear()
+    evaluateEventAvailability.mockReset()
+    evaluateEventAvailability.mockImplementation((body) => body.end_date !== body.start_date
+      ? getAvailabilitySpan(body.start_date, body.end_date)
+      : getAvailabilityOn(body.start_date))
   })
 
   it('renders nothing when eventDate is empty', () => {
@@ -53,9 +59,27 @@ describe('BandAvailabilityPanel', () => {
   })
 
   it('shows error chip for unavailable member with reason', async () => {
+    const user = userEvent.setup()
     getAvailabilityOn.mockResolvedValueOnce(RESPONSE_WITH_MEMBERS)
     wrap(<BandAvailabilityPanel eventDate="2026-05-10" />)
-    await waitFor(() => expect(screen.getByText(/bob.*holiday/i)).toBeInTheDocument(), { timeout: 1000 })
+    const chip = await screen.findByText('Bob')
+    expect(screen.queryByText('Holiday')).not.toBeInTheDocument()
+    await user.hover(chip)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/Bob.*Holiday/i)
+  })
+
+  it('shows an orange warning chip inside the travel margin', async () => {
+    const user = userEvent.setup()
+    getAvailabilityOn.mockResolvedValueOnce({
+      bandWide: null,
+      members: [{ member_id: 1, name: 'Alice', position: 'lead', status: 'travel_margin', reason: 'Other show' }],
+    })
+    wrap(<BandAvailabilityPanel eventDate="2026-05-10" />)
+    const chip = await screen.findByText('Alice')
+    expect(screen.queryByText('Other show')).not.toBeInTheDocument()
+    await user.hover(chip)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/Alice.*Other show/i)
+    expect(document.querySelector('.MuiChip-colorWarning')).not.toBeNull()
   })
 
   it('shows outlined chip for default member', async () => {
@@ -77,9 +101,9 @@ describe('BandAvailabilityPanel', () => {
     getAvailabilityOn.mockResolvedValueOnce({
       bandWide: null,
       members: [
-        { member_id: 1, name: 'Alice', position: 'lead', status: 'default', reason: null, source: 'default' },
-        { member_id: 2, name: 'Dave', position: 'sub', status: 'default', reason: null, source: 'default' },
-        { member_id: 3, name: 'Eve', position: 'optional', status: 'default', reason: null, source: 'default' },
+        { member_id: 1, name: 'Alice', position: 'lead', status: 'available', reason: null, source: 'default' },
+        { member_id: 2, name: 'Dave', position: 'sub', status: 'available', reason: null, source: 'default' },
+        { member_id: 3, name: 'Eve', position: 'optional', status: 'available', reason: null, source: 'default' },
         { member_id: 4, name: 'Frank', position: 'sub', status: 'available', reason: null, source: 'member' },
       ],
     })
@@ -101,9 +125,10 @@ describe('BandAvailabilityPanel', () => {
     })
     wrap(<BandAvailabilityPanel eventDate="2026-05-10" />)
 
-    await waitFor(() => expect(screen.getByText(/Alice.*Booked elsewhere/)).toBeInTheDocument(), { timeout: 1000 })
-    expect(screen.getByText(/Bob.*Booked elsewhere/)).toBeInTheDocument()
-    expect(screen.getByText(/Carol.*Booked elsewhere/)).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument(), { timeout: 1000 })
+    expect(screen.getByText('Bob')).toBeInTheDocument()
+    expect(screen.getByText('Carol')).toBeInTheDocument()
+    expect(screen.queryByText('Booked elsewhere')).not.toBeInTheDocument()
     expect(document.querySelectorAll('.MuiChip-colorError')).toHaveLength(3)
   })
 

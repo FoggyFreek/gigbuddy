@@ -108,6 +108,9 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
   const unavailableLeads = (availabilityData?.members ?? []).filter(
     (member) => member.position === 'lead' && member.status === 'unavailable'
   )
+  const marginLeads = (availabilityData?.members ?? []).filter(
+    (member) => member.position === 'lead' && member.status === 'travel_margin'
+  )
 
   async function handleCreate() {
     const errs: Record<string, string> = {}
@@ -115,7 +118,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
     if (!form.start_date) errs.start_date = t($ => $.form.required)
     if (form.end_date && form.end_date < form.start_date) errs.end_date = t($ => $.form.endDateError)
     if (Object.keys(errs).length) { setErrors(errs); return }
-    if (unavailableLeads.length > 0) {
+    if (unavailableLeads.length > 0 || marginLeads.length > 0) {
       setConfirmCreate(true)
       return
     }
@@ -158,6 +161,9 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
                 <BandAvailabilityPanel
                   eventDate={form.start_date}
                   endDate={form.end_date || form.start_date}
+                  eventType="band_event"
+                  startTime={form.start_time}
+                  endTime={form.end_time}
                   onDataLoad={setAvailabilityData}
                 />
               </Grid>
@@ -182,13 +188,16 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
       </DialogActions>
 
       <Dialog open={confirmCreate} onClose={() => setConfirmCreate(false)}>
-        <DialogTitle>{t($ => $.form.unavailableTitle)}</DialogTitle>
+        <DialogTitle>{t($ => unavailableLeads.length > 0 ? $.form.unavailableTitle : $.form.travelMarginTitle)}</DialogTitle>
         <DialogContent>
-          <Typography>
+          {unavailableLeads.length > 0 && <Typography>
             {t($ => $.form.unavailableBody, {
               names: unavailableLeads.map((member) => member.name).join(', '),
             })}
-          </Typography>
+          </Typography>}
+          {marginLeads.length > 0 && <Typography sx={{ mt: unavailableLeads.length > 0 ? 1 : 0 }}>
+            {t($ => $.form.travelMarginBody, { names: marginLeads.map((member) => member.name).join(', ') })}
+          </Typography>}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmCreate(false)}>{t($ => $.form.goBack)}</Button>

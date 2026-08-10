@@ -21,13 +21,32 @@ interface RehearsalFieldsProps {
   onChange: (field: string, value: string | null) => void
   errors?: Record<string, string | undefined>
   readOnly?: boolean
+  dateTimeFirst?: boolean
 }
 
-export default function RehearsalFields({ form, onChange, errors = {}, readOnly = false }: Readonly<RehearsalFieldsProps>) {
+export default function RehearsalFields({
+  form,
+  onChange,
+  errors = {},
+  readOnly = false,
+  dateTimeFirst = false,
+}: Readonly<RehearsalFieldsProps>) {
   const { t } = useTranslation('rehearsals')
+  const locationField = (
+    <Grid size={dateTimeFirst ? 12 : { xs: 12, sm: 6 }}>
+      <TextField
+        label={t($ => $.form.location)}
+        fullWidth
+        value={form.location}
+        onChange={(e) => onChange('location', e.target.value)}
+        slotProps={{ htmlInput: { readOnly } }}
+      />
+    </Grid>
+  )
+
   return (
     <>
-      <Grid size={{ xs: 12, sm: 6 }}>
+      <Grid size={{ xs: 12, sm: dateTimeFirst ? 4 : 6 }}>
         <DateEntryField
           label={t($ => $.form.date)}
           fullWidth
@@ -39,15 +58,7 @@ export default function RehearsalFields({ form, onChange, errors = {}, readOnly 
           readOnly={readOnly}
         />
       </Grid>
-      <Grid size={{ xs: 12, sm: 6 }}>
-        <TextField
-          label={t($ => $.form.location)}
-          fullWidth
-          value={form.location}
-          onChange={(e) => onChange('location', e.target.value)}
-          slotProps={{ htmlInput: { readOnly } }}
-        />
-      </Grid>
+      {!dateTimeFirst && locationField}
       <Grid size={{ xs: 6, sm: 4 }}>
         <TimePicker
           label={t($ => $.form.startTime)}
@@ -68,6 +79,7 @@ export default function RehearsalFields({ form, onChange, errors = {}, readOnly 
           slotProps={{ textField: { fullWidth: true } }}
         />
       </Grid>
+      {dateTimeFirst && locationField}
     </>
   )
 }

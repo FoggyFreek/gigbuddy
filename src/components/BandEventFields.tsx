@@ -68,15 +68,6 @@ export default function BandEventFields({ form, onChange, errors = {}, readOnly 
           readOnly={readOnly}
         />
       </Grid>
-      <Grid size={12}>
-        <TextField
-          label={t($ => $.form.location)}
-          fullWidth
-          value={form.location}
-          onChange={(e) => onChange('location', e.target.value)}
-          slotProps={{ htmlInput: { readOnly } }}
-        />
-      </Grid>
       <Grid size={{ xs: 6 }}>
         <TimePicker
           label={t($ => $.form.startTime)}
@@ -95,6 +86,15 @@ export default function BandEventFields({ form, onChange, errors = {}, readOnly 
           value={timeStringToDayjs(form.end_time)}
           onChange={(v) => onChange('end_time', dayjsToTimeString(v))}
           slotProps={{ textField: { fullWidth: true } }}
+        />
+      </Grid>
+      <Grid size={12}>
+        <TextField
+          label={t($ => $.form.location)}
+          fullWidth
+          value={form.location}
+          onChange={(e) => onChange('location', e.target.value)}
+          slotProps={{ htmlInput: { readOnly } }}
         />
       </Grid>
       <Grid size={12}>

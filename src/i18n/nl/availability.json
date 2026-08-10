@@ -24,6 +24,7 @@
   },
   "status": {
     "available": "Beschikbaar",
+    "travel_margin": "Reistijdmarge",
     "unavailable": "Niet beschikbaar"
   },
   "events": {
@@ -49,6 +50,8 @@
   "mine": {
     "title": "Mijn beschikbaarheid",
     "help": "Je agenda is van jou, niet van een band. Elke band waarin je speelt ziet alleen wat je hier toestaat.",
+    "travelMargin": "Tijd-/reismarge (uren)",
+    "travelMarginHelp": "Vereiste totale ruimte tussen opeenvolgende evenementen. Beschikbaarheid binnen deze marge wordt oranje weergegeven.",
     "detailVisible": "Laat mijn bands zien waarom ik niet kan",
     "detailVisibleHelp": "Uit: bands zien dat je bezet bent, niet de reden.",
     "crossBandVisible": "Laat mijn bands zien waarvoor ik elders geboekt ben",

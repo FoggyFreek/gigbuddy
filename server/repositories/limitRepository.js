@@ -25,7 +25,8 @@ export async function lockUserForCapCheck(executor, userId) {
 
 export async function countRosterMembers(executor, tenantId) {
   const { rows } = await executor.query(
-    'SELECT COUNT(*)::int AS count FROM band_members WHERE tenant_id = $1',
+    `SELECT COUNT(*)::int AS count FROM band_members
+      WHERE tenant_id = $1 AND deleted_at IS NULL`,
     [tenantId],
   )
   return rows[0].count

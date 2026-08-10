@@ -16,6 +16,9 @@ vi.mock('../api/gigs.ts', () => ({
   createGig: vi.fn(),
   updateGig: vi.fn(),
   deleteGig: vi.fn().mockResolvedValue({}),
+  addGigParticipant: vi.fn().mockResolvedValue({}),
+  removeGigParticipant: vi.fn().mockResolvedValue({}),
+  setGigVote: vi.fn().mockResolvedValue({}),
   listGigContacts: vi.fn().mockResolvedValue([]),
   addGigContact: vi.fn().mockResolvedValue({}),
   setGigContactPrimary: vi.fn().mockResolvedValue({}),
@@ -32,8 +35,14 @@ vi.mock('../api/venues.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   listVenueContacts: vi.fn().mockResolvedValue([]),
 }))
+vi.mock('../api/invoices.ts', () => ({
+  listInvoicesByGig: vi.fn().mockResolvedValue([]),
+  draftFromGig: vi.fn(),
+  createInvoice: vi.fn(),
+}))
 vi.mock('../api/availability.ts', () => ({
   getAvailabilityOn: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
+  evaluateEventAvailability: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
   listAvailability: vi.fn().mockResolvedValue([]),
   createSlot: vi.fn(),
   updateSlot: vi.fn(),
@@ -59,7 +68,9 @@ vi.mock('../components/BannerMosaicDialog.tsx', () => ({
 
 import GigsPage from '../pages/GigsPage.tsx'
 import GigDetailPage from '../pages/GigDetailPage.tsx'
-import { deleteGig, getGig, listGigs, listPastGigs, listUpcomingGigs, searchGigs } from '../api/gigs.ts'
+import { addGigParticipant, deleteGig, getGig, listGigs, listPastGigs, listUpcomingGigs, removeGigParticipant, searchGigs } from '../api/gigs.ts'
+import { evaluateEventAvailability } from '../api/availability.ts'
+import { listMembers } from '../api/bandMembers.ts'
 import { listMyUpcomingGigs } from '../api/me.ts'
 import theme from '../theme.ts'
 import { AuthContext } from '../contexts/authContext.ts'
@@ -265,7 +276,80 @@ describe('GigsPage — split-view detail route', () => {
     searchGigs.mockResolvedValue([])
     getGig.mockClear()
     getGig.mockResolvedValue(GIG_DETAIL)
+    addGigParticipant.mockClear()
+    removeGigParticipant.mockClear()
+    listMembers.mockReset()
+    listMembers.mockResolvedValue([])
+    evaluateEventAvailability.mockReset()
+    evaluateEventAvailability.mockResolvedValue({ bandWide: null, members: [] })
     deleteGig.mockClear()
+  })
+
+  it('updates the selected list row after adding a participant in the detail pane', async () => {
+    const user = userEvent.setup()
+    const alice = {
+      member_id: 7,
+      name: 'Alice',
+      position: 'lead',
+      color: '#e53935',
+      status: 'available',
+      reason: null,
+    }
+    getGig
+      .mockResolvedValueOnce(GIG_DETAIL)
+      .mockResolvedValueOnce({
+        ...GIG_DETAIL,
+        participants: [{ band_member_id: 7, name: 'Alice', position: 'lead', color: '#e53935' }],
+      })
+    listMembers.mockResolvedValueOnce([{ id: 7, name: 'Alice', position: 'lead', color: '#e53935' }])
+    evaluateEventAvailability.mockImplementation(async ({ participant_ids }) => ({
+      bandWide: null,
+      members: participant_ids?.includes(7) ? [alice] : [],
+    }))
+
+    wrapWithRoutes({ initialEntries: ['/gigs/42?tab=participants'] })
+
+    const participantSelect = await screen.findByRole('combobox', { name: /add participant/i })
+    await user.click(participantSelect)
+    await user.click(screen.getByRole('option', { name: /Alice/ }))
+    await user.click(screen.getAllByRole('button', { name: /^add$/i }).at(-1))
+
+    await waitFor(() => expect(addGigParticipant).toHaveBeenCalledWith(42, 7))
+    expect(await screen.findByText('A')).toBeInTheDocument()
+  })
+
+  it('updates the selected list row after removing a participant in the detail pane', async () => {
+    const user = userEvent.setup()
+    const alice = {
+      member_id: 7,
+      name: 'Alice',
+      position: 'lead',
+      color: '#e53935',
+      status: 'available',
+      reason: null,
+    }
+    listUpcomingGigs.mockResolvedValue(limitedCollection([{
+      ...GIGS[0],
+      members_availability: [alice],
+    }]))
+    getGig
+      .mockResolvedValueOnce({
+        ...GIG_DETAIL,
+        participants: [{ band_member_id: 7, name: 'Alice', position: 'lead', color: '#e53935' }],
+      })
+      .mockResolvedValueOnce(GIG_DETAIL)
+    evaluateEventAvailability.mockImplementation(async ({ participant_ids }) => ({
+      bandWide: null,
+      members: participant_ids?.includes(7) ? [alice] : [],
+    }))
+
+    wrapWithRoutes({ initialEntries: ['/gigs/42?tab=participants'] })
+    expect(await screen.findByText('A')).toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: /remove Alice/i }))
+
+    await waitFor(() => expect(removeGigParticipant).toHaveBeenCalledWith(42, 7))
+    await waitFor(() => expect(screen.queryByText('A')).not.toBeInTheDocument())
   })
 
   it('renders detail alongside the list at /gigs/:id and the Close button returns to /gigs', async () => {

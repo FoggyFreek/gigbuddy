@@ -35,6 +35,8 @@
     "endDateError": "Moet op of na de begindatum liggen",
     "addEvent": "Evenement toevoegen",
     "unavailableTitle": "Vast bandlid niet beschikbaar",
+    "travelMarginTitle": "Waarschuwing reistijdmarge",
+    "travelMarginBody": "{{names}} heeft een ander evenement binnen de ingestelde reistijdmarge. Het evenement toch toevoegen?",
     "unavailableBody": "{{names}} kan tijdens dit evenement niet. Het evenement toch toevoegen?",
     "goBack": "Terug",
     "createAnyway": "Toch toevoegen"
@@ -43,6 +45,7 @@
     "title": "Beschikbaarheid",
     "bandWide": "Hele band op {{date}}: {{status}}",
     "available": "Beschikbaar",
+    "travelMargin": "Reistijdmarge",
     "unavailable": "Niet beschikbaar",
     "unknown": "Geen antwoord",
     "noMembers": "Er zijn geen bandleden aan dit evenement toegevoegd.",

@@ -24,6 +24,7 @@
   },
   "status": {
     "available": "Available",
+    "travel_margin": "Travel margin",
     "unavailable": "Unavailable"
   },
   "events": {
@@ -49,6 +50,8 @@
   "mine": {
     "title": "My availability",
     "help": "Your calendar belongs to you, not to any band. Each band you play in sees only what you allow here.",
+    "travelMargin": "Time / travel margin (hours)",
+    "travelMarginHelp": "Required total gap between consecutive events. Availability inside this gap is shown in orange.",
     "detailVisible": "Let my bands see why I'm unavailable",
     "detailVisibleHelp": "Off: bands see that you're busy, not the reason.",
     "crossBandVisible": "Let my bands see what I'm booked for elsewhere",
