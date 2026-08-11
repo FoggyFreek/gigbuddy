@@ -1,16 +1,12 @@
-import { useId, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
-import FormControl from '@mui/material/FormControl'
 import IconButton from '@mui/material/IconButton'
-import InputLabel from '@mui/material/InputLabel'
-import MenuItem from '@mui/material/MenuItem'
-import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
+import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import DeleteIcon from '@mui/icons-material/Delete'
-import { useTranslation } from 'react-i18next'
 import VoteToggle from './VoteToggle.tsx'
 import type { Participant, Member, Id } from '../types/entities.ts'
 import { isPastDate } from '../utils/dateFormat.ts'
@@ -21,12 +17,10 @@ interface Props {
   eventDate?: string | Date | null
   eventStatus?: string | null
   candidateMembers?: Member[]
-  addMemberId?: Id | ''
   emptyText: ReactNode
   addParticipantLabel: string
   getRemoveParticipantLabel: (participant: Participant) => string
-  onAddMemberChange?: (value: Id | '') => void
-  onAddParticipant?: () => void
+  onAddParticipant?: (memberId: Id) => void
   onRemoveParticipant?: (memberId: Id) => void
   onVote?: (memberId: Id, vote: string | null) => void
   canWrite?: boolean
@@ -41,11 +35,9 @@ export default function BandParticipantsSection({
   eventDate,
   eventStatus,
   candidateMembers = [],
-  addMemberId = '',
   emptyText,
   addParticipantLabel,
   getRemoveParticipantLabel,
-  onAddMemberChange,
   onAddParticipant,
   onRemoveParticipant,
   onVote,
@@ -55,8 +47,7 @@ export default function BandParticipantsSection({
   renderParticipantEnd,
   headerContent,
 }: Readonly<Props>) {
-  const { t } = useTranslation('common')
-  const addParticipantLabelId = useId()
+  const [addInput, setAddInput] = useState('')
   const isCompact = useCompactLayout()
   const showVotes = !isPastDate(eventDate) && (eventStatus === undefined || eventStatus === 'option')
 
@@ -209,26 +200,33 @@ export default function BandParticipantsSection({
           </Box>
         )
       })}
-      {canWrite && candidateMembers.length > 0 && onAddMemberChange && onAddParticipant && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-          <FormControl size="small" sx={{ minWidth: 220 }}>
-            <InputLabel id={addParticipantLabelId}>{addParticipantLabel}</InputLabel>
-            <Select
-              labelId={addParticipantLabelId}
-              label={addParticipantLabel}
-              value={addMemberId}
-              onChange={(event) => onAddMemberChange(event.target.value as Id | '')}
-            >
-              {candidateMembers.map((member) => (
-                <MenuItem key={String(member.id)} value={member.id}>
-                  {member.name} ({member.position})
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-          <Button variant="outlined" disabled={!addMemberId} onClick={onAddParticipant}>
-            {t($ => $.actions.add)}
-          </Button>
+      {canWrite && candidateMembers.length > 0 && onAddParticipant && (
+        <Box sx={{ mt: 1 }}>
+          <Autocomplete
+            value={null}
+            options={candidateMembers}
+            inputValue={addInput}
+            onInputChange={(_event, value, reason) => setAddInput(reason === 'reset' ? '' : value)}
+            onChange={(_event, picked) => {
+              if (picked?.id == null) return
+              setAddInput('')
+              onAddParticipant(picked.id)
+            }}
+            blurOnSelect
+            getOptionLabel={(member) => member.name ?? ''}
+            isOptionEqualToValue={(a, b) => a.id != null && a.id === b.id}
+            renderOption={(props, member) => (
+              <li {...props} key={String(member.id)}>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="body2">{member.name}</Typography>
+                  {member.position && (
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>{member.position}</Typography>
+                  )}
+                </Box>
+              </li>
+            )}
+            renderInput={(params) => <TextField {...params} label={addParticipantLabel} />}
+          />
         </Box>
       )}
     </Stack>

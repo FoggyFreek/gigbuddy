@@ -1,5 +1,5 @@
 import { request, requestForm } from './_client.ts'
-import type { Gig, GigMerchSummary, GigTag, Id, Task } from '../types/entities.ts'
+import type { Gig, GigEquipmentEntry, GigMerchSummary, GigTag, Id, Task } from '../types/entities.ts'
 import type {
   GigMapGig,
   LimitedCollectionWithCursorResponse,
@@ -50,6 +50,9 @@ export const searchGigTags = (q: string) =>
   api<GigTag[]>(`/tags?${new URLSearchParams({ q: q ?? '' })}`)
 export const setGigTags = (id: Id, tags: string[]) =>
   api<GigTag[]>(`/${id}/tags`, { method: 'PUT', body: JSON.stringify({ tags }) })
+// Replaces the whole set; the response is the same shape the gig detail carries.
+export const setGigEquipment = (id: Id, equipment: GigEquipmentEntry[]) =>
+  api<GigEquipmentEntry[]>(`/${id}/equipment`, { method: 'PUT', body: JSON.stringify({ equipment }) })
 export const getGig = (id: Id, opts?: RequestInit) => api<Gig>(`/${id}`, opts)
 export const getGigMerchSummary = (id: Id, opts?: RequestInit) =>
   api<GigMerchSummary>(`/${id}/merch-summary`, opts)

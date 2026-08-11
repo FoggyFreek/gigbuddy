@@ -9,7 +9,6 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
 import FormControlLabel from '@mui/material/FormControlLabel'
-import FormGroup from '@mui/material/FormGroup'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -24,6 +23,7 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import { useTranslation } from 'react-i18next'
 import { Link as RouterLink, useNavigate } from 'react-router'
 import StatusDot from '../StatusDot.tsx'
+import GigEquipmentEditor from './GigEquipmentEditor.tsx'
 import { getGigMerchSummary } from '../../api/gigs.ts'
 import { draftFromGig, listInvoicesByGig } from '../../api/invoices.ts'
 import { createInvoiceFromGigDraft } from '../invoices/createInvoiceFromGigDraft.ts'
@@ -31,7 +31,7 @@ import { usePermissions } from '../../hooks/usePermissions.ts'
 import { formatShortDate } from '../../utils/dateFormat.ts'
 import { formatEur } from '../../utils/invoiceTotals.ts'
 import { invoiceStatusColor } from '../../utils/invoiceStatus.ts'
-import type { GigMerchSummary, Id, Invoice, InvoiceStatus, Venue } from '../../types/entities.ts'
+import type { GigEquipmentEntry, GigMerchSummary, Id, Invoice, InvoiceStatus, Venue } from '../../types/entities.ts'
 import type { GigDetailForm } from './types.ts'
 
 const NO_NUMBER_SPINNER_SX = {
@@ -48,7 +48,9 @@ interface Props {
   form: GigDetailForm
   selectedVenue: Venue | null
   selectedFestival: Venue | null
+  equipment: GigEquipmentEntry[]
   onChange: (field: string, value: unknown) => void
+  onEquipmentChange: (equipment: GigEquipmentEntry[]) => void
 }
 
 export default function GigTerms({
@@ -59,7 +61,9 @@ export default function GigTerms({
   form,
   selectedVenue,
   selectedFestival,
+  equipment,
   onChange,
+  onEquipmentChange,
 }: Readonly<Props>) {
   const { t, i18n } = useTranslation(['gigs', 'common'])
   const { canViewFinance, canManageFinance } = usePermissions()
@@ -72,7 +76,7 @@ export default function GigTerms({
 
   // Both reads are gated. The gated-off value is derived during render rather
   // than written back by the effect, so closing the gate needs no extra render.
-  const merchEnabled = gigLoaded && editable
+  const merchEnabled = gigLoaded && editable && canViewFinance
   const merchSummary = merchEnabled ? fetchedMerchSummary : null
   const invoicesEnabled = gigLoaded && canViewFinance
   const relatedInvoices = invoicesEnabled ? fetchedInvoices : []
@@ -120,124 +124,142 @@ export default function GigTerms({
     <>
       <Box sx={{ display: active ? 'block' : 'none' }}>
         <Grid container spacing={2}>
-          <Grid size={12}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              {t($ => $.detail.terms)}
-            </Typography>
-          </Grid>
-          <Grid size={12}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.admission === 'paid'}
-                  disabled={!editable}
-                  onChange={(event) => onChange('admission', event.target.checked ? 'paid' : 'free')}
+          {canViewFinance && (
+            <>
+              <Grid size={12}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  {t($ => $.detail.terms)}
+                </Typography>
+              </Grid>
+              <Grid size={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={form.admission === 'paid'}
+                      disabled={!editable}
+                      onChange={(event) => onChange('admission', event.target.checked ? 'paid' : 'free')}
+                    />
+                  }
+                  label={t($ => $.detail.paidAdmission)}
                 />
-              }
-              label={t($ => $.detail.paidAdmission)}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <TextField
-              label={t($ => $.detail.guaranteedFee)}
-              fullWidth
-              value={form.booking_fee}
-              onChange={(event) => onChange('booking_fee', event.target.value)}
-              placeholder="0.00"
-              slotProps={{
-                htmlInput: { readOnly: !editable },
-                input: { startAdornment: <InputAdornment position="start">€</InputAdornment> },
-              }}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <TextField
-              label={t($ => $.detail.merchandiseCut)}
-              type="number"
-              fullWidth
-              value={form.merchandise_cut}
-              onChange={(event) => onChange('merchandise_cut', event.target.value)}
-              placeholder="0"
-              sx={NO_NUMBER_SPINNER_SX}
-              slotProps={{
-                htmlInput: { min: 0, max: 100, step: 0.5, readOnly: !editable },
-                input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
-              }}
-            />
-          </Grid>
-          {form.admission === 'paid' && (
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                label={t($ => $.detail.percentageOfNetSales)}
-                type="number"
-                fullWidth
-                value={form.percentage_of_sales}
-                onChange={(event) => onChange('percentage_of_sales', event.target.value)}
-                placeholder="0"
-                sx={NO_NUMBER_SPINNER_SX}
-                slotProps={{
-                  htmlInput: { min: 0, max: 100, step: 0.5, readOnly: !editable },
-                  input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
-                }}
-              />
-            </Grid>
-          )}
-          {form.admission === 'paid' && (
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                label={t($ => $.detail.ticketLink)}
-                type="url"
-                fullWidth
-                value={form.ticket_link}
-                onChange={(event) => onChange('ticket_link', event.target.value)}
-                slotProps={{
-                  htmlInput: { readOnly: !editable },
-                  input: {
-                    endAdornment: form.ticket_link ? (
-                      <InputAdornment position="end">
-                        <Tooltip title={t($ => $.detail.openLink)}>
-                          <IconButton
-                            size="small"
-                            edge="end"
-                            component="a"
-                            href={form.ticket_link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <OpenInNewIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </InputAdornment>
-                    ) : null,
-                  },
-                }}
-              />
-            </Grid>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label={t($ => $.detail.guaranteedFee)}
+                  fullWidth
+                  value={form.booking_fee}
+                  onChange={(event) => onChange('booking_fee', event.target.value)}
+                  placeholder="0.00"
+                  slotProps={{
+                    htmlInput: { readOnly: !editable },
+                    input: { startAdornment: <InputAdornment position="start">€</InputAdornment> },
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label={t($ => $.detail.merchandiseCut)}
+                  type="number"
+                  fullWidth
+                  value={form.merchandise_cut}
+                  onChange={(event) => onChange('merchandise_cut', event.target.value)}
+                  placeholder="0"
+                  sx={NO_NUMBER_SPINNER_SX}
+                  slotProps={{
+                    htmlInput: { min: 0, max: 100, step: 0.5, readOnly: !editable },
+                    input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
+                  }}
+                />
+              </Grid>
+              {form.admission === 'paid' && (
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    label={t($ => $.detail.percentageOfNetSales)}
+                    type="number"
+                    fullWidth
+                    value={form.percentage_of_sales}
+                    onChange={(event) => onChange('percentage_of_sales', event.target.value)}
+                    placeholder="0"
+                    sx={NO_NUMBER_SPINNER_SX}
+                    slotProps={{
+                      htmlInput: { min: 0, max: 100, step: 0.5, readOnly: !editable },
+                      input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
+                    }}
+                  />
+                </Grid>
+              )}
+              {form.admission === 'paid' && (
+                <Grid size={{ xs: 12, sm: 6 }}>
+                  <TextField
+                    label={t($ => $.detail.ticketLink)}
+                    type="url"
+                    fullWidth
+                    value={form.ticket_link}
+                    onChange={(event) => onChange('ticket_link', event.target.value)}
+                    slotProps={{
+                      htmlInput: { readOnly: !editable },
+                      input: {
+                        endAdornment: form.ticket_link ? (
+                          <InputAdornment position="end">
+                            <Tooltip title={t($ => $.detail.openLink)}>
+                              <IconButton
+                                size="small"
+                                edge="end"
+                                component="a"
+                                href={form.ticket_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <OpenInNewIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </InputAdornment>
+                        ) : null,
+                      },
+                    }}
+                  />
+                </Grid>
+              )}
+
+              {editable && merchSummary && merchSummary.unitsSold > 0 && (
+                <Grid size={12}>
+                  <Card variant="outlined" sx={{ p: 2 }}>
+                    <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                      <LocalMallIcon color="action" />
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, flexGrow: 1 }}>
+                        {t($ => $.detail.merchandiseSold)}
+                      </Typography>
+                      <Box sx={{ textAlign: 'right' }}>
+                        <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
+                          {formatEur(merchSummary.netCents)}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {t($ => $.detail.itemsSold, { count: merchSummary.unitsSold })}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Card>
+                </Grid>
+              )}
+            </>
           )}
 
-          {editable && merchSummary && merchSummary.unitsSold > 0 && (
-            <Grid size={12}>
-              <Card variant="outlined" sx={{ p: 2 }}>
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
-                  <LocalMallIcon color="action" />
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, flexGrow: 1 }}>
-                    {t($ => $.detail.merchandiseSold)}
-                  </Typography>
-                  <Box sx={{ textAlign: 'right' }}>
-                    <Typography variant="h6" sx={{ lineHeight: 1.2 }}>
-                      {formatEur(merchSummary.netCents)}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {t($ => $.detail.itemsSold, { count: merchSummary.unitsSold })}
-                    </Typography>
-                  </Box>
-                </Stack>
-              </Card>
-            </Grid>
-          )}
+          <Grid size={12}>
+            <Divider sx={{ my: 1 }} />
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+              {t($ => $.detail.equipment.title)}
+            </Typography>
+            <GigEquipmentEditor
+              gigId={gigId}
+              equipment={equipment}
+              canWrite={editable}
+              onChange={onEquipmentChange}
+            />
+          </Grid>
 
           {canViewFinance && ((relatedInvoices && relatedInvoices.length > 0) || canCreateInvoice) && (
             <Grid size={12}>
+              <Divider sx={{ my: 1 }} />
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                 {t($ => $.detail.relatedInvoices)}
               </Typography>
@@ -295,44 +317,6 @@ export default function GigTerms({
             </Grid>
           )}
 
-          <Grid size={12}>
-            <Divider sx={{ my: 1 }} />
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              {t($ => $.detail.equipmentOnSite)}
-            </Typography>
-            <FormGroup row>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={form.has_pa_system}
-                    disabled={!editable}
-                    onChange={(event) => onChange('has_pa_system', event.target.checked)}
-                  />
-                }
-                label={t($ => $.detail.paSystem)}
-              />
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={form.has_drumkit}
-                    disabled={!editable}
-                    onChange={(event) => onChange('has_drumkit', event.target.checked)}
-                  />
-                }
-                label={t($ => $.detail.drumkit)}
-              />
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={form.has_stage_lights}
-                    disabled={!editable}
-                    onChange={(event) => onChange('has_stage_lights', event.target.checked)}
-                  />
-                }
-                label={t($ => $.detail.stageLight)}
-              />
-            </FormGroup>
-          </Grid>
         </Grid>
       </Box>
 

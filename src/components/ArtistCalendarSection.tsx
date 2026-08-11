@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
-import Fab from '@mui/material/Fab'
 import List from '@mui/material/List'
 import ListItemButton from '@mui/material/ListItemButton'
 import ListItemIcon from '@mui/material/ListItemIcon'
@@ -11,11 +10,11 @@ import ListItemText from '@mui/material/ListItemText'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
-import AddIcon from '@mui/icons-material/Add'
 import EventAvailableIcon from '@mui/icons-material/EventAvailable'
 import EventNoteIcon from '@mui/icons-material/EventNote'
 import MicIcon from '@mui/icons-material/Mic'
 import AvailabilityCalendar from './AvailabilityCalendar.tsx'
+import CalendarAddFab from './calendar/CalendarAddFab.tsx'
 import AvailabilitySlotDialog from './AvailabilitySlotDialog.tsx'
 import BandEventFormModal from './BandEventFormModal.tsx'
 import GigFormModal from './GigFormModal.tsx'
@@ -86,7 +85,6 @@ export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<A
   const [addMenu, setAddMenu] = useState<{ anchorEl: Element; date: string } | null>(null)
   const [createModal, setCreateModal] = useState<{ type: 'event' | 'gig'; date: string } | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
-  const fabRef = useRef<HTMLButtonElement | null>(null)
 
   const selfLane = useMemo<UnassignedSlotLane>(
     () => ({ name: t($ => $.events.me), color: SELF_LANE_COLOR }),
@@ -208,7 +206,7 @@ export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<A
   const daySlots = slots.filter((slot) => selectedDay >= (slot.start_date ?? '') && selectedDay <= (slot.end_date ?? ''))
 
   return (
-    <Box>
+    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
       {loadFailed && <Alert severity="error" sx={{ mb: 2 }}>{t($ => $.mine.loadFailed)}</Alert>}
       <AvailabilityCalendar
         summarizeAvailability={false}
@@ -262,15 +260,10 @@ export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<A
       )}
 
       {isCompact && (
-        <Fab
-          ref={fabRef}
-          color="primary"
-          aria-label={t($ => $.addEventAria)}
+        <CalendarAddFab
+          label={t($ => $.addEventAria)}
           onClick={(event) => openAddMenu(event.currentTarget, selectedDay)}
-          sx={{ position: 'fixed', bottom: 24, right: 24, zIndex: (theme) => theme.zIndex.fab }}
-        >
-          <AddIcon />
-        </Fab>
+        />
       )}
 
       <Menu open={Boolean(addMenu)} anchorEl={addMenu?.anchorEl ?? null} onClose={() => setAddMenu(null)}>

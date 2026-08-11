@@ -77,7 +77,6 @@ export default function RehearsalDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [rehearsal, setRehearsal] = useState<RehearsalDetail | null>(null)
   const [members, setMembers] = useState<Member[]>([])
-  const [addMemberId, setAddMemberId] = useState('')
   const { isCrossBand, canWrite: detailCanWrite } = useCrossTenantRow(rehearsal)
 
   const saveFn = useCallback(
@@ -143,10 +142,8 @@ export default function RehearsalDetailPage() {
     await refresh()
   }
 
-  async function handleAddParticipant() {
-    if (!addMemberId) return
-    await addParticipant(rehearsalId, Number(addMemberId))
-    setAddMemberId('')
+  async function handleAddParticipant(memberId: Id) {
+    await addParticipant(rehearsalId, Number(memberId))
     await refresh()
   }
 
@@ -232,8 +229,6 @@ export default function RehearsalDetailPage() {
               <RehearsalParticipantsSection
                 rehearsal={rehearsal}
                 members={members}
-                addMemberId={addMemberId as Id | ''}
-                onAddMemberIdChange={(id) => setAddMemberId(String(id))}
                 onVote={handleVote}
                 onRemoveParticipant={handleRemoveParticipant}
                 onAddParticipant={handleAddParticipant}

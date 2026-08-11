@@ -59,6 +59,7 @@ import {
   setParticipantVote,
 } from './rehearsalService.js'
 import { enrichEventsWithAvailability, getEvent } from './bandEventService.js'
+import { loadSharedUserAvailability } from './availabilityService.js'
 import { patchTask } from './taskService.js'
 
 const NOT_FOUND = notFound('Not found')
@@ -96,16 +97,39 @@ const attachRehearsalParticipants = (db, userId, rows) =>
     return rehearsals.map((r) => ({ ...r, participants: byId.get(r.id) ?? [], viewerBandMemberId }))
   })
 
-const attachGigAvailability = (db, userId, rows) =>
-  perTenant(rows, (tenantId, gigs) =>
-    enrichGigsWithAvailability(db, tenantId, gigs, { userId, tenantId }))
+// The user-level half of every band's availability matrix is the same fetch —
+// it is keyed by musician, not by band. Doing it once up front turns the
+// heaviest query in the domain from one-per-band-in-the-feed into one, and
+// keeps a single hub request from firing N of them at the connection pool.
+async function sharedUserAvailability(db, rows, dateOf, endDateOf = dateOf) {
+  const tenantIds = [...new Set(rows.map((row) => row.tenant_id))]
+  const dates = rows.map(dateOf).map(toDateStr).filter(Boolean)
+  if (!tenantIds.length || !dates.length) return null
 
-const attachBandEventAvailability = (db, userId, scope, rows, withDays = false) =>
-  perTenant(rows, (tenantId, events) => enrichEventsWithAvailability(db, tenantId, {
+  const ends = rows.map((row) => toDateStr(endDateOf(row)) ?? toDateStr(dateOf(row))).filter(Boolean)
+  return loadSharedUserAvailability(
+    db,
+    tenantIds,
+    dates.reduce((a, b) => (a < b ? a : b)),
+    ends.reduce((a, b) => (a > b ? a : b)),
+  )
+}
+
+const attachGigAvailability = async (db, userId, rows) => {
+  const shared = await sharedUserAvailability(db, rows, (gig) => gig.event_date)
+  return perTenant(rows, (tenantId, gigs) =>
+    enrichGigsWithAvailability(db, tenantId, gigs, { userId, tenantId }, shared))
+}
+
+const attachBandEventAvailability = async (db, userId, scope, rows, withDays = false) => {
+  const shared = await sharedUserAvailability(db, rows, (e) => e.start_date, (e) => e.end_date)
+  return perTenant(rows, (tenantId, events) => enrichEventsWithAvailability(db, tenantId, {
     tenantKind: scope.byId.get(tenantId)?.kind,
     viewer: { userId, tenantId },
     withDays,
+    shared,
   }, events))
+}
 
 // One agenda row, whatever the underlying entity. `type` + `id` identify the
 // source so the frontend can build the right in-tenant link.

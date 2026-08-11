@@ -203,10 +203,25 @@
       "paid": "Betaald",
       "void": "Vervallen"
     },
-    "equipmentOnSite": "Beschikbare apparatuur ter plaatse",
-    "paSystem": "PA-systeem",
-    "drumkit": "Drumstel",
-    "stageLight": "Podiumverlichting",
+    "equipment": {
+      "title": "Apparatuur",
+      "add": "Apparatuur toevoegen",
+      "empty": "Nog geen apparatuur vastgelegd",
+      "remove": "Verwijderen",
+      "saveFailed": "Opslaan van apparatuur mislukt",
+      "providerLabel": "Wie zorgt voor {{item}}",
+      "provider": {
+        "event": "Op locatie",
+        "band": "Wij nemen mee"
+      },
+      "items": {
+        "pa_system": "PA-systeem",
+        "drumkit": "Drumstel",
+        "bass_amp": "Basversterker",
+        "guitar_amp": "Gitaarversterker",
+        "stage_lights": "Podiumverlichting"
+      }
+    },
     "memberAvailability": "Beschikbaarheid",
     "participants": "Deelnemers",
     "contacts": "Contacten",
@@ -231,15 +246,13 @@
     "unassigned": "Niet toegewezen",
     "deleteTask": "Taak {{title}} verwijderen",
     "dueDateFor": "Vervaldatum voor {{title}}",
-    "openDuePickerFor": "vervaldatumkiezer openen voor {{title}}",
     "assignTask": "{{title}} toewijzen",
-    "doneEditing": "Klaar met bewerken",
     "taskLabel": "Taak",
-    "taskPlaceholder": "Taaknaam…",
     "addTask": "Taak toevoegen",
-    "openDuePicker": "vervaldatumkiezer openen",
-    "due": "Vervaldatum",
-    "completed": "Voltooid ({{count}})"
+    "completed": "Voltooid ({{count}})",
+    "setDueDate": "Vervaldatum instellen",
+    "clearDueDate": "Vervaldatum wissen",
+    "assign": "Toewijzen"
   },
   "contacts": {
     "sourceVenue": "Locatie",

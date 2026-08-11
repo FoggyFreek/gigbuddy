@@ -75,7 +75,6 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
   const [rehearsal, setRehearsal] = useState<Rehearsal | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [extraMemberIds, setExtraMemberIds] = useState<Id[]>([])
-  const [addMemberId, setAddMemberId] = useState<Id | ''>('')
   const [availabilityData, setAvailabilityData] = useState<AvailabilityData | null>(null)
   const [confirmCreate, setConfirmCreate] = useState(false)
 
@@ -169,10 +168,8 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
     await refresh()
   }
 
-  async function handleAddParticipant() {
-    if (!addMemberId) return
-    await addParticipant(rehearsalId!, Number(addMemberId))
-    setAddMemberId('')
+  async function handleAddParticipant(memberId: Id) {
+    await addParticipant(rehearsalId!, Number(memberId))
     await refresh()
   }
 
@@ -281,8 +278,6 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
               <RehearsalParticipantsSection
                 rehearsal={rehearsal}
                 members={members}
-                addMemberId={addMemberId}
-                onAddMemberIdChange={setAddMemberId}
                 onVote={handleVote}
                 onRemoveParticipant={handleRemoveParticipant}
                 onAddParticipant={handleAddParticipant}

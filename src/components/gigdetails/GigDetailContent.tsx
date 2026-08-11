@@ -1,6 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import Box from '@mui/material/Box'
+import Badge from '@mui/material/Badge'
 import CircularProgress from '@mui/material/CircularProgress'
 import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
@@ -40,7 +41,7 @@ import { listMembers } from '../../api/bandMembers.ts'
 import { compressBanner } from '../../utils/compressImage.ts'
 import { toDateInput, toTimeInput } from '../../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../../utils/requiredFields.ts'
-import type { AvailabilitySummary, Id, GigTag, Member, Venue, Task } from '../../types/entities.ts'
+import type { AvailabilitySummary, Id, GigEquipmentEntry, GigTag, Member, Venue, Task } from '../../types/entities.ts'
 
 const REQUIRED_FIELDS = ['event_date', 'event_description']
 
@@ -119,9 +120,6 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     merchandise_cut: '',
     percentage_of_sales: '',
     notes: '',
-    has_pa_system: false,
-    has_drumkit: false,
-    has_stage_lights: false,
   })
   const [loading, setLoading] = useState(true)
   const [initialTasks, setInitialTasks] = useState<Task[]>([])
@@ -129,9 +127,9 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   const [selectedFestival, setSelectedFestival] = useState<Venue | null>(null)
   const [gig, setGig] = useState<GigDetail | null>(null)
   const [members, setMembers] = useState<Member[]>([])
-  const [addMemberId, setAddMemberId] = useState<Id | ''>('')
   const [bannerPath, setBannerPath] = useState<string | null>(null)
   const [tags, setTags] = useState<GigTag[]>([])
+  const [equipment, setEquipment] = useState<GigEquipmentEntry[]>([])
   const [bandBannerPath, setBandBannerPath] = useState<string | null>(null)
   const [bannerBusy, setBannerBusy] = useState(false)
   const [bannerError, setBannerError] = useState<string | null>(null)
@@ -157,6 +155,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     onGigLoaded?.(g)
     setBannerPath(g.banner_path || null)
     setTags(g.tags || [])
+    setEquipment(g.equipment || [])
     setSelectedVenue(g.venue || null)
     setSelectedFestival(g.festival || null)
     setForm({
@@ -174,9 +173,6 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       merchandise_cut: g.merchandise_cut == null ? '' : String(g.merchandise_cut),
       percentage_of_sales: g.percentage_of_sales == null ? '' : String(g.percentage_of_sales),
       notes: g.notes || '',
-      has_pa_system: !!g.has_pa_system,
-      has_drumkit: !!g.has_drumkit,
-      has_stage_lights: !!g.has_stage_lights,
     })
     setInitialTasks((g.tasks as Task[]) || [])
   }, [onGigLoaded])
@@ -238,10 +234,8 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     await refresh()
   }
 
-  async function handleAddParticipant() {
-    if (!addMemberId) return
-    await addGigParticipant(gigId, Number(addMemberId))
-    setAddMemberId('')
+  async function handleAddParticipant(memberId: Id) {
+    await addGigParticipant(gigId, Number(memberId))
     await refresh()
   }
 
@@ -250,6 +244,17 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   async function completeOwnTaskCrossBand(task: Task, done: boolean): Promise<Task> {
     if (task.id == null) return task
     return setMyTaskDone(task.id, done)
+  }
+
+  function handleTaskUpsert(task: Task) {
+    setInitialTasks((current) => {
+      if (task.id == null || !current.some((item) => item.id === task.id)) return [...current, task]
+      return current.map((item) => item.id === task.id ? task : item)
+    })
+  }
+
+  function handleTaskDelete(taskId: Id) {
+    setInitialTasks((current) => current.filter((task) => task.id !== taskId))
   }
 
   function handleChange(field: string, value: unknown) {
@@ -331,6 +336,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
 
   const requiredErrors = getRequiredErrors(form, REQUIRED_FIELDS)
   const visibleTabs = isCrossBand ? TABS.filter(({ key }) => key === 'event' || key === 'tasks') : TABS
+  const openTaskCount = initialTasks.filter((task) => !task.done).length
   // Derived, not synced: an initialTab (or a stale selection) pointing at a tab
   // this gig doesn't have falls back to the event tab without a render-phase set.
   const shownTab = visibleTabs.some(({ key }) => key === activeTab) ? activeTab : 'event'
@@ -554,7 +560,18 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
                     '&:hover': { bgcolor: selected ? 'action.selected' : 'action.hover' },
                   }}
                 >
-                  <Icon />
+                  {key === 'tasks' ? (
+                    <Badge
+                      badgeContent={openTaskCount}
+                      color="primary"
+                      invisible={openTaskCount === 0}
+                      anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
+                    >
+                      <Icon />
+                    </Badge>
+                  ) : (
+                    <Icon />
+                  )}
                 </IconButton>
               </Tooltip>
             )
@@ -595,7 +612,9 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           form={form}
           selectedVenue={selectedVenue}
           selectedFestival={selectedFestival}
+          equipment={equipment}
           onChange={handleChange}
+          onEquipmentChange={setEquipment}
         />
       )}
 
@@ -606,16 +625,14 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           gigId={gigId}
           showAvailability={showAvailability}
           eventDate={form.event_date}
-          eventStatus={gig?.status}
+          eventStatus={form.status}
           startTime={form.start_time}
           endTime={form.end_time}
           participants={gig?.participants ?? []}
           candidateMembers={candidateMembers}
-          addMemberId={addMemberId}
           venueId={selectedVenue?.id}
           festivalId={selectedFestival?.id}
           flush={flush}
-          onAddMemberChange={setAddMemberId}
           onAddParticipant={handleAddParticipant}
           onRemoveParticipant={handleRemoveParticipant}
           onVote={handleVote}
@@ -635,6 +652,8 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         plainTextAttachments={isCrossBand}
         onChangeNotes={(notes) => handleChange('notes', notes)}
         onToggleTask={isCrossBand ? completeOwnTaskCrossBand : undefined}
+        onTaskUpsert={handleTaskUpsert}
+        onTaskDelete={handleTaskDelete}
       />
       <ImageCropDialog
         open={cropOpen}

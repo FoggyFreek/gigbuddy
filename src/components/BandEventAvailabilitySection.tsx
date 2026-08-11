@@ -4,7 +4,6 @@ import Chip from '@mui/material/Chip'
 import Stack from '@mui/material/Stack'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
-import { useState } from 'react'
 import { AVAILABILITY_STATUS_COLORS } from '../utils/availabilityUtils.ts'
 import type { AvailabilityDay, AvailabilityStatus, Id, Member, MemberAvailability, Participant } from '../types/entities.ts'
 import BandParticipantsSection from './BandParticipantsSection.tsx'
@@ -39,7 +38,6 @@ export default function BandEventAvailabilitySection({
   onRemoveMember,
 }: Readonly<BandEventAvailabilitySectionProps>) {
   const { t, i18n } = useTranslation('bandEvents')
-  const [addMemberId, setAddMemberId] = useState<Id | ''>('')
 
   const statusLabel = (status: AvailabilityStatus | undefined) => {
     if (status === 'available') return t($ => $.availability.available)
@@ -123,16 +121,10 @@ export default function BandEventAvailabilitySection({
           position: member.position,
         }))}
         candidateMembers={candidateMembers}
-        addMemberId={addMemberId}
         emptyText={t($ => $.availability.noMembers)}
         addParticipantLabel={t($ => $.availability.addMember)}
         getRemoveParticipantLabel={(participant) => t($ => $.availability.removeMember, { name: participant.name })}
-        onAddMemberChange={setAddMemberId}
-        onAddParticipant={() => {
-          if (!addMemberId) return
-          void onAddMember?.(addMemberId)
-          setAddMemberId('')
-        }}
+        onAddParticipant={(memberId) => { void onAddMember?.(memberId) }}
         onRemoveParticipant={(memberId) => { void onRemoveMember?.(memberId) }}
         canWrite={canWrite}
         renderParticipantEnd={renderAvailability}

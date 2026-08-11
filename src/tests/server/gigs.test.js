@@ -32,6 +32,28 @@ function asUserA(req) {
     .set('x-test-tenant-id', String(seed.tenantA.id))
 }
 
+// The bare list is the unbounded export/picker feed — it spans the tenant's
+// whole history, where a per-member availability verdict is both meaningless
+// and the most expensive thing the endpoint could compute. The bounded feeds
+// that actually render the availability column keep it.
+describe('GET /api/gigs — availability is not computed for the full list', () => {
+  it('omits members_availability from the unbounded list', async () => {
+    const res = await asUserA(request(app).get('/api/gigs')).expect(200)
+
+    expect(res.body.length).toBeGreaterThan(0)
+    for (const gig of res.body) expect(gig).not.toHaveProperty('members_availability')
+  })
+
+  it('still returns it on the bounded upcoming feed', async () => {
+    const res = await asUserA(
+      request(app).get('/api/gigs/upcoming?limit=10&today=2000-01-01')
+    ).expect(200)
+
+    expect(res.body.items.length).toBeGreaterThan(0)
+    expect(res.body.items[0]).toHaveProperty('members_availability')
+  })
+})
+
 describe('gig admission — defaults', () => {
   it('seeded gig defaults to admission=free', async () => {
     const { rows } = await pool.query(
@@ -517,6 +539,89 @@ describe('gig tags', () => {
   })
 })
 
+describe('gig equipment', () => {
+  const equipmentUrl = (gigId) => `/api/gigs/${gigId}/equipment`
+
+  // Returns the supertest request itself so callers can chain .expect().
+  function setEquipment(gigId, equipment) {
+    return asUserA(request(app).put(equipmentUrl(gigId)).send({ equipment }))
+  }
+
+  it('replaces the whole set and returns the same shape the detail payload carries', async () => {
+    const res = await setEquipment(seed.gigA.id, [
+      { item: 'drumkit', provider: 'band' },
+      { item: 'pa_system', provider: 'event' },
+    ]).expect(200)
+
+    expect(res.body).toEqual([
+      { item: 'drumkit', provider: 'band' },
+      { item: 'pa_system', provider: 'event' },
+    ])
+
+    const detail = await asUserA(request(app).get(`/api/gigs/${seed.gigA.id}`)).expect(200)
+    expect(detail.body.equipment).toEqual(res.body)
+
+    // A second PUT replaces rather than merges.
+    const replaced = await setEquipment(seed.gigA.id, [
+      { item: 'stage_lights', provider: 'event' },
+    ]).expect(200)
+    expect(replaced.body).toEqual([{ item: 'stage_lights', provider: 'event' }])
+
+    const cleared = await setEquipment(seed.gigA.id, []).expect(200)
+    expect(cleared.body).toEqual([])
+  })
+
+  it('collapses duplicate items instead of failing on the primary key', async () => {
+    const res = await setEquipment(seed.gigA.id, [
+      { item: 'drumkit', provider: 'event' },
+      { item: 'drumkit', provider: 'band' },
+    ]).expect(200)
+
+    expect(res.body).toEqual([{ item: 'drumkit', provider: 'band' }])
+  })
+
+  it('rejects an unknown item, an unknown provider and a non-array body', async () => {
+    await setEquipment(seed.gigA.id, [{ item: 'laser_harp', provider: 'event' }]).expect(400)
+    await setEquipment(seed.gigA.id, [{ item: 'drumkit', provider: 'venue' }]).expect(400)
+    await setEquipment(seed.gigA.id, [{ item: 'drumkit', provider: null }]).expect(400)
+    await setEquipment(seed.gigA.id, ['drumkit']).expect(400)
+    await setEquipment(seed.gigA.id, 'drumkit').expect(400)
+    await asUserA(request(app).put(equipmentUrl(seed.gigA.id)).send({})).expect(400)
+
+    const { rows } = await pool.query('SELECT * FROM gig_equipment')
+    expect(rows).toEqual([])
+  })
+
+  it('404s a foreign-tenant gig and leaves its equipment untouched', async () => {
+    await pool.query(
+      `INSERT INTO gig_equipment (gig_id, tenant_id, item_key, provider) VALUES ($1, $2, 'drumkit', 'event')`,
+      [seed.gigB.id, seed.tenantB.id],
+    )
+
+    await setEquipment(seed.gigB.id, [{ item: 'pa_system', provider: 'band' }]).expect(404)
+
+    const { rows } = await pool.query(
+      'SELECT item_key, provider FROM gig_equipment WHERE gig_id = $1',
+      [seed.gigB.id],
+    )
+    expect(rows).toEqual([{ item_key: 'drumkit', provider: 'event' }])
+  })
+
+  it('forbids readers (403) but allows contributors (200)', async () => {
+    await pool.query(
+      'UPDATE memberships SET role = $1 WHERE user_id = $2 AND tenant_id = $3',
+      ['reader', seed.userA.id, seed.tenantA.id],
+    )
+    await setEquipment(seed.gigA.id, [{ item: 'drumkit', provider: 'band' }]).expect(403)
+
+    await pool.query(
+      'UPDATE memberships SET role = $1 WHERE user_id = $2 AND tenant_id = $3',
+      ['contributor', seed.userA.id, seed.tenantA.id],
+    )
+    await setEquipment(seed.gigA.id, [{ item: 'drumkit', provider: 'band' }]).expect(200)
+  })
+})
+
 describe('gig payload — venue/festival address for the location map', () => {
   async function insertVenue(tenantId, { category, name, city, street }) {
     const { rows: [venue] } = await pool.query(
@@ -603,11 +708,14 @@ describe('gig merch summary — GET /api/gigs/:id/merch-summary', () => {
     await asUserA(request(app).get(`/api/gigs/${seed.gigB.id}/merch-summary`)).expect(404)
   })
 
-  it('forbids readers (403) but allows contributors (200)', async () => {
+  it('requires finance.view', async () => {
     await setRoleA('reader')
     await asUserA(request(app).get(`/api/gigs/${seed.gigA.id}/merch-summary`)).expect(403)
 
     await setRoleA('contributor')
+    await asUserA(request(app).get(`/api/gigs/${seed.gigA.id}/merch-summary`)).expect(403)
+
+    await setRoleA('financial_admin')
     await asUserA(request(app).get(`/api/gigs/${seed.gigA.id}/merch-summary`)).expect(200)
   })
 })

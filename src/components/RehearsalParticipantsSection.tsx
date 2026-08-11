@@ -14,11 +14,9 @@ import useEventAvailability from '../hooks/useEventAvailability.ts'
 interface RehearsalParticipantsSectionProps {
   rehearsal: Rehearsal
   members?: Member[]
-  addMemberId?: Id | ''
-  onAddMemberIdChange?: (id: Id | '') => void
   onVote?: (memberId: Id | undefined, vote: string | null) => void
   onRemoveParticipant?: (memberId: Id | undefined) => void
-  onAddParticipant?: () => void
+  onAddParticipant?: (memberId: Id) => void
   onPromote?: () => void
   onDemote?: () => void
   // Presentation gating for readers: when false, only the current member's own
@@ -31,8 +29,6 @@ interface RehearsalParticipantsSectionProps {
 export default function RehearsalParticipantsSection({
   rehearsal,
   members = [],
-  addMemberId,
-  onAddMemberIdChange,
   onVote,
   onRemoveParticipant,
   onAddParticipant,
@@ -137,11 +133,9 @@ export default function RehearsalParticipantsSection({
           eventDate={rehearsal.proposed_date}
           eventStatus={rehearsal.status}
           candidateMembers={isPlanned ? [] : candidateMembers}
-          addMemberId={addMemberId}
           emptyText={t($ => $.participants.noParticipants)}
           addParticipantLabel={t($ => $.participants.addParticipant)}
           getRemoveParticipantLabel={(participant) => t($ => $.participants.removeParticipant, { name: participant.name })}
-          onAddMemberChange={onAddMemberIdChange}
           onAddParticipant={onAddParticipant}
           onRemoveParticipant={onRemoveParticipant
             ? (memberId) => onRemoveParticipant(memberId)

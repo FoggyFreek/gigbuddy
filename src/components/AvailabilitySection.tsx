@@ -7,7 +7,6 @@ import List from '@mui/material/List'
 import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
 import ListItemIcon from '@mui/material/ListItemIcon'
-import Fab from '@mui/material/Fab'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Button from '@mui/material/Button'
@@ -18,7 +17,6 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import FormGroup from '@mui/material/FormGroup'
-import AddIcon from '@mui/icons-material/Add'
 import EventAvailableIcon from '@mui/icons-material/EventAvailable'
 import MicIcon from '@mui/icons-material/Mic'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
@@ -27,6 +25,7 @@ import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { useEntitlements } from '../hooks/useEntitlements.ts'
 import { FEATURES } from '../auth/entitlements.ts'
 import AvailabilityCalendar from './AvailabilityCalendar.tsx'
+import CalendarAddFab from './calendar/CalendarAddFab.tsx'
 import { venueHeadline } from '../utils/venueDisplay.ts'
 import {
   GIG_STATUS_COLORS,
@@ -89,7 +88,6 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
   const manageableMembers = members.filter(canManageAvailabilityForMember)
   const canSyncCalendar = useEntitlements().has(FEATURES.CALENDAR_SYNC)
   const [exportOptions, setExportOptions] = useState({ gigs: true, rehearsals: true, bandEvents: true })
-  const fabRef = useRef<HTMLButtonElement | null>(null)
   const focusedRouteRef = useRef<string | null>(null)
   const escapedBasePath = basePath.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')
   const focusMatch = basePath
@@ -255,7 +253,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
   const daySlots = selectedDay ? (summarizeCalendarSlots(slots, [selectedDay])[selectedDay] ?? []) : []
 
   return (
-    <Box sx={{ mb: 3 }}>
+    <Box sx={{ mb: 3, display: 'flex', flexDirection: 'column', flex: 1 }}>
       <AvailabilityCalendar
         year={viewYear}
         month={viewMonth}
@@ -402,15 +400,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
       )}
 
       {isMobile && (
-        <Fab
-          ref={fabRef}
-          color="primary"
-          aria-label={t($ => $.addEventAria)}
-          onClick={handleFabClick}
-          sx={{ position: 'fixed', bottom: 24, right: 24, zIndex: (t) => t.zIndex.fab }}
-        >
-          <AddIcon />
-        </Fab>
+        <CalendarAddFab label={t($ => $.addEventAria)} onClick={handleFabClick} />
       )}
 
       <Menu

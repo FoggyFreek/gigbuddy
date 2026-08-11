@@ -157,6 +157,29 @@ describe('AvailabilityPage', () => {
     })
   })
 
+  it('keeps the add button inside the list column when a split view forces compact layout', async () => {
+    wrap(<AvailabilitySection basePath="/availability" />, undefined, true)
+    const fab = await screen.findByRole('button', { name: /add event/i })
+    expect(getComputedStyle(fab).position).not.toBe('fixed')
+    expect(getComputedStyle(fab.parentElement).position).toBe('sticky')
+  })
+
+  it('pins the add button to the viewport on a narrow screen', async () => {
+    const originalMatchMedia = window.matchMedia
+    window.matchMedia = (query) => ({
+      matches: query.includes('max-width'), media: query, onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {},
+      addListener: () => {}, removeListener: () => {}, dispatchEvent: () => true,
+    })
+    try {
+      wrap(<AvailabilitySection basePath="/availability" />)
+      const fab = await screen.findByRole('button', { name: /add event/i })
+      expect(getComputedStyle(fab).position).toBe('fixed')
+    } finally {
+      window.matchMedia = originalMatchMedia
+    }
+  })
+
   it('allows delegated linked-member slots to be edited from the compact agenda', async () => {
     const user = userEvent.setup()
     listMembers.mockResolvedValueOnce([

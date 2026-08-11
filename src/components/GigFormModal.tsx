@@ -51,9 +51,6 @@ interface GigFormShape {
   end_time: string
   status: string
   notes: string
-  has_pa_system: boolean
-  has_drumkit: boolean
-  has_stage_lights: boolean
   /** Which of the artist's bands; personal workspaces only. */
   my_band_id: Id | null
 }
@@ -67,9 +64,6 @@ const EMPTY_FORM: GigFormShape = {
   end_time: '',
   status: 'option',
   notes: '',
-  has_pa_system: false,
-  has_drumkit: false,
-  has_stage_lights: false,
   my_band_id: null,
 }
 
@@ -131,8 +125,6 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
       start_time: form.start_time || null,
       end_time: form.end_time || null,
       status: form.status,
-      // Extra fields not in base Gig type — server accepts them
-      ...({ has_pa_system: form.has_pa_system, has_drumkit: form.has_drumkit, has_stage_lights: form.has_stage_lights } as Partial<Gig>),
       ...(supportsMyBand ? ({ my_band_id: form.my_band_id || null } as Partial<Gig>) : {}),
     })
     onClose()

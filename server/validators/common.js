@@ -37,14 +37,35 @@ export function parseListLimit(value, maxLimit = MAX_LIST_LIMIT) {
   return limit <= maxLimit ? limit : null
 }
 
+// A year. Reads that fan out over several range-scoped queries per request —
+// anything availability-enriched — pass this as `maxDays` so an absurd window
+// is refused BEFORE the fetch. Capping the computed result instead (see
+// MAX_SPAN_DAYS) bounds only the response, never the work. Lean single-query
+// projections like the gig map stay deliberately uncapped.
+export const MAX_RANGE_DAYS = 366
+
+export const INVALID_RANGE = 'from and to must be valid ISO dates (YYYY-MM-DD) with from <= to'
+export const INVALID_BOUNDED_RANGE = `${INVALID_RANGE}, at most ${MAX_RANGE_DAYS} days apart`
+
+/** The message matching the cap actually applied, so a 400 explains itself. */
+export const rangeErrorMessage = (maxDays) => (
+  Number.isFinite(maxDays) ? INVALID_BOUNDED_RANGE : INVALID_RANGE
+)
+
+const DAY_MS = 86400000
+
 // Strict parsing of an inclusive day window (`?from=YYYY-MM-DD&to=YYYY-MM-DD`)
 // for windowed collection endpoints. Both bounds are required — an omitted
-// bound would be an unbounded scan — and malformed input is rejected, not
-// clamped, so clients can detect contract mistakes.
-export function parseDateRange(query) {
+// bound would be an unbounded scan — and malformed or over-wide input is
+// rejected, not clamped, so clients can detect contract mistakes.
+export function parseDateRange(query, maxDays = Infinity) {
   const from = query?.from
   const to = query?.to
   if (!isIsoDate(from) || !isIsoDate(to) || from > to) return null
+  if (Number.isFinite(maxDays)) {
+    const days = ((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS) + 1
+    if (days > maxDays) return null
+  }
   return { from, to }
 }
 

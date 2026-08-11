@@ -258,9 +258,6 @@ describe('GigsPage — split-view detail route', () => {
     ...GIGS[0],
     booking_fee_cents: null,
     notes: '',
-    has_pa_system: false,
-    has_drumkit: false,
-    has_stage_lights: false,
     tasks: [],
     participants: [],
   }
@@ -309,10 +306,9 @@ describe('GigsPage — split-view detail route', () => {
 
     wrapWithRoutes({ initialEntries: ['/gigs/42?tab=participants'] })
 
-    const participantSelect = await screen.findByRole('combobox', { name: /add participant/i })
-    await user.click(participantSelect)
+    const participantPicker = await screen.findByRole('combobox', { name: /add participant/i })
+    await user.click(participantPicker)
     await user.click(screen.getByRole('option', { name: /Alice/ }))
-    await user.click(screen.getAllByRole('button', { name: /^add$/i }).at(-1))
 
     await waitFor(() => expect(addGigParticipant).toHaveBeenCalledWith(42, 7))
     expect(await screen.findByText('A')).toBeInTheDocument()

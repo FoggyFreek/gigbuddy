@@ -20,6 +20,8 @@ interface Props {
   plainTextAttachments: boolean
   onChangeNotes: (notes: string) => void
   onToggleTask?: (task: Task, done: boolean) => Promise<Task>
+  onTaskUpsert?: (task: Task) => void
+  onTaskDelete?: (taskId: Id) => void
 }
 
 export default function GigTasksSection({
@@ -34,6 +36,8 @@ export default function GigTasksSection({
   plainTextAttachments,
   onChangeNotes,
   onToggleTask,
+  onTaskUpsert,
+  onTaskDelete,
 }: Readonly<Props>) {
   const { t } = useTranslation('gigs')
 
@@ -52,6 +56,8 @@ export default function GigTasksSection({
             canWrite={editable}
             currentBandMemberId={currentBandMemberId}
             onToggleTask={onToggleTask}
+            onTaskUpsert={onTaskUpsert}
+            onTaskDelete={onTaskDelete}
           />
         </Grid>
         <Grid size={12}>

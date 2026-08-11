@@ -31,16 +31,14 @@ import {
   setDelegation,
   isManagedByBand,
 } from '../repositories/userAvailabilityRepository.js'
-import { parseDateRange } from '../validators/common.js'
+import { INVALID_BOUNDED_RANGE, MAX_RANGE_DAYS, parseDateRange } from '../validators/common.js'
 import { badRequest, forbidden, notFound } from './serviceErrors.js'
 
 const NOT_FOUND = notFound('Availability slot not found')
 
 export async function listMyAvailability(db, userId, query) {
-  const range = parseDateRange(query)
-  if (range === null) {
-    return badRequest('from and to must be valid ISO dates (YYYY-MM-DD) with from <= to')
-  }
+  const range = parseDateRange(query, MAX_RANGE_DAYS)
+  if (range === null) return badRequest(INVALID_BOUNDED_RANGE)
   const slots = await listUserSlotsInRange(db, userId, range.from, range.to)
   return { items: slots.map(present), meta: { ...range, returned: slots.length } }
 }

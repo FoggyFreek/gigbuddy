@@ -1,5 +1,6 @@
 import type {
   Gig,
+  GigEquipmentEntry,
   Id,
   Participant,
   PurchaseAttachment,
@@ -17,9 +18,7 @@ export interface GigDetail extends MaybeCrossTenant<Gig> {
   admission?: string
   ticket_link?: string
   notes?: string
-  has_pa_system?: boolean
-  has_drumkit?: boolean
-  has_stage_lights?: boolean
+  equipment?: GigEquipmentEntry[]
   tasks?: Task[]
   attachments?: PurchaseAttachment[]
   participants?: Participant[]
@@ -41,7 +40,4 @@ export interface GigDetailForm {
   merchandise_cut: string
   percentage_of_sales: string
   notes: string
-  has_pa_system: boolean
-  has_drumkit: boolean
-  has_stage_lights: boolean
 }

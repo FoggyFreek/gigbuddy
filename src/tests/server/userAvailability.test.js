@@ -63,6 +63,35 @@ const RANGE = { from: '2099-07-01', to: '2099-07-31' }
 const bandGrid = (userId, tenantId, range = RANGE) =>
   inTenant(userId, tenantId)(request(app).get('/api/availability').query(range))
 
+// Every availability read fans out over four range-scoped queries, so the
+// window has to be bounded at the door — MAX_SPAN_DAYS only ever truncated the
+// computed output, long after the rows had been fetched.
+describe('availability reads reject an unbounded window', () => {
+  const TOO_WIDE = { from: '2000-01-01', to: '2099-12-31' }
+
+  it('rejects a window wider than a year on the band grid', async () => {
+    await bandGrid(seed.userA.id, seed.tenantA.id, TOO_WIDE).expect(400)
+  })
+
+  it('rejects a malformed window on the band grid instead of failing in the database', async () => {
+    await bandGrid(seed.userA.id, seed.tenantA.id, { from: 'yesterday', to: '2099-07-31' }).expect(400)
+    await bandGrid(seed.userA.id, seed.tenantA.id, { from: '2099-07-31', to: '2099-07-01' }).expect(400)
+  })
+
+  it('rejects a window wider than a year on the span and personal reads', async () => {
+    await inTenant(seed.userA.id, seed.tenantA.id)(
+      request(app).get('/api/availability/span').query(TOO_WIDE),
+    ).expect(400)
+    await asUser(seed.userA.id)(
+      request(app).get('/api/me/availability').query(TOO_WIDE),
+    ).expect(400)
+  })
+
+  it('still accepts a full year', async () => {
+    await bandGrid(seed.userA.id, seed.tenantA.id, { from: '2099-01-01', to: '2099-12-31' }).expect(200)
+  })
+})
+
 describe('/api/me/availability — the musician\'s own calendar', () => {
   it('creates, lists and deletes without any active tenant', async () => {
     const created = await asUser(seed.userA.id)(request(app).post('/api/me/availability').send({

@@ -26,7 +26,9 @@ export default function AvailabilityPage() {
         onBandEventDelete: reloadDeletedEvent,
       }}
     >
-      <Box>
+      {/* Full-height column so the calendar's add button can sit at the foot
+          of the list pane instead of floating over the detail pane. */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
         <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>
           {t($ => $.title)}
         </Typography>

@@ -85,7 +85,9 @@ describe('windowed range endpoints', () => {
   })
 
   it('rejects malformed or inverted windows with a stable 400 response', async () => {
-    const expectedError = { error: 'from and to must be valid ISO dates (YYYY-MM-DD) with from <= to' }
+    const expectedError = {
+      error: 'from and to must be valid ISO dates (YYYY-MM-DD) with from <= to, at most 366 days apart',
+    }
 
     const missing = await asUserA(request(app).get('/api/gigs/range').query({ from: '2027-07-01' })).expect(400)
     expect(missing.body).toEqual(expectedError)

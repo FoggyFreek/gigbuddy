@@ -11,14 +11,17 @@ import {
   updateSlotFields,
   deleteSlot as deleteSlotRow,
 } from '../repositories/availabilityRepository.js'
-import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
+import {
+  bandMemberExistsInTenant,
+  listMemberUserIdsForTenants,
+} from '../repositories/bandMemberRepository.js'
 import {
   listSlotsForUsersInRange,
   listBookingsForUsersInRange,
   fetchVisibilityForUsers,
 } from '../repositories/userAvailabilityRepository.js'
 import { projectSlot, projectBooking } from './availabilityProjection.js'
-import { summarizeSpan } from '../domain/availabilitySpan.js'
+import { prepareMatrix, summarizeSpan, withMembers } from '../domain/availabilitySpan.js'
 import {
   assertMayWriteFor,
   loadSlotOwner,
@@ -28,13 +31,68 @@ import {
 } from './userAvailabilityService.js'
 import { bandMemberUserId } from '../repositories/bandMemberRepository.js'
 import { badRequest, forbidden, notFound } from './serviceErrors.js'
-import { parseDateRange, validateDailyTimeRange } from '../validators/common.js'
+import {
+  INVALID_BOUNDED_RANGE,
+  MAX_RANGE_DAYS,
+  parseDateRange,
+  validateDailyTimeRange,
+} from '../validators/common.js'
 
 const NOT_FOUND = notFound('Not found')
 
 // Band-wide slots and slots for members without an account belong to the band,
 // not to a person, so they stay behind planning.write.
 const PLANNING_WRITE_REQUIRED = forbidden('Forbidden')
+
+// ---------- the user-level half ----------
+
+// A musician's own slots and their bookings across every band they play in are
+// keyed by USER, not tenant, so a request that builds matrices for SEVERAL
+// bands (the cross-tenant hub) fetches this once for everyone involved instead
+// of repeating the heaviest query in the domain per band.
+const EMPTY_USER_AVAILABILITY = {
+  slotsByUser: new Map(),
+  bookingsByUser: new Map(),
+  owners: new Map(),
+}
+
+function groupByUser(rows) {
+  const byUser = new Map()
+  for (const row of rows) {
+    const existing = byUser.get(row.user_id)
+    if (existing) existing.push(row)
+    else byUser.set(row.user_id, [row])
+  }
+  return byUser
+}
+
+export async function loadUserAvailability(db, userIds, from, to) {
+  if (!userIds.length) return EMPTY_USER_AVAILABILITY
+
+  const [slots, bookings, visibility] = await Promise.all([
+    listSlotsForUsersInRange(db, userIds, from, to),
+    listBookingsForUsersInRange(db, userIds, from, to),
+    fetchVisibilityForUsers(db, userIds),
+  ])
+
+  return {
+    slotsByUser: groupByUser(slots),
+    bookingsByUser: groupByUser(bookings),
+    owners: new Map(visibility.map((v) => [v.id, {
+      userId: v.id,
+      availabilityDetailVisible: v.availability_detail_visible,
+      crossBandGigDetailVisible: v.cross_band_gig_detail_visible,
+      travelMarginHours: v.availability_travel_margin_hours ?? 2,
+    }])),
+  }
+}
+
+// The user-level half for every musician in `tenantIds`, to hand to each
+// per-tenant loadAvailabilityMatrix call as its `shared` argument.
+export async function loadSharedUserAvailability(db, tenantIds, from, to) {
+  if (!tenantIds.length) return EMPTY_USER_AVAILABILITY
+  return loadUserAvailability(db, await listMemberUserIdsForTenants(db, tenantIds), from, to)
+}
 
 // The band-side read is a UNION of two sources, keyed on band_member_id so the
 // grid keeps its current shape:
@@ -45,7 +103,7 @@ const PLANNING_WRITE_REQUIRED = forbidden('Forbidden')
 // This is the single SQL owner of "what does this band see on these days".
 // Everything derived from it — the grid, the single-date read, the per-event
 // summaries — goes through summarizeSpan (server/domain/availabilitySpan.js).
-export async function loadAvailabilityMatrix(db, tenantId, from, to, viewer = null) {
+export async function loadAvailabilityMatrix(db, tenantId, from, to, viewer = null, shared = null) {
   const [bandLocal, members] = await Promise.all([
     listSlotsInRange(db, tenantId, from, to),
     listBandMembers(db, tenantId),
@@ -53,9 +111,15 @@ export async function loadAvailabilityMatrix(db, tenantId, from, to, viewer = nu
 
   const linked = members.filter((m) => m.user_id !== null)
   const unlinked = members.filter((m) => m.user_id === null)
-  const localBookings = await listBookingsForMembersInRange(
-    db, tenantId, unlinked.map((member) => member.id), from, to,
-  )
+  const userIds = [...new Set(linked.map((m) => m.user_id))]
+
+  // Everything below depends only on `members`, so it goes out in one batch
+  // rather than a round trip for the unlinked half and another for the linked.
+  const [localBookings, userAvailability] = await Promise.all([
+    listBookingsForMembersInRange(db, tenantId, unlinked.map((member) => member.id), from, to),
+    shared ?? loadUserAvailability(db, userIds, from, to),
+  ])
+
   const projectedLocalBookings = localBookings.map((booking) => ({
     id: `${booking.source}-${booking.source_id}`,
     source: 'booking',
@@ -73,48 +137,34 @@ export async function loadAvailabilityMatrix(db, tenantId, from, to, viewer = nu
     title: booking.title ?? null,
     redacted: false,
   }))
-  if (linked.length === 0) return { members, slots: [...bandLocal, ...projectedLocalBookings] }
 
-  const userIds = [...new Set(linked.map((m) => m.user_id))]
-  const [userSlots, bookings, visibility] = await Promise.all([
-    listSlotsForUsersInRange(db, userIds, from, to),
-    listBookingsForUsersInRange(db, userIds, from, to),
-    fetchVisibilityForUsers(db, userIds),
-  ])
-
-  const owners = new Map(visibility.map((v) => [v.id, {
-    userId: v.id,
-    availabilityDetailVisible: v.availability_detail_visible,
-    crossBandGigDetailVisible: v.cross_band_gig_detail_visible,
-    travelMarginHours: v.availability_travel_margin_hours ?? 2,
-  }]))
-  const memberIdByUser = new Map(linked.map((m) => [m.user_id, m.id]))
   const seenViewer = viewer ?? { userId: null, tenantId }
 
-  const projected = [
-    ...userSlots.map((slot) => ({
-      slot, owner: owners.get(slot.user_id), project: projectSlot,
-    })),
-    ...bookings.map((booking) => ({
-      slot: booking, owner: owners.get(booking.user_id), project: projectBooking,
-    })),
-  ]
-    .filter((entry) => entry.owner)
-    .map(({ slot, owner, project }) => ({
-      ...project(slot, owner, seenViewer),
-      band_member_id: memberIdByUser.get(owner.userId) ?? null,
-      tenant_id: tenantId,
-    }))
-    // A projected entry always belongs to a member — never let one fall through
-    // as band_member_id null, which the span rules read as band-wide.
-    .filter((entry) => entry.band_member_id !== null)
+  // Walk this band's linked members, not the fetched rows: `shared` may cover
+  // musicians from other bands entirely, and a projected entry must always land
+  // on one of THIS band's member ids — a null there reads as band-wide.
+  const projected = []
+  for (const member of linked) {
+    const owner = userAvailability.owners.get(member.user_id)
+    if (!owner) continue
+    const attach = (entry) => projected.push({
+      ...entry, band_member_id: member.id, tenant_id: tenantId,
+    })
+    for (const slot of userAvailability.slotsByUser.get(member.user_id) ?? []) {
+      attach(projectSlot(slot, owner, seenViewer))
+    }
+    for (const booking of userAvailability.bookingsByUser.get(member.user_id) ?? []) {
+      attach(projectBooking(booking, owner, seenViewer))
+    }
+  }
 
   return { members, slots: [...bandLocal, ...projectedLocalBookings, ...projected] }
 }
 
 export async function listRange(db, tenantId, query, viewer = null) {
-  const { from, to } = query
-  if (!from || !to) return badRequest('from and to are required')
+  const range = parseDateRange(query, MAX_RANGE_DAYS)
+  if (!range) return badRequest(INVALID_BOUNDED_RANGE)
+  const { from, to } = range
 
   const { slots } = await loadAvailabilityMatrix(db, tenantId, from, to, viewer)
   // Current-tenant events already have their own calendar blocks. Keep them in
@@ -136,8 +186,8 @@ export async function listOnDate(db, tenantId, date, viewer = null) {
 }
 
 export async function listSpan(db, tenantId, query, viewer = null) {
-  const range = parseDateRange(query)
-  if (!range) return badRequest('from and to must be valid ISO dates with from <= to')
+  const range = parseDateRange(query, MAX_RANGE_DAYS)
+  if (!range) return badRequest(INVALID_BOUNDED_RANGE)
 
   const matrix = await loadAvailabilityMatrix(db, tenantId, range.from, range.to, viewer)
   return summarizeSpan(matrix, range.from, range.to)
@@ -150,8 +200,12 @@ export async function evaluateEvent(db, tenantId, body, viewer = null) {
   if (!EVENT_TYPES.has(type)) return badRequest('event_type must be gig, rehearsal, or band_event')
   const start = body?.start_date
   const end = body?.end_date || start
-  const range = parseDateRange({ from: start, to: end })
-  if (!range) return badRequest('start_date and end_date must be valid ISO dates with start_date <= end_date')
+  const range = parseDateRange({ from: start, to: end }, MAX_RANGE_DAYS)
+  if (!range) {
+    return badRequest(
+      `start_date and end_date must be valid ISO dates with start_date <= end_date, at most ${MAX_RANGE_DAYS} days apart`,
+    )
+  }
 
   const startTime = body?.start_time || null
   const endTime = body?.end_time || null
@@ -174,12 +228,16 @@ export async function evaluateEvent(db, tenantId, body, viewer = null) {
   }
 
   const matrix = await loadAvailabilityMatrix(db, tenantId, range.from, range.to, viewer)
+  const memberIds = new Set(matrix.members.map((member) => member.id))
   const selected = participantIds === null
     ? new Set(matrix.members.filter((member) => member.position === 'lead').map((member) => member.id))
     : new Set(participantIds)
-  if ([...selected].some((id) => !matrix.members.some((member) => member.id === id))) return NOT_FOUND
+  if ([...selected].some((id) => !memberIds.has(id))) return NOT_FOUND
 
-  const filtered = { ...matrix, members: matrix.members.filter((member) => selected.has(member.id)) }
+  const filtered = withMembers(
+    prepareMatrix(matrix),
+    matrix.members.filter((member) => selected.has(member.id)),
+  )
   return summarizeSpan(filtered, range.from, range.to, {
     start_date: range.from,
     end_date: range.to,

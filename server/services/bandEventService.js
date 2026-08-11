@@ -24,7 +24,7 @@ import {
   windowedCollection,
 } from './limitedCollectionService.js'
 import { loadAvailabilityMatrix } from './availabilityService.js'
-import { summarizeSpan } from '../domain/availabilitySpan.js'
+import { prepareMatrix, summarizeSpan, withMembers } from '../domain/availabilitySpan.js'
 import { toDateStr } from '../utils/dateOnly.js'
 import { TENANT_CAPABILITIES, tenantKindSupports } from '../../shared/tenantCapabilities.js'
 import { listBandMembers, bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
@@ -41,7 +41,7 @@ const NOT_FOUND = notFound('Not found')
 // Personal workspaces have no band availability at all, so they get the rows
 // untouched rather than an empty column.
 export async function enrichEventsWithAvailability(db, tenantId, scope, events) {
-  const { tenantKind, viewer = null, withDays = false } = scope
+  const { tenantKind, viewer = null, withDays = false, shared = null } = scope
   if (!events.length) return events
   if (!tenantKindSupports(tenantKind, TENANT_CAPABILITIES.BAND_AVAILABILITY)) return events
 
@@ -52,23 +52,29 @@ export async function enrichEventsWithAvailability(db, tenantId, scope, events) 
   const to = ends.reduce((a, b) => (a > b ? a : b))
 
   const [matrix, participantsByEvent] = await Promise.all([
-    loadAvailabilityMatrix(db, tenantId, from, to, viewer),
+    loadAvailabilityMatrix(db, tenantId, from, to, viewer, shared),
     loadBandEventParticipantIds(db, events.map((event) => event.id), tenantId),
   ])
+  // Normalized and indexed once for the whole batch; each event only evaluates
+  // its own participants against it.
+  const prepared = prepareMatrix(matrix)
 
   return events.map((event) => {
     const start = toDateStr(event.start_date)
-    const { members, days } = summarizeSpan(matrix, start, toDateStr(event.end_date) ?? start, {
+    const end = toDateStr(event.end_date) ?? start
+    const participants = participantsByEvent.get(event.id) ?? []
+    const selected = new Set(participants.map((participant) => participant.band_member_id))
+    const selectedMembers = matrix.members.filter((member) => selected.has(member.id))
+
+    const { members, days } = summarizeSpan(withMembers(prepared, selectedMembers), start, end, {
       start_date: start,
-      end_date: toDateStr(event.end_date) ?? start,
+      end_date: end,
       start_time: event.start_time,
       end_time: event.end_time,
       exclude: { type: 'band_event', id: event.id },
     })
-    const participants = participantsByEvent.get(event.id) ?? []
-    const selected = new Set(participants.map((participant) => participant.band_member_id))
-    const selectedMembers = members.filter((member) => selected.has(member.member_id))
-    const evaluatedIds = new Set(selectedMembers.map((member) => member.member_id))
+
+    const evaluatedIds = new Set(members.map((member) => member.member_id))
     const formerMembers = participants
       .filter((participant) => participant.deleted_at && !evaluatedIds.has(participant.band_member_id))
       .map((participant) => ({
@@ -80,14 +86,9 @@ export async function enrichEventsWithAvailability(db, tenantId, scope, events) 
       }))
     return {
       ...event,
-      members_availability: [...selectedMembers, ...formerMembers],
+      members_availability: [...members, ...formerMembers],
       // The per-day breakdown is detail-only — list feeds stay lean.
-      ...(withDays ? {
-        availability_days: days.map((day) => ({
-          ...day,
-          members: day.members.filter((member) => selected.has(member.member_id)),
-        })),
-      } : {}),
+      ...(withDays ? { availability_days: days } : {}),
     }
   })
 }

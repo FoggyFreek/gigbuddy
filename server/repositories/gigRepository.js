@@ -48,6 +48,14 @@ export const GIG_TAGS_SELECT = `COALESCE((
    WHERE gtl.gig_id = g.id AND gtl.tenant_id = g.tenant_id
 ), '[]'::jsonb) AS tags`
 
+// Detail-only: no list view shows equipment. The column is item_key, the wire
+// field is item — loadGigEquipment aliases it the same way.
+export const GIG_EQUIPMENT_SELECT = `COALESCE((
+  SELECT jsonb_agg(jsonb_build_object('item', ge.item_key, 'provider', ge.provider) ORDER BY ge.item_key)
+    FROM gig_equipment ge
+   WHERE ge.gig_id = g.id AND ge.tenant_id = g.tenant_id
+), '[]'::jsonb) AS equipment`
+
 export const GIG_LIST_PROJECTION = `g.*,
   (
     SELECT COUNT(*)::int
@@ -479,11 +487,11 @@ export async function insertGigWithRelations(executor, tenantId, data) {
   const { rows } = await executor.query(
     `WITH inserted AS (
        INSERT INTO gigs (tenant_id, event_date, event_description, venue_id, festival_id, start_time, end_time, status,
-                         has_pa_system, has_drumkit, has_stage_lights, my_band_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                         my_band_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *
      )
-     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}, ${myBandSelect('g')}
+     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}, ${GIG_EQUIPMENT_SELECT}, ${myBandSelect('g')}
        FROM inserted g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}`,
@@ -491,7 +499,7 @@ export async function insertGigWithRelations(executor, tenantId, data) {
       tenantId,
       data.event_date, data.event_description, data.venueId, data.festivalId,
       data.start_time, data.end_time, data.status,
-      data.has_pa_system, data.has_drumkit, data.has_stage_lights, data.myBandId ?? null,
+      data.myBandId ?? null,
     ],
   )
   return rows[0]
@@ -634,6 +642,35 @@ export async function insertGigTagLink(executor, gigId, tagId, tenantId) {
   )
 }
 
+// ---------- equipment ----------
+
+// Aliased to match GIG_EQUIPMENT_SELECT so the PUT response and the detail
+// payload are the same shape.
+export async function loadGigEquipment(executor, gigId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT item_key AS item, provider
+       FROM gig_equipment
+      WHERE gig_id = $1 AND tenant_id = $2
+      ORDER BY item_key`,
+    [gigId, tenantId],
+  )
+  return rows
+}
+
+export async function deleteGigEquipment(executor, gigId, tenantId) {
+  await executor.query(
+    'DELETE FROM gig_equipment WHERE gig_id = $1 AND tenant_id = $2',
+    [gigId, tenantId],
+  )
+}
+
+export async function insertGigEquipment(executor, gigId, tenantId, item, provider) {
+  await executor.query(
+    'INSERT INTO gig_equipment (gig_id, tenant_id, item_key, provider) VALUES ($1, $2, $3, $4)',
+    [gigId, tenantId, item, provider],
+  )
+}
+
 // Returns { banner_path } for the gig, or null when the gig does not exist
 // in the tenant (a gig with no banner still returns a row).
 export async function getGigBannerRow(executor, gigId, tenantId) {
@@ -765,7 +802,7 @@ export async function deleteGigContact(executor, gigId, contactId, tenantId) {
 
 export async function fetchGigWithRelations(executor, gigId, tenantId) {
   const { rows } = await executor.query(
-    `SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}, ${myBandSelect('g')}
+    `SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}, ${GIG_EQUIPMENT_SELECT}, ${myBandSelect('g')}
        FROM gigs g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}
@@ -787,7 +824,7 @@ export async function updateGigFields(executor, tenantId, gigId, fields, values)
        WHERE id = $${whereIdx} AND tenant_id = $${whereIdx + 1}
        RETURNING *
      )
-     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}, ${myBandSelect('g')}
+     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}, ${GIG_EQUIPMENT_SELECT}, ${myBandSelect('g')}
        FROM updated g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}`,

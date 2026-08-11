@@ -2,13 +2,14 @@ import {
   MAX_LIST_LIMIT,
   parseListLimit,
   parseDateRange,
+  rangeErrorMessage,
   encodeTimestampCursor,
 } from '../validators/common.js'
 import { toDateStr } from '../utils/dateOnly.js'
 import { badRequest } from './serviceErrors.js'
 
 const limitError = (maxLimit) => badRequest(`limit must be an integer between 1 and ${maxLimit}`)
-const rangeError = () => badRequest('from and to must be valid ISO dates (YYYY-MM-DD) with from <= to')
+const rangeError = (maxDays) => badRequest(rangeErrorMessage(maxDays))
 
 // Shared contract for endpoints that intentionally return only a bounded
 // collection. The envelope can gain cursor/pagination metadata later without
@@ -102,9 +103,13 @@ export async function limitedCollectionWithTimestampCursorAndTotal(
 // Shared contract for endpoints that return every item inside an inclusive
 // day window (`?from=&to=`). Same envelope family as limitedCollection; meta
 // echoes the window the server actually applied.
-export async function windowedCollection(query, fetchItems) {
-  const range = parseDateRange(query)
-  if (range === null) return rangeError()
+//
+// `maxDays` caps the window WIDTH. Pass MAX_RANGE_DAYS on any feed whose
+// fetcher fans out per row or per range (availability enrichment); leave it off
+// for a single lean projection that is meant to span all history.
+export async function windowedCollection(query, fetchItems, { maxDays = Infinity } = {}) {
+  const range = parseDateRange(query, maxDays)
+  if (range === null) return rangeError(maxDays)
 
   const items = await fetchItems(range)
   return {

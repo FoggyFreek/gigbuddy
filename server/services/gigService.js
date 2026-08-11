@@ -13,7 +13,7 @@ import { dispatchNotification } from './notificationService.js'
 import { logger } from '../utils/logger.js'
 import { createTask as createTaskService, patchTask as patchTaskService, removeTask as removeTaskService } from './taskService.js'
 import { loadAvailabilityMatrix } from './availabilityService.js'
-import { summarizeSpan } from '../domain/availabilitySpan.js'
+import { prepareMatrix, summarizeSpan, withMembers } from '../domain/availabilitySpan.js'
 import {
   parseSearchLimit,
   toDateStr,
@@ -26,6 +26,7 @@ import {
   normalizeGigTagNames,
   MAX_GIG_TAGS,
   MAX_GIG_TAG_LENGTH,
+  parseGigEquipmentPayload,
 } from '../validators/gigValidators.js'
 import {
   assertVenueInTenant,
@@ -71,10 +72,13 @@ import {
   upsertGigTag,
   deleteGigTagLinks,
   insertGigTagLink,
+  loadGigEquipment,
+  deleteGigEquipment,
+  insertGigEquipment,
 } from '../repositories/gigRepository.js'
 import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
 import { getTaskById } from '../repositories/taskRepository.js'
-import { INVALID_CURSOR, INVALID_TODAY, parseLocalDate, parseListCursor, validateDailyTimeRange } from '../validators/common.js'
+import { INVALID_CURSOR, INVALID_TODAY, MAX_RANGE_DAYS, parseLocalDate, parseListCursor, validateDailyTimeRange } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
 import { assertMyBandWritable } from './myBandService.js'
 import {
@@ -177,16 +181,23 @@ async function withTasksAndParticipants(db, tenantId, gigId, gig) {
 
 // ---------- reads ----------
 
-// Lists all gigs with open task counts and per-member availability.
-export async function listGigs(db, tenantId, viewer = null) {
-  return enrichGigsWithAvailability(db, tenantId, await listGigsWithTaskCounts(db, tenantId), viewer)
+// Every gig with its open task count, for export, duplicate checks and gig
+// pickers. Deliberately NOT availability-enriched: this feed is unbounded, so
+// its window spans the tenant's whole history — the most expensive matrix the
+// endpoint could build, for a verdict none of its callers render. The bounded
+// feeds below (upcoming/past/range) are the ones that show the column.
+export async function listGigs(db, tenantId) {
+  return listGigsWithTaskCounts(db, tenantId)
 }
 
 // Attaches members_availability to gig rows. A gig is a single day, so this is
 // the span rules (server/domain/availabilitySpan.js) applied to a span of one,
 // over the same redacted matrix the availability grid reads — a linked member
 // busy in another band shows up here too. One query for the whole batch.
-export async function enrichGigsWithAvailability(db, tenantId, gigs, viewer = null) {
+// `shared` is the user-level half of the matrix, pre-fetched once when a caller
+// enriches several bands at a time (the cross-tenant hub). Omitted, each call
+// loads its own.
+export async function enrichGigsWithAvailability(db, tenantId, gigs, viewer = null, shared = null) {
   if (!gigs.length) return []
 
   const dates = gigs.map((g) => toDateStr(g.event_date)).filter(Boolean)
@@ -195,21 +206,25 @@ export async function enrichGigsWithAvailability(db, tenantId, gigs, viewer = nu
   const maxDate = dates.reduce((a, b) => (a > b ? a : b))
 
   const [matrix, participantsByGig] = await Promise.all([
-    loadAvailabilityMatrix(db, tenantId, minDate, maxDate, viewer),
+    loadAvailabilityMatrix(db, tenantId, minDate, maxDate, viewer, shared),
     loadParticipants(db, gigs.map((gig) => gig.id), tenantId),
   ])
+  // Normalized and indexed once for the whole batch; each gig only evaluates
+  // its own participants against it.
+  const prepared = prepareMatrix(matrix)
 
   return gigs.map((gig) => {
     const dateStr = toDateStr(gig.event_date)
     if (!dateStr) return { ...gig, members_availability: [] }
     const selected = new Set((participantsByGig.get(gig.id) ?? []).map((participant) => participant.band_member_id))
-    const members = summarizeSpan(matrix, dateStr, dateStr, {
+    const participants = matrix.members.filter((member) => selected.has(member.id))
+    const { members } = summarizeSpan(withMembers(prepared, participants), dateStr, dateStr, {
       start_date: dateStr,
       end_date: dateStr,
       start_time: gig.start_time,
       end_time: gig.end_time,
       exclude: { type: 'gig', id: gig.id },
-    }).members.filter((member) => selected.has(member.member_id))
+    })
     return { ...gig, members_availability: members }
   })
 }
@@ -238,9 +253,12 @@ export async function listPastGigs(db, tenantId, query = {}, viewer = null) {
   return { ...result, items: await enrichGigsWithAvailability(db, tenantId, result.items, viewer) }
 }
 
+// Availability-enriched, so the window is capped — unlike the map read below,
+// which is a single lean projection and spans all history on purpose.
 export async function listGigsInRange(db, tenantId, query = {}, viewer = null) {
   return windowedCollection(query, async (range) =>
-    enrichGigsWithAvailability(db, tenantId, await listGigsInRangeRows(db, tenantId, range.from, range.to), viewer))
+    enrichGigsWithAvailability(db, tenantId, await listGigsInRangeRows(db, tenantId, range.from, range.to), viewer),
+  { maxDays: MAX_RANGE_DAYS })
 }
 
 export async function listGigMapData(db, tenantId, query = {}) {
@@ -343,10 +361,7 @@ export async function importGigs(tenantId, userId, body) {
 // Creates a gig plus its initial lead-member participants in one transaction.
 // The caller fires the created notification. Returns { error } | { gig }.
 export async function createGig(tenantId, userId, body) {
-  const {
-    event_date, event_description, start_time, end_time, status,
-    has_pa_system, has_drumkit, has_stage_lights,
-  } = body
+  const { event_date, event_description, start_time, end_time, status } = body
   if (!event_date || !event_description) {
     return { error: { status: 400, body: { error: 'event_date and event_description are required' } } }
   }
@@ -373,7 +388,6 @@ export async function createGig(tenantId, userId, body) {
     const gig = await insertGigWithRelations(client, tenantId, {
       event_date, event_description, venueId, festivalId,
       start_time: start_time || null, end_time: end_time || null, status: finalStatus,
-      has_pa_system: !!has_pa_system, has_drumkit: !!has_drumkit, has_stage_lights: !!has_stage_lights,
       myBandId: body.my_band_id ?? null,
     })
 
@@ -450,6 +464,24 @@ export async function setGigTags(db, tenantId, gigId, body) {
     for (const tagId of tagIds) await insertGigTagLink(client, gigId, tagId, tenantId)
     await touchGig(client, gigId, tenantId)
     return { tags: await loadGigTags(client, gigId, tenantId) }
+  }, { db })
+}
+
+// Replaces a gig's complete equipment set: which catalogue items are involved
+// and, per item, whether the venue provides it or the band brings it.
+export async function setGigEquipment(db, tenantId, gigId, body) {
+  const parsed = parseGigEquipmentPayload(body)
+  if (parsed.error) return { error: { status: 400, body: { error: parsed.error } } }
+
+  return withTransaction(async (client) => {
+    if (!(await gigExistsInTenant(client, gigId, tenantId))) abortTransaction(NOT_FOUND)
+
+    await deleteGigEquipment(client, gigId, tenantId)
+    for (const { item, provider } of parsed.items) {
+      await insertGigEquipment(client, gigId, tenantId, item, provider)
+    }
+    await touchGig(client, gigId, tenantId)
+    return { equipment: await loadGigEquipment(client, gigId, tenantId) }
   }, { db })
 }
 

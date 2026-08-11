@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
 import BandParticipantsSection from '../components/BandParticipantsSection.tsx'
@@ -22,11 +23,9 @@ function baseProps(overrides = {}) {
   return {
     participants: PARTICIPANTS,
     candidateMembers: CANDIDATES,
-    addMemberId: '',
     emptyText: 'No participants yet.',
     addParticipantLabel: 'Add participant',
     getRemoveParticipantLabel: (participant) => `remove ${participant.name}`,
-    onAddMemberChange: vi.fn(),
     onAddParticipant: vi.fn(),
     onRemoveParticipant: vi.fn(),
     onVote: vi.fn(),
@@ -39,7 +38,20 @@ describe('BandParticipantsSection', () => {
     wrap(<BandParticipantsSection {...baseProps()} />)
     expect(screen.getByRole('button', { name: 'Yes' })).toBeEnabled()
     expect(screen.getByLabelText('remove Alice')).toBeInTheDocument()
-    expect(screen.getByText('Add')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Add participant' })).toBeInTheDocument()
+  })
+
+  it('adds the candidate as soon as it is picked from the autocomplete', async () => {
+    const user = userEvent.setup()
+    const props = baseProps()
+    wrap(<BandParticipantsSection {...props} />)
+
+    const picker = screen.getByRole('combobox', { name: 'Add participant' })
+    await user.click(picker)
+    await user.click(screen.getByRole('option', { name: /Bob/ }))
+
+    expect(props.onAddParticipant).toHaveBeenCalledWith(2)
+    expect(picker).toHaveValue('')
   })
 
   it('reader mode disables voting and hides remove + add affordances', () => {
@@ -48,7 +60,7 @@ describe('BandParticipantsSection', () => {
     expect(screen.getByRole('button', { name: 'Yes' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'No' })).toBeDisabled()
     expect(screen.queryByLabelText('remove Alice')).not.toBeInTheDocument()
-    expect(screen.queryByText('Add')).not.toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Add participant' })).not.toBeInTheDocument()
   })
 
   it('supports event-specific row content without showing vote controls', () => {

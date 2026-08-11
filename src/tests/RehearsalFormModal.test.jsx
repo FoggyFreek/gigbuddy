@@ -314,13 +314,12 @@ describe('RehearsalFormModal — edit mode', () => {
     expect(screen.getByText('Bob')).toBeInTheDocument()
   })
 
-  it('adds a participant via the add-participant select + button', async () => {
+  it('adds a participant as soon as one is picked in the add-participant autocomplete', async () => {
     const user = userEvent.setup()
     wrap(<RehearsalFormModal mode="edit" rehearsalId={1} onClose={() => {}} />)
     await waitFor(() => screen.getByDisplayValue('Studio A'))
     await user.click(screen.getByLabelText(/add participant/i))
     await user.click(screen.getByRole('option', { name: /Sam/ }))
-    await user.click(screen.getByRole('button', { name: /^add$/i }))
     await waitFor(() => expect(addParticipant).toHaveBeenCalledWith(1, 12))
   })
 })

@@ -1,7 +1,6 @@
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import Divider from '@mui/material/Divider'
-import Grid from '@mui/material/Grid'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
@@ -9,6 +8,10 @@ import GigContactsSection from './GigContactsSection.tsx'
 import BandParticipantsSection from '../BandParticipantsSection.tsx'
 import useEventAvailability from '../../hooks/useEventAvailability.ts'
 import type { AvailabilityStatus, AvailabilitySummary, Id, Member, Participant } from '../../types/entities.ts'
+
+// Split into columns on the container's own width, not the viewport's: this tab
+// also renders inside the SplitView detail pane, which is narrower than the page.
+const TWO_COLUMN_MIN_WIDTH = 760
 
 interface Props {
   active: boolean
@@ -21,12 +24,10 @@ interface Props {
   endTime?: string | null
   participants: Participant[]
   candidateMembers: Member[]
-  addMemberId: Id | ''
   venueId?: Id
   festivalId?: Id
   flush: () => Promise<void>
-  onAddMemberChange: (memberId: Id | '') => void
-  onAddParticipant: () => void
+  onAddParticipant: (memberId: Id) => void
   onRemoveParticipant: (memberId: Id) => void
   onVote: (memberId: Id, vote: string | null) => void
   onAvailabilityChange?: (availability: AvailabilitySummary | null) => void
@@ -43,11 +44,9 @@ export default function GigAvailability({
   endTime,
   participants,
   candidateMembers,
-  addMemberId,
   venueId,
   festivalId,
   flush,
-  onAddMemberChange,
   onAddParticipant,
   onRemoveParticipant,
   onVote,
@@ -101,9 +100,20 @@ export default function GigAvailability({
   const bandWideLabel = availabilityLabel(availability?.bandWide?.status)
 
   return (
-    <Box sx={{ display: active ? 'block' : 'none' }}>
-      <Grid container spacing={2}>
-        <Grid size={12}>
+    <Box sx={{ display: active ? 'block' : 'none', containerType: 'inline-size' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'flex-start',
+          gap: 2,
+          '& > *': { flex: '1 1 100%', minWidth: 0 },
+          [`@container (min-width: ${TWO_COLUMN_MIN_WIDTH}px)`]: {
+            '& > *': { flex: '1 1 0' },
+          },
+        }}
+      >
+        <Box>
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
             {t($ => $.detail.participants)}
           </Typography>
@@ -112,11 +122,9 @@ export default function GigAvailability({
             eventDate={eventDate}
             eventStatus={eventStatus}
             candidateMembers={candidateMembers}
-            addMemberId={addMemberId}
             emptyText={t($ => $.participants.noParticipants)}
             addParticipantLabel={t($ => $.participants.addParticipant)}
             getRemoveParticipantLabel={(participant) => t($ => $.participants.removeParticipant, { name: participant.name })}
-            onAddMemberChange={onAddMemberChange}
             onAddParticipant={onAddParticipant}
             onRemoveParticipant={onRemoveParticipant}
             onVote={onVote}
@@ -129,9 +137,14 @@ export default function GigAvailability({
             ) : null}
             renderParticipantEnd={showAvailability ? renderAvailability : undefined}
           />
-        </Grid>
-        <Grid size={12}>
-          <Divider sx={{ my: 1 }} />
+        </Box>
+        <Box>
+          <Divider
+            sx={{
+              my: 1,
+              [`@container (min-width: ${TWO_COLUMN_MIN_WIDTH}px)`]: { display: 'none' },
+            }}
+          />
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
             {t($ => $.detail.contacts)}
           </Typography>
@@ -142,8 +155,8 @@ export default function GigAvailability({
             flush={flush}
             canWrite={editable}
           />
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
     </Box>
   )
 }

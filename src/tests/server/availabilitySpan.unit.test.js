@@ -1,7 +1,13 @@
 import './_envSetup.js'
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { eachDay, summarizeSpan, MAX_SPAN_DAYS } from '../../../server/domain/availabilitySpan.js'
+import {
+  eachDay,
+  summarizeSpan,
+  prepareMatrix,
+  withMembers,
+  MAX_SPAN_DAYS,
+} from '../../../server/domain/availabilitySpan.js'
 
 const MEMBERS = [
   { id: 1, name: 'Alpha', color: '#f00', role: 'member', position: 'lead' },
@@ -269,5 +275,136 @@ describe('summarizeSpan', () => {
     })
 
     expect(result.members[0].status).toBe('available')
+  })
+
+  // The booking index only reaches one day beyond a booking's own span. That is
+  // exactly enough for the largest travel margin the schema allows (24h), so
+  // these two pin the boundary the index depends on.
+  it('still applies a 24h travel margin reaching into the next day', () => {
+    const matrix = {
+      members: [MEMBERS[0]],
+      slots: [{
+        id: 'gig-9', source: 'booking', source_id: 9, band_member_id: 1,
+        start_date: '2099-07-09', end_date: '2099-07-09',
+        start_time: '18:00', end_time: '20:00', travel_margin_hours: 24,
+        status: 'unavailable', reason: 'Show',
+      }],
+    }
+
+    const result = summarizeSpan(matrix, '2099-07-10', '2099-07-10', {
+      start_date: '2099-07-10', end_date: '2099-07-10', start_time: '10:00', end_time: '12:00',
+    })
+
+    expect(result.members[0].status).toBe('travel_margin')
+  })
+
+  it('leaves a booking two days out alone even at the maximum margin', () => {
+    const matrix = {
+      members: [MEMBERS[0]],
+      slots: [{
+        id: 'gig-9', source: 'booking', source_id: 9, band_member_id: 1,
+        start_date: '2099-07-08', end_date: '2099-07-08',
+        start_time: '22:00', end_time: '23:59', travel_margin_hours: 24,
+        status: 'unavailable', reason: 'Show',
+      }],
+    }
+
+    const result = summarizeSpan(matrix, '2099-07-10', '2099-07-10', {
+      start_date: '2099-07-10', end_date: '2099-07-10', start_time: '00:00', end_time: '02:00',
+    })
+
+    expect(result.members[0].status).toBe('available')
+  })
+
+  it('evaluates a booking whose span is too long to index', () => {
+    const matrix = {
+      members: [MEMBERS[0]],
+      slots: [{
+        id: 'band_event-4', source: 'booking', source_id: 4, band_member_id: 1,
+        start_date: '2099-01-01', end_date: '2099-12-31',
+        start_time: null, end_time: null, travel_margin_hours: 2,
+        status: 'unavailable', reason: 'Sabbatical',
+      }],
+    }
+
+    const result = summarizeSpan(matrix, '2099-07-10', '2099-07-10', {
+      start_date: '2099-07-10', end_date: '2099-07-10', start_time: '19:00', end_time: '21:00',
+    })
+
+    expect(result.members[0]).toEqual(expect.objectContaining({ status: 'unavailable', source: 'booking' }))
+  })
+})
+
+// The matrix is normalized and indexed ONCE and then reused across every row of
+// a list feed, so these pin that a prepared matrix behaves exactly like the raw
+// one and that repeated use never leaks state between rows.
+describe('prepareMatrix', () => {
+  const matrix = () => ({
+    members: MEMBERS,
+    slots: [
+      slot(1, '2099-07-11', '2099-07-11', 'unavailable', 'Dentist'),
+      slot(null, '2099-07-12', '2099-07-12', 'unavailable', 'Studio closed'),
+      {
+        id: 'gig-9', source: 'booking', bookingType: 'gig', source_id: 9, band_member_id: 2,
+        start_date: '2099-07-10', end_date: '2099-07-10',
+        start_time: '18:00', end_time: '20:00', travel_margin_hours: 2,
+        status: 'unavailable', reason: 'Show',
+      },
+    ],
+  })
+
+  it('summarizes a prepared matrix exactly like the raw one', () => {
+    const raw = matrix()
+    const event = {
+      start_date: '2099-07-10', end_date: '2099-07-12', start_time: '19:00', end_time: '21:00',
+    }
+
+    expect(summarizeSpan(prepareMatrix(raw), '2099-07-10', '2099-07-12', event))
+      .toEqual(summarizeSpan(raw, '2099-07-10', '2099-07-12', event))
+  })
+
+  it('is reusable: repeated summaries of one prepared matrix do not drift', () => {
+    const prepared = prepareMatrix(matrix())
+    const event = { start_date: '2099-07-10', end_date: '2099-07-10', start_time: '19:00', end_time: '21:00' }
+
+    const first = summarizeSpan(prepared, '2099-07-10', '2099-07-10', event)
+    const second = summarizeSpan(prepared, '2099-07-10', '2099-07-10', event)
+    const third = summarizeSpan(prepared, '2099-07-10', '2099-07-10', event)
+
+    expect(second).toEqual(first)
+    expect(third).toEqual(first)
+  })
+
+  it('does not mutate the matrix it was given', () => {
+    const raw = matrix()
+    const snapshot = structuredClone(raw)
+
+    summarizeSpan(prepareMatrix(raw), '2099-07-10', '2099-07-12')
+
+    expect(raw).toEqual(snapshot)
+  })
+})
+
+describe('withMembers', () => {
+  it('narrows the evaluated members while sharing the prepared index', () => {
+    const prepared = prepareMatrix({
+      members: MEMBERS,
+      slots: [slot(1, '2099-07-10', '2099-07-10', 'unavailable', 'Dentist')],
+    })
+
+    const narrowed = summarizeSpan(withMembers(prepared, [MEMBERS[0]]), '2099-07-10', '2099-07-10')
+
+    expect(narrowed.members).toEqual([
+      expect.objectContaining({ member_id: 1, status: 'unavailable', reason: 'Dentist' }),
+    ])
+    expect(narrowed.days[0].members).toHaveLength(1)
+  })
+
+  it('leaves the source prepared matrix untouched', () => {
+    const prepared = prepareMatrix({ members: MEMBERS, slots: [] })
+
+    withMembers(prepared, [MEMBERS[0]])
+
+    expect(summarizeSpan(prepared, '2099-07-10', '2099-07-10').members).toHaveLength(2)
   })
 })

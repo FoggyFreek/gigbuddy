@@ -37,9 +37,6 @@ vi.mock('../api/gigs.ts', () => ({
     admission: 'free',
     ticket_link: null,
     notes: 'Bring own PA',
-    has_pa_system: false,
-    has_drumkit: false,
-    has_stage_lights: false,
     tasks: [],
     attachments: [],
     participants: [],
@@ -66,7 +63,7 @@ vi.mock('../api/myBands.ts', () => ({
   listMyBands: vi.fn().mockResolvedValue({ items: [] }),
 }))
 
-import { createGig, getGig, updateGig } from '../api/gigs.ts'
+import { createGig, getGig } from '../api/gigs.ts'
 import { getAvailabilityOn } from '../api/availability.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 
@@ -130,7 +127,7 @@ describe('GigFormModal — create mode', () => {
     await user.click(screen.getByRole('button', { name: /create/i }))
     await waitFor(() => expect(createGig).toHaveBeenCalled())
     expect(createGig).toHaveBeenCalledWith(
-      expect.objectContaining({ has_pa_system: false, has_drumkit: false })
+      expect.objectContaining({ event_description: 'Rock Show', event_date: '2026-08-01' })
     )
     await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
@@ -238,17 +235,4 @@ describe('GigFormModal — edit mode', () => {
     expect(screen.queryByText(/member availability/i)).not.toBeInTheDocument()
   })
 
-  it('auto-saves when PA system toggle is flipped', async () => {
-    updateGig.mockClear()
-    wrap(<GigFormModal mode="edit" gigId={1} onClose={() => {}} />)
-    await waitFor(() => screen.getByDisplayValue('Jazz Night'))
-
-    const user = userEvent.setup()
-    await user.click(screen.getByLabelText('PA system'))
-
-    await waitFor(
-      () => expect(updateGig).toHaveBeenCalledWith(1, { has_pa_system: true }),
-      { timeout: 2000 }
-    )
-  })
 })

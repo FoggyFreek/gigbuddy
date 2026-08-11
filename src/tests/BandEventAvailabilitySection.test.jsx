@@ -99,7 +99,6 @@ describe('BandEventAvailabilitySection', () => {
 
     await user.click(screen.getByLabelText(/add band member/i))
     await user.click(screen.getByRole('option', { name: /sam kerr/i }))
-    await user.click(screen.getByRole('button', { name: /^add$/i }))
     expect(onAddMember).toHaveBeenCalledWith(3)
   })
 })

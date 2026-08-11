@@ -4,15 +4,20 @@ import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
 import request from 'supertest'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
+let listMyUpcomingGigs, memberTenantScope
 let seed
 
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
   const appMod = await import('./_app.js')
+  const meMod = await import('../../../server/services/meService.js')
+  const scopeMod = await import('../../../server/domain/memberTenants.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
+  listMyUpcomingGigs = meMod.listMyUpcomingGigs
+  memberTenantScope = scopeMod.memberTenantScope
   app = appMod.createTestApp()
   await runMigrations()
 })
@@ -52,7 +57,7 @@ async function addMembership(userId, tenantId, { role = 'contributor', status = 
        SELECT $2, u.name, 'lead', 100, u.id
          FROM users u JOIN tenants t ON t.id = $2
         WHERE u.id = $1 AND t.kind = 'band'
-       ON CONFLICT (user_id, tenant_id) WHERE user_id IS NOT NULL DO NOTHING`,
+       ON CONFLICT (user_id, tenant_id) WHERE user_id IS NOT NULL AND deleted_at IS NULL DO NOTHING`,
       [userId, tenantId],
     )
   }
@@ -100,6 +105,30 @@ async function addBandEvent(tenantId, { start, end, title = 'Event' }) {
     [tenantId, event.id],
   )
   return event
+}
+
+async function addBandTenant(slug, name, ownerUserId) {
+  const { rows: [tenant] } = await pool.query(
+    `INSERT INTO tenants (slug, band_name, display_name, kind, created_by_user_id, owner_user_id)
+     VALUES ($1, $2, $2, 'band', $3, $3) RETURNING *`,
+    [slug, name, ownerUserId],
+  )
+  return tenant
+}
+
+// Counts the SQL a service issues, so a fan-out regression is caught by shape
+// rather than by a stopwatch.
+function countingExecutor() {
+  const statements = []
+  return {
+    statements,
+    db: {
+      query: (text, values) => {
+        statements.push(String(text))
+        return pool.query(text, values)
+      },
+    },
+  }
 }
 
 async function addPersonalWorkspace(ownerUserId, slug, name = 'Alpha Artist') {
@@ -669,5 +698,73 @@ describe('the cross-tenant agenda tier', () => {
     expect(req.memberTenants.ids).toEqual([seed.tenantA.id])
     expect(req.tenantId).toBeUndefined()
     expect(req.membership).toBeUndefined()
+  })
+})
+
+// The user-level half of an availability matrix (a musician's own slots, and
+// their bookings across every band they play in) is keyed by USER, not tenant.
+// The hub builds one matrix per band in the feed, so fetching that half per
+// band repeated the single heaviest query in the domain N times — and fired
+// them concurrently at a connection pool of five.
+describe('cross-tenant availability shares the user-level fetch', () => {
+  const CROSS_TENANT_BOOKINGS = 'member_tenants'
+
+  async function threeBandsWithGigs() {
+    const bandB = await addBandTenant('shared-b', 'Shared B', seed.userA.id)
+    const bandC = await addBandTenant('shared-c', 'Shared C', seed.userA.id)
+    await addMembership(seed.userA.id, bandB.id)
+    await addMembership(seed.userA.id, bandC.id)
+    for (const tenantId of [seed.tenantA.id, bandB.id, bandC.id]) {
+      await addGig(tenantId, { date: '2099-07-10' })
+    }
+    return [
+      { tenantId: seed.tenantA.id, displayName: 'Alpha Band', kind: 'band' },
+      { tenantId: bandB.id, displayName: 'Shared B', kind: 'band' },
+      { tenantId: bandC.id, displayName: 'Shared C', kind: 'band' },
+    ]
+  }
+
+  it('runs the cross-tenant booking query once for a feed spanning three bands', async () => {
+    const tenants = await threeBandsWithGigs()
+    const { statements, db } = countingExecutor()
+
+    const result = await listMyUpcomingGigs(db, seed.userA.id, memberTenantScope(tenants), {
+      limit: 10, today: '2099-01-01',
+    })
+
+    expect(result.items).toHaveLength(3)
+    expect(statements.filter((sql) => sql.includes(CROSS_TENANT_BOOKINGS))).toHaveLength(1)
+  })
+
+  // The shared fetch must not lose the cross-band half of the picture: all
+  // three gigs are on the same day, so each one sees the other two as bookings.
+  it('still labels every band and sees the bookings in the other two', async () => {
+    const tenants = await threeBandsWithGigs()
+
+    const result = await listMyUpcomingGigs(pool, seed.userA.id, memberTenantScope(tenants), {
+      limit: 10, today: '2099-01-01',
+    })
+
+    expect(result.items.map((gig) => gig.tenantName).sort()).toEqual(['Alpha Band', 'Shared B', 'Shared C'])
+    for (const gig of result.items) {
+      expect(gig.members_availability.length).toBeGreaterThan(0)
+      expect(gig.members_availability.some((m) => m.source === 'booking')).toBe(true)
+    }
+  })
+
+  it('leaves a member available when their other bands are busy on other days', async () => {
+    const bandB = await addBandTenant('spread-b', 'Spread B', seed.userA.id)
+    await addMembership(seed.userA.id, bandB.id)
+    await addGig(seed.tenantA.id, { date: '2099-07-10' })
+    await addGig(bandB.id, { date: '2099-08-20' })
+
+    const result = await listMyUpcomingGigs(pool, seed.userA.id, memberTenantScope([
+      { tenantId: seed.tenantA.id, displayName: 'Alpha Band', kind: 'band' },
+      { tenantId: bandB.id, displayName: 'Spread B', kind: 'band' },
+    ]), { limit: 10, today: '2099-01-01' })
+
+    for (const gig of result.items) {
+      expect(gig.members_availability.every((m) => m.status === 'available')).toBe(true)
+    }
   })
 })

@@ -19,6 +19,7 @@ import {
   createGig,
   patchGig,
   setGigTags,
+  setGigEquipment,
   deleteGig,
   addGigTask,
   patchGigTask,
@@ -60,9 +61,10 @@ const attachmentUpload = multer({
 
 const router = Router()
 
-// List all gigs with open task count and member availability
+// Every gig with its open task count — the export / duplicate-check / picker
+// feed. No member availability: see listGigs.
 router.get('/', async (req, res) => {
-  res.json(await listGigs(pool, req.tenantId, viewerOf(req)))
+  res.json(await listGigs(pool, req.tenantId))
 })
 
 router.get('/upcoming', async (req, res) => {
@@ -111,10 +113,8 @@ router.get('/:id', async (req, res) => {
   res.json(result.gig)
 })
 
-// Merch-sold totals for this gig. Finance-ish: gated on planning.write so
-// readers (the only role without it on this page) get 403 — the same boundary
-// the UI mirrors by hiding the card.
-router.get('/:id/merch-summary', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+// Merch-sold totals are part of the finance-only Terms section.
+router.get('/:id/merch-summary', requirePermission(PERMISSIONS.FINANCE_VIEW), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await gigMerchSummary(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
@@ -264,6 +264,13 @@ router.put('/:id/tags', requirePermission(PERMISSIONS.PLANNING_WRITE), async (re
   const result = await setGigTags(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.tags)
+})
+
+router.put('/:id/equipment', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await setGigEquipment(pool, req.tenantId, id, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.equipment)
 })
 
 // --- Gig contacts (mirrors venue_contacts; links are informational) ---

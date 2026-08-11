@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { describe, expect, it, vi } from 'vitest'
 import GigTasks from '../components/gigdetails/GigTasks.tsx'
 import theme from '../theme.ts'
@@ -28,7 +30,11 @@ const INITIAL_TASKS = [
 ]
 
 function wrap(ui) {
-  return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)
+  return render(
+    <ThemeProvider theme={theme}>
+      <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+    </ThemeProvider>,
+  )
 }
 
 describe('GigTasks', () => {
@@ -38,42 +44,53 @@ describe('GigTasks', () => {
     expect(screen.getByText('Send invoice')).toBeInTheDocument()
   })
 
-  it('renders due date input populated for task with due date', () => {
+  it('shows the due date on the task card', () => {
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} />)
-    const input = screen.getByLabelText(/Due date for Book sound engineer/i)
-    expect(input).toHaveValue('2026-06-01')
+    expect(screen.getByRole('button', { name: /due date for Book sound engineer/i })).toHaveTextContent('Jun 1')
   })
 
-  it('updates due date on change', async () => {
+  it('shows the assignee name on the task card', async () => {
+    const user = userEvent.setup()
+    wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} members={MEMBERS} />)
+    await user.click(screen.getByRole('button', { name: /completed/i }))
+    expect(screen.getByRole('button', { name: /assign Send invoice/i })).toHaveTextContent('Alice')
+  })
+
+  it('updates the due date from the calendar', async () => {
     const user = userEvent.setup()
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} />)
 
-    const input = screen.getByLabelText(/Due date for Send invoice/i)
-    await user.type(input, '2026-07-15')
+    await user.click(screen.getByRole('button', { name: /due date for Book sound engineer/i }))
+    await user.click(await screen.findByRole('gridcell', { name: '15' }))
     await waitFor(() =>
-      expect(updateTask).toHaveBeenCalledWith(42, 2, { due_date: '2026-07-15' })
+      expect(updateTask).toHaveBeenCalledWith(42, 1, { due_date: '2026-06-15' })
     )
+  })
+
+  it('clears the due date from the calendar popover', async () => {
+    const user = userEvent.setup()
+    wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} />)
+
+    await user.click(screen.getByRole('button', { name: /due date for Book sound engineer/i }))
+    await user.click(await screen.findByRole('button', { name: /clear due date/i }))
+    await waitFor(() => expect(updateTask).toHaveBeenCalledWith(42, 1, { due_date: null }))
   })
 
   it('adds a new task on Enter key', async () => {
     const user = userEvent.setup()
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} />)
 
-    await user.click(screen.getByRole('button', { name: /add task/i }))
-    const input = screen.getByPlaceholderText(/task name/i)
-    await user.type(input, 'Prepare set list{Enter}')
+    await user.type(screen.getByPlaceholderText(/add task/i), 'Prepare set list{Enter}')
     await waitFor(() =>
       expect(createTask).toHaveBeenCalledWith(42, { title: 'Prepare set list', due_date: null, assigned_to: null })
     )
   })
 
-  it('adds a new task via Add button', async () => {
+  it('adds a new task via the Add button', async () => {
     const user = userEvent.setup()
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} />)
 
-    await user.click(screen.getByRole('button', { name: /add task/i }))
-    const input = screen.getByPlaceholderText(/task name/i)
-    await user.type(input, 'Check PA system')
+    await user.type(screen.getByPlaceholderText(/add task/i), 'Check PA system')
     await user.click(screen.getByRole('button', { name: /add task/i }))
     await waitFor(() =>
       expect(createTask).toHaveBeenCalledWith(42, { title: 'Check PA system', due_date: null, assigned_to: null })
@@ -97,45 +114,35 @@ describe('GigTasks', () => {
     await waitFor(() => expect(deleteTask).toHaveBeenCalledWith(42, 1))
   })
 
-  it('renders assignment selects with member names when members are provided', async () => {
-    const user = userEvent.setup()
-    wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} members={MEMBERS} />)
-    // Expand a task row to reveal its edit controls (Collapse is aria-hidden until opened)
-    await user.click(screen.getByText('Book sound engineer'))
-    expect(screen.getByRole('combobox')).toBeInTheDocument()
-  })
-
-  it('calls updateTask with assigned_to when a member is selected', async () => {
+  it('calls updateTask with assigned_to when a member is picked', async () => {
     const user = userEvent.setup()
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} members={MEMBERS} />)
 
-    await user.click(screen.getByText('Book sound engineer'))
-    await user.click(screen.getByRole('combobox'))
-    const option = await screen.findByRole('option', { name: 'Alice' })
-    await user.click(option)
+    await user.click(screen.getByRole('button', { name: /assign Book sound engineer/i }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Alice' }))
     await waitFor(() =>
       expect(updateTask).toHaveBeenCalledWith(42, 1, { assigned_to: 1 })
     )
   })
 
-  it('does not render assignment selects when no members are provided', () => {
+  it('does not offer assignment when no members are provided', () => {
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} />)
-    expect(screen.queryAllByRole('combobox')).toHaveLength(0)
+    expect(screen.queryByRole('button', { name: /assign/i })).not.toBeInTheDocument()
   })
 })
 
 describe('GigTasks — reader mode (canWrite=false)', () => {
-  it('hides the add row and delete buttons', () => {
+  it('hides the composer and the delete buttons', () => {
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} canWrite={false} currentBandMemberId={1} />)
-    expect(screen.queryByPlaceholderText(/new task/i)).not.toBeInTheDocument()
+    expect(screen.queryByPlaceholderText(/add task/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /delete task/i })).not.toBeInTheDocument()
   })
 
-  it('disables due-date and assignment edits', () => {
+  it('shows due date and assignee as static text, not editable controls', () => {
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} members={MEMBERS} canWrite={false} currentBandMemberId={1} />)
-    // In reader mode the edit panel (date + assign) is not rendered at all
-    expect(screen.queryByLabelText(/due date for/i)).not.toBeInTheDocument()
-    expect(screen.queryAllByRole('combobox')).toHaveLength(0)
+    expect(screen.getByText('Jun 1')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /due date for/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /assign/i })).not.toBeInTheDocument()
   })
 
   it('lets a reader tick only their own assigned task done', async () => {

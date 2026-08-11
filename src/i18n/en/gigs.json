@@ -203,10 +203,25 @@
       "paid": "Paid",
       "void": "Void"
     },
-    "equipmentOnSite": "Available equipment on-site",
-    "paSystem": "PA system",
-    "drumkit": "Drumkit",
-    "stageLight": "Stage light",
+    "equipment": {
+      "title": "Equipment",
+      "add": "Add equipment",
+      "empty": "No equipment recorded yet",
+      "remove": "Remove",
+      "saveFailed": "Could not save equipment",
+      "providerLabel": "Who provides {{item}}",
+      "provider": {
+        "event": "At venue",
+        "band": "We bring"
+      },
+      "items": {
+        "pa_system": "PA system",
+        "drumkit": "Drumkit",
+        "bass_amp": "Bass amp",
+        "guitar_amp": "Guitar amp",
+        "stage_lights": "Stage lights"
+      }
+    },
     "memberAvailability": "Member availability",
     "participants": "Participants",
     "contacts": "Contacts",
@@ -231,15 +246,13 @@
     "unassigned": "Unassigned",
     "deleteTask": "Delete task {{title}}",
     "dueDateFor": "Due date for {{title}}",
-    "openDuePickerFor": "open due date picker for {{title}}",
     "assignTask": "Assign {{title}}",
-    "doneEditing": "Done editing",
     "taskLabel": "Task",
-    "taskPlaceholder": "Task name…",
     "addTask": "Add task",
-    "openDuePicker": "open due date picker",
-    "due": "Due",
-    "completed": "Completed ({{count}})"
+    "completed": "Completed ({{count}})",
+    "setDueDate": "Set due date",
+    "clearDueDate": "Clear due date",
+    "assign": "Assign"
   },
   "contacts": {
     "sourceVenue": "Venue",

@@ -48,6 +48,17 @@ export async function getBandMemberIdForUser(executor, userId, tenantId) {
   return rows[0]?.id ?? null
 }
 
+// Every musician with an account across a set of bands, for the one shared
+// user-level availability fetch behind a cross-tenant read.
+export async function listMemberUserIdsForTenants(executor, tenantIds) {
+  const { rows } = await executor.query(
+    `SELECT DISTINCT user_id FROM band_members
+      WHERE tenant_id = ANY($1) AND user_id IS NOT NULL AND deleted_at IS NULL`,
+    [tenantIds],
+  )
+  return rows.map((row) => row.user_id)
+}
+
 export async function nextSortOrder(executor, tenantId) {
   const { rows } = await executor.query(
     'SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM band_members WHERE tenant_id = $1 AND deleted_at IS NULL',

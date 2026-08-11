@@ -158,8 +158,10 @@ export default function AvailabilityCalendar({
     return cells.map((cell, idx) => buildCalendarCellViewModel(cell, idx, cellCtx))
   }, [cells, slotsByDate, gigsByDate, rehearsalsByDate, bandEventsByDate, selectionStart, selectedDay, mobile, today])
 
+  // width:100% keeps the auto margins from shrinking this to fit-content when
+  // the parent is a flex column.
   return (
-    <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
+    <Box sx={{ width: '100%', maxWidth: 1280, mx: 'auto' }}>
       <Stack direction="row" sx={{ mb: 1, width: '100%', alignItems: 'center' }}>
         <IconButton size="small" onClick={onPrev} aria-label={t($ => $.nav.prevMonth)}>
           <ChevronLeftIcon />

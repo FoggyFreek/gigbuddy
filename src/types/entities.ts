@@ -9,6 +9,7 @@
 // - `Id` is a number from Postgres, sometimes a string from the client.
 import type { PurchaseImportWarningCode } from '../utils/purchaseImportWarnings.ts'
 import type { BandMemberRole } from '../utils/bandMemberRoles.ts'
+import type { GigEquipmentItemKey, GigEquipmentProvider } from '../utils/gigEquipment.ts'
 import type { TenantKind } from '../utils/businessRegistry.ts'
 import type { JoinPolicy } from '../utils/membership.ts'
 
@@ -145,6 +146,12 @@ export interface Gig {
 export interface GigTag {
   id?: Id
   name?: string
+}
+
+/** One catalogue item on a gig, and who supplies it. Detail payloads only. */
+export interface GigEquipmentEntry {
+  item: GigEquipmentItemKey
+  provider: GigEquipmentProvider
 }
 
 export interface Member {

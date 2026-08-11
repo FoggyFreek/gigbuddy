@@ -35,9 +35,6 @@ vi.mock('../api/gigs.ts', () => ({
     admission: 'free',
     ticket_link: null,
     notes: 'Bring own PA',
-    has_pa_system: false,
-    has_drumkit: false,
-    has_stage_lights: false,
     tasks: [],
     attachments: [],
     participants: [],
@@ -127,21 +124,55 @@ const GIG_PAID = {
   admission: 'paid',
   ticket_link: 'https://tickets.example.com',
   notes: '',
-  has_pa_system: false,
-  has_drumkit: false,
-  has_stage_lights: false,
   tasks: [],
   attachments: [],
   participants: [],
   tags: [],
 }
 
+const DEFAULT_USER = {
+  id: 9,
+  activeTenantRole: 'tenant_admin',
+  permissions: ['app.view', 'planning.write', 'finance.view', 'finance.manage'],
+  bandMemberId: 3,
+}
+
 function wrap(ui) {
   return render(
     <MemoryRouter>
-      <ThemeProvider theme={theme}>
-        <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
-      </ThemeProvider>
+      <AuthContext.Provider
+        value={{
+          user: DEFAULT_USER,
+          setUser: () => {},
+          logout: async () => {},
+          switchTenant: async () => undefined,
+          refreshUser: async () => undefined,
+        }}
+      >
+        <ThemeProvider theme={theme}>
+          <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+        </ThemeProvider>
+      </AuthContext.Provider>
+    </MemoryRouter>
+  )
+}
+
+function wrapAsRole(user, ui) {
+  return render(
+    <MemoryRouter>
+      <AuthContext.Provider
+        value={{
+          user,
+          setUser: () => {},
+          logout: async () => {},
+          switchTenant: async () => undefined,
+          refreshUser: async () => undefined,
+        }}
+      >
+        <ThemeProvider theme={theme}>
+          <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+        </ThemeProvider>
+      </AuthContext.Provider>
     </MemoryRouter>
   )
 }
@@ -382,6 +413,84 @@ describe('GigDetailContent — reader mode (canWrite=false)', () => {
   })
 })
 
+describe('GigDetailContent — task tab count', () => {
+  const GIG_WITH_TASKS = {
+    ...GIG_PAID,
+    tasks: [
+      { id: 1, title: 'Confirm arrival time', done: false },
+      { id: 2, title: 'Bring cables', done: false },
+      { id: 3, title: 'Send rider', done: true },
+    ],
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows the number of open tasks in a primary-colour badge', async () => {
+    getGig.mockResolvedValueOnce(GIG_WITH_TASKS)
+    wrap(<GigDetailContent gigId={1} />)
+
+    const tasksTab = await screen.findByRole('button', { name: 'Tasks' })
+    const badge = within(tasksTab).getByText('2')
+    expect(badge).toHaveClass('MuiBadge-colorPrimary')
+    expect(badge).toHaveClass('MuiBadge-anchorOriginTopLeftRectangular')
+  })
+
+  it('updates the badge when an open task is completed', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce(GIG_WITH_TASKS)
+    updateTask.mockResolvedValueOnce({ ...GIG_WITH_TASKS.tasks[0], done: true })
+    wrap(<GigDetailContent gigId={1} />)
+
+    const tasksTab = await screen.findByRole('button', { name: 'Tasks' })
+    await user.click(tasksTab)
+    await user.click(screen.getAllByRole('checkbox')[0])
+
+    await waitFor(() => expect(within(tasksTab).getByText('1')).toBeInTheDocument())
+  })
+})
+
+describe('GigDetailContent — Terms role gating', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getGigMerchSummary.mockResolvedValue({ unitsSold: 2, netCents: 10000, grossCents: 10900 })
+    listInvoicesByGig.mockResolvedValue([
+      { id: 5, invoice_number: '2026-001', status: 'draft', issue_date: '2026-06-16', total_cents: 15000 },
+    ])
+  })
+
+  it.each([
+    ['reader', ['app.view', 'task.complete.self', 'rehearsal.respond.self', 'availability.write.self'], false],
+    ['contributor', ['app.view', 'task.complete.self', 'rehearsal.respond.self', 'availability.write.self', 'planning.write', 'purchase.create'], true],
+  ])('hides financial terms and related invoices for %s', async (role, permissions, canWrite) => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce({
+      ...GIG_PAID,
+      equipment: [{ item: 'pa_system', provider: 'venue' }],
+    })
+    wrapAsRole(
+      { id: 9, activeTenantRole: role, permissions, bandMemberId: 3 },
+      <GigDetailContent gigId={1} canWrite={canWrite} />,
+    )
+
+    await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
+    await openTab(user, 'Terms')
+
+    expect(screen.queryByRole('heading', { name: /^terms$/i })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/paid admission/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/guaranteed fee/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/merchandise cut/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/percentage of net sales/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/ticket link/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/merchandise sold/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/related invoices/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /equipment/i })).toBeInTheDocument()
+    expect(getGigMerchSummary).not.toHaveBeenCalled()
+    expect(listInvoicesByGig).not.toHaveBeenCalled()
+  })
+})
+
 describe('GigDetailContent — participants voting', () => {
   const GIG_WITH_VOTE = (vote) => ({
     id: 1,
@@ -396,9 +505,6 @@ describe('GigDetailContent — participants voting', () => {
     admission: 'free',
     ticket_link: null,
     notes: '',
-    has_pa_system: false,
-    has_drumkit: false,
-    has_stage_lights: false,
     tasks: [],
     attachments: [],
     participants: [{ band_member_id: 1, name: 'Alice', position: 'guitar', color: '#f00', vote }],
@@ -461,6 +567,40 @@ describe('GigDetailContent — participants voting', () => {
     expect(screen.getByText('Alice')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Participants' })).toBeInTheDocument()
   })
+
+  it.each(['Confirmed', 'Announced'])(
+    'hides vote toggles immediately when status changes from option to %s',
+    async (status) => {
+      const user = userEvent.setup()
+      getGig.mockResolvedValueOnce(GIG_WITH_VOTE('yes'))
+      wrap(<GigDetailContent gigId={1} />)
+      await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
+
+      await user.click(screen.getByRole('combobox', { name: 'Status' }))
+      await user.click(screen.getByRole('option', { name: status }))
+      await openTab(user, 'Participants')
+
+      expect(screen.queryByRole('button', { name: 'Yes' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'No' })).not.toBeInTheDocument()
+    },
+  )
+
+  it.each(['confirmed', 'announced'])(
+    'shows vote toggles immediately when status changes from %s to option',
+    async (status) => {
+      const user = userEvent.setup()
+      getGig.mockResolvedValueOnce({ ...GIG_WITH_VOTE('yes'), status })
+      wrap(<GigDetailContent gigId={1} />)
+      await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
+
+      await user.click(screen.getByRole('combobox', { name: 'Status' }))
+      await user.click(screen.getByRole('option', { name: 'Option' }))
+      await openTab(user, 'Participants')
+
+      expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument()
+    },
+  )
 })
 
 describe('GigDetailContent — participant availability', () => {
@@ -653,9 +793,6 @@ describe('GigDetailContent — location map', () => {
     admission: 'free',
     ticket_link: null,
     notes: '',
-    has_pa_system: false,
-    has_drumkit: false,
-    has_stage_lights: false,
     tasks: [],
     attachments: [],
     participants: [],
@@ -916,9 +1053,6 @@ describe('GigDetailContent — personal workspace (source="me")', () => {
     admission: 'free',
     ticket_link: null,
     notes: 'Bring own PA',
-    has_pa_system: false,
-    has_drumkit: false,
-    has_stage_lights: false,
     viewerBandMemberId: 22,
     tasks: [{ id: 5, title: 'Bring charts', assigned_to: 22, done: false }],
     attachments: [{ id: 6, original_filename: 'rider.pdf', file_size: 10 }],
