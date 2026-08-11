@@ -56,14 +56,14 @@ describe('UserMenu', () => {
     expect(onSwitch).toHaveBeenCalledWith(1)
   })
 
-  it('offers to create a workspace only when the user has none', () => {
+  it('offers the artist profile action only when the user has no personal workspace', () => {
     open({ approvedMemberships: [BAND, OTHER_BAND], onCreatePersonalWorkspace: vi.fn() })
-    expect(screen.getByRole('menuitem', { name: /create my artist workspace/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /artist profile/i })).toBeInTheDocument()
   })
 
-  it('does not offer to create a second workspace', () => {
+  it('does not offer the artist profile action for an existing personal workspace', () => {
     open({ approvedMemberships: [BAND, PERSONAL], onCreatePersonalWorkspace: vi.fn() })
-    expect(screen.queryByRole('menuitem', { name: /create my artist workspace/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /artist profile/i })).not.toBeInTheDocument()
   })
 
   it('shows no switcher at all for a user with one tenant', () => {

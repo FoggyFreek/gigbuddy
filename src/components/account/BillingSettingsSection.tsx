@@ -19,6 +19,7 @@ import {
   syncSubscription as apiSync,
 } from '../../api/billing.ts'
 import type { BillingInterval, BillingState } from '../../api/billing.ts'
+import { redirectToCheckout } from '../../utils/checkoutNavigation.ts'
 import PlanLadderSection from './PlanLadderSection.tsx'
 import type { LadderEmptyState } from './PlanLadderSection.tsx'
 
@@ -128,7 +129,7 @@ export default function BillingSettingsSection() {
 
   const onSubscribe = (planId: number, interval: BillingInterval) => run(async () => {
     const { checkoutUrl } = await apiSubscribe(planId, interval)
-    window.location.href = checkoutUrl // hand off to the hosted checkout
+    redirectToCheckout(checkoutUrl)
   })
 
   const onUpgrade = (planId: number, interval: BillingInterval) => run(async () => {

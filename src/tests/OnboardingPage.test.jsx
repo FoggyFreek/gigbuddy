@@ -34,6 +34,9 @@ vi.mock('../api/profile.ts', async (importOriginal) => ({
 vi.mock('../contexts/authContext.ts', () => ({
   useAuth: vi.fn(),
 }))
+vi.mock('../utils/checkoutNavigation.ts', () => ({
+  redirectToCheckout: vi.fn(),
+}))
 
 import { acceptTerms, onboardingComplete } from '../api/auth.ts'
 import { searchBandProfiles } from '../api/bandProfiles.ts'
@@ -47,6 +50,7 @@ import {
 } from '../api/tenants.ts'
 import { uploadLogo } from '../api/profile.ts'
 import { useAuth } from '../contexts/authContext.ts'
+import { redirectToCheckout } from '../utils/checkoutNavigation.ts'
 
 const PLANS = [
   {
@@ -235,6 +239,7 @@ describe('OnboardingPage — confirm (paid path)', () => {
     await user.click(await screen.findByRole('button', { name: 'Continue to payment' }))
 
     await waitFor(() => expect(subscribe).toHaveBeenCalledWith(2, 'month', 'onboarding'))
+    expect(redirectToCheckout).toHaveBeenCalledWith('https://pay.test/tr_1')
     // Order: create → switch → subscribe.
     expect(createOwnedTenant.mock.invocationCallOrder[0])
       .toBeLessThan(auth.switchTenant.mock.invocationCallOrder[0])
@@ -346,6 +351,7 @@ describe('OnboardingPage — resume via onboarding pointer', () => {
     await user.click(await screen.findByRole('button', { name: 'Continue to payment' }))
 
     await waitFor(() => expect(subscribe).toHaveBeenCalledWith(2, 'month', 'onboarding'))
+    expect(redirectToCheckout).toHaveBeenCalledWith('https://pay.test/tr_2')
     expect(createOwnedTenant).not.toHaveBeenCalled()
     expect(auth.switchTenant).toHaveBeenCalledWith(42)
   })

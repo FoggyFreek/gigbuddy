@@ -37,6 +37,7 @@ import type { TenantKind } from '../utils/businessRegistry.ts'
 import { ladderPlans } from '../utils/planLadder.ts'
 import { audienceForTenantKind, isPlanAudience } from '../auth/planAudiences.ts'
 import type { PlanAudience } from '../auth/planAudiences.ts'
+import { redirectToCheckout } from '../utils/checkoutNavigation.ts'
 import WelcomeStep from '../components/onboarding/WelcomeStep.tsx'
 import BandStep from '../components/onboarding/BandStep.tsx'
 import ClaimBandProfileField from '../components/onboarding/ClaimBandProfileField.tsx'
@@ -473,7 +474,7 @@ export default function OnboardingPage() {
         return
       }
       const { checkoutUrl } = await subscribe(selectedPlan.id, interval, 'onboarding')
-      window.location.href = checkoutUrl
+      redirectToCheckout(checkoutUrl)
     } catch {
       setError(t($ => $.errors.generic))
     } finally {

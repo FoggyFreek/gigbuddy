@@ -231,10 +231,11 @@ describe('GigFormModal — edit mode', () => {
     expect(screen.getByDisplayValue('Bring own PA')).toBeInTheDocument()
   })
 
-  it('renders availability panel section heading', async () => {
+  it('keeps edit-mode availability inside the participants section', async () => {
     wrap(<GigFormModal mode="edit" gigId={1} onClose={() => {}} />)
     await waitFor(() => screen.getByDisplayValue('Jazz Night'))
-    expect(screen.getByText(/member availability/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Participants' })).toBeInTheDocument()
+    expect(screen.queryByText(/member availability/i)).not.toBeInTheDocument()
   })
 
   it('auto-saves when PA system toggle is flipped', async () => {
