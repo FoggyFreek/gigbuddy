@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
 import type { Id } from '../types/entities.ts'
-import type { TenantKind } from '../utils/businessRegistry.ts'
+import type { TenantKind } from '../auth/tenantKinds.ts'
 import type { UserEntitlements } from '../auth/entitlements.ts'
 
 export interface UserMembership {

@@ -31,12 +31,13 @@ import GigTerms from './GigTerms.tsx'
 import type { GigDetail, GigDetailForm, GigDetailTabKey } from './types.ts'
 import useDebouncedSave from '../../hooks/useDebouncedSave.ts'
 import { useCrossTenantRow } from '../../hooks/useCrossTenantRow.ts'
+import { usePlanningSource } from '../../hooks/usePlanningSource.ts'
 import { useTenantKind } from '../../hooks/useTenantKind.ts'
 import { TENANT_CAPABILITIES } from '../../auth/tenantCapabilities.ts'
 import { useAuth } from '../../contexts/authContext.ts'
-import { addGigParticipant, deleteGigBanner, getGig, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../../api/gigs.ts'
+import { addGigParticipant, deleteGigBanner, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../../api/gigs.ts'
 import { getBannerPath } from '../../api/profile.ts'
-import { getMyGig, setMyTaskDone } from '../../api/me.ts'
+import { setMyTaskDone } from '../../api/me.ts'
 import { listMembers } from '../../api/bandMembers.ts'
 import { compressBanner } from '../../utils/compressImage.ts'
 import { toDateInput, toTimeInput } from '../../utils/eventFormUtils.ts'
@@ -73,12 +74,6 @@ interface GigDetailContentProps {
   canWrite?: boolean
   // Tab to open on first mount (e.g. arriving from the tasks list → 'tasks').
   initialTab?: TabKey
-  // 'me' reads through the cross-tenant hub (/api/me) instead of the active
-  // tenant's /api/gigs — set by the page when the active tenant is personal, so
-  // gigs from the musician's other bands resolve at all. Those arrive labelled
-  // with their band, which is what makes them read-only (useCrossTenantRow) and
-  // drops the Terms and Participants tabs, band-scoped and unreachable here.
-  source?: 'tenant' | 'me'
 }
 
 function feeToDisplay(cents: number | null | undefined): string {
@@ -101,9 +96,14 @@ function pctToValue(str: string): number | null {
   return Number.isNaN(n) ? null : n
 }
 
-const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded, onGigLoadError, canWrite = true, initialTab = 'event', source = 'tenant' }, ref) {
+const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded, onGigLoadError, canWrite = true, initialTab = 'event' }, ref) {
   const { t } = useTranslation(['gigs', 'common'])
   const { user } = useAuth()
+  // A personal workspace reads through the cross-tenant hub, so gigs from the
+  // musician's other bands resolve at all. Those arrive labelled with their
+  // band, which is what makes them read-only (useCrossTenantRow) and drops the
+  // Terms and Participants tabs, band-scoped and unreachable from here.
+  const source = usePlanningSource('gigs')
   const currentBandMemberId = user?.bandMemberId ?? null
   const [form, setForm] = useState<GigDetailForm>({
     event_date: '',
@@ -177,19 +177,23 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     setInitialTasks((g.tasks as Task[]) || [])
   }, [onGigLoaded])
 
-  const fetchGig = useCallback(
-    (id: Id, opts?: RequestInit) => (source === 'me' ? getMyGig(id, opts) : getGig(id, opts)),
-    [source]
-  )
-
   const refresh = useCallback(async () => {
-    const g = await fetchGig(gigId)
+    const g = await source.api.detail(gigId)
     applyGig(g)
-  }, [gigId, applyGig, fetchGig])
+  }, [gigId, applyGig, source])
 
+  // The split view swaps `gigId` under a mounted pane, so between that render
+  // and the arriving row the one in state is still the previous gig's. Derived
+  // here rather than left to the fetch effect's setLoading, which lands a
+  // commit later — after the panels below have already fetched for the new id.
+  const rowIsStale = gig != null && gig.id !== gigId
   // A gig the personal workspace doesn't own: served read-only by /api/me, with
   // no band roster, availability, contacts, merch or invoices reachable.
-  const { isCrossBand, canWrite: editable } = useCrossTenantRow(gig, { canWrite })
+  const { isCrossBand, canWrite: editable } = useCrossTenantRow(rowIsStale ? null : gig, { canWrite })
+  // Who owns the gig is unknown until its own row arrives, and unknown is not
+  // ours: the band-only panels each read a tenant-scoped sub-resource that 404s
+  // for a gig the active tenant doesn't have.
+  const ownRow = !rowIsStale && gig != null && !isCrossBand
   // Band-wide availability is scoped to the active tenant's roster, so it means
   // nothing for a foreign band's gig, and /api/availability 403s a personal
   // workspace outright — gate on both like the create-form panels do.
@@ -200,19 +204,20 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     const ac = new AbortController()
     setLoading(true)
     getBannerPath().then(setBandBannerPath).catch(() => {})
-    fetchGig(gigId, { signal: ac.signal })
+    source.api.detail(gigId, { signal: ac.signal })
       .then(applyGig)
       .catch((err: Error) => { if (!ac.signal.aborted) { console.error(err); onGigLoadError?.() } })
       .finally(() => { if (!ac.signal.aborted) setLoading(false) })
     return () => ac.abort()
-  }, [gigId, applyGig, onGigLoadError, fetchGig])
+  }, [gigId, applyGig, onGigLoadError, source])
 
   // The roster is the active tenant's, so it only means anything for a gig that
-  // tenant owns — hence the wait for the gig rather than a fetch on mount.
+  // tenant owns — hence the wait for the gig rather than a fetch on mount. A
+  // personal workspace has no roster at all (/band-members is band-only).
   useEffect(() => {
-    if (gig == null || isCrossBand) return
+    if (gig == null || isCrossBand || !source.canLoadRoster) return
     listMembers().then(setMembers).catch(() => {})
-  }, [gig, isCrossBand])
+  }, [gig, isCrossBand, source])
 
   const participantIds = useMemo(
     () => new Set((gig?.participants ?? []).map((p) => p.band_member_id)),
@@ -326,7 +331,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     }
   }
 
-  if (loading) {
+  if (loading || rowIsStale) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
         <CircularProgress />
@@ -335,7 +340,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   }
 
   const requiredErrors = getRequiredErrors(form, REQUIRED_FIELDS)
-  const visibleTabs = isCrossBand ? TABS.filter(({ key }) => key === 'event' || key === 'tasks') : TABS
+  const visibleTabs = ownRow ? TABS : TABS.filter(({ key }) => key === 'event' || key === 'tasks')
   const openTaskCount = initialTasks.filter((task) => !task.done).length
   // Derived, not synced: an initialTab (or a stale selection) pointing at a tab
   // this gig doesn't have falls back to the event tab without a render-phase set.
@@ -369,6 +374,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         {bandBannerPath && (
           <Box
             aria-hidden
+            data-testid="band-banner"
             sx={{
               position: 'absolute',
               inset: -8,
@@ -603,12 +609,12 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         />
       </Box>
 
-      {!isCrossBand && (
+      {ownRow && (
         <GigTerms
           active={shownTab === 'terms'}
           editable={editable}
           gigId={gigId}
-          gigLoaded={gig != null}
+          gigLoaded={ownRow}
           form={form}
           selectedVenue={selectedVenue}
           selectedFestival={selectedFestival}
@@ -618,7 +624,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         />
       )}
 
-      {!isCrossBand && (
+      {ownRow && (
         <GigAvailability
           active={shownTab === 'participants'}
           editable={editable}

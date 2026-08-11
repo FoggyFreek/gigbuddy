@@ -2,29 +2,37 @@
 // authenticated + terms accepted + resolveMemberTenantIds, and deliberately
 // NO resolveTenantId — these reads span tenants rather than sitting inside one.
 //
-// Every rule about which tenants a caller may see lives in meService; handlers
-// here just pass `req.memberTenants` (server-derived) and `req.query` through.
+// Every rule about which tenants a caller may see lives in memberTenants;
+// handlers only pass the server-derived scope to the owning application service.
 import { Router } from 'express'
 import pool from '../db/index.js'
 import { requireParam, sendError } from './routeHelpers.js'
 import {
-  getMyBandEvent,
+  listMyAgenda,
+} from '../services/meService.js'
+import {
   getMyGig,
+  listMyGigMapData,
+  listMyPastGigs,
+  listMyUpcomingGigs,
+  searchMyGigs,
+} from '../services/meGigService.js'
+import {
   getMyNextRehearsal,
   getMyRehearsal,
-  listMyAgenda,
-  listMyGigMapData,
-  listMyPastBandEvents,
-  listMyPastGigs,
   listMyPastRehearsals,
-  listMyTasks,
-  listMyUpcomingBandEvents,
-  listMyUpcomingGigs,
   listMyUpcomingRehearsals,
-  searchMyGigs,
   setMyRehearsalVote,
+} from '../services/meRehearsalService.js'
+import {
+  getMyBandEvent,
+  listMyPastBandEvents,
+  listMyUpcomingBandEvents,
+} from '../services/meBandEventService.js'
+import {
+  listMyTasks,
   setMyTaskDone,
-} from '../services/meService.js'
+} from '../services/meTaskService.js'
 
 const router = Router()
 

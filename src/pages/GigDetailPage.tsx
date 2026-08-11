@@ -20,7 +20,6 @@ import { deleteGig } from '../api/gigs.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Gig, Id } from '../types/entities.ts'
 import type { MaybeCrossTenant } from '../types/api.ts'
-import { useTenantKind } from '../hooks/useTenantKind.ts'
 import { useCrossTenantRow } from '../hooks/useCrossTenantRow.ts'
 
 export default function GigDetailPage() {
@@ -28,7 +27,6 @@ export default function GigDetailPage() {
   const { id } = useParams()
   const gigId = Number(id)
   const { canWritePlanning } = usePermissions()
-  const { isPersonal } = useTenantKind()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const TAB_KEYS: TabKey[] = ['event', 'terms', 'participants', 'tasks']
@@ -98,7 +96,6 @@ export default function GigDetailPage() {
       <GigDetailContent
         ref={contentRef}
         gigId={gigId}
-        source={isPersonal ? 'me' : 'tenant'}
         canWrite={canWritePlanning}
         initialTab={initialTab}
         onBannerUpdate={outletCtx.onGigUpdate as ((gigId: Id, patch: Record<string, unknown>) => void) | undefined}

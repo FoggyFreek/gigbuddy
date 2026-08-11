@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import GigTasks from '../components/gigdetails/GigTasks.tsx'
 import theme from '../theme.ts'
 
@@ -38,6 +38,10 @@ function wrap(ui) {
 }
 
 describe('GigTasks', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('renders existing tasks from initialTasks', () => {
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} />)
     expect(screen.getByText('Book sound engineer')).toBeInTheDocument()
@@ -91,10 +95,32 @@ describe('GigTasks', () => {
     wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} />)
 
     await user.type(screen.getByPlaceholderText(/add task/i), 'Check PA system')
-    await user.click(screen.getByRole('button', { name: /add task/i }))
+    await user.click(screen.getByRole('button', { name: /^add$/i }))
     await waitFor(() =>
       expect(createTask).toHaveBeenCalledWith(42, { title: 'Check PA system', due_date: null, assigned_to: null })
     )
+  })
+
+  it('keeps the composer open while setting a due date without a description', async () => {
+    const user = userEvent.setup()
+    wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} />)
+
+    await user.click(screen.getByRole('button', { name: /add task/i }))
+    await user.click(screen.getByRole('button', { name: /set due date/i }))
+    await user.click(await screen.findByRole('gridcell', { name: '15' }))
+
+    expect(screen.getByRole('button', { name: /set due date/i })).toBeInTheDocument()
+  })
+
+  it('keeps the composer open while assigning a person without a description', async () => {
+    const user = userEvent.setup()
+    wrap(<GigTasks gigId={42} initialTasks={INITIAL_TASKS} members={MEMBERS} />)
+
+    await user.click(screen.getByRole('button', { name: /add task/i }))
+    await user.click(screen.getByRole('button', { name: /^assign$/i }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Alice' }))
+
+    expect(screen.getByRole('button', { name: /^assign$/i })).toHaveTextContent('Alice')
   })
 
   it('toggles task done state on checkbox click', async () => {

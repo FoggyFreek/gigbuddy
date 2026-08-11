@@ -13,10 +13,15 @@ function renderPage(route = '/login') {
 
 describe('LoginPage', () => {
   it('renders a sign-in button per provider', () => {
-    renderPage()
+    const { container } = renderPage()
 
     expect(screen.getByRole('button', { name: 'Sign in with Google' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sign in with Microsoft' })).toBeInTheDocument()
+    expect(container.firstChild).toHaveStyle({
+      backgroundImage: 'url(/backgrounds/bg_01_light.webp)',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    })
   })
 
   it('shows no auth error by default', () => {

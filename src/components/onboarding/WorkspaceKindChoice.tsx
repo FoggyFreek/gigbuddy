@@ -7,7 +7,7 @@ import PersonOutlined from '@mui/icons-material/PersonOutlined'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import type { SvgIconComponent } from '@mui/icons-material'
-import { TENANT_KINDS, type TenantKind } from '../../utils/businessRegistry.ts'
+import { TENANT_KINDS, type TenantKind } from '../../auth/tenantKinds.ts'
 
 const KIND_ICONS: Record<TenantKind, SvgIconComponent> = {
   band: GroupsOutlined,

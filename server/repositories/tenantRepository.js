@@ -3,7 +3,7 @@
 //
 // Tenants are global super-admin-managed resources (no tenant_id scoping); the
 // memberships table joins them to users.
-import { DEFAULT_TENANT_KIND } from '../../shared/businessRegistry.js'
+import { DEFAULT_TENANT_KIND } from '../../shared/tenantKinds.js'
 import { tenantSafeProjection } from './tenantSafeProjection.js'
 
 export async function listTenantsWithMemberCount(executor) {

@@ -19,8 +19,6 @@ describe('plan audience parity (frontend mirrors shared)', () => {
     }
     for (const kind of ['band', 'personal']) {
       expect(fe.audienceForTenantKind(kind)).toBe(be.audienceForTenantKind(kind))
-      expect(fe.tenantKindsForAudience(fe.audienceForTenantKind(kind)))
-        .toEqual(be.tenantKindsForAudience(be.audienceForTenantKind(kind)))
     }
     expect(() => fe.audienceForTenantKind('nope')).toThrow(/Unknown tenant kind/)
   })

@@ -28,6 +28,7 @@ interface MetaButtonProps {
   overdue?: boolean
   readOnly?: boolean
   disabled?: boolean
+  onOpen?: () => void
   onClick: (event: MouseEvent<HTMLElement>) => void
 }
 
@@ -40,6 +41,7 @@ function MetaButton({
   overdue = false,
   readOnly = false,
   disabled = false,
+  onOpen,
   onClick,
 }: Readonly<MetaButtonProps>) {
   const color = overdue ? 'error.main' : 'text.secondary'
@@ -60,6 +62,7 @@ function MetaButton({
       color="inherit"
       aria-label={label}
       disabled={disabled}
+      onMouseDown={onOpen}
       onClick={onClick}
       sx={{ minWidth: 0, maxWidth: 200, px: 1, color, textTransform: 'none', fontWeight: 400 }}
     >
@@ -82,6 +85,7 @@ interface TaskDueControlProps {
   overdue?: boolean
   readOnly?: boolean
   disabled?: boolean
+  onOpenChange?: (open: boolean) => void
   onChange: (next: string | null) => void
 }
 
@@ -91,6 +95,7 @@ export function TaskDueControl({
   overdue = false,
   readOnly = false,
   disabled = false,
+  onOpenChange,
   onChange,
 }: Readonly<TaskDueControlProps>) {
   const { t, i18n } = useTranslation('gigs')
@@ -104,7 +109,11 @@ export function TaskDueControl({
       overdue={overdue}
       readOnly={readOnly}
       disabled={disabled}
-      onClick={(event) => setAnchor(event.currentTarget)}
+      onOpen={() => onOpenChange?.(true)}
+      onClick={(event) => {
+        setAnchor(event.currentTarget)
+        onOpenChange?.(true)
+      }}
     />
   )
   if (readOnly) return button
@@ -112,6 +121,12 @@ export function TaskDueControl({
   function pick(next: string | null) {
     setAnchor(null)
     onChange(next)
+    onOpenChange?.(false)
+  }
+
+  function close() {
+    setAnchor(null)
+    onOpenChange?.(false)
   }
 
   return (
@@ -120,7 +135,7 @@ export function TaskDueControl({
       <Popover
         open={Boolean(anchor)}
         anchorEl={anchor}
-        onClose={() => setAnchor(null)}
+        onClose={close}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
       >
         <DateCalendar
@@ -145,6 +160,7 @@ interface TaskAssigneeControlProps {
   label: string
   readOnly?: boolean
   disabled?: boolean
+  onOpenChange?: (open: boolean) => void
   onChange: (next: Id | null) => void
 }
 
@@ -154,6 +170,7 @@ export function TaskAssigneeControl({
   label,
   readOnly = false,
   disabled = false,
+  onOpenChange,
   onChange,
 }: Readonly<TaskAssigneeControlProps>) {
   const { t } = useTranslation('gigs')
@@ -170,7 +187,11 @@ export function TaskAssigneeControl({
       label={label}
       readOnly={readOnly}
       disabled={disabled}
-      onClick={(event) => setAnchor(event.currentTarget)}
+      onOpen={() => onOpenChange?.(true)}
+      onClick={(event) => {
+        setAnchor(event.currentTarget)
+        onOpenChange?.(true)
+      }}
     />
   )
   if (readOnly) return button
@@ -178,12 +199,18 @@ export function TaskAssigneeControl({
   function pick(next: Id | null) {
     setAnchor(null)
     onChange(next)
+    onOpenChange?.(false)
+  }
+
+  function close() {
+    setAnchor(null)
+    onOpenChange?.(false)
   }
 
   return (
     <>
       {button}
-      <Menu open={Boolean(anchor)} anchorEl={anchor} onClose={() => setAnchor(null)}>
+      <Menu open={Boolean(anchor)} anchorEl={anchor} onClose={close}>
         <MenuItem selected={value == null} onClick={() => pick(null)}>
           {t($ => $.tasks.unassigned)}
         </MenuItem>

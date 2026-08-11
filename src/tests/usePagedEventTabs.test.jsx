@@ -1,9 +1,11 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../hooks/useTenantKind.ts', () => ({ useTenantKind: vi.fn() }))
+// The hook names an aggregate; which surface that resolves to (active tenant vs
+// the /api/me hub) is usePlanningSource's job and is tested there.
+vi.mock('../hooks/usePlanningSource.ts', () => ({ usePlanningSource: vi.fn() }))
 
-import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { usePlanningSource } from '../hooks/usePlanningSource.ts'
 import { usePagedEventTabs } from '../hooks/usePagedEventTabs.ts'
 
 const UPCOMING = [{ id: 1, date: '2099-01-01' }]
@@ -22,14 +24,25 @@ function makeFetchers() {
   return {
     upcoming: vi.fn().mockResolvedValue(upcomingPage()),
     past: vi.fn().mockResolvedValue(pastPage()),
-    upcomingMine: vi.fn().mockResolvedValue(upcomingPage([{ id: 11, date: '2099-02-02' }])),
-    pastMine: vi.fn().mockResolvedValue(pastPage([{ id: 12, date: '2020-02-02' }])),
   }
 }
 
-function setup(overrides = {}) {
-  const fetchers = makeFetchers()
-  const options = { ...fetchers, dateOf: (item) => item.date, ...overrides }
+// The resolved source is stable across renders (usePlanningSource memoizes it),
+// which is what keeps the hook's load effect from re-firing.
+function asSource(api) {
+  usePlanningSource.mockReturnValue({
+    kind: 'tenant',
+    labelsTenant: false,
+    canLoadRoster: true,
+    canWriteOrdinaryEndpoint: true,
+    api,
+  })
+}
+
+function setup({ fetchers: overrides, ...optionOverrides } = {}) {
+  const fetchers = { ...makeFetchers(), ...overrides }
+  asSource(fetchers)
+  const options = { aggregate: 'gigs', dateOf: (item) => item.date, ...optionOverrides }
   // A fresh options object every render, as a page component would pass it —
   // the hook must not re-fetch just because that identity changed.
   const rendered = renderHook(() => usePagedEventTabs({ ...options }))
@@ -38,11 +51,10 @@ function setup(overrides = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  useTenantKind.mockReturnValue({ isPersonal: false })
 })
 
 describe('usePagedEventTabs', () => {
-  it('loads the upcoming tab on mount from the tenant-scoped feed', async () => {
+  it('loads the upcoming tab on mount from the resolved feed', async () => {
     const { result, fetchers } = setup()
 
     await waitFor(() => expect(result.current.loading).toBe(false))
@@ -52,15 +64,18 @@ describe('usePagedEventTabs', () => {
     expect(result.current.hasMore).toBe(false)
   })
 
-  // The whole point of the hook: a personal workspace reads the cross-tenant
-  // hub, and no page can forget to branch.
-  it('reads the cross-tenant feed in a personal workspace', async () => {
-    useTenantKind.mockReturnValue({ isPersonal: true })
-    const { result, fetchers } = setup()
+  // The point of naming an aggregate: the page never picks a fetcher, so it
+  // can't read the wrong surface. Whatever usePlanningSource resolved is what
+  // gets paged — here the cross-tenant hub's feeds.
+  it('pages whichever feeds the resolved source provides', async () => {
+    const hub = {
+      upcoming: vi.fn().mockResolvedValue(upcomingPage([{ id: 11, date: '2099-02-02' }])),
+      past: vi.fn().mockResolvedValue(pastPage([{ id: 12, date: '2020-02-02' }])),
+    }
+    const { result } = setup({ fetchers: hub })
 
     await waitFor(() => expect(result.current.items).toHaveLength(1))
-    expect(fetchers.upcomingMine).toHaveBeenCalled()
-    expect(fetchers.upcoming).not.toHaveBeenCalled()
+    expect(hub.upcoming).toHaveBeenCalled()
     expect(result.current.items[0].id).toBe(11)
   })
 
@@ -128,7 +143,7 @@ describe('usePagedEventTabs', () => {
   })
 
   it('surfaces a failed load as an error message', async () => {
-    const { result } = setup({ upcoming: vi.fn().mockRejectedValue(new Error('boom')) })
+    const { result } = setup({ fetchers: { upcoming: vi.fn().mockRejectedValue(new Error('boom')) } })
 
     await waitFor(() => expect(result.current.error).toBe('boom'))
     expect(result.current.loading).toBe(false)

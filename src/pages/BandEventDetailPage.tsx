@@ -17,7 +17,6 @@ import CloseIcon from '@mui/icons-material/Close'
 import {
   addBandEventParticipant,
   deleteBandEvent,
-  getBandEvent,
   removeBandEventParticipant,
   updateBandEvent,
 } from '../api/bandEvents.ts'
@@ -33,8 +32,7 @@ import PastEventAlert from '../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import { useCrossTenantRow } from '../hooks/useCrossTenantRow.ts'
 import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
-import { getMyBandEvent } from '../api/me.ts'
-import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { usePlanningSource } from '../hooks/usePlanningSource.ts'
 import { SourceTenantSwitch } from '../components/SourceTenantIdentity.tsx'
 
 const REQUIRED_FIELDS = ['title', 'start_date']
@@ -62,7 +60,7 @@ export default function BandEventDetailPage() {
   const { t } = useTranslation(['bandEvents', 'common'])
   const { id } = useParams()
   const bandEventId = Number(id)
-  const { isPersonal } = useTenantKind()
+  const source = usePlanningSource('bandEvents')
   const navigate = useNavigate()
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
   const insideSplitView = !!outletCtx.insideSplitView
@@ -96,10 +94,10 @@ export default function BandEventDetailPage() {
   }, [])
 
   const refreshAvailability = useCallback(async () => {
-    const updatedEvent = await (isPersonal ? getMyBandEvent(bandEventId) : getBandEvent(bandEventId))
+    const updatedEvent = await source.api.detail(bandEventId)
     setEventAvailability(updatedEvent)
     return updatedEvent
-  }, [bandEventId, setEventAvailability, isPersonal])
+  }, [bandEventId, setEventAvailability, source])
 
   const saveFn = useCallback(
     async (patch: Partial<BandEventForm>) => { await updateBandEvent(bandEventId, patch) },
@@ -120,7 +118,7 @@ export default function BandEventDetailPage() {
   )
 
   useEffect(() => {
-    ;(isPersonal ? getMyBandEvent(bandEventId) : getBandEvent(bandEventId))
+    source.api.detail(bandEventId)
       .then((ev) => {
         const detail = ev as BandEventDetail
         setEvent(detail)
@@ -138,11 +136,11 @@ export default function BandEventDetailPage() {
       })
       .catch(() => onBandEventDetailLoadError?.())
       .finally(() => setLoading(false))
-  }, [bandEventId, onBandEventDetailLoaded, onBandEventDetailLoadError, setEventAvailability, isPersonal])
+  }, [bandEventId, onBandEventDetailLoaded, onBandEventDetailLoadError, setEventAvailability, source])
 
   useEffect(() => {
-    if (!isPersonal) listMembers().then(setMembers).catch(() => {})
-  }, [isPersonal])
+    if (source.canLoadRoster) listMembers().then(setMembers).catch(() => {})
+  }, [source])
 
   function handleChange(field: string, value: string | boolean | null) {
     if (!detailCanWrite) return

@@ -11,17 +11,11 @@ import {
   registrationUsesOffice as registrationUsesOfficeJs,
   isValidRegistrationNumber as isValidRegistrationNumberJs,
   LEGAL_FORMS as LEGAL_FORMS_JS,
-  TENANT_KINDS as TENANT_KINDS_JS,
   requiresCompanyDisclosure as requiresCompanyDisclosureJs,
 } from '../../shared/businessRegistry.js'
 
 export type LegalForm = 'sole_trader' | 'partnership' | 'company' | 'association' | 'other'
 export const LEGAL_FORMS = LEGAL_FORMS_JS as readonly LegalForm[]
-
-/** What a tenant represents: a band, or one musician's own artist workspace. */
-export type TenantKind = 'band' | 'personal'
-export const TENANT_KINDS = TENANT_KINDS_JS as readonly TenantKind[]
-export const DEFAULT_TENANT_KIND: TenantKind = 'band'
 
 export function requiresCompanyDisclosure(legalForm: string | null | undefined): boolean {
   return requiresCompanyDisclosureJs(legalForm ?? undefined) as boolean

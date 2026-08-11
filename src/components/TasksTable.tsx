@@ -70,7 +70,7 @@ function TaskRow({ task, onToggleDone, canToggleDone, onEditTask, onOpenTask, ca
           e.stopPropagation()
           onToggleDone(task)
         }}
-        sx={{ flexShrink: 0, p: 0.25, mt: 0.1 }}
+        sx={{ flexShrink: 0, p: 0.25, mt: 0 }}
       />
       <Box
         onClick={() => { if (editable) onEditTask?.(task); else if (openable) onOpenTask?.(task) }}

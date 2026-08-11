@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 import type { Permission } from '../auth/permissions.ts'
 import type { Feature } from '../auth/entitlements.ts'
-import type { TenantKind } from '../utils/businessRegistry.ts'
+import type { TenantKind } from '../auth/tenantKinds.ts'
 
 // Synchronous signals a tutorial's `eligible` predicate reads. All are derivable
 // from already-loaded state (permissions, plan, route) so eligibility is cheap.

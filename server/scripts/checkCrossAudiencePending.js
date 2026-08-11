@@ -18,7 +18,12 @@ import 'dotenv/config'
 import { pathToFileURL } from 'node:url'
 import pool from '../db/index.js'
 import { logger } from '../utils/logger.js'
-import { legacyPlanAudience } from '../db/defaultPlans.js'
+import { PLAN_AUDIENCES } from '../../shared/planAudiences.js'
+
+function legacyPlanAudience(plan) {
+  const bands = plan?.entitlements?.limits?.bands
+  return !plan?.is_fallback && bands === 0 ? PLAN_AUDIENCES.ARTIST : PLAN_AUDIENCES.BAND
+}
 
 // Reads the audience column when it exists (post-166 re-runs) and otherwise
 // derives the audience migration 166 WILL assign, so the same script is valid

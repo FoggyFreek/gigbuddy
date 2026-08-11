@@ -60,6 +60,10 @@ export default function LoginPage() {
         alignItems: 'center',
         minHeight: '100vh',
         bgcolor: '#F4F1FB',
+        backgroundImage: 'url(/backgrounds/bg_01_light.webp)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
         px: 2,
       }}
     >

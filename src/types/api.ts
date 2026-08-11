@@ -78,7 +78,7 @@ export interface CrossTenantRef {
   tenantId: import('./entities.ts').Id
   tenantName: string | null
   tenantAvatarPath: string | null
-  kind: import('../utils/businessRegistry.ts').TenantKind | null
+  kind: import('../auth/tenantKinds.ts').TenantKind | null
 }
 
 /** An entity that carries its band label when it came from a cross-tenant read. */

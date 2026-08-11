@@ -3,9 +3,8 @@ import {
   PLAN_AUDIENCE_KEYS,
   isPlanAudience as isPlanAudienceJs,
   audienceForTenantKind as audienceForTenantKindJs,
-  tenantKindsForAudience as tenantKindsForAudienceJs,
 } from '../../shared/planAudiences.js'
-import type { TenantKind } from '../utils/businessRegistry.ts'
+import type { TenantKind } from './tenantKinds.ts'
 
 export { PLAN_AUDIENCES, PLAN_AUDIENCE_KEYS }
 
@@ -22,8 +21,4 @@ export function isPlanAudience(value: unknown): value is PlanAudience {
 /** Throws on an unrecognised kind — see the shared registry for why. */
 export function audienceForTenantKind(kind: TenantKind): PlanAudience {
   return audienceForTenantKindJs(kind)
-}
-
-export function tenantKindsForAudience(audience: PlanAudience): readonly TenantKind[] {
-  return tenantKindsForAudienceJs(audience)
 }

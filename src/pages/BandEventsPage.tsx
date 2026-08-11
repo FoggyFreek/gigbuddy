@@ -8,16 +8,14 @@ import AddIcon from '@mui/icons-material/Add'
 import BandEventsTable from '../components/BandEventsTable.tsx'
 import BandEventFormModal from '../components/BandEventFormModal.tsx'
 import SplitView from '../components/SplitView.tsx'
-import { listPastBandEvents, listUpcomingBandEvents } from '../api/bandEvents.ts'
-import { listMyPastBandEvents, listMyUpcomingBandEvents } from '../api/me.ts'
 import { usePagedEventTabs } from '../hooks/usePagedEventTabs.ts'
-import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { usePlanningSource } from '../hooks/usePlanningSource.ts'
 import { bandEventShareUrl } from '../utils/shareUtils.ts'
 import type { BandEvent } from '../types/entities.ts'
 
 export default function BandEventsPage() {
   const { t } = useTranslation(['bandEvents', 'common'])
-  const { isPersonal } = useTenantKind()
+  const eventSource = usePlanningSource('bandEvents')
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -28,11 +26,8 @@ export default function BandEventsPage() {
     items: events, setItems: setEvents,
     loading, loadingMore, hasMore, error,
     reload, loadMore, onDetailLoaded, onDetailLoadError,
-  } = usePagedEventTabs<BandEvent>({
-    upcoming: listUpcomingBandEvents,
-    past: listPastBandEvents,
-    upcomingMine: listMyUpcomingBandEvents,
-    pastMine: listMyPastBandEvents,
+  } = usePagedEventTabs({
+    aggregate: 'bandEvents',
     dateOf: (event) => event.end_date || event.start_date,
     deferInitialLoad: selectedIdParam != null,
   })
@@ -82,7 +77,7 @@ export default function BandEventsPage() {
         hasMore={hasMore}
         loadingMore={loadingMore}
         onLoadMore={loadMore}
-        showBand={isPersonal}
+        showBand={eventSource.labelsTenant}
       />
 
       {modal && <BandEventFormModal mode="create" onClose={handleClose} />}

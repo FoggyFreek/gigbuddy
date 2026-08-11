@@ -1,6 +1,5 @@
 export {
   TENANT_CAPABILITIES,
-  TENANT_CAPABILITY_KEYS,
   tenantKindSupports,
 } from '../../shared/tenantCapabilities.js'
 

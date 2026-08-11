@@ -20,9 +20,10 @@ import TaskFormDialog from '../components/TaskFormDialog.tsx'
 import { useAuth } from '../contexts/authContext.ts'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
-import { listTasks, updateTask } from '../api/tasks.ts'
-import { listMyTasks, setMyTaskDone } from '../api/me.ts'
-import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { updateTask } from '../api/tasks.ts'
+import { setMyTaskDone } from '../api/me.ts'
+import { usePlanningSource } from '../hooks/usePlanningSource.ts'
+import { isCrossTenantRow } from '../hooks/useCrossTenantRow.ts'
 import { useCrossTenantNavigate } from '../hooks/useCrossTenantNavigate.ts'
 import type { Id, Task } from '../types/entities.ts'
 import type { MaybeCrossTenant } from '../types/api.ts'
@@ -53,7 +54,7 @@ export default function TasksPage() {
   const { t } = useTranslation('tasks')
   const { user } = useAuth()
   const { canWritePlanning } = usePermissions()
-  const { isPersonal } = useTenantKind()
+  const source = usePlanningSource('tasks')
   const openInTenant = useCrossTenantNavigate()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -74,7 +75,7 @@ export default function TasksPage() {
     setSilentReload(silent)
     setReloadNonce((n) => n + 1)
   }, [])
-  const tasksKey = `${isPersonal}|${reloadNonce}`
+  const tasksKey = `${source.kind}|${reloadNonce}`
   const [tasksState, setTasksState] = useState<{ key: string; tasks: TaskItem[]; error: string | null } | null>(null)
   const tasks = tasksState?.tasks ?? NO_TASKS
   const loading = tasksState == null || (tasksState.key !== tasksKey && !silentReload)
@@ -82,7 +83,7 @@ export default function TasksPage() {
 
   useEffect(() => {
     let cancelled = false
-    ;(isPersonal ? listMyTasks({ limit: TASK_LIST_LIMIT }) : listTasks({ limit: TASK_LIST_LIMIT }))
+    source.api.list({ limit: TASK_LIST_LIMIT })
       .then((response) => {
         if (!cancelled) setTasksState({ key: tasksKey, tasks: response.items, error: null })
       })
@@ -96,18 +97,23 @@ export default function TasksPage() {
         }
       })
     return () => { cancelled = true }
-  }, [tasksKey, isPersonal])
+  }, [tasksKey, source])
 
+  // Hub rows are the caller's own tasks across their bands, so ticking one done
+  // is always allowed — the server authorizes the self-action. In a band
+  // workspace it takes planning.write, or the task being the viewer's own.
   const canToggleDone = useCallback(
-    (task: TaskItem) => isPersonal
-      ? task.tenantId === user?.activeTenantId || task.tenantId != null
-      : canWritePlanning || (task.assigned_to != null && task.assigned_to === user?.bandMemberId),
-    [isPersonal, user?.activeTenantId, canWritePlanning, user?.bandMemberId],
+    (task: TaskItem) => source.labelsTenant
+      || canWritePlanning
+      || (task.assigned_to != null && task.assigned_to === user?.bandMemberId),
+    [source, canWritePlanning, user?.bandMemberId],
   )
 
+  // Editing a task is an ordinary tenant-scoped write, so it needs the row to
+  // belong to the active tenant.
   const canEditTask = useCallback(
-    (task: TaskItem) => !isPersonal || task.tenantId === user?.activeTenantId,
-    [isPersonal, user?.activeTenantId],
+    (task: TaskItem) => !isCrossTenantRow(task, user?.activeTenantId),
+    [user?.activeTenantId],
   )
 
   // Deep links are derived from the loaded list, so opening the dialog does not
@@ -134,11 +140,10 @@ export default function TasksPage() {
       ? { ...prev, tasks: prev.tasks.map((x) => (x.id === task.id ? { ...x, done: !x.done } : x)) }
       : prev))
     try {
-      if (isPersonal && task.tenantId !== user?.activeTenantId) {
-        await setMyTaskDone(task.id, !task.done)
-      } else {
-        await updateTask(task.id, { done: !task.done })
-      }
+      // Another band's task is out of reach of /tasks; the hub's self-action is
+      // the only way to tick it done.
+      if (canEditTask(task)) await updateTask(task.id, { done: !task.done })
+      else await setMyTaskDone(task.id, !task.done)
     } finally {
       reload(true)
     }
@@ -174,8 +179,11 @@ export default function TasksPage() {
   const allStatusesSelected = selectedStatuses.size === TASK_STATUSES.length
   const someStatusesSelected = selectedStatuses.size > 0 && !allStatusesSelected
 
+  // "My tasks" filters on the viewer's band member id, which only identifies
+  // them inside the active tenant — meaningless once rows span several bands.
+  const showMyTasksFilter = !source.labelsTenant && !!user?.bandMemberId
   const memberTasks = tasks
-    .filter((task) => isPersonal || !myTasksOnly || !user?.bandMemberId || task.assigned_to === user.bandMemberId)
+    .filter((task) => source.labelsTenant || !myTasksOnly || !user?.bandMemberId || task.assigned_to === user.bandMemberId)
   const gigsWithOpenTasks = new Set(
     memberTasks
       .filter((task) => !task.done && task.gig_id != null)
@@ -225,19 +233,19 @@ export default function TasksPage() {
               open={Boolean(filterAnchor)}
               onClose={() => setFilterAnchor(null)}
             >
-              {!isPersonal && user?.bandMemberId && (
+              {showMyTasksFilter && (
                 <MenuItem dense onClick={() => setMyTasksOnly((v) => !v)}>
                   <Checkbox size="small" checked={myTasksOnly} />
                   <ListItemText primary={t($ => $.myTasks)} />
                 </MenuItem>
               )}
-              {!isPersonal && user?.bandMemberId && <Divider />}
+              {showMyTasksFilter && <Divider />}
               {statusMenuItems()}
             </Menu>
           </>
         ) : (
           <>
-            {!isPersonal && user?.bandMemberId && (
+            {showMyTasksFilter && (
               <ToggleButton
                 value="myTasks"
                 selected={myTasksOnly}
@@ -292,12 +300,12 @@ export default function TasksPage() {
           canToggleDone={canToggleDone}
           onOpenGig={(gigId: Id) => navigate(`/gigs/${gigId}?tab=tasks`)}
           onOpenGigTask={(gigId: Id, task: TaskItem) => {
-            if (isPersonal && task.tenantId !== user?.activeTenantId) {
+            if (isCrossTenantRow(task, user?.activeTenantId)) {
               void openInTenant(task.tenantId, `/gigs/${gigId}?tab=tasks`)
             } else navigate(`/gigs/${gigId}?tab=tasks`)
           }}
           onOpenTask={(task) => {
-            if (isPersonal && task.tenantId !== user?.activeTenantId) {
+            if (isCrossTenantRow(task, user?.activeTenantId)) {
               void openInTenant(task.tenantId, '/tasks')
             }
           }}

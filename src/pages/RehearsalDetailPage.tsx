@@ -19,7 +19,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { toDateInput, toTimeInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
-import { addParticipant, addSong, deleteRehearsal, getRehearsal, removeParticipant, removeSong, setVote, updateRehearsal } from '../api/rehearsals.ts'
+import { addParticipant, addSong, deleteRehearsal, removeParticipant, removeSong, setVote, updateRehearsal } from '../api/rehearsals.ts'
 import { listMembers } from '../api/bandMembers.ts'
 import RehearsalFields from '../components/RehearsalFields.tsx'
 import PastEventAlert from '../components/PastEventAlert.tsx'
@@ -31,8 +31,9 @@ import { useAuth } from '../contexts/authContext.ts'
 import { useCrossTenantRow } from '../hooks/useCrossTenantRow.ts'
 import type { Rehearsal, Member, Song, Id } from '../types/entities.ts'
 import type { MaybeCrossTenant } from '../types/api.ts'
-import { getMyRehearsal, setMyRehearsalVote } from '../api/me.ts'
+import { setMyRehearsalVote } from '../api/me.ts'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { usePlanningSource } from '../hooks/usePlanningSource.ts'
 import { SourceTenantSwitch } from '../components/SourceTenantIdentity.tsx'
 import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 
@@ -66,7 +67,7 @@ export default function RehearsalDetailPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const tenantKind = useTenantKind()
-  const { isPersonal } = tenantKind
+  const source = usePlanningSource('rehearsals')
   const outletCtx = (useOutletContext<RehearsalDetailOutletContext>() || {}) as RehearsalDetailOutletContext
   const insideSplitView = !!outletCtx.insideSplitView
   const onRehearsalDetailLoaded = outletCtx.onRehearsalDetailLoaded
@@ -90,11 +91,11 @@ export default function RehearsalDetailPage() {
   )
 
   useEffect(() => {
-    if (!isPersonal) listMembers().then(setMembers).catch(() => {})
-  }, [isPersonal])
+    if (source.canLoadRoster) listMembers().then(setMembers).catch(() => {})
+  }, [source])
 
   const refresh = useCallback(async () => {
-    const r = await (isPersonal ? getMyRehearsal(rehearsalId) : getRehearsal(rehearsalId))
+    const r = await source.api.detail(rehearsalId)
     setRehearsal(r)
     setForm({
       proposed_date: toDateInput(r.proposed_date),
@@ -103,10 +104,10 @@ export default function RehearsalDetailPage() {
       location: r.location || '',
       notes: r.notes || '',
     })
-  }, [rehearsalId, isPersonal])
+  }, [rehearsalId, source])
 
   useEffect(() => {
-    ;(isPersonal ? getMyRehearsal(rehearsalId) : getRehearsal(rehearsalId))
+    source.api.detail(rehearsalId)
       .then((rehearsalData) => {
         setRehearsal(rehearsalData)
         onRehearsalDetailLoaded?.(rehearsalData)
@@ -120,7 +121,7 @@ export default function RehearsalDetailPage() {
       })
       .catch(() => onRehearsalDetailLoadError?.())
       .finally(() => setLoading(false))
-  }, [rehearsalId, onRehearsalDetailLoaded, onRehearsalDetailLoadError, isPersonal])
+  }, [rehearsalId, onRehearsalDetailLoaded, onRehearsalDetailLoadError, source])
 
   function handleChange(field: string, value: string | null) {
     if (!detailCanWrite) return

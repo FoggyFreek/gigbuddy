@@ -7,7 +7,7 @@ import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Typography from '@mui/material/Typography'
 import type { BillingInterval, SubscriptionPlan } from '../../api/billing.ts'
-import type { TenantKind } from '../../utils/businessRegistry.ts'
+import type { TenantKind } from '../../auth/tenantKinds.ts'
 import OnboardingPlanCard from './OnboardingPlanCard.tsx'
 import WorkspaceKindChoice from './WorkspaceKindChoice.tsx'
 

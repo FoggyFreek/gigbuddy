@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
+import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -162,6 +163,30 @@ function GigCard({ gig, active, onClick, showBand = false }: Readonly<GigCardPro
               </Box>
             )}
             <MemberAvatarStack members={gig.members_availability} />
+            {(gig.tags ?? []).some((tag) => tag.name) && (
+              <Box
+                data-testid={`gig-card-tags-${String(gig.id)}`}
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'row-reverse',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  minWidth: 0,
+                  ml: 'auto',
+                  pl: 1,
+                }}
+              >
+                {(gig.tags ?? []).filter((tag) => tag.name).map((tag) => (
+                  <Chip
+                    key={`${String(tag.id ?? 'tag')}-${tag.name}`}
+                    label={tag.name}
+                    size="small"
+                    variant="filled"
+                  />
+                ))}
+              </Box>
+            )}
           </Box>
         </Box>
       </Box>
@@ -215,22 +240,23 @@ function DesktopRow({ gig, active, onClick, showBand = false }: Readonly<GigCard
       <TableCell>
         <MemberAvatarStack members={gig.members_availability} />
       </TableCell>
-      <TableCell align="center">
-        {(gig.open_task_count ?? 0) > 0 && (
-          <Box
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              bgcolor: 'action.hover',
-            }}
-          >
-            {gig.open_task_count}
-          </Box>
-        )}
+      <TableCell>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+          {(gig.open_task_count ?? 0) > 0 && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, color: 'text.secondary' }}>
+              <ChecklistIcon fontSize="small" />
+              <Typography variant="caption">{gig.open_task_count}</Typography>
+            </Box>
+          )}
+          {(gig.tags ?? []).filter((tag) => tag.name).map((tag) => (
+            <Chip
+              key={`${String(tag.id ?? 'tag')}-${tag.name}`}
+              label={tag.name}
+              size="small"
+              variant="filled"
+            />
+          ))}
+        </Box>
       </TableCell>
     </TableRow>
   )
@@ -248,7 +274,7 @@ function DesktopHead({ showBand = false }: Readonly<{ showBand?: boolean }>) {
         <TableCell>{t($ => $.table.colTime)}</TableCell>
         {showBand && <TableCell>{t($ => $.table.colBand)}</TableCell>}
         <TableCell>{t($ => $.table.colAvailability)}</TableCell>
-        <TableCell align="center">{t($ => $.table.colOpenTasks)}</TableCell>
+        <TableCell />
       </TableRow>
     </TableHead>
   )

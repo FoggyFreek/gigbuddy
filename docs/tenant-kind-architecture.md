@@ -200,11 +200,16 @@ the caller: setting the caller's rehearsal vote and changing the done state of
 a task assigned to the caller. Resource creation and general editing use the
 ordinary active-tenant endpoints.
 
-In the SPA, `usePagedEventTabs` owns the choice between active-tenant and
-cross-tenant feeds for gigs, rehearsals, and band events. Hub rows carry a
-tenant label. Opening or editing a row from another tenant switches to that
-tenant before using its ordinary route. A labeled foreign row is not writable
-in the current tenant context.
+In the SPA, `usePlanningSource(aggregate)` owns the choice between active-tenant
+and cross-tenant reads for gigs, rehearsals, band events, and tasks. It returns
+the resolved fetchers plus the traits that follow from the source —
+`labelsTenant`, `canLoadRoster`, `canWriteOrdinaryEndpoint` — so pages read
+traits rather than comparing tenant kinds. `usePagedEventTabs` names an
+aggregate and pages whatever that resolves to. Hub rows carry a tenant label.
+Opening or editing a row from another tenant switches to that tenant before
+using its ordinary route. A labeled foreign row is not writable in the current
+tenant context; `useCrossTenantRow` (and its plain `isCrossTenantRow` form, for
+list rows) is the only place that decides so.
 
 ## Availability
 

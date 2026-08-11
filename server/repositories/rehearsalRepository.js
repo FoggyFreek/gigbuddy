@@ -2,10 +2,16 @@
 // transaction client) so callers control transactions.
 import { rehearsalScopeSql } from './memberEventScope.js'
 import { myBandSelect } from './myBandRepository.js'
+import { appendDateCursor } from './listCursorSql.js'
+
+const REHEARSAL_LIST_PROJECTION = `r.*, ${myBandSelect('r')}`
+const REHEARSAL_DATE_ASC_ORDER = 'r.proposed_date ASC, r.id ASC'
+const REHEARSAL_DATE_DESC_ORDER = 'r.proposed_date DESC, r.id DESC'
 
 export async function listRehearsals(executor, tenantId) {
   const { rows } = await executor.query(
-    `SELECT *, ${myBandSelect('rehearsals')} FROM rehearsals WHERE tenant_id = $1 ORDER BY proposed_date ASC, id ASC`,
+    `SELECT ${REHEARSAL_LIST_PROJECTION} FROM rehearsals r
+     WHERE r.tenant_id = $1 ORDER BY ${REHEARSAL_DATE_ASC_ORDER}`,
     [tenantId],
   )
   return rows
@@ -13,9 +19,9 @@ export async function listRehearsals(executor, tenantId) {
 
 export async function listNextPlannedRehearsal(executor, tenantId) {
   const { rows } = await executor.query(
-    `SELECT *, ${myBandSelect('rehearsals')} FROM rehearsals
-     WHERE tenant_id = $1 AND status = 'planned' AND proposed_date >= CURRENT_DATE
-     ORDER BY proposed_date ASC, id ASC
+    `SELECT ${REHEARSAL_LIST_PROJECTION} FROM rehearsals r
+     WHERE r.tenant_id = $1 AND r.status = 'planned' AND r.proposed_date >= CURRENT_DATE
+     ORDER BY ${REHEARSAL_DATE_ASC_ORDER}
      LIMIT 1`,
     [tenantId],
   )
@@ -24,9 +30,9 @@ export async function listNextPlannedRehearsal(executor, tenantId) {
 
 export async function listUpcomingRehearsals(executor, tenantId, today, limit) {
   const { rows } = await executor.query(
-    `SELECT *, ${myBandSelect('rehearsals')} FROM rehearsals
-     WHERE tenant_id = $1 AND proposed_date >= $2
-     ORDER BY proposed_date ASC, id ASC
+    `SELECT ${REHEARSAL_LIST_PROJECTION} FROM rehearsals r
+     WHERE r.tenant_id = $1 AND r.proposed_date >= $2
+     ORDER BY ${REHEARSAL_DATE_ASC_ORDER}
      LIMIT $3`,
     [tenantId, today, limit],
   )
@@ -35,16 +41,12 @@ export async function listUpcomingRehearsals(executor, tenantId, today, limit) {
 
 export async function listPastRehearsals(executor, tenantId, today, limit, cursor = null) {
   const params = [tenantId, today]
-  let cursorClause = ''
-  if (cursor) {
-    params.push(cursor.date, cursor.id)
-    cursorClause = `AND (proposed_date, id) < ($${params.length - 1}, $${params.length})`
-  }
+  const cursorClause = appendDateCursor(params, cursor, 'r.proposed_date', 'r.id')
   params.push(limit)
   const { rows } = await executor.query(
-    `SELECT *, ${myBandSelect('rehearsals')} FROM rehearsals
-     WHERE tenant_id = $1 AND proposed_date < $2 ${cursorClause}
-     ORDER BY proposed_date DESC, id DESC
+    `SELECT ${REHEARSAL_LIST_PROJECTION} FROM rehearsals r
+     WHERE r.tenant_id = $1 AND r.proposed_date < $2 ${cursorClause}
+     ORDER BY ${REHEARSAL_DATE_DESC_ORDER}
      LIMIT $${params.length}`,
     params,
   )
@@ -53,9 +55,9 @@ export async function listPastRehearsals(executor, tenantId, today, limit, curso
 
 export async function listRehearsalsInRange(executor, tenantId, from, to) {
   const { rows } = await executor.query(
-    `SELECT *, ${myBandSelect('rehearsals')} FROM rehearsals
-     WHERE tenant_id = $1 AND proposed_date BETWEEN $2 AND $3
-     ORDER BY proposed_date ASC, id ASC`,
+    `SELECT ${REHEARSAL_LIST_PROJECTION} FROM rehearsals r
+     WHERE r.tenant_id = $1 AND r.proposed_date BETWEEN $2 AND $3
+     ORDER BY ${REHEARSAL_DATE_ASC_ORDER}`,
     [tenantId, from, to],
   )
   return rows
@@ -66,10 +68,10 @@ export async function listRehearsalsInRange(executor, tenantId, from, to) {
 // the caller must also be linked to a participant row.
 export async function listRehearsalsInRangeForMemberTenants(executor, userId, tenantIds, from, to) {
   const { rows } = await executor.query(
-    `SELECT r.*, ${myBandSelect('r')} FROM rehearsals r
+    `SELECT ${REHEARSAL_LIST_PROJECTION} FROM rehearsals r
       WHERE r.tenant_id = ANY($2) AND r.proposed_date BETWEEN $3 AND $4
         AND ${rehearsalScopeSql('r', '$1')}
-      ORDER BY r.proposed_date ASC, r.id ASC`,
+      ORDER BY ${REHEARSAL_DATE_ASC_ORDER}`,
     [userId, tenantIds, from, to],
   )
   return rows
@@ -78,10 +80,10 @@ export async function listRehearsalsInRangeForMemberTenants(executor, userId, te
 // Mirrors listNextPlannedRehearsal across every band the caller plays in.
 export async function listNextPlannedRehearsalForMemberTenants(executor, userId, tenantIds) {
   const { rows } = await executor.query(
-    `SELECT r.*, ${myBandSelect('r')} FROM rehearsals r
+    `SELECT ${REHEARSAL_LIST_PROJECTION} FROM rehearsals r
       WHERE r.tenant_id = ANY($2) AND r.status = 'planned' AND r.proposed_date >= CURRENT_DATE
         AND ${rehearsalScopeSql('r', '$1')}
-      ORDER BY r.proposed_date ASC, r.id ASC
+      ORDER BY ${REHEARSAL_DATE_ASC_ORDER}
       LIMIT 1`,
     [userId, tenantIds],
   )
@@ -90,10 +92,10 @@ export async function listNextPlannedRehearsalForMemberTenants(executor, userId,
 
 export async function listUpcomingRehearsalsForMemberTenants(executor, userId, tenantIds, today, limit) {
   const { rows } = await executor.query(
-    `SELECT r.*, ${myBandSelect('r')} FROM rehearsals r
+    `SELECT ${REHEARSAL_LIST_PROJECTION} FROM rehearsals r
       WHERE r.tenant_id = ANY($2) AND r.proposed_date >= $3
         AND ${rehearsalScopeSql('r', '$1')}
-      ORDER BY r.proposed_date ASC, r.id ASC
+      ORDER BY ${REHEARSAL_DATE_ASC_ORDER}
       LIMIT $4`,
     [userId, tenantIds, today, limit],
   )
@@ -102,17 +104,13 @@ export async function listUpcomingRehearsalsForMemberTenants(executor, userId, t
 
 export async function listPastRehearsalsForMemberTenants(executor, userId, tenantIds, today, limit, cursor = null) {
   const params = [userId, tenantIds, today]
-  let cursorClause = ''
-  if (cursor) {
-    params.push(cursor.date, cursor.id)
-    cursorClause = `AND (r.proposed_date, r.id) < ($${params.length - 1}, $${params.length})`
-  }
+  const cursorClause = appendDateCursor(params, cursor, 'r.proposed_date', 'r.id')
   params.push(limit)
   const { rows } = await executor.query(
-    `SELECT r.*, ${myBandSelect('r')} FROM rehearsals r
+    `SELECT ${REHEARSAL_LIST_PROJECTION} FROM rehearsals r
       WHERE r.tenant_id = ANY($2) AND r.proposed_date < $3 ${cursorClause}
         AND ${rehearsalScopeSql('r', '$1')}
-      ORDER BY r.proposed_date DESC, r.id DESC
+      ORDER BY ${REHEARSAL_DATE_DESC_ORDER}
       LIMIT $${params.length}`,
     params,
   )

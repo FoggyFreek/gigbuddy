@@ -12,7 +12,7 @@ import { useImageCrop, JPEG_PNG_WEBP } from '../../hooks/useImageCrop.ts'
 import { compressLogo } from '../../utils/compressImage.ts'
 import ImageCropDialog from '../ImageCropDialog.tsx'
 import AccountingCountrySelect from '../shared/AccountingCountrySelect.tsx'
-import type { TenantKind } from '../../utils/businessRegistry.ts'
+import type { TenantKind } from '../../auth/tenantKinds.ts'
 
 interface BandStepProps {
   /** Which sort of tenant this flow is creating — selects the copy. */

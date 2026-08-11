@@ -172,16 +172,3 @@ export async function seedDefaultPlans(executor) {
     )
   }
 }
-
-// How migration 166 classifies a pre-split plan row, for code that must reason
-// about the catalog before the `audience` column exists.
-//
-// Not keyed on the slug: slugs here are admin-editable and have already drifted
-// from the seeded values (the artist tier is 'artistgold' in some databases,
-// since isValidSlug rejects the underscore in 'artist_gold'). Before the split,
-// "artist plan" meant exactly `limits.bands = 0` — a plan granting no bands of
-// your own is only usable from a personal workspace.
-export function legacyPlanAudience(plan) {
-  const bands = plan?.entitlements?.limits?.bands
-  return !plan?.is_fallback && bands === 0 ? PLAN_AUDIENCES.ARTIST : PLAN_AUDIENCES.BAND
-}

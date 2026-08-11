@@ -16,18 +16,24 @@ import FilterListIcon from '@mui/icons-material/FilterList'
 import RehearsalsTable from '../components/RehearsalsTable.tsx'
 import RehearsalFormModal from '../components/RehearsalFormModal.tsx'
 import SplitView from '../components/SplitView.tsx'
-import { listPastRehearsals, listUpcomingRehearsals, setVote } from '../api/rehearsals.ts'
-import { listMyPastRehearsals, listMyUpcomingRehearsals, setMyRehearsalVote } from '../api/me.ts'
+import { setVote } from '../api/rehearsals.ts'
+import { setMyRehearsalVote } from '../api/me.ts'
 import { rehearsalShareUrl } from '../utils/shareUtils.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { usePagedEventTabs } from '../hooks/usePagedEventTabs.ts'
+import { usePlanningSource } from '../hooks/usePlanningSource.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Rehearsal, Id } from '../types/entities.ts'
-import { useTenantKind } from '../hooks/useTenantKind.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
 
 const REHEARSAL_STATUSES = ['planned', 'option'] as const
 
-function applyVoteToRehearsals(rehearsals: Rehearsal[], rehearsalId: Id, memberId: Id, vote: string): Rehearsal[] {
+function applyVoteToRehearsals(
+  rehearsals: MaybeCrossTenant<Rehearsal>[],
+  rehearsalId: Id,
+  memberId: Id,
+  vote: string,
+): MaybeCrossTenant<Rehearsal>[] {
   return rehearsals.map((rehearsal) => {
     if (rehearsal.id !== rehearsalId) return rehearsal
     const participants = (rehearsal.participants ?? []).map((participant) =>
@@ -41,7 +47,7 @@ export default function RehearsalsPage() {
   const { t } = useTranslation(['rehearsals', 'common'])
   const { user } = useAuth()
   const { canWritePlanning } = usePermissions()
-  const { isPersonal } = useTenantKind()
+  const rehearsalSource = usePlanningSource('rehearsals')
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
@@ -56,11 +62,8 @@ export default function RehearsalsPage() {
     items: rehearsals, setItems: setRehearsals,
     loading, loadingMore, hasMore, error,
     reload, loadMore, onDetailLoaded, onDetailLoadError,
-  } = usePagedEventTabs<Rehearsal>({
-    upcoming: listUpcomingRehearsals,
-    past: listPastRehearsals,
-    upcomingMine: listMyUpcomingRehearsals,
-    pastMine: listMyPastRehearsals,
+  } = usePagedEventTabs({
+    aggregate: 'rehearsals',
     dateOf: (rehearsal) => rehearsal.proposed_date,
     deferInitialLoad: selectedIdParam != null,
   })
@@ -72,8 +75,10 @@ export default function RehearsalsPage() {
 
   async function handleVote(rehearsalId: Id | undefined, memberId: Id | undefined, vote: string | null) {
     if (rehearsalId === undefined || memberId === undefined || vote === null) return
-    if (isPersonal) await setMyRehearsalVote(rehearsalId, vote)
-    else await setVote(rehearsalId, memberId, vote)
+    // Hub rows aren't reachable through the tenant-scoped vote endpoint; voting
+    // on your own attendance is the one write /api/me offers instead.
+    if (rehearsalSource.canWriteOrdinaryEndpoint) await setVote(rehearsalId, memberId, vote)
+    else await setMyRehearsalVote(rehearsalId, vote)
     setRehearsals((previous) => applyVoteToRehearsals(previous, rehearsalId, memberId, vote))
   }
 
@@ -163,7 +168,7 @@ export default function RehearsalsPage() {
         hasMore={hasMore}
         loadingMore={loadingMore}
         onLoadMore={loadMore}
-        showBand={isPersonal}
+        showBand={rehearsalSource.labelsTenant}
       />
 
       {modal && <RehearsalFormModal mode="create" onClose={handleClose} />}

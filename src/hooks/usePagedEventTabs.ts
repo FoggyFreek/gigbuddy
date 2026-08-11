@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { useTenantKind } from './useTenantKind.ts'
+import { usePlanningSource, type PlanningEventAggregate, type PlanningRows } from './usePlanningSource.ts'
 import { isPastDate, localDateString } from '../utils/dateFormat.ts'
 import type { ListCollectionCursor } from '../types/api.ts'
 
@@ -9,23 +9,11 @@ const TAB_PAGE_SIZE = 100
 
 export type EventTab = 'upcoming' | 'past'
 
-type UpcomingFetcher<T> = (limit: number, today: string) => Promise<{ items: T[] }>
-
-type PastFetcher<T> = (
-  limit: number,
-  today: string,
-  cursor?: ListCollectionCursor,
-) => Promise<{ items: T[]; meta: { nextCursor: ListCollectionCursor | null } }>
-
-export interface PagedEventTabsOptions<T> {
-  /** Active-tenant feeds. */
-  upcoming: UpcomingFetcher<T>
-  past: PastFetcher<T>
-  /** Cross-tenant (`/api/me/*`) feeds, used when the workspace is personal. */
-  upcomingMine: UpcomingFetcher<T>
-  pastMine: PastFetcher<T>
+export interface PagedEventTabsOptions<K extends PlanningEventAggregate> {
+  /** Which planning aggregate's feeds to page; the source comes from usePlanningSource. */
+  aggregate: K
   /** The row's date, which decides its tab when a deep link is resolved. */
-  dateOf: (item: T) => string | Date | null | undefined
+  dateOf: (item: PlanningRows[K]) => string | Date | null | undefined
   /** The page mounted on a deep link, so the row's tab isn't known yet. Read once. */
   deferInitialLoad?: boolean
   pageSize?: number
@@ -51,16 +39,22 @@ export interface PagedEventTabsApi<T> {
 }
 
 // The Upcoming/Past tab pair behind the gigs, rehearsals and band-events lists:
-// bounded first page, keyset "load more" on Past, and the active-tenant vs
-// cross-tenant feed split that a personal workspace needs. Owning the split
-// here is the point — a new feed can't quietly ship without it.
+// bounded first page and keyset "load more" on Past. Naming an aggregate rather
+// than fetchers is the point — the feeds come from usePlanningSource, so a new
+// list can't quietly ship reading the wrong surface.
 //
 // A deep-linked row (/gigs/:id landed on directly) has an unknown date, and so
 // an unknown tab. With `deferInitialLoad` the first fetch waits for
 // `onDetailLoaded`, so a past-row link doesn't fire a throwaway upcoming
 // request; `onDetailLoadError` releases it if that row never arrives.
-export function usePagedEventTabs<T>(options: PagedEventTabsOptions<T>): PagedEventTabsApi<T> {
-  const { isPersonal } = useTenantKind()
+export function usePagedEventTabs<K extends PlanningEventAggregate>(
+  options: PagedEventTabsOptions<K>,
+): PagedEventTabsApi<PlanningRows[K]> {
+  // PlanningApis is written in terms of PlanningRows, so an aggregate's feeds
+  // do return its row type — TypeScript just can't follow that correspondence
+  // through a generic key, hence the casts on the fetched pages below.
+  type Row = PlanningRows[K]
+  const { api } = usePlanningSource(options.aggregate)
   const pageSize = options.pageSize ?? TAB_PAGE_SIZE
 
   // Callers pass a fresh options literal every render; read them through a ref
@@ -77,7 +71,7 @@ export function usePagedEventTabs<T>(options: PagedEventTabsOptions<T>): PagedEv
   useEffect(() => {
     activeTabRef.current = activeTab
   }, [activeTab])
-  const [items, setItems] = useState<T[]>([])
+  const [items, setItems] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [pastCursor, setPastCursor] = useState<ListCollectionCursor | null>(null)
@@ -91,21 +85,20 @@ export function usePagedEventTabs<T>(options: PagedEventTabsOptions<T>): PagedEv
 
   const loadTab = useCallback(async (tab: EventTab) => {
     const requestId = ++requestIdRef.current
-    const { upcoming, past, upcomingMine, pastMine } = optionsRef.current
     try {
       setLoading(true)
       setError(null)
       const today = localDateString()
       if (tab === 'upcoming') {
-        const result = await (isPersonal ? upcomingMine : upcoming)(pageSize, today)
+        const result = await api.upcoming(pageSize, today)
         if (requestIdRef.current !== requestId) return
-        setItems(result.items)
+        setItems(result.items as Row[])
         setPastCursor(null)
         setHasMore(false)
       } else {
-        const result = await (isPersonal ? pastMine : past)(pageSize, today)
+        const result = await api.past(pageSize, today)
         if (requestIdRef.current !== requestId) return
-        setItems(result.items)
+        setItems(result.items as Row[])
         setPastCursor(result.meta.nextCursor)
         setHasMore(result.meta.nextCursor !== null)
       }
@@ -114,7 +107,7 @@ export function usePagedEventTabs<T>(options: PagedEventTabsOptions<T>): PagedEv
     } finally {
       if (requestIdRef.current === requestId) setLoading(false)
     }
-  }, [isPersonal, pageSize])
+  }, [api, pageSize])
 
   useEffect(() => {
     if (deferInitialLoadRef.current) return
@@ -128,12 +121,11 @@ export function usePagedEventTabs<T>(options: PagedEventTabsOptions<T>): PagedEv
   const loadMore = useCallback(async () => {
     if (!pastCursor || loadingMore) return
     const requestId = requestIdRef.current
-    const { past, pastMine } = optionsRef.current
     try {
       setLoadingMore(true)
-      const result = await (isPersonal ? pastMine : past)(pageSize, localDateString(), pastCursor)
+      const result = await api.past(pageSize, localDateString(), pastCursor)
       if (requestIdRef.current !== requestId || activeTabRef.current !== 'past') return
-      setItems((previous) => [...previous, ...result.items])
+      setItems((previous) => [...previous, ...(result.items as Row[])])
       setPastCursor(result.meta.nextCursor)
       setHasMore(result.meta.nextCursor !== null)
     } catch (e: unknown) {
@@ -141,9 +133,9 @@ export function usePagedEventTabs<T>(options: PagedEventTabsOptions<T>): PagedEv
     } finally {
       setLoadingMore(false)
     }
-  }, [isPersonal, pageSize, pastCursor, loadingMore])
+  }, [api, pageSize, pastCursor, loadingMore])
 
-  const onDetailLoaded = useCallback((item: T) => {
+  const onDetailLoaded = useCallback((item: Row) => {
     const wasDeferred = deferInitialLoadRef.current
     deferInitialLoadRef.current = false
     const tab: EventTab = isPastDate(optionsRef.current.dateOf(item)) ? 'past' : 'upcoming'

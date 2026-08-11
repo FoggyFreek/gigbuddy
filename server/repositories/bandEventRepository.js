@@ -3,10 +3,16 @@
 // tenant_id.
 import { bandEventScopeSql } from './memberEventScope.js'
 import { myBandSelect } from './myBandRepository.js'
+import { appendDateCursor } from './listCursorSql.js'
+
+const BAND_EVENT_LIST_PROJECTION = `e.*, ${myBandSelect('e')}`
+const BAND_EVENT_START_ASC_ORDER = 'e.start_date ASC, e.id ASC'
+const BAND_EVENT_END_DESC_ORDER = 'e.end_date DESC, e.id DESC'
 
 export async function listBandEvents(executor, tenantId) {
   const { rows } = await executor.query(
-    `SELECT *, ${myBandSelect('band_events')} FROM band_events WHERE tenant_id = $1 ORDER BY start_date ASC, id ASC`,
+    `SELECT ${BAND_EVENT_LIST_PROJECTION} FROM band_events e
+     WHERE e.tenant_id = $1 ORDER BY ${BAND_EVENT_START_ASC_ORDER}`,
     [tenantId],
   )
   return rows
@@ -14,9 +20,9 @@ export async function listBandEvents(executor, tenantId) {
 
 export async function listUpcomingBandEvents(executor, tenantId, today, limit) {
   const { rows } = await executor.query(
-    `SELECT *, ${myBandSelect('band_events')} FROM band_events
-     WHERE tenant_id = $1 AND end_date >= $2
-     ORDER BY start_date ASC, id ASC
+    `SELECT ${BAND_EVENT_LIST_PROJECTION} FROM band_events e
+     WHERE e.tenant_id = $1 AND e.end_date >= $2
+     ORDER BY ${BAND_EVENT_START_ASC_ORDER}
      LIMIT $3`,
     [tenantId, today, limit],
   )
@@ -25,16 +31,12 @@ export async function listUpcomingBandEvents(executor, tenantId, today, limit) {
 
 export async function listPastBandEvents(executor, tenantId, today, limit, cursor = null) {
   const params = [tenantId, today]
-  let cursorClause = ''
-  if (cursor) {
-    params.push(cursor.date, cursor.id)
-    cursorClause = `AND (end_date, id) < ($${params.length - 1}, $${params.length})`
-  }
+  const cursorClause = appendDateCursor(params, cursor, 'e.end_date', 'e.id')
   params.push(limit)
   const { rows } = await executor.query(
-    `SELECT *, ${myBandSelect('band_events')} FROM band_events
-     WHERE tenant_id = $1 AND end_date < $2 ${cursorClause}
-     ORDER BY end_date DESC, id DESC
+    `SELECT ${BAND_EVENT_LIST_PROJECTION} FROM band_events e
+     WHERE e.tenant_id = $1 AND e.end_date < $2 ${cursorClause}
+     ORDER BY ${BAND_EVENT_END_DESC_ORDER}
      LIMIT $${params.length}`,
     params,
   )
@@ -43,9 +45,9 @@ export async function listPastBandEvents(executor, tenantId, today, limit, curso
 
 export async function listBandEventsInRange(executor, tenantId, from, to) {
   const { rows } = await executor.query(
-    `SELECT *, ${myBandSelect('band_events')} FROM band_events
-     WHERE tenant_id = $1 AND start_date <= $3 AND end_date >= $2
-     ORDER BY start_date ASC, id ASC`,
+    `SELECT ${BAND_EVENT_LIST_PROJECTION} FROM band_events e
+     WHERE e.tenant_id = $1 AND e.start_date <= $3 AND e.end_date >= $2
+     ORDER BY ${BAND_EVENT_START_ASC_ORDER}`,
     [tenantId, from, to],
   )
   return rows
@@ -57,10 +59,10 @@ export async function listBandEventsInRange(executor, tenantId, from, to) {
 // a participant linked to the caller.
 export async function listBandEventsInRangeForMemberTenants(executor, userId, tenantIds, from, to) {
   const { rows } = await executor.query(
-    `SELECT e.*, ${myBandSelect('e')} FROM band_events e
+    `SELECT ${BAND_EVENT_LIST_PROJECTION} FROM band_events e
       WHERE e.tenant_id = ANY($2) AND e.start_date <= $4 AND e.end_date >= $3
         AND ${bandEventScopeSql('e', '$1')}
-      ORDER BY e.start_date ASC, e.id ASC`,
+      ORDER BY ${BAND_EVENT_START_ASC_ORDER}`,
     [userId, tenantIds, from, to],
   )
   return rows
@@ -69,10 +71,10 @@ export async function listBandEventsInRangeForMemberTenants(executor, userId, te
 // Mirrors listUpcomingBandEvents across every band the caller plays in.
 export async function listUpcomingBandEventsForMemberTenants(executor, userId, tenantIds, today, limit) {
   const { rows } = await executor.query(
-    `SELECT e.*, ${myBandSelect('e')} FROM band_events e
+    `SELECT ${BAND_EVENT_LIST_PROJECTION} FROM band_events e
       WHERE e.tenant_id = ANY($2) AND e.end_date >= $3
         AND ${bandEventScopeSql('e', '$1')}
-      ORDER BY e.start_date ASC, e.id ASC
+      ORDER BY ${BAND_EVENT_START_ASC_ORDER}
       LIMIT $4`,
     [userId, tenantIds, today, limit],
   )
@@ -81,17 +83,13 @@ export async function listUpcomingBandEventsForMemberTenants(executor, userId, t
 
 export async function listPastBandEventsForMemberTenants(executor, userId, tenantIds, today, limit, cursor = null) {
   const params = [userId, tenantIds, today]
-  let cursorClause = ''
-  if (cursor) {
-    params.push(cursor.date, cursor.id)
-    cursorClause = `AND (e.end_date, e.id) < ($${params.length - 1}, $${params.length})`
-  }
+  const cursorClause = appendDateCursor(params, cursor, 'e.end_date', 'e.id')
   params.push(limit)
   const { rows } = await executor.query(
-    `SELECT e.*, ${myBandSelect('e')} FROM band_events e
+    `SELECT ${BAND_EVENT_LIST_PROJECTION} FROM band_events e
       WHERE e.tenant_id = ANY($2) AND e.end_date < $3 ${cursorClause}
         AND ${bandEventScopeSql('e', '$1')}
-      ORDER BY e.end_date DESC, e.id DESC
+      ORDER BY ${BAND_EVENT_END_DESC_ORDER}
       LIMIT $${params.length}`,
     params,
   )

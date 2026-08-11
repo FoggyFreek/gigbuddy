@@ -10,13 +10,13 @@ let seed
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
   const appMod = await import('./_app.js')
-  const meMod = await import('../../../server/services/meService.js')
+  const meGigMod = await import('../../../server/services/meGigService.js')
   const scopeMod = await import('../../../server/domain/memberTenants.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
-  listMyUpcomingGigs = meMod.listMyUpcomingGigs
+  listMyUpcomingGigs = meGigMod.listMyUpcomingGigs
   memberTenantScope = scopeMod.memberTenantScope
   app = appMod.createTestApp()
   await runMigrations()

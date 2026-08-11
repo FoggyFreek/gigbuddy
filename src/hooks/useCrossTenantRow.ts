@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useAuth } from '../contexts/authContext.ts'
 import { usePermissions } from './usePermissions.ts'
 import type { CrossTenantRef } from '../types/api.ts'
+import type { Id } from '../types/entities.ts'
 
 export interface CrossTenantRowApi {
   /** The row belongs to one of the viewer's other bands, not the active tenant. */
@@ -13,6 +14,17 @@ export interface CrossTenantRowApi {
 export interface CrossTenantRowOptions {
   /** Capability to intersect with; defaults to `planning.write`. */
   canWrite?: boolean
+}
+
+// The calculation itself, for the rows of a list — where a hook can't be called
+// per row. `useCrossTenantRow` is the hook form and the only other caller, so
+// "which band does this row belong to" is answered in exactly one place.
+export function isCrossTenantRow(
+  row: Partial<CrossTenantRef> | null | undefined,
+  activeTenantId: Id | null | undefined,
+): boolean {
+  const rowTenantId = row?.tenantId ?? null
+  return rowTenantId !== null && rowTenantId !== (activeTenantId ?? null)
 }
 
 // Read-only-for-foreign-rows, in one place.
@@ -42,12 +54,13 @@ export function useCrossTenantRow(
   const { canWritePlanning } = usePermissions()
 
   const rowResolved = row != null
-  const rowTenantId = row?.tenantId ?? null
-  const activeTenantId = user?.activeTenantId ?? null
   const baseCanWrite = options.canWrite ?? canWritePlanning
+  const isCrossBand = isCrossTenantRow(row, user?.activeTenantId)
 
-  return useMemo(() => {
-    const isCrossBand = rowTenantId !== null && rowTenantId !== activeTenantId
-    return { isCrossBand, canWrite: rowResolved && baseCanWrite && !isCrossBand }
-  }, [rowResolved, rowTenantId, activeTenantId, baseCanWrite])
+  // Memoized on the derived booleans, not on the row's identity, so a caller
+  // passing a fresh object every render still gets a stable result.
+  return useMemo(
+    () => ({ isCrossBand, canWrite: rowResolved && baseCanWrite && !isCrossBand }),
+    [isCrossBand, rowResolved, baseCanWrite],
+  )
 }

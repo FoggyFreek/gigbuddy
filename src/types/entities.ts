@@ -10,7 +10,7 @@
 import type { PurchaseImportWarningCode } from '../utils/purchaseImportWarnings.ts'
 import type { BandMemberRole } from '../utils/bandMemberRoles.ts'
 import type { GigEquipmentItemKey, GigEquipmentProvider } from '../utils/gigEquipment.ts'
-import type { TenantKind } from '../utils/businessRegistry.ts'
+import type { TenantKind } from '../auth/tenantKinds.ts'
 import type { JoinPolicy } from '../utils/membership.ts'
 
 export type Id = number | string

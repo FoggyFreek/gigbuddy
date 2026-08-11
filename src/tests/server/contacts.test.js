@@ -109,15 +109,8 @@ describe('GET /api/contacts - category filters', () => {
   })
 })
 
-// 'ensemble' was a category of its own until the concept was removed. It is now
-// an ordinary unknown value, and each entry point treats it as one.
-describe("contact category 'ensemble' — removed", () => {
-  it('rejects it as a category filter', async () => {
-    await asUserA(request(app).get('/api/contacts?category=ensemble')).expect(400)
-    await asUserA(request(app).get('/api/contacts?excludeCategory=ensemble')).expect(400)
-  })
-
-  it('rejects it on PATCH', async () => {
+describe('invalid contact categories', () => {
+  it('rejects an invalid category on PATCH', async () => {
     const { rows: [contact] } = await pool.query(
       `INSERT INTO contacts (tenant_id, name, category)
        VALUES ($1, 'Side Project', 'network') RETURNING id`,
@@ -125,7 +118,7 @@ describe("contact category 'ensemble' — removed", () => {
     )
 
     const res = await asUserA(request(app).patch(`/api/contacts/${contact.id}`)
-      .send({ category: 'ensemble' })).expect(400)
+      .send({ category: 'invalid' })).expect(400)
     expect(res.body.error).toBe('Invalid category value')
 
     const { rows: [stored] } = await pool.query(
@@ -134,11 +127,9 @@ describe("contact category 'ensemble' — removed", () => {
     expect(stored.category).toBe('network')
   })
 
-  // POST falls back to 'press' for any unrecognized category rather than
-  // erroring — the DB CHECK would refuse 'ensemble' outright.
   it('falls back to press on POST', async () => {
     const res = await asUserA(request(app).post('/api/contacts')
-      .send({ name: 'Side Project', category: 'ensemble' })).expect(201)
+      .send({ name: 'Side Project', category: 'invalid' })).expect(201)
     expect(res.body.category).toBe('press')
   })
 })

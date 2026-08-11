@@ -5,6 +5,13 @@
 // All open/done tasks across the tenant, enriched with gig + assignee context for
 // the cross-gig task list. LEFT JOIN to gigs so gig-less tasks still appear (their
 // event_description/event_date come back null).
+const TASK_LIST_PROJECTION = `t.id, t.gig_id, t.title, t.done, t.due_date, t.created_at,
+  (COUNT(*) OVER ())::int AS collection_total,
+  g.event_description, g.event_date,
+  t.assigned_to,
+  bm.name AS assigned_to_name`
+const TASK_LIST_ORDER = 't.done ASC, t.due_date ASC NULLS LAST, t.created_at ASC, t.id ASC'
+
 export async function listTasks(executor, tenantId, { done, assigneeId, limit }) {
   const values = [tenantId]
   const predicates = ['t.tenant_id = $1']
@@ -22,16 +29,12 @@ export async function listTasks(executor, tenantId, { done, assigneeId, limit })
   const limitPlaceholder = `$${values.length}`
 
   const { rows } = await executor.query(
-    `SELECT t.id, t.gig_id, t.title, t.done, t.due_date, t.created_at,
-            (COUNT(*) OVER ())::int AS collection_total,
-            g.event_description, g.event_date,
-            t.assigned_to,
-            bm.name AS assigned_to_name
+    `SELECT ${TASK_LIST_PROJECTION}
      FROM gig_tasks t
      LEFT JOIN gigs g ON g.id = t.gig_id AND g.tenant_id = t.tenant_id
      LEFT JOIN band_members bm ON bm.id = t.assigned_to AND bm.tenant_id = t.tenant_id
      WHERE ${predicates.join(' AND ')}
-     ORDER BY t.done ASC, t.due_date ASC NULLS LAST, t.created_at ASC, t.id ASC
+     ORDER BY ${TASK_LIST_ORDER}
      LIMIT ${limitPlaceholder}`,
     values,
   )
@@ -52,17 +55,13 @@ export async function listTasksAssignedToUserForMemberTenants(executor, userId, 
 
   values.push(limit)
   const { rows } = await executor.query(
-    `SELECT t.id, t.tenant_id, t.gig_id, t.title, t.done, t.due_date, t.created_at,
-            (COUNT(*) OVER ())::int AS collection_total,
-            g.event_description, g.event_date,
-            t.assigned_to,
-            bm.name AS assigned_to_name
+    `SELECT t.tenant_id, ${TASK_LIST_PROJECTION}
      FROM gig_tasks t
      JOIN tenants source_tenant ON source_tenant.id = t.tenant_id
      LEFT JOIN band_members bm ON bm.id = t.assigned_to AND bm.tenant_id = t.tenant_id
      LEFT JOIN gigs g ON g.id = t.gig_id AND g.tenant_id = t.tenant_id
      WHERE ${predicates.join(' AND ')}
-     ORDER BY t.done ASC, t.due_date ASC NULLS LAST, t.created_at ASC, t.id ASC
+     ORDER BY ${TASK_LIST_ORDER}
      LIMIT $${values.length}`,
     values,
   )

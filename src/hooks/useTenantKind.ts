@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useAuth } from '../contexts/authContext.ts'
-import { DEFAULT_TENANT_KIND, type TenantKind } from '../utils/businessRegistry.ts'
+import { DEFAULT_TENANT_KIND, type TenantKind } from '../auth/tenantKinds.ts'
 import { tenantKindSupports, type TenantCapability } from '../auth/tenantCapabilities.ts'
 
 export interface TenantKindApi {

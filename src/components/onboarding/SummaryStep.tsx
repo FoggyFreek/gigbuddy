@@ -6,7 +6,7 @@ import type { BillingInterval, SubscriptionPlan } from '../../api/billing.ts'
 import { priceForInterval } from '../../api/billing.ts'
 import { formatEur } from '../../utils/invoiceTotals.ts'
 import { slugFromBandName } from '../../utils/slugify.ts'
-import type { TenantKind } from '../../utils/businessRegistry.ts'
+import type { TenantKind } from '../../auth/tenantKinds.ts'
 
 interface SummaryStepProps {
   /** Which sort of tenant this flow is creating — selects the copy. */

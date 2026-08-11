@@ -20,14 +20,15 @@ import TourExportDialog from '../components/TourExportDialog.tsx'
 import BannerMosaicDialog from '../components/BannerMosaicDialog.tsx'
 import BandsintownImportDialog from '../components/BandsintownImportDialog.tsx'
 import BandsintownApiImportDialog from '../components/BandsintownApiImportDialog.tsx'
-import { listGigs, listPastGigs, listUpcomingGigs, searchGigs } from '../api/gigs.ts'
-import { listMyPastGigs, listMyUpcomingGigs, searchMyGigs } from '../api/me.ts'
+import { listGigs } from '../api/gigs.ts'
 import { getProfile } from '../api/profile.ts'
 import { usePagedEventTabs } from '../hooks/usePagedEventTabs.ts'
+import { usePlanningSource } from '../hooks/usePlanningSource.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { downloadBandsintownCsv } from '../utils/bandsintownExport.ts'
 import { ALL_STATUSES } from '../utils/gigStatus.ts'
 import type { Gig } from '../types/entities.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
 import { useProfile } from '../contexts/profileContext.ts'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
 import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
@@ -38,7 +39,8 @@ export default function GigsPage() {
   const { t } = useTranslation(['gigs', 'common'])
   const { canWritePlanning } = usePermissions()
   const { isIntegrationConfigured } = useProfile()
-  const { isPersonal, supports } = useTenantKind()
+  const { supports } = useTenantKind()
+  const gigSource = usePlanningSource('gigs')
   const hasBandShare = supports(TENANT_CAPABILITIES.BAND_SHARE)
   const bandsintownConfigured = isIntegrationConfigured('bandsintown')
   const navigate = useNavigate()
@@ -60,11 +62,8 @@ export default function GigsPage() {
     error, setError,
     reload: reloadTab, loadMore: handleLoadMorePast,
     onDetailLoaded, onDetailLoadError,
-  } = usePagedEventTabs<Gig>({
-    upcoming: listUpcomingGigs,
-    past: listPastGigs,
-    upcomingMine: listMyUpcomingGigs,
-    pastMine: listMyPastGigs,
+  } = usePagedEventTabs({
+    aggregate: 'gigs',
     dateOf: (gig) => gig.event_date,
     // A gig deep-linked at /gigs/:id has an unknown date, so its tab is resolved
     // from the detail pane's own fetch rather than guessed as 'upcoming'.
@@ -72,9 +71,9 @@ export default function GigsPage() {
   })
 
   const [search, setSearch] = useState('')
-  const [searchResults, setSearchResults] = useState<Gig[]>([])
+  const [searchResults, setSearchResults] = useState<MaybeCrossTenant<Gig>[]>([])
   const isSearching = search.trim().length >= SEARCH_MIN_CHARS
-  const searchKey = isSearching ? `${isPersonal}|${search.trim()}` : null
+  const searchKey = isSearching ? `${gigSource.kind}|${search.trim()}` : null
   const [loadedSearchKey, setLoadedSearchKey] = useState<string | null>(null)
   const searchLoading = searchKey !== null && loadedSearchKey !== searchKey
 
@@ -117,12 +116,12 @@ export default function GigsPage() {
     // further debouncing is needed here.
     if (searchKey === null) return
     let cancelled = false
-    ;(isPersonal ? searchMyGigs(search.trim()) : searchGigs(search.trim()))
+    gigSource.api.search(search.trim())
       .then((rows) => { if (!cancelled) setSearchResults(rows) })
       .catch(() => { if (!cancelled) setSearchResults([]) })
       .finally(() => { if (!cancelled) setLoadedSearchKey(searchKey) })
     return () => { cancelled = true }
-  }, [search, searchKey, isPersonal])
+  }, [search, searchKey, gigSource])
 
   useEffect(() => {
     if (!bandsintownConfigured) return
@@ -140,14 +139,14 @@ export default function GigsPage() {
   }
 
   const handleGigUpdate = useCallback((gigId: number, patch: Partial<Gig>) => {
-    const apply = (list: Gig[]) => list.map((g) => (g.id === gigId ? { ...g, ...patch } : g))
+    const apply = (list: MaybeCrossTenant<Gig>[]) => list.map((g) => (g.id === gigId ? { ...g, ...patch } : g))
     setAllGigs(apply)
     setTabGigs(apply)
     setSearchResults(apply)
   }, [setTabGigs])
 
   const handleGigDelete = useCallback((gigId: number) => {
-    const apply = (list: Gig[]) => list.filter((g) => g.id !== gigId)
+    const apply = (list: MaybeCrossTenant<Gig>[]) => list.filter((g) => g.id !== gigId)
     setAllGigs(apply)
     setTabGigs(apply)
     setSearchResults(apply)
@@ -320,7 +319,7 @@ export default function GigsPage() {
         hasMore={pastHasMore}
         loadingMore={loadingMore}
         onLoadMore={handleLoadMorePast}
-        showBand={isPersonal}
+        showBand={gigSource.labelsTenant}
       />
 
       {modal && (

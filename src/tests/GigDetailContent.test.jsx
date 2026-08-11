@@ -66,6 +66,12 @@ vi.mock('../api/me.ts', () => ({
   setMyTaskDone: vi.fn(),
 }))
 
+// The blurred header banner behind the gig is the active tenant's own.
+vi.mock('../api/profile.ts', async (importOriginal) => ({
+  ...(await importOriginal()),
+  getBannerPath: vi.fn().mockResolvedValue('tenants/1/banner/own.jpg'),
+}))
+
 vi.mock('../api/invoices.ts', () => ({
   listInvoicesByGig: vi.fn().mockResolvedValue([]),
   draftFromGig: vi.fn(),
@@ -103,7 +109,7 @@ vi.mock('../components/map/GigLocationMap.tsx', () => ({
   ),
 }))
 
-import { getGig, getGigMerchSummary, setGigTags, setGigVote, updateGig, updateTask } from '../api/gigs.ts'
+import { getGig, getGigMerchSummary, listGigContacts, setGigTags, setGigVote, updateGig, updateTask } from '../api/gigs.ts'
 import { createInvoice, draftFromGig, listInvoicesByGig } from '../api/invoices.ts'
 import { evaluateEventAvailability, getAvailabilityOn } from '../api/availability.ts'
 import { listMembers } from '../api/bandMembers.ts'
@@ -1021,10 +1027,12 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
   })
 })
 
-// source="me" reads through the cross-tenant hub instead of the active tenant.
-// A gig owned by another band is read-only and loses the Terms and Participants
-// tabs; a gig owned by the personal workspace itself behaves like any other.
-describe('GigDetailContent — personal workspace (source="me")', () => {
+// A personal workspace reads through the cross-tenant hub instead of the active
+// tenant — usePlanningSource decides that from the tenant kind on /auth/me, so
+// the component takes no source prop. A gig owned by another band is read-only
+// and loses the Terms and Participants tabs; a gig owned by the personal
+// workspace itself behaves like any other.
+describe('GigDetailContent — personal workspace', () => {
   const ARTIST_USER = {
     id: 9,
     activeTenantId: 1,
@@ -1061,8 +1069,8 @@ describe('GigDetailContent — personal workspace (source="me")', () => {
 
   const OWN_GIG = { ...CROSS_BAND_GIG, tenantId: 1, tenantName: 'Solo', viewerBandMemberId: null }
 
-  function wrapAsArtist(ui) {
-    return render(
+  function asArtist(ui) {
+    return (
       <MemoryRouter>
         <AuthContext.Provider
           value={{
@@ -1081,6 +1089,8 @@ describe('GigDetailContent — personal workspace (source="me")', () => {
     )
   }
 
+  const wrapAsArtist = (ui) => render(asArtist(ui))
+
   beforeEach(() => {
     vi.clearAllMocks()
     getMyGig.mockResolvedValue(CROSS_BAND_GIG)
@@ -1091,8 +1101,30 @@ describe('GigDetailContent — personal workspace (source="me")', () => {
     getAvailabilityOn.mockResolvedValue({ bandWide: null, members: [] })
   })
 
+  // The split view swaps the gig id under a mounted detail pane. Until the new
+  // gig arrives nothing is known about who owns it, so no tenant-scoped
+  // sub-resource may be fetched for it — the previous gig's ownership says
+  // nothing about this one, and in a personal workspace every such read 404s.
+  it('fetches no sub-resources for a gig id whose owner is not known yet', async () => {
+    getMyGig.mockResolvedValue(OWN_GIG)
+    const view = wrapAsArtist(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    listGigContacts.mockClear()
+    getGigMerchSummary.mockClear()
+    listInvoicesByGig.mockClear()
+    getMyGig.mockResolvedValue({ ...CROSS_BAND_GIG, id: 2 })
+
+    view.rerender(asArtist(<GigDetailContent gigId={2} />))
+    await act(async () => {})
+
+    for (const fetcher of [listGigContacts, getGigMerchSummary, listInvoicesByGig]) {
+      expect(fetcher.mock.calls.map(([id]) => id)).not.toContain(2)
+    }
+  })
+
   it("shows only Event and Tasks for another band's gig", async () => {
-    wrapAsArtist(<GigDetailContent gigId={1} source="me" />)
+    wrapAsArtist(<GigDetailContent gigId={1} />)
     await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
 
     expect(screen.getByRole('button', { name: 'Event' })).toBeInTheDocument()
@@ -1110,7 +1142,7 @@ describe('GigDetailContent — personal workspace (source="me")', () => {
   })
 
   it('gives the event-banner slot to the source band', async () => {
-    wrapAsArtist(<GigDetailContent gigId={1} source="me" />)
+    wrapAsArtist(<GigDetailContent gigId={1} />)
     await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
 
     // The gig banner is stripped cross-tenant, so the source band stands in for
@@ -1121,8 +1153,17 @@ describe('GigDetailContent — personal workspace (source="me")', () => {
     expect(screen.queryByRole('button', { name: /add event banner/i })).not.toBeInTheDocument()
   })
 
+  // The header banner is the viewer's own artist profile, so it frames every
+  // gig they open from here — their own and the ones they play in other bands.
+  it("keeps the artist's own header banner behind another band's gig", async () => {
+    wrapAsArtist(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    expect(screen.getByTestId('band-banner')).toBeInTheDocument()
+  })
+
   it('reads through /api/me and never calls a tenant-scoped endpoint', async () => {
-    wrapAsArtist(<GigDetailContent gigId={1} source="me" />)
+    wrapAsArtist(<GigDetailContent gigId={1} />)
     await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
 
     expect(getMyGig.mock.calls[0][0]).toBe(1)
@@ -1135,7 +1176,7 @@ describe('GigDetailContent — personal workspace (source="me")', () => {
 
   it('renders the event fields read-only and saves nothing', async () => {
     const user = userEvent.setup()
-    wrapAsArtist(<GigDetailContent gigId={1} source="me" />)
+    wrapAsArtist(<GigDetailContent gigId={1} />)
     await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
 
     expect(screen.getByLabelText(/event description/i)).toHaveAttribute('readonly')
@@ -1146,7 +1187,7 @@ describe('GigDetailContent — personal workspace (source="me")', () => {
   })
 
   it('lists attachments as plain text and drops the open-venue shortcut', async () => {
-    wrapAsArtist(<GigDetailContent gigId={1} source="me" />)
+    wrapAsArtist(<GigDetailContent gigId={1} />)
     await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
 
     // object_key is stripped from the cross-tenant payload, so there is nothing
@@ -1158,7 +1199,7 @@ describe('GigDetailContent — personal workspace (source="me")', () => {
 
   it('completes the viewer\'s own task through /api/me', async () => {
     const user = userEvent.setup()
-    wrapAsArtist(<GigDetailContent gigId={1} source="me" />)
+    wrapAsArtist(<GigDetailContent gigId={1} />)
     await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
 
     await openTab(user, 'Tasks')
@@ -1171,13 +1212,15 @@ describe('GigDetailContent — personal workspace (source="me")', () => {
   it('keeps all four tabs and stays editable for the workspace\'s own gig', async () => {
     const user = userEvent.setup()
     getMyGig.mockResolvedValue(OWN_GIG)
-    wrapAsArtist(<GigDetailContent gigId={1} source="me" />)
+    wrapAsArtist(<GigDetailContent gigId={1} />)
     await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
 
     expect(screen.getByRole('button', { name: 'Terms' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Participants' })).toBeInTheDocument()
     expect(screen.queryByTestId('source-tenant-switch')).not.toBeInTheDocument()
-    expect(listMembers).toHaveBeenCalled()
+    // /band-members is band-only, so a personal workspace has no roster to load
+    // even for its own gig — asking would 403.
+    expect(listMembers).not.toHaveBeenCalled()
 
     await openTab(user, 'Terms')
     await user.type(screen.getByLabelText(/merchandise cut/i), '15')

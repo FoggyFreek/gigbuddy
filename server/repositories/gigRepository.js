@@ -2,6 +2,7 @@
 // `executor` (a pool or transaction client) so callers control transactions.
 import { gigScopeSql } from './memberEventScope.js'
 import { myBandSelect } from './myBandRepository.js'
+import { appendDateCursor } from './listCursorSql.js'
 
 export const VENUE_JSON_SELECT = `CASE WHEN v.id IS NULL THEN NULL ELSE jsonb_build_object(
   'id', v.id,
@@ -68,6 +69,12 @@ export const GIG_LIST_PROJECTION = `g.*,
   ${FESTIVAL_JSON_SELECT},
   ${GIG_TAGS_SELECT},
   ${myBandSelect('g')}`
+
+const GIG_DATE_ASC_ORDER = 'g.event_date ASC, g.id ASC'
+const GIG_DATE_DESC_ORDER = 'g.event_date DESC, g.id DESC'
+const GIG_MAP_PROJECTION = `g.id, g.event_date, g.event_description,
+  ${MAP_PLACE_JSON('v')} AS venue,
+  ${MAP_PLACE_JSON('fv')} AS festival`
 
 // Throws a 400 Error when venueId is set but does not reference a row of the
 // expected category in the tenant. A null/undefined id is a no-op.
@@ -161,7 +168,7 @@ export async function listUpcomingGigs(executor, tenantId, today, limit) {
      ${VENUE_JOIN}
      ${FESTIVAL_JOIN}
      WHERE g.tenant_id = $1 AND g.event_date >= $2
-     ORDER BY g.event_date ASC, g.id ASC
+     ORDER BY ${GIG_DATE_ASC_ORDER}
      LIMIT $3`,
     [tenantId, today, limit],
   )
@@ -175,11 +182,7 @@ export async function listUpcomingGigs(executor, tenantId, today, limit) {
 // last (event_date, id) pair of a previous page for "load more" pagination.
 export async function listPastGigs(executor, tenantId, today, limit, cursor = null) {
   const params = [tenantId, today]
-  let cursorClause = ''
-  if (cursor) {
-    params.push(cursor.date, cursor.id)
-    cursorClause = `AND (g.event_date, g.id) < ($${params.length - 1}, $${params.length})`
-  }
+  const cursorClause = appendDateCursor(params, cursor, 'g.event_date', 'g.id')
   params.push(limit)
   const { rows } = await executor.query(
     `SELECT
@@ -188,7 +191,7 @@ export async function listPastGigs(executor, tenantId, today, limit, cursor = nu
      ${VENUE_JOIN}
      ${FESTIVAL_JOIN}
      WHERE g.tenant_id = $1 AND g.event_date < $2 ${cursorClause}
-     ORDER BY g.event_date DESC, g.id DESC
+     ORDER BY ${GIG_DATE_DESC_ORDER}
      LIMIT $${params.length}`,
     params,
   )
@@ -213,7 +216,7 @@ export async function listGigsInRangeForMemberTenants(executor, userId, tenantId
      ${FESTIVAL_JOIN}
      WHERE g.tenant_id = ANY($2) AND g.event_date BETWEEN $3 AND $4
        AND ${gigScopeSql('g', '$1')}
-     ORDER BY g.event_date ASC, g.id ASC`,
+     ORDER BY ${GIG_DATE_ASC_ORDER}`,
     [userId, tenantIds, from, to],
   )
   return rows
@@ -231,7 +234,7 @@ export async function listUpcomingGigsForMemberTenants(executor, userId, tenantI
      ${FESTIVAL_JOIN}
      WHERE g.tenant_id = ANY($2) AND g.event_date >= $3
        AND ${gigScopeSql('g', '$1')}
-     ORDER BY g.event_date ASC, g.id ASC
+     ORDER BY ${GIG_DATE_ASC_ORDER}
      LIMIT $4`,
     [userId, tenantIds, today, limit],
   )
@@ -243,11 +246,7 @@ export async function listUpcomingGigsForMemberTenants(executor, userId, tenantI
 
 export async function listPastGigsForMemberTenants(executor, userId, tenantIds, today, limit, cursor = null) {
   const params = [userId, tenantIds, today]
-  let cursorClause = ''
-  if (cursor) {
-    params.push(cursor.date, cursor.id)
-    cursorClause = `AND (g.event_date, g.id) < ($${params.length - 1}, $${params.length})`
-  }
+  const cursorClause = appendDateCursor(params, cursor, 'g.event_date', 'g.id')
   params.push(limit)
   const { rows } = await executor.query(
     `SELECT ${GIG_LIST_PROJECTION}
@@ -256,7 +255,7 @@ export async function listPastGigsForMemberTenants(executor, userId, tenantIds, 
        ${FESTIVAL_JOIN}
       WHERE g.tenant_id = ANY($2) AND g.event_date < $3 ${cursorClause}
         AND ${gigScopeSql('g', '$1')}
-      ORDER BY g.event_date DESC, g.id DESC
+      ORDER BY ${GIG_DATE_DESC_ORDER}
       LIMIT $${params.length}`,
     params,
   )
@@ -308,15 +307,13 @@ export async function findGigTenantForMember(executor, userId, tenantIds, gigId)
 // row with its band.
 export async function listGigMapDataForMemberTenants(executor, userId, tenantIds, from, to) {
   const { rows } = await executor.query(
-    `SELECT g.id, g.tenant_id, g.event_date, g.event_description,
-            ${MAP_PLACE_JSON('v')} AS venue,
-            ${MAP_PLACE_JSON('fv')} AS festival
+    `SELECT g.tenant_id, ${GIG_MAP_PROJECTION}
        FROM gigs g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}
       WHERE g.tenant_id = ANY($2) AND g.event_date BETWEEN $3 AND $4
         AND ${gigScopeSql('g', '$1')}
-      ORDER BY g.event_date ASC, g.id ASC`,
+      ORDER BY ${GIG_DATE_ASC_ORDER}`,
     [userId, tenantIds, from, to],
   )
   return rows
@@ -330,7 +327,7 @@ export async function listGigsInRange(executor, tenantId, from, to) {
      ${VENUE_JOIN}
      ${FESTIVAL_JOIN}
      WHERE g.tenant_id = $1 AND g.event_date BETWEEN $2 AND $3
-     ORDER BY g.event_date ASC, g.id ASC`,
+     ORDER BY ${GIG_DATE_ASC_ORDER}`,
     [tenantId, from, to],
   )
   return rows
@@ -340,15 +337,13 @@ export async function listGigsInRange(executor, tenantId, from, to) {
 // task, tag, participant, and availability data.
 export async function listGigMapData(executor, tenantId, from, to) {
   const { rows } = await executor.query(
-    `SELECT g.id, g.event_date, g.event_description,
-            ${MAP_PLACE_JSON('v')} AS venue,
-            ${MAP_PLACE_JSON('fv')} AS festival
+    `SELECT ${GIG_MAP_PROJECTION}
        FROM gigs g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}
       WHERE g.tenant_id = $1
         AND g.event_date BETWEEN $2 AND $3
-      ORDER BY g.event_date ASC, g.id ASC`,
+      ORDER BY ${GIG_DATE_ASC_ORDER}`,
     [tenantId, from, to],
   )
   return rows

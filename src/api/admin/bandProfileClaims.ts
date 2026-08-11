@@ -1,7 +1,7 @@
 import { request } from '../_client.ts'
 import type { BandProfileClaim, ClaimStatus, Id } from '../../types/entities.ts'
 import type { Role } from '../../auth/permissions.ts'
-import type { TenantKind } from '../../utils/businessRegistry.ts'
+import type { TenantKind } from '../../auth/tenantKinds.ts'
 
 const api = <T = unknown>(path: string, options?: RequestInit) =>
   request<T>(`/api/admin/band-profile-claims${path}`, options)

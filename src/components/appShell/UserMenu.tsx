@@ -13,7 +13,7 @@ import LogoutIcon from '@mui/icons-material/Logout'
 import PersonOutlined from '@mui/icons-material/PersonOutlined'
 import PersonAddAltOutlined from '@mui/icons-material/PersonAddAltOutlined'
 import type { Id } from '../../types/entities.ts'
-import type { TenantKind } from '../../utils/businessRegistry.ts'
+import type { TenantKind } from '../../auth/tenantKinds.ts'
 
 interface ApprovedMembership {
   tenantId: Id

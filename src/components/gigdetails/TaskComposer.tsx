@@ -33,10 +33,11 @@ export default function TaskComposer({ members = [], onAdd }: Readonly<Props>) {
   const [assignedTo, setAssignedTo] = useState<Id | null>(null)
   const [saving, setSaving] = useState(false)
   const [descriptionFocused, setDescriptionFocused] = useState(false)
+  const [metaControlOpen, setMetaControlOpen] = useState(false)
   const titleInputRef = useRef<HTMLInputElement | null>(null)
 
   const canSubmit = title.trim().length > 0 && !saving
-  const expanded = descriptionFocused || title.length > 0
+  const expanded = descriptionFocused || metaControlOpen || title.length > 0 || dueDate !== null || assignedTo !== null
 
   async function submit() {
     if (!canSubmit) return
@@ -46,6 +47,7 @@ export default function TaskComposer({ members = [], onAdd }: Readonly<Props>) {
       setTitle('')
       setDueDate(null)
       setAssignedTo(null)
+      setMetaControlOpen(false)
       titleInputRef.current?.focus()
     } finally {
       setSaving(false)
@@ -61,6 +63,7 @@ export default function TaskComposer({ members = [], onAdd }: Readonly<Props>) {
       setTitle('')
       setDueDate(null)
       setAssignedTo(null)
+      setMetaControlOpen(false)
     }
   }
 
@@ -101,6 +104,7 @@ export default function TaskComposer({ members = [], onAdd }: Readonly<Props>) {
             value={dueDate}
             label={t($ => $.tasks.setDueDate)}
             disabled={saving}
+            onOpenChange={setMetaControlOpen}
             onChange={setDueDate}
           />
           <TaskAssigneeControl
@@ -108,6 +112,7 @@ export default function TaskComposer({ members = [], onAdd }: Readonly<Props>) {
             members={members}
             label={t($ => $.tasks.assign)}
             disabled={saving}
+            onOpenChange={setMetaControlOpen}
             onChange={setAssignedTo}
           />
           <Box sx={{ flex: 1 }} />

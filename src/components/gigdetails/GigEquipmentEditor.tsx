@@ -39,8 +39,6 @@ interface ValueProps {
   onDelete: () => void
 }
 
-// One entry in the collection below the Autocomplete: the item name, a
-// band/event toggle and a cross to remove it.
 function EquipmentValue({
   label,
   provider,
@@ -66,9 +64,6 @@ function EquipmentValue({
         pl: 1.5,
       }}
     >
-      {/* The label absorbs the slack so the toggle sits at the right edge. On
-          desktop its min width is what establishes the shrink-wrapped width of
-          the whole control, keeping the toggles aligned down the list. */}
       <Typography variant="body2" sx={{ flex: 1, minWidth: isCompact ? 0 : 90, pr: 1.5 }}>
         {label}
       </Typography>
@@ -128,9 +123,6 @@ export default function GigEquipmentEditor({ gigId, equipment, canWrite, onChang
   const providerByItem = new Map(equipment.map((entry) => [entry.item, entry.provider]))
   const itemLabel = (item: GigEquipmentItemKey) => t($ => $.detail.equipment.items[item])
 
-  // Each write replaces the whole set, so two in flight could resolve out of
-  // order and resurrect a removed item. Every control is disabled while one is
-  // pending, which keeps a single request outstanding.
   async function persist(next: GigEquipmentEntry[]) {
     setSaving(true)
     setError(null)
@@ -165,9 +157,7 @@ export default function GigEquipmentEditor({ gigId, equipment, canWrite, onChang
   }
 
   return (
-    // The Autocomplete and the rows below share this width, so they line up.
-    // Compact takes the screen; desktop takes half the tab rather than all of it.
-    <Stack spacing={1} sx={{ width: isCompact ? '100%' : '50%' }}>
+    <Stack spacing={1} sx={{ width: isCompact ? '100%' : '50%', pr: isCompact ? 0 : 1 }}>
       {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
 
       <Stack spacing={0.5} sx={{ alignItems: 'stretch' }}>
