@@ -21,7 +21,7 @@ import {
   parseBandProfileCreate,
   parseRemovalMode,
 } from '../band-profiles/bandProfileValidators.js'
-import { parsePositiveId } from '../../validators/common.js'
+import { parsePositiveId } from '../../platform/http/requestValidators.js'
 import {
   MAX_HOLDERS_PER_PROFILE,
   MAX_MY_BANDS_PER_TENANT,

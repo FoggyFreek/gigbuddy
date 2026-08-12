@@ -3,7 +3,7 @@ import {
   parsePositiveId as parseId,
   parseSearchLimit,
   trimOrNull,
-} from '../../validators/common.js'
+} from '../../platform/http/requestValidators.js'
 
 export { parseId, parseSearchLimit, trimOrNull }
 

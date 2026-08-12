@@ -1,8 +1,8 @@
 // Data-access helpers for rehearsals. Each query takes an `executor` (a pool or
 // transaction client) so callers control transactions.
-import { rehearsalScopeSql } from '../../repositories/memberEventScope.js'
+import { rehearsalScopeSql } from '../shared/eventScopeSql.js'
 import { myBandSelect } from '../../people/my-bands/myBandRepository.js'
-import { appendDateCursor } from '../../repositories/listCursorSql.js'
+import { appendDateCursor } from '../shared/dateCursorSql.js'
 
 const REHEARSAL_LIST_PROJECTION = `r.*, ${myBandSelect('r')}`
 const REHEARSAL_DATE_ASC_ORDER = 'r.proposed_date ASC, r.id ASC'

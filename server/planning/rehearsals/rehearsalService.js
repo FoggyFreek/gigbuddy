@@ -45,7 +45,7 @@ import {
   getBandMemberIdForUser,
 } from '../../people/roster/bandMemberRepository.js'
 import { songExistsInTenant } from '../../music/songs/songRepository.js'
-import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate, validateDailyTimeRange } from '../../validators/common.js'
+import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate, validateDailyTimeRange } from '../../platform/http/requestValidators.js'
 import { badRequest, notFound } from '../../platform/http/serviceErrors.js'
 import { assertMyBandWritable } from '../../people/my-bands/myBandService.js'
 import {

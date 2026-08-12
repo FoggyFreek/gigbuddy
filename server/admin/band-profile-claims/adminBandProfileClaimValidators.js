@@ -1,4 +1,4 @@
-import { parseListLimit, parseTimestampCursor } from '../../validators/common.js'
+import { parseListLimit, parseTimestampCursor } from '../../platform/http/requestValidators.js'
 
 export function parseUnclaimedProfileListQuery(query) {
   const limit = parseListLimit(query?.limit)

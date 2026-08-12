@@ -1,5 +1,5 @@
 // Input parsing and validation for notification routes. No DB access here.
-import { parsePositiveId as parseId } from '../../validators/common.js'
+import { parsePositiveId as parseId } from '../../platform/http/requestValidators.js'
 import { NOTIFICATION_TYPES } from '../../domain/notificationTypes.js'
 
 const VALID_TYPES = new Set(NOTIFICATION_TYPES)

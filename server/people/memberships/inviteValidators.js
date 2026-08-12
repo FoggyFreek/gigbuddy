@@ -1,5 +1,5 @@
 // Input parsing and validation for invite routes. No DB access here.
-import { parseIntegerId as parseId } from '../../validators/common.js'
+import { parseIntegerId as parseId } from '../../platform/http/requestValidators.js'
 import { WRITE_ROLES } from '../../auth/permissions.js'
 
 export const ALLOWED_ROLES = WRITE_ROLES

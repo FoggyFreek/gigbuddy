@@ -13,7 +13,7 @@ import {
   limitedCollectionWithTimestampCursor,
   limitedCollectionWithTimestampCursorAndTotal,
 } from '../../platform/collections/limitedCollectionService.js'
-import { parseTimestampCursor, parseListLimit } from '../../validators/common.js'
+import { parseTimestampCursor, parseListLimit } from '../../platform/http/requestValidators.js'
 import { parseUnclaimedProfileListQuery } from './adminBandProfileClaimValidators.js'
 import { logger } from '../../utils/logger.js'
 import { CLAIM_STATUSES } from '../../domain/bandProfiles.js'

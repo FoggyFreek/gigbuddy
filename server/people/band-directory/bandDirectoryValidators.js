@@ -1,6 +1,6 @@
 // Input parsing for the band directory. No DB access here.
 import { MAX_REQUEST_MESSAGE_LENGTH } from '../../domain/membership.js'
-import { parseDiscoverySearch } from '../../validators/common.js'
+import { parseDiscoverySearch } from '../../platform/http/requestValidators.js'
 
 // Shared with the global band-profile search: both answer questions about rows
 // the caller has no membership in, so they get the same floor and ceiling.

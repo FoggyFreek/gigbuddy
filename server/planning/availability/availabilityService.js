@@ -36,7 +36,7 @@ import {
   MAX_RANGE_DAYS,
   parseDateRange,
   validateDailyTimeRange,
-} from '../../validators/common.js'
+} from '../../platform/http/requestValidators.js'
 
 const NOT_FOUND = notFound('Not found')
 

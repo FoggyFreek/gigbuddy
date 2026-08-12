@@ -1,5 +1,5 @@
 // Pure request/query validation for reimbursement routes. No DB access here.
-import { isValidIsoDate, parsePositiveId as parseId } from '../../validators/common.js'
+import { isValidIsoDate, parsePositiveId as parseId } from '../../platform/http/requestValidators.js'
 import { buildPeriodWhere } from '../../utils/periodQuery.js'
 
 export { isValidIsoDate, parseId }

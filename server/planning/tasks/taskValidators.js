@@ -1,4 +1,4 @@
-import { parsePositiveId, parseSearchLimit } from '../../validators/common.js'
+import { parsePositiveId, parseSearchLimit } from '../../platform/http/requestValidators.js'
 
 export { parseSearchLimit }
 

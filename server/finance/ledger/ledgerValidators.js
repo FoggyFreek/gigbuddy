@@ -1,5 +1,5 @@
 // Pure request/query validation for ledger routes. No DB access here.
-import { parsePositiveId as parseId, parseSearchLimit } from '../../validators/common.js'
+import { parsePositiveId as parseId, parseSearchLimit } from '../../platform/http/requestValidators.js'
 
 export { parseId, parseSearchLimit }
 

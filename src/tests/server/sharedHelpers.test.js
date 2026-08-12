@@ -8,7 +8,7 @@ import {
   parseListLimit,
   parseSearchLimit,
   trimOrNull,
-} from '../../../server/validators/common.js'
+} from '../../../server/platform/http/requestValidators.js'
 import { requireParam, sendError } from '../../../server/platform/http/routeHelpers.js'
 import {
   badRequest,

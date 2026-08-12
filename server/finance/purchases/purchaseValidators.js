@@ -1,5 +1,5 @@
 // Pure request/parameter validation for purchase routes. No DB or IO here.
-import { parsePositiveId as parseId, parseSearchLimit } from '../../validators/common.js'
+import { parsePositiveId as parseId, parseSearchLimit } from '../../platform/http/requestValidators.js'
 import { DEFAULT_VAT_COUNTRY, snapVatRate } from '../../../shared/vatRates.js'
 import { validateTaxCategoryFields } from '../vat/taxCategoryValidators.js'
 

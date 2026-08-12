@@ -1,4 +1,4 @@
-import { parsePositiveId } from '../../validators/common.js'
+import { parsePositiveId } from '../../platform/http/requestValidators.js'
 
 // Parses the positive integer route-id convention shared by tenant resources.
 // It keeps HTTP translation in the route layer while avoiding per-router

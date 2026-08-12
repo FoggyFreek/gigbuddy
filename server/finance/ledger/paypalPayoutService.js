@@ -11,7 +11,7 @@ import {
   markPaypalReconciliationPosted,
 } from '../../commerce/merch/shopifyPaymentsRepository.js'
 import { accountExistsOfType } from '../accounts/accountRepository.js'
-import { parseListLimit } from '../../validators/common.js'
+import { parseListLimit } from '../../platform/http/requestValidators.js'
 import { validateCustomPaypalPayout } from './paypalPayoutValidators.js'
 import { badRequest, notFound } from '../../platform/http/serviceErrors.js'
 

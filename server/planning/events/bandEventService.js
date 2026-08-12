@@ -15,7 +15,7 @@ import {
   updateBandEventFields,
   deleteBandEvent as deleteBandEventRow,
 } from './bandEventRepository.js'
-import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate, validateDailyTimeRange } from '../../validators/common.js'
+import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate, validateDailyTimeRange } from '../../platform/http/requestValidators.js'
 import { badRequest, notFound } from '../../platform/http/serviceErrors.js'
 import { assertMyBandWritable } from '../../people/my-bands/myBandService.js'
 import {

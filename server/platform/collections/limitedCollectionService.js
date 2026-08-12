@@ -4,7 +4,7 @@ import {
   parseDateRange,
   rangeErrorMessage,
   encodeTimestampCursor,
-} from '../../validators/common.js'
+} from '../../platform/http/requestValidators.js'
 import { toDateStr } from '../../utils/dateOnly.js'
 import { badRequest } from '../http/serviceErrors.js'
 

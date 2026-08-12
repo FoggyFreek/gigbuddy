@@ -15,7 +15,7 @@
 // { error: { status, body } }; success returns a domain payload.
 import { withTransaction, abortTransaction } from '../../db/withTransaction.js'
 import { limitedCollection } from '../../platform/collections/limitedCollectionService.js'
-import { parseDiscoverySearch } from '../../validators/common.js'
+import { parseDiscoverySearch } from '../../platform/http/requestValidators.js'
 import {
   parseBandProfilePatch,
   parseWebsiteUrl,

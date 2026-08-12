@@ -1,5 +1,5 @@
 import { isValidCalendarDate } from '../accounts/accountValidators.js'
-import { parsePositiveId } from '../../validators/common.js'
+import { parsePositiveId } from '../../platform/http/requestValidators.js'
 
 function trimOrNull(value) {
   if (value == null) return null

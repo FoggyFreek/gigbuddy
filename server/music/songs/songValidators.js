@@ -1,5 +1,5 @@
 // Input parsing and validation for song routes. No DB access here.
-import { parsePositiveId as parseId, trimOrNull } from '../../validators/common.js'
+import { parsePositiveId as parseId, trimOrNull } from '../../platform/http/requestValidators.js'
 
 export { parseId, trimOrNull }
 

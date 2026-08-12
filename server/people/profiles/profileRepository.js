@@ -1,6 +1,6 @@
 // Data-access helpers for the tenant profile aggregate and profile links.
 // Each query takes an `executor` so callers control transactions.
-import { tenantSafeProjection } from '../../repositories/tenantSafeProjection.js'
+import { tenantSafeProjection } from '../workspaces/tenantSafeProjection.js'
 import {
   clearMemoryTileCustomization,
   getMemoryImagePath,

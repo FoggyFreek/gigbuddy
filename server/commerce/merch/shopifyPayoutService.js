@@ -42,7 +42,7 @@ import {
   validateCustomPayout,
 } from './shopifyPayoutValidators.js'
 import { badRequest, conflict, notFound } from '../../platform/http/serviceErrors.js'
-import { parseListLimit } from '../../validators/common.js'
+import { parseListLimit } from '../../platform/http/requestValidators.js'
 
 const PAYOUT_QUERY = `#graphql
   query GigbuddyPayouts($first: Int!, $after: String, $query: String) {

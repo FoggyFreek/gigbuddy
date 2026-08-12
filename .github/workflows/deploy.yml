@@ -89,7 +89,7 @@ jobs:
             sudo /usr/bin/docker compose up -d postgres
             sudo /usr/bin/docker compose run --rm migrate
             sudo /usr/bin/docker compose up -d app
-            sudo /usr/bin/docker compose run --rm app node server/scripts/checkStorageConnection.js
+            sudo /usr/bin/docker compose run --rm app node server/platform/files/scripts/checkStorageConnection.js
             # Retire containers left by pre-cutover deployments only after the
             # live S3 store passes its read/write/delete probe. The named RustFS
             # data volume is intentionally retained for manual recovery.
@@ -97,9 +97,9 @@ jobs:
             # Re-encrypts credential envelopes under INTEGRATION_SECRETS_ACTIVE_KEY_ID
             # after a key rotation. A no-op when the active key is unchanged; both
             # checks fail the deploy (exit 2) if any envelope is unreadable.
-            sudo /usr/bin/docker compose run --rm app node server/scripts/rotateIntegrationSecrets.js --check
-            sudo /usr/bin/docker compose run --rm app node server/scripts/rotateIntegrationSecrets.js --apply
-            sudo /usr/bin/docker compose run --rm app node server/scripts/rotateIntegrationSecrets.js --check
+            sudo /usr/bin/docker compose run --rm app node server/platform/integrations/scripts/rotateIntegrationSecrets.js --check
+            sudo /usr/bin/docker compose run --rm app node server/platform/integrations/scripts/rotateIntegrationSecrets.js --apply
+            sudo /usr/bin/docker compose run --rm app node server/platform/integrations/scripts/rotateIntegrationSecrets.js --check
   
   sonarqube:
     name: SonarQube

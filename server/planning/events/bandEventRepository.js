@@ -1,9 +1,9 @@
 // Data-access helpers for band events. Each query takes an `executor` (a pool or
 // transaction client) so callers control transactions. Every query is scoped by
 // tenant_id.
-import { bandEventScopeSql } from '../../repositories/memberEventScope.js'
+import { bandEventScopeSql } from '../shared/eventScopeSql.js'
 import { myBandSelect } from '../../people/my-bands/myBandRepository.js'
-import { appendDateCursor } from '../../repositories/listCursorSql.js'
+import { appendDateCursor } from '../shared/dateCursorSql.js'
 
 const BAND_EVENT_LIST_PROJECTION = `e.*, ${myBandSelect('e')}`
 const BAND_EVENT_START_ASC_ORDER = 'e.start_date ASC, e.id ASC'

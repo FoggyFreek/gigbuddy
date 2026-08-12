@@ -1,5 +1,5 @@
 // Input parsing and validation for rehearsal routes. No DB access here.
-import { parsePositiveId as parseId } from '../../validators/common.js'
+import { parsePositiveId as parseId } from '../../platform/http/requestValidators.js'
 
 export const VALID_STATUSES = new Set(['option', 'planned'])
 export const VALID_VOTES = new Set(['yes', 'no'])

@@ -1,4 +1,4 @@
-import { parsePositiveId as parseId } from '../../validators/common.js'
+import { parsePositiveId as parseId } from '../../platform/http/requestValidators.js'
 
 const CODE_RE = /^\d{4,6}$/
 

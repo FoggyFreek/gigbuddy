@@ -1,5 +1,5 @@
 // Input parsing and validation for profile routes. No DB access here.
-import { parsePositiveId as parseId } from '../../validators/common.js'
+import { parsePositiveId as parseId } from '../../platform/http/requestValidators.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../../utils/urls.js'
 import { EMAIL_RE } from '../../utils/email.js'
 import { DEFAULT_VAT_COUNTRY, isValidVatId, normalizeVatNumber } from '../../../shared/vatRates.js'

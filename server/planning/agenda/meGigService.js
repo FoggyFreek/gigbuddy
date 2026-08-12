@@ -20,7 +20,7 @@ import {
   parseListCursor,
   parseLocalDate,
   parseSearchLimit,
-} from '../../validators/common.js'
+} from '../../platform/http/requestValidators.js'
 import { enrichPerTenant, loadFeedUserAvailability } from './mePlanningEnrichment.js'
 
 const NOT_FOUND = notFound('Not found')

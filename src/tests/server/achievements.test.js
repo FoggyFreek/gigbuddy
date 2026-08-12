@@ -407,7 +407,7 @@ describe('achievement definitions registry', () => {
   })
 
   it('has en i18n copy for every achievement key', () => {
-    const enPath = fileURLToPath(new URL('../../i18n/en/achievements.json', import.meta.url))
+    const enPath = fileURLToPath(new URL('../../user/achievements/i18n/en.json', import.meta.url))
     const en = JSON.parse(readFileSync(enPath, 'utf8'))
     for (const d of ACHIEVEMENT_DEFINITIONS) {
       expect(en.items[d.key]?.title, d.key).toBeTruthy()

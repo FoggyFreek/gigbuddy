@@ -1,5 +1,5 @@
 // Pure input parsing for the place-lookup service.
-import { parseSearchLimit } from '../../validators/common.js'
+import { parseSearchLimit } from '../../platform/http/requestValidators.js'
 import {
   LATITUDE_MAX, LATITUDE_MIN, LONGITUDE_MAX, LONGITUDE_MIN, parseCoordinate,
 } from '../../utils/coordinates.js'

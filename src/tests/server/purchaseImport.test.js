@@ -27,7 +27,7 @@ vi.mock('../../../server/utils/storage.js', () => ({
   },
 }))
 
-const FIX = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'ublImport')
+const FIX = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'finance', 'invoices', '__tests__', 'fixtures', 'ublImport')
 const SI_UBL = join(FIX, 'si-ubl-discount.xml')
 const siUblText = readFileSync(SI_UBL, 'utf8')
 const CII = join(FIX, 'cii-xrechnung.xml')

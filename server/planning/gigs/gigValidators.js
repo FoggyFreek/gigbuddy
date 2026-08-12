@@ -1,6 +1,6 @@
 // Pure request/parameter validation and update-field construction for gig
 // routes. No DB or IO here.
-import { parsePositiveId as parseId, parseSearchLimit } from '../../validators/common.js'
+import { parsePositiveId as parseId, parseSearchLimit } from '../../platform/http/requestValidators.js'
 import {
   GIG_EQUIPMENT_ITEM_KEYS,
   GIG_EQUIPMENT_PROVIDERS,

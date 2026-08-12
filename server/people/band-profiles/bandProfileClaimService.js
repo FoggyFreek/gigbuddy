@@ -15,7 +15,7 @@
 import { withTransaction, abortTransaction } from '../../db/withTransaction.js'
 import { lockTenantRow } from '../workspaces/tenantRepository.js'
 import { parseClaimMessage } from './bandProfileValidators.js'
-import { parsePositiveId } from '../../validators/common.js'
+import { parsePositiveId } from '../../platform/http/requestValidators.js'
 import { CLAIM_STATUSES } from '../../domain/bandProfiles.js'
 import {
   lockBandProfile,

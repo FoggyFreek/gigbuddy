@@ -1,5 +1,5 @@
 // Input parsing and validation for venue routes. No DB access here.
-import { parsePositiveId as parseId, parseSearchLimit } from '../../validators/common.js'
+import { parsePositiveId as parseId, parseSearchLimit } from '../../platform/http/requestValidators.js'
 import { normalizeOptionalUrl, WEB_URL_PROTOCOLS } from '../../utils/urls.js'
 import {
   normalizeOptionalRegistrationNumber,

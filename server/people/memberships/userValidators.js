@@ -1,5 +1,5 @@
 // Input parsing and validation for user/membership routes. No DB access here.
-import { parsePositiveId as parseId } from '../../validators/common.js'
+import { parsePositiveId as parseId } from '../../platform/http/requestValidators.js'
 import { WRITE_ROLES } from '../../auth/permissions.js'
 
 export const ALLOWED_STATUS = new Set(['pending', 'approved', 'rejected'])

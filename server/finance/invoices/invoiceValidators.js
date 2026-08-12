@@ -1,5 +1,5 @@
 // Pure request/parameter validation for invoice routes. No DB or IO here.
-import { parsePositiveId as parseId, parseSearchLimit } from '../../validators/common.js'
+import { parsePositiveId as parseId, parseSearchLimit } from '../../platform/http/requestValidators.js'
 import { validateTaxCategoryFields } from '../vat/taxCategoryValidators.js'
 export { formatInvoiceNumber } from '../../domain/invoice.js'
 

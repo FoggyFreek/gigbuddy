@@ -2,7 +2,7 @@
 // validates only the *shape* of a commit request; all authorization and
 // eligibility checks (line ownership, exact amount, target-doc status, account
 // type, tenant scope) happen in the service under row locks.
-import { parsePositiveId } from '../../validators/common.js'
+import { parsePositiveId } from '../../platform/http/requestValidators.js'
 import { isKnownVatRate } from '../../../shared/vatRates.js'
 import { validateTaxCategoryFields } from '../vat/taxCategoryValidators.js'
 

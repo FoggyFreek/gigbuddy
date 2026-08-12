@@ -1,5 +1,5 @@
 // Pure request/parameter validation for journal routes. No DB or IO here.
-import { isValidIsoDate, parsePositiveId as parseId } from '../../validators/common.js'
+import { isValidIsoDate, parsePositiveId as parseId } from '../../platform/http/requestValidators.js'
 import { isKnownVatRate } from '../../../shared/vatRates.js'
 import { validateTaxCategoryFields } from '../vat/taxCategoryValidators.js'
 

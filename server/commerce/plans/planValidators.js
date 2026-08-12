@@ -1,5 +1,5 @@
 // Input parsing and validation for subscription plan routes. No DB access here.
-import { parsePositiveId as parseId } from '../../validators/common.js'
+import { parsePositiveId as parseId } from '../../platform/http/requestValidators.js'
 
 // Underscores are allowed alongside hyphens: the artist tier shipped as
 // 'artist_gold' (migration 160), planLogo.ts keys on the slug, and it appears

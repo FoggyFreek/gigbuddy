@@ -38,7 +38,7 @@ import {
   findUnpostableLine,
   validateJournalLineTaxFields,
 } from './journalValidators.js'
-import { parsePositiveId } from '../../validators/common.js'
+import { parsePositiveId } from '../../platform/http/requestValidators.js'
 import { ledgerErrorResult, postUserJournal, firstOpenDate } from './ledgerService.js'
 import { classify } from './ledgerEntryTypes.js'
 import { withTransaction, abortTransaction } from '../../db/withTransaction.js'

@@ -1,5 +1,5 @@
 // Input parsing and validation for band-event routes. No DB access here.
-import { parsePositiveId as parseId } from '../../validators/common.js'
+import { parsePositiveId as parseId } from '../../platform/http/requestValidators.js'
 
 // my_band_id is only meaningful in a personal workspace; the route gates the
 // field on the MY_BANDS capability and the service validates it against my_bands.

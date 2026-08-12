@@ -1,5 +1,5 @@
 // Input parsing and validation for band-member routes. No DB access here.
-import { parsePositiveId as parseId } from '../../validators/common.js'
+import { parsePositiveId as parseId } from '../../platform/http/requestValidators.js'
 import { BAND_MEMBER_ROLE_OPTIONS } from '../../../shared/bandMemberRoles.js'
 
 export const MEMBER_FIELDS = ['name', 'roles', 'color', 'sort_order', 'position']

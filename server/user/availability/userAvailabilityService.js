@@ -31,7 +31,7 @@ import {
   setDelegation,
   isManagedByBand,
 } from './userAvailabilityRepository.js'
-import { INVALID_BOUNDED_RANGE, MAX_RANGE_DAYS, parseDateRange } from '../../validators/common.js'
+import { INVALID_BOUNDED_RANGE, MAX_RANGE_DAYS, parseDateRange } from '../../platform/http/requestValidators.js'
 import { badRequest, forbidden, notFound } from '../../platform/http/serviceErrors.js'
 
 const NOT_FOUND = notFound('Availability slot not found')

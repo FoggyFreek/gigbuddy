@@ -78,7 +78,7 @@ import {
 } from './gigRepository.js'
 import { bandMemberExistsInTenant } from '../../people/roster/bandMemberRepository.js'
 import { getTaskById } from '../tasks/taskRepository.js'
-import { INVALID_CURSOR, INVALID_TODAY, MAX_RANGE_DAYS, parseLocalDate, parseListCursor, validateDailyTimeRange } from '../../validators/common.js'
+import { INVALID_CURSOR, INVALID_TODAY, MAX_RANGE_DAYS, parseLocalDate, parseListCursor, validateDailyTimeRange } from '../../platform/http/requestValidators.js'
 import { badRequest, notFound } from '../../platform/http/serviceErrors.js'
 import { assertMyBandWritable } from '../../people/my-bands/myBandService.js'
 import {

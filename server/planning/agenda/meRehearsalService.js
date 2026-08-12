@@ -15,7 +15,7 @@ import {
   INVALID_TODAY,
   parseListCursor,
   parseLocalDate,
-} from '../../validators/common.js'
+} from '../../platform/http/requestValidators.js'
 import { enrichPerTenant } from './mePlanningEnrichment.js'
 
 const NOT_FOUND = notFound('Not found')

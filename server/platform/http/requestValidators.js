@@ -1,6 +1,6 @@
 // Shared pure parsing primitives. Resource validators re-export these under
 // their existing names so routes keep their current API and error behavior.
-import { isIsoDate } from '../utils/periodQuery.js'
+import { isIsoDate } from '../../utils/periodQuery.js'
 
 export function parsePositiveId(value) {
   const id = Number(value)

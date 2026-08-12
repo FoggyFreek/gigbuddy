@@ -13,7 +13,7 @@ import {
   limitedCollectionWithCursor,
   limitedCollectionWithTimestampCursor,
 } from '../../../server/platform/collections/limitedCollectionService.js'
-import { parseTimestampCursor } from '../../../server/validators/common.js'
+import { parseTimestampCursor } from '../../../server/platform/http/requestValidators.js'
 import { memberTenantScope } from '../../../server/domain/memberTenants.js'
 import { normalizeIban } from '../../../server/utils/normalizeIban.js'
 

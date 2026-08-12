@@ -1,5 +1,5 @@
 // Input parsing and validation for availability routes. No DB access here.
-import { parsePositiveId as parseId } from '../../validators/common.js'
+import { parsePositiveId as parseId } from '../../platform/http/requestValidators.js'
 
 export const SLOT_FIELDS = ['band_member_id', 'start_date', 'end_date', 'status', 'reason']
 export const VALID_STATUSES = new Set(['available', 'unavailable'])
