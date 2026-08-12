@@ -44,7 +44,7 @@ describe('aggregate-owned repository primitives', () => {
 
     await expect(bandMemberExistsInTenant(executor, 13, 7)).resolves.toBe(false)
     expect(executor.query).toHaveBeenCalledWith(
-      'SELECT 1 FROM band_members WHERE id = $1 AND tenant_id = $2',
+      'SELECT 1 FROM band_members WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL',
       [13, 7],
     )
   })
@@ -54,7 +54,7 @@ describe('aggregate-owned repository primitives', () => {
 
     await expect(getBandMemberIdForUser(executor, 3, 7)).resolves.toBe(5)
     expect(executor.query).toHaveBeenCalledWith(
-      'SELECT id FROM band_members WHERE user_id = $1 AND tenant_id = $2',
+      'SELECT id FROM band_members WHERE user_id = $1 AND tenant_id = $2 AND deleted_at IS NULL',
       [3, 7],
     )
   })

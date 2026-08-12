@@ -230,7 +230,9 @@ describe('GigsPage', () => {
     await user.click(screen.getByText('Announced'))
     await user.keyboard('{Escape}')
     await user.click(screen.getByRole('button', { name: 'Tags' }))
-    await user.click(screen.getByText('Summer Tour'))
+    // Rows render their own tag chips, so the filter option is only unambiguous
+    // inside the open menu.
+    await user.click(within(await screen.findByRole('menu')).getByText('Summer Tour'))
     await user.keyboard('{Escape}')
 
     await user.click(screen.getByRole('button', { name: /share tour dates/i }))

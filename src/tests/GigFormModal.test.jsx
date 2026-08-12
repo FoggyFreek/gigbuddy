@@ -63,6 +63,11 @@ vi.mock('../api/myBands.ts', () => ({
   listMyBands: vi.fn().mockResolvedValue({ items: [] }),
 }))
 
+vi.mock('../api/invoices.ts', async (importOriginal) => ({
+  ...(await importOriginal()),
+  listInvoicesByGig: vi.fn().mockResolvedValue([]),
+}))
+
 import { createGig, getGig } from '../api/gigs.ts'
 import { getAvailabilityOn } from '../api/availability.ts'
 import { AuthContext } from '../contexts/authContext.ts'
@@ -77,10 +82,11 @@ const AUTH_VALUE = {
   refreshUser: async () => undefined,
 }
 
-function wrap(ui, tenantKind = 'band') {
+function wrap(ui, tenantKind = 'band', extraPermissions = []) {
+  const permissions = [...AUTH_VALUE.user.permissions, ...extraPermissions]
   return render(
     <MemoryRouter>
-      <AuthContext.Provider value={{ ...AUTH_VALUE, user: { ...AUTH_VALUE.user, activeTenantKind: tenantKind } }}>
+      <AuthContext.Provider value={{ ...AUTH_VALUE, user: { ...AUTH_VALUE.user, activeTenantKind: tenantKind, permissions } }}>
         <ThemeProvider theme={theme}>
           <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
         </ThemeProvider>
@@ -217,9 +223,17 @@ describe('GigFormModal — edit mode', () => {
   })
 
   it('renders guaranteed fee field in edit mode', async () => {
-    wrap(<GigFormModal mode="edit" gigId={1} onClose={() => {}} />)
+    wrap(<GigFormModal mode="edit" gigId={1} onClose={() => {}} />, 'band', ['finance.view'])
     await waitFor(() => screen.getByLabelText(/guaranteed fee/i))
     expect(screen.getByLabelText(/guaranteed fee/i)).toBeInTheDocument()
+  })
+
+  // The terms tab is finance data, so a member without finance.view gets no
+  // fee or merch-cut fields at all.
+  it('hides the terms fields without finance.view', async () => {
+    wrap(<GigFormModal mode="edit" gigId={1} onClose={() => {}} />)
+    await waitFor(() => screen.getByDisplayValue('Jazz Night'))
+    expect(screen.queryByLabelText(/guaranteed fee/i)).not.toBeInTheDocument()
   })
 
   it('renders notes field', async () => {
