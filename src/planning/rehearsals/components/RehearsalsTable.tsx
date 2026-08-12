@@ -22,7 +22,7 @@ import Tooltip from '@mui/material/Tooltip'
 import { useCompactLayout } from '../../../hooks/useCompactLayout.ts'
 import VoteToggle from '../../../components/VoteToggle.tsx'
 import RehearsalStatusIcon from './RehearsalStatusIcon.tsx'
-import SourceTenantIdentity from '../../../components/SourceTenantIdentity.tsx'
+import PlanningSourceIdentity from '../../shared/PlanningSourceIdentity.tsx'
 
 const BASE_COLUMN_COUNT = 6
 
@@ -128,12 +128,7 @@ function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onShare, onVo
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
             {showBand && (
-              <SourceTenantIdentity
-                tenantId={rehearsal.tenantId}
-                tenantName={rehearsal.tenantName}
-                tenantAvatarPath={rehearsal.tenantAvatarPath}
-                withName
-              />
+              <PlanningSourceIdentity source={rehearsal} withName />
             )}
             <ParticipantProgress participants={rehearsal.participants} />
           </Box>
@@ -183,11 +178,7 @@ function DesktopRow({ rehearsal, active, onClick, onShare, showBand = false }: R
       <TableCell>{rehearsal.location || '—'}</TableCell>
       {showBand && (
         <TableCell>
-          <SourceTenantIdentity
-            tenantId={rehearsal.tenantId}
-            tenantName={rehearsal.tenantName}
-            tenantAvatarPath={rehearsal.tenantAvatarPath}
-          />
+          <PlanningSourceIdentity source={rehearsal} />
         </TableCell>
       )}
       <TableCell sx={{ minWidth: 180 }}>

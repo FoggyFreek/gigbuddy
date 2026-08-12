@@ -57,9 +57,33 @@ describe('BandEventsTable', () => {
   })
 
   it('adds a source Band column only for the personal aggregate view', () => {
-    wrap(<BandEventsTable events={[]} showBand onRowClick={() => {}} />)
+    wrap(<BandEventsTable
+      events={[{ ...EVENTS[0], tenantId: 9, tenantName: 'Other Band', tenantAvatarPath: null }]}
+      showBand
+      onRowClick={() => {}}
+    />)
     expect(screen.getByText('Band')).toBeInTheDocument()
     expect(screen.getByText('Availability')).toBeInTheDocument()
+    expect(screen.getByText('OB')).toBeInTheDocument()
+    expect(screen.queryByText('Other Band')).not.toBeInTheDocument()
+  })
+
+  it('shows the linked band profile instead of the personal workspace identity', () => {
+    wrap(<BandEventsTable
+      events={[{
+        ...EVENTS[0],
+        tenantId: 1,
+        tenantName: 'Solo Artist',
+        tenantAvatarPath: 'tenants/1/avatar/artist.jpg',
+        my_band: { id: 12, name: 'Night Owls', country_code: 'NL' },
+      }]}
+      showBand
+      onRowClick={() => {}}
+    />)
+
+    expect(screen.getByText('NO')).toBeInTheDocument()
+    expect(screen.queryByText('Night Owls')).not.toBeInTheDocument()
+    expect(screen.queryByText('Solo Artist')).not.toBeInTheDocument()
   })
 
   it('renders member availability as initial circles', () => {

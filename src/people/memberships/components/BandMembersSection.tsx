@@ -80,7 +80,6 @@ export default function BandMembersSection() {
 
   const leads = members.filter((member) => member.position === 'lead')
   const showInviteCta = canManageMembers
-    && leads.length > 0
     && leads.some((member) => member.user_id == null)
 
   return (

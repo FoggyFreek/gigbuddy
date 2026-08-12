@@ -311,7 +311,7 @@ export function parseCiiInvoice(xml) {
     supplier: partyOf(agreement?.SellerTradeParty),
     customer: partyOf(agreement?.BuyerTradeParty),
     payeeIban: payeeIbanOf(settlement),
-    lines: asArray(transaction?.IncludedSupplyChainTradeLineItem).map(lineOf),
+    lines: asArray(transaction?.IncludedSupplyChainTradeLineItem).map((line) => lineOf(line)),
     allowanceCharges: allowanceChargesOf(settlement),
     vatBreakdown: vatBreakdownOf(settlement),
     totals,

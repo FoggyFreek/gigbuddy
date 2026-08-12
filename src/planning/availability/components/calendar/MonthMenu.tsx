@@ -67,6 +67,7 @@ export default function MonthMenu({ year, month, onMonthJump }: Readonly<MonthMe
   return (
     <Box sx={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
       <button
+        type="button"
         ref={anchorRef}
         id={uid}
         onClick={toggle}

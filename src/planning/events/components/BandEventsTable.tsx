@@ -22,7 +22,7 @@ import { useCompactLayout } from '../../../hooks/useCompactLayout.ts'
 import MemberAvatarStack from '../../../components/MemberAvatarStack.tsx'
 import type { BandEvent, Id } from '../../../types/entities.ts'
 import type { MaybeCrossTenant } from '../../../types/api.ts'
-import SourceTenantIdentity from '../../../components/SourceTenantIdentity.tsx'
+import PlanningSourceIdentity from '../../shared/PlanningSourceIdentity.tsx'
 
 // `showBand` rows come from the cross-tenant `/api/me` feeds, so the band label
 // fields may be present.
@@ -123,12 +123,7 @@ function EventCard({ event, active, onClick, onShare, showBand = false }: Readon
       <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
         {showBand && (
           <Box sx={{ mr: 1 }}>
-            <SourceTenantIdentity
-              tenantId={event.tenantId}
-              tenantName={event.tenantName}
-              tenantAvatarPath={event.tenantAvatarPath}
-              withName
-            />
+            <PlanningSourceIdentity source={event} withName />
           </Box>
         )}
         <MemberAvatarStack members={event.members_availability} />
@@ -154,11 +149,7 @@ function DesktopRow({ event, active, onClick, onShare, showBand = false }: Reado
       <TableCell>{formatTimeRange(event.start_time, event.end_time)}</TableCell>
       {showBand && (
         <TableCell>
-          <SourceTenantIdentity
-            tenantId={event.tenantId}
-            tenantName={event.tenantName}
-            tenantAvatarPath={event.tenantAvatarPath}
-          />
+          <PlanningSourceIdentity source={event} />
         </TableCell>
       )}
       <TableCell>

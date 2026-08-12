@@ -54,7 +54,7 @@ export function verifyPayload(token) {
 export function isValidSyncBearer(headerValue) {
   const secret = process.env.LINKPAGE_SECRET
   if (!secret || typeof headerValue !== 'string') return false
-  const match = /^Bearer\s+(.+)$/.exec(headerValue)
+  const match = /^Bearer\s+(\S.*)$/.exec(headerValue)
   if (!match) return false
   const a = crypto.createHash('sha256').update(match[1]).digest()
   const b = crypto.createHash('sha256').update(secret).digest()

@@ -2,7 +2,7 @@ import './_envSetup.js'
 // @vitest-environment node
 import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
 import request from 'supertest'
-import { verifyPayload } from '../../../server/promotion/linkpage/linkpageTokens.js'
+import { verifyPayload, isValidSyncBearer } from '../../../server/promotion/linkpage/linkpageTokens.js'
 import { seedDefaultPlans } from '../../../server/db/defaultPlans.js'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
@@ -123,6 +123,32 @@ async function seedLinkpageContent() {
     [b],
   )
 }
+
+describe('isValidSyncBearer', () => {
+  it('accepts the secret however the delimiter is padded', () => {
+    expect(isValidSyncBearer(`Bearer ${SECRET}`)).toBe(true)
+    expect(isValidSyncBearer(`Bearer    ${SECRET}`)).toBe(true)
+    expect(isValidSyncBearer(`Bearer\t${SECRET}`)).toBe(true)
+  })
+
+  it('rejects a missing, empty or whitespace-only credential', () => {
+    expect(isValidSyncBearer(undefined)).toBe(false)
+    expect(isValidSyncBearer('Bearer')).toBe(false)
+    expect(isValidSyncBearer('Bearer   ')).toBe(false)
+    expect(isValidSyncBearer(`Basic ${SECRET}`)).toBe(false)
+    expect(isValidSyncBearer('Bearer nope')).toBe(false)
+  })
+
+  // The credential pattern must stay unambiguous: a greedy `\s+` followed by a
+  // `.+` that can also match spaces backtracks quadratically on a value the
+  // dot cannot span (a trailing newline). Node's header parser rejects such a
+  // value today, so this is defence in depth for any non-HTTP caller.
+  it('scans a pathological value in linear time', () => {
+    const started = Date.now()
+    expect(isValidSyncBearer(`Bearer${' '.repeat(50_000)}\n`)).toBe(false)
+    expect(Date.now() - started).toBeLessThan(100)
+  })
+})
 
 describe('public linkpage export', () => {
   it('rejects requests without the shared-secret bearer', async () => {

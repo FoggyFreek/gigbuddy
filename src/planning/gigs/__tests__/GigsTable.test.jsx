@@ -68,7 +68,28 @@ describe('GigsTable', () => {
     />)
     expect(screen.getByText('Band')).toBeInTheDocument()
     expect(screen.getByText('Availability')).toBeInTheDocument()
-    expect(screen.getByText('Other Band')).toBeInTheDocument()
+    expect(screen.getByText('OB')).toBeInTheDocument()
+    expect(screen.queryByText('Other Band')).not.toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'Other Band' })).not.toBeInTheDocument()
+  })
+
+  it('shows the linked band profile with a text avatar for a personal-workspace gig', () => {
+    wrap(<GigsTable
+      gigs={[{
+        ...GIGS[0],
+        tenantId: 1,
+        tenantName: 'Solo Artist',
+        tenantAvatarPath: 'tenants/1/avatar/artist.jpg',
+        my_band: { id: 12, name: 'Night Owls', country_code: 'NL' },
+      }]}
+      showBand
+      onRowClick={() => {}}
+    />)
+
+    expect(screen.getByText('NO')).toBeInTheDocument()
+    expect(screen.queryByText('Night Owls')).not.toBeInTheDocument()
+    expect(screen.queryByText('Solo Artist')).not.toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'Night Owls' })).not.toBeInTheDocument()
   })
 
   it('renders Upcoming/Past tabs and reports tab changes', async () => {
@@ -217,6 +238,23 @@ describe('GigsTable', () => {
       // Status is rendered as an icon (no text label): confirmed → EventAvailable, option → LiveHelp.
       expect(screen.getByTestId('EventAvailableIcon')).toBeInTheDocument()
       expect(screen.getByTestId('LiveHelpIcon')).toBeInTheDocument()
+    })
+
+    it('shows the source name next to the avatar', () => {
+      wrap(<GigsTable
+        gigs={[{
+          ...GIGS[0],
+          tenantId: 1,
+          tenantName: 'Solo Artist',
+          tenantAvatarPath: 'tenants/1/avatar/artist.jpg',
+          my_band: { id: 12, name: 'Night Owls', country_code: 'NL' },
+        }]}
+        showBand
+        onRowClick={() => {}}
+      />)
+
+      expect(screen.getByText('Night Owls')).toBeInTheDocument()
+      expect(screen.getByText('NO')).toBeInTheDocument()
     })
 
     it('only shows the task-count badge when there are open tasks', () => {

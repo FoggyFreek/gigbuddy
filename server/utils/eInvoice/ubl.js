@@ -318,7 +318,7 @@ export function parseUblInvoice(xml) {
   )?.toUpperCase(), 'BT-5', 'a document currency')
   const issueDate = required(toUblDate(trimOrNull(invoice.IssueDate)), 'BT-2', 'a valid issue date')
 
-  const lines = asArray(invoice.InvoiceLine).map(lineOf)
+  const lines = asArray(invoice.InvoiceLine).map((line) => lineOf(line))
   if (!lines.length) throw new EInvoiceParseError('invoice has no invoice lines')
 
   const totals = totalsOf(invoice, currency)

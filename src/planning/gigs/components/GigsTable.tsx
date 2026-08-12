@@ -30,7 +30,7 @@ import { useCompactLayout } from '../../../hooks/useCompactLayout.ts'
 import { venueHeadline, venueCity } from '../../../people/venues/venueDisplay.ts'
 import MemberAvatarStack from '../../../components/MemberAvatarStack.tsx'
 import GigStatusIcon from './GigStatusIcon.tsx'
-import SourceTenantIdentity from '../../../components/SourceTenantIdentity.tsx'
+import PlanningSourceIdentity from '../../shared/PlanningSourceIdentity.tsx'
 import { ALL_STATUSES } from '../gigStatus.ts'
 import type { Gig, Member, MemberAvailability, Id } from '../../../types/entities.ts'
 import type { MaybeCrossTenant } from '../../../types/api.ts'
@@ -154,12 +154,7 @@ function GigCard({ gig, active, onClick, showBand = false }: Readonly<GigCardPro
           <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
             {showBand && (
               <Box sx={{ mr: 1 }}>
-                <SourceTenantIdentity
-                  tenantId={gig.tenantId}
-                  tenantName={gig.tenantName}
-                  tenantAvatarPath={gig.tenantAvatarPath}
-                  withName
-                />
+                <PlanningSourceIdentity source={gig} withName />
               </Box>
             )}
             <MemberAvatarStack members={gig.members_availability} />
@@ -230,11 +225,7 @@ function DesktopRow({ gig, active, onClick, showBand = false }: Readonly<GigCard
       <TableCell>{formatTime(gig.start_time)}–{formatTime(gig.end_time)}</TableCell>
       {showBand && (
         <TableCell>
-          <SourceTenantIdentity
-            tenantId={gig.tenantId}
-            tenantName={gig.tenantName}
-            tenantAvatarPath={gig.tenantAvatarPath}
-          />
+          <PlanningSourceIdentity source={gig} />
         </TableCell>
       )}
       <TableCell>
