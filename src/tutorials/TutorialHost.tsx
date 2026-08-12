@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useActiveTutorial } from './useActiveTutorial.ts'
 
 // Renders the currently-active tutorial's card (or nothing). Mounted once inside

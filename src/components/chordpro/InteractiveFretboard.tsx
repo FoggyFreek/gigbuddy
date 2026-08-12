@@ -9,7 +9,7 @@ import { formatNote, STANDARD_TUNING, type AbsoluteFret } from '../../utils/chor
 // free and tests can target by aria-label). One note per string, matching
 // ChordShape.frets. Click a fret to set it; click the active fret again to mute;
 // the nut button toggles the string open/muted. Purely presentational state lives
-// in the parent â€” this only emits onChange.
+// in the parent, this only emits onChange.
 //
 // Visually it's drawn like a real fretboard: six horizontal strings (heavier on
 // the bass side), metallic fret wires, and inlay position dots painted behind the

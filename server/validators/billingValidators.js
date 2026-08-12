@@ -1,8 +1,17 @@
 // Input validation for the billing routes. Pure functions returning either a
 // parsed value object or { error: '<message>' }; the service maps errors to 400.
 import { BILLING_INTERVAL } from '../billing/paymentProvider/index.js'
+import { isPlanAudience } from '../../shared/planAudiences.js'
 
 const INTERVALS = [BILLING_INTERVAL.MONTH, BILLING_INTERVAL.YEAR]
+
+// Which product an audience-scoped action targets. Never defaulted: with a live
+// band AND artist subscription possible, guessing would act on the wrong one.
+export function parseAudience(body) {
+  const audience = body?.audience
+  if (!isPlanAudience(audience)) return { error: "audience must be 'band' or 'artist'" }
+  return { audience }
+}
 
 function parsePlanId(value) {
   const planId = Number(value)

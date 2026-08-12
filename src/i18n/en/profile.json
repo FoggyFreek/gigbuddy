@@ -9,21 +9,21 @@
     "error": "Could not open the link page editor"
   },
   "crop": {
-    "logo": "Crop band logo",
+    "logo": "Crop profile logo",
     "logoDark": "Crop dark logo",
     "banner": "Crop profile banner",
     "avatar": "Crop profile picture"
   },
   "identity": {
     "bannerAlt": "Profile banner",
-    "logoAlt": "Band logo",
+    "logoAlt": "Profile logo",
     "avatarAlt": "Profile picture",
     "changeBanner": "Change banner",
     "changeLogo": "Change logo",
     "changeAvatar": "Change profile picture",
     "lightLogo": "Light theme logo",
     "darkLogo": "Dark theme logo",
-    "bandName": "Band name",
+    "bandName": "Display name",
     "shortBio": "Short bio",
     "shortBioHelp": "Shown on your link page",
     "fullBio": "Full bio"

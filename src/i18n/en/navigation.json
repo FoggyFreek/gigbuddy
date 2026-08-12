@@ -21,6 +21,7 @@
     "contacts": "Contacts",
     "suppliers": "Suppliers",
     "venues": "Venues",
+    "myBands": "My bands",
     "emailTemplates": "Email Templates",
     "invoices": "Invoices",
     "purchases": "Purchases",
@@ -66,9 +67,13 @@
     "noResults": "No results",
     "removeRecentAria": "remove recent search",
     "addCategoryAria": "add search category",
+    "markers": {
+      "finished": "Finished"
+    },
     "categories": {
       "contacts": "Contacts",
       "gigs": "Gigs",
+      "tasks": "Tasks",
       "files": "Files",
       "invoices": "Invoices",
       "purchases": "Purchases",
@@ -78,5 +83,13 @@
       "venues": "Venues",
       "transaction": "Transaction"
     }
+  },
+  "userMenu": {
+    "me": "Me",
+    "switchBand": "Switch band",
+    "addBand": "Add band",
+    "createPersonalWorkspace": "Artist profile",
+    "admin": "admin",
+    "logout": "Log out"
   }
 }

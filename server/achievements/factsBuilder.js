@@ -60,7 +60,7 @@ async function memberFacts(db, tenantId) {
             COUNT(*) FILTER (WHERE position = 'optional')::int AS optional,
             COUNT(*) FILTER (WHERE position = 'sub')::int AS subs
        FROM band_members
-      WHERE tenant_id = $1`,
+      WHERE tenant_id = $1 AND deleted_at IS NULL`,
     [tenantId],
   )
   const invites = await db.query(
@@ -208,17 +208,28 @@ async function networkFacts(db, tenantId) {
   return { network: { contacts: rows[0].contacts } }
 }
 
-export async function buildFacts(db, tenantId) {
-  const parts = await Promise.all([
-    tenantFacts(db, tenantId),
-    memberFacts(db, tenantId),
-    gigFacts(db, tenantId),
-    planningFacts(db, tenantId),
-    billingDocFacts(db, tenantId),
-    merchFacts(db, tenantId),
-    financeFacts(db, tenantId),
-    repertoireFacts(db, tenantId),
-    networkFacts(db, tenantId),
-  ])
+const FACT_GROUPS = Object.freeze({
+  tenant: tenantFacts,
+  members: memberFacts,
+  gigs: gigFacts,
+  planning: planningFacts,
+  billingDocs: billingDocFacts,
+  merch: merchFacts,
+  finance: financeFacts,
+  repertoire: repertoireFacts,
+  network: networkFacts,
+})
+
+// Which fact groups a kind's catalogue can reference. A personal workspace has
+// no roster and no merch shop, so those queries are skipped rather than
+// computing counts that are structurally always zero.
+const GROUPS_BY_KIND = Object.freeze({
+  band: Object.keys(FACT_GROUPS),
+  personal: ['tenant', 'gigs', 'planning', 'billingDocs', 'finance', 'repertoire', 'network'],
+})
+
+export async function buildFacts(db, tenantId, kind = 'band') {
+  const groups = GROUPS_BY_KIND[kind] ?? GROUPS_BY_KIND.band
+  const parts = await Promise.all(groups.map((name) => FACT_GROUPS[name](db, tenantId)))
   return Object.assign({}, ...parts)
 }

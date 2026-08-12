@@ -58,6 +58,7 @@ import {
 } from '../repositories/subscriptionRepository.js'
 import { fetchFallbackPlan } from '../repositories/planRepository.js'
 import { listOwnedTenants } from '../repositories/limitRepository.js'
+import { tenantKindsForAudience } from '../../shared/planAudiences.js'
 import {
   withTenantFeatureLock,
   withIntegrationWriteLock,
@@ -151,7 +152,9 @@ export async function purgeFeatureData(db, tenantId, features) {
 // feature is never purged.
 async function effectiveEntitlementsNow(db, sub) {
   if (sub.status === 'canceled') {
-    const fallback = await fetchFallbackPlan(db)
+    // The floor of this subscription's OWN ladder — a lapsed artist plan falls
+    // back to the artist floor, never the band one.
+    const fallback = await fetchFallbackPlan(db, sub.audience)
     return mergeEntitlements(fallback.entitlements, sub.entitlement_overrides)
   }
   return mergeEntitlements(sub.plan_entitlements, sub.entitlement_overrides)
@@ -184,9 +187,14 @@ export async function executeDowngradePurge(db, subId) {
     const features = (Array.isArray(manifest.features) ? manifest.features : [])
       .filter((f) => PURGEABLE_FEATURES.includes(f) && effNow.features[f] === false)
 
-    // Archived tenants included: they can be unarchived, so the promised
-    // deletion must reach them too.
-    const tenants = await listOwnedTenants(db, sub.user_id)
+    // Scoped to the downgraded subscription's own ladder: an artist downgrade
+    // purges only the personal workspace, a band downgrade only bands. The two
+    // products are billed separately, so one lapsing must not delete the
+    // other's data.
+    //
+    // Archived tenants of that kind are still included: they can be unarchived,
+    // so the promised deletion must reach them too.
+    const tenants = await listOwnedTenants(db, sub.user_id, tenantKindsForAudience(sub.audience))
     for (const tenant of tenants) {
       await purgeFeatureData(db, tenant.id, features)
       auditLog(null, 'billing.purge_executed', {

@@ -9,6 +9,9 @@
 // - `Id` is a number from Postgres, sometimes a string from the client.
 import type { PurchaseImportWarningCode } from '../utils/purchaseImportWarnings.ts'
 import type { BandMemberRole } from '../utils/bandMemberRoles.ts'
+import type { GigEquipmentItemKey, GigEquipmentProvider } from '../utils/gigEquipment.ts'
+import type { TenantKind } from '../auth/tenantKinds.ts'
+import type { JoinPolicy } from '../utils/membership.ts'
 
 export type Id = number | string
 
@@ -31,11 +34,97 @@ export interface Venue {
   longitude?: number | null
 }
 
+/**
+ * Which of the artist's bands a personal-workspace event was for. A domain
+ * reference like `venue`, NOT a tenant label — a foreign-tenant row is
+ * identified by CrossTenantRef in api.ts, and conflating the two would make a
+ * band tag look like a read-only marker.
+ *
+ * Only ever set in a personal workspace; a band's own events are already the
+ * band's.
+ */
+export interface MyBandRef {
+  id: Id
+  name: string
+  country_code: string
+}
+
+/**
+ * The claiming band, disclosed ONLY when that band opted into discovery — its
+ * id is the input to the join-request and avatar endpoints, so emitting it for
+ * an invite-only band would reveal a private tenant. `claimed` stays true
+ * either way.
+ */
+export interface ClaimedTenantRef {
+  id: Id
+  slug: string
+  displayName: string
+  logoPath: string | null
+}
+
+export type BandProfileStatus = 'claimable' | 'pending_claim' | 'claimed'
+
+/**
+ * A band that is not a gigbuddy customer: one shared, global row, held by the
+ * musicians who play in it. Deliberately thin — no avatar, no roster.
+ */
+export interface BandProfile {
+  id: Id
+  name: string
+  countryCode: string
+  spotifyUrl: string | null
+  websiteUrl: string | null
+  contactEmail: string | null
+  /** Derived server-side from the claim state; never stored. */
+  status: BandProfileStatus
+  claimed: boolean
+  claimedTenant: ClaimedTenantRef | null
+  createdAt: string
+  /** Search only: this hit matched the website the caller typed, not the name. */
+  websiteMatch?: boolean
+  /** Detail only: the caller created it and nobody is claiming it. */
+  canEdit?: boolean
+}
+
+export interface MyBandEventCounts {
+  gigs: number
+  rehearsals: number
+  bandEvents: number
+}
+
+/** One entry in a personal workspace's My Bands collection. */
+export interface MyBand {
+  id: Id
+  bandProfile: BandProfile
+  eventCounts: MyBandEventCounts
+  addedAt: string
+}
+
+export type ClaimStatus = 'pending' | 'approved' | 'rejected'
+
+/**
+ * A band tenant's request to be recognised as the owner of a global profile.
+ * `bandProfileId` is null once the profile has been deleted — a decided claim
+ * is the record of a super admin's decision and outlives it, which is what
+ * `bandProfileName` is for.
+ */
+export interface BandProfileClaim {
+  id: Id
+  bandProfileId: Id | null
+  bandProfileName: string
+  status: ClaimStatus
+  message: string | null
+  decisionReason: string | null
+  createdAt: string
+  decidedAt: string | null
+}
+
 export interface Gig {
   id?: Id
   event_date?: string | Date
   event_description?: string
   status?: string
+  my_band?: MyBandRef | null
   start_time?: string | null
   end_time?: string | null
   banner_path?: string | null
@@ -45,15 +134,24 @@ export interface Gig {
   open_task_count?: number
   venue_id?: Id | null
   festival_id?: Id | null
+  /** Participant availability summary rendered in gig list rows. */
+  members_availability?: MemberAvailability[]
   // Venue deal terms. NUMERIC(5,2) percentages arrive as strings over the wire
   // but may be set as numbers in code; null = not agreed.
   merchandise_cut?: number | string | null
   percentage_of_sales?: number | string | null
+  viewerBandMemberId?: Id | null
 }
 
 export interface GigTag {
   id?: Id
   name?: string
+}
+
+/** One catalogue item on a gig, and who supplies it. Detail payloads only. */
+export interface GigEquipmentEntry {
+  item: GigEquipmentItemKey
+  provider: GigEquipmentProvider
 }
 
 export interface Member {
@@ -65,6 +163,8 @@ export interface Member {
   sort_order?: number
   // Set when this band member is linked to an app (gigBuddy) user account.
   user_id?: Id | null
+  /** The linked user allowed this band to manage their availability. */
+  availability_managed_by_band?: boolean
 }
 
 export interface BandMemberInput {
@@ -109,20 +209,65 @@ export interface Rehearsal {
   id?: Id
   proposed_date?: string
   status?: string
+  my_band?: MyBandRef | null
   location?: string
+  /** Optional calendar-only label, used when a rehearsal is shown outside its tenant. */
+  calendar_description?: string
   start_time?: string
   end_time?: string
   notes?: string
   participants?: Participant[]
   songs?: RehearsalSong[]
+  /** Caller-linked member in the source tenant, present on /api/me reads. */
+  viewerBandMemberId?: Id | null
+}
+
+export type AvailabilityStatus = 'available' | 'travel_margin' | 'unavailable'
+
+/**
+ * One member's availability for an event, derived server-side from the
+ * availability calendar (server/domain/availabilitySpan.js). Over a multi-day
+ * event the worst day decides. `reason` is null whenever the viewer may not see
+ * it — the redaction already happened, there is nothing to hide here.
+ */
+export interface MemberAvailability {
+  member_id?: Id
+  name?: string
+  color?: string | null
+  role?: string
+  position?: string
+  status?: AvailabilityStatus
+  reason?: string | null
+  /** Which source decided it: 'band' | 'member' | 'booking' | 'default'. */
+  source?: string
+}
+
+/** One day of an event's span, for the detail breakdown. */
+export interface AvailabilityDay {
+  date: string
+  bandWide: { status?: AvailabilityStatus; reason?: string | null } | null
+  members: { member_id?: Id; status?: AvailabilityStatus; reason?: string | null; source?: string }[]
+}
+
+export interface AvailabilitySummary {
+  members: MemberAvailability[]
+  bandWide?: { status?: AvailabilityStatus; reason?: string | null } | null
+  days?: AvailabilityDay[]
 }
 
 export interface BandEvent {
   id?: Id
   title?: string
   start_date?: string
+  my_band?: MyBandRef | null
   end_date?: string
+  start_time?: string
+  end_time?: string
   location?: string
+  /** Absent in a personal workspace, which has no band roster. */
+  members_availability?: MemberAvailability[]
+  /** Detail read only — the list feeds carry the summary alone. */
+  availability_days?: AvailabilityDay[]
 }
 
 export interface Slot {
@@ -132,12 +277,44 @@ export interface Slot {
   end_date?: string
   status?: string
   reason?: string | null
+  /**
+   * Projection fields, present only on entries derived from a member's
+   * user-level calendar (see server/services/availabilityProjection.js).
+   * Band-local slots for members without an account carry none of them.
+   */
+  source?: 'slot' | 'booking' | 'summary'
+  /** Month-view aggregation marker; a single explicit source remains editable. */
+  calendar_summary?: boolean
+  bookingType?: 'gig' | 'rehearsal' | 'band_event'
+  source_id?: Id
+  start_time?: string | null
+  end_time?: string | null
+  travel_margin_hours?: number
+  /** The viewer may not see this member's detail — show busy, not why. */
+  redacted?: boolean
+  /** A booking's title / band, present only when the owner allows it. */
+  title?: string | null
+  /** Human-readable booking summary, including the band name when visible. */
+  description?: string | null
+  tenantName?: string | null
+  /** Provenance of a delegated write: who entered it, from which band. */
+  createdByUserId?: Id | null
+  createdInTenantId?: Id | null
 }
 
 export interface Tenant {
   id?: Id
   slug?: string
+  /** 'band' | 'personal' — a personal workspace is one musician's own tenant. */
+  kind?: TenantKind
+  /**
+   * Pre-rename alias of `display_name`. Both are emitted while readers migrate;
+   * the repository keeps them in sync, so either is safe to read.
+   */
   band_name?: string
+  display_name?: string
+  /** 'invite_only' (default) | 'request' — whether the band is findable. */
+  join_policy?: JoinPolicy
   /** Long-form band bio, shown inside the app. */
   bio?: string | null
   /** 150-char blurb; the only bio text shipped to the public link page. */
@@ -192,6 +369,7 @@ export type NotificationType =
   | 'invoice-paid'
   | 'task-assigned'
   | 'invite-redeemed'
+  | 'membership-requested'
   | 'achievement-unlocked'
 
 export interface AppNotification {
@@ -871,6 +1049,17 @@ export interface Period {
   to?: string
 }
 
+/**
+ * How the calendar renders a slot with no `band_member_id`. A band reads that as
+ * "whole band" (the default); a personal workspace, which has no roster at all,
+ * reads it as "me" — so the artist calendar overrides the label and colour
+ * instead of inventing a member row to match against.
+ */
+export interface UnassignedSlotLane {
+  name: string
+  color: string
+}
+
 /** The per-cell view model produced by buildCalendarCellViewModel. */
 export interface CalendarCell {
   iso: string
@@ -1253,6 +1442,7 @@ export type AchievementCategory =
   | 'platform'
   | 'repertoire'
   | 'network'
+  | 'artist'
 
 // Keys mirror server/achievements/definitions.js and double as the i18n keys
 // under achievements.items.<key>. Never rename a shipped key — only add.
@@ -1294,6 +1484,16 @@ export type AchievementKey =
   | 'linkin_spark'
   | 'now_with_actual_sound'
   | 'fifty_people_who_might_answer'
+  // Personal workspace only — a band can never earn these.
+  | 'a_stage_name_and_a_face'
+  | 'presentable_on_paper'
+  | 'first_one_in_the_diary'
+  | 'twenty_five_nights_of_my_own'
+  | 'my_own_books_thanks'
+  | 'invoice_number_one'
+  | 'a_month_in_the_black_solo'
+  | 'my_own_little_black_book'
+  | 'songs_i_can_actually_play'
 
 // GET /api/achievements row; unlocked_at is null while the goal is unmet.
 export interface Achievement {

@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
+import { BrowserRouter } from 'react-router'
 import CssBaseline from '@mui/material/CssBaseline'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
@@ -11,6 +11,7 @@ import App from './App.tsx'
 import { AuthProvider } from './contexts/AuthContext.tsx'
 import { ProfileProvider } from './contexts/ProfileContext.tsx'
 import { AccountingProfileProvider } from './contexts/AccountingProfileContext.tsx'
+import { registerServiceWorker } from './registerServiceWorker.ts'
 import './i18n/index.ts'
 import '@fontsource/bebas-neue/400.css'
 import '@fontsource/lato/400.css'
@@ -20,9 +21,7 @@ import '@fontsource/montserrat/500.css'
 import '@fontsource/montserrat/700.css'
 import './index.css'
 
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js')
-}
+void registerServiceWorker()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

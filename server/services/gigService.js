@@ -12,6 +12,8 @@ import { verifyDocumentContent } from '../utils/verifyFileContent.js'
 import { dispatchNotification } from './notificationService.js'
 import { logger } from '../utils/logger.js'
 import { createTask as createTaskService, patchTask as patchTaskService, removeTask as removeTaskService } from './taskService.js'
+import { loadAvailabilityMatrix } from './availabilityService.js'
+import { prepareMatrix, summarizeSpan, withMembers } from '../domain/availabilitySpan.js'
 import {
   parseSearchLimit,
   toDateStr,
@@ -24,6 +26,7 @@ import {
   normalizeGigTagNames,
   MAX_GIG_TAGS,
   MAX_GIG_TAG_LENGTH,
+  parseGigEquipmentPayload,
 } from '../validators/gigValidators.js'
 import {
   assertVenueInTenant,
@@ -37,8 +40,6 @@ import {
   listPastGigs as listPastGigRows,
   listGigsInRange as listGigsInRangeRows,
   listGigMapData as listGigMapRows,
-  listBandMembers,
-  listAvailabilitySlotsOverlapping,
   listGigTasks,
   listGigAttachments,
   getLeadMemberIds,
@@ -53,6 +54,7 @@ import {
   touchGig,
   deleteGig as deleteGigRow,
   getGigBannerRow,
+  listGigStorageKeys,
   setGigBannerPath,
   clearGigBannerPath,
   insertGigAttachment,
@@ -70,16 +72,22 @@ import {
   upsertGigTag,
   deleteGigTagLinks,
   insertGigTagLink,
+  loadGigEquipment,
+  deleteGigEquipment,
+  insertGigEquipment,
 } from '../repositories/gigRepository.js'
 import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
 import { getTaskById } from '../repositories/taskRepository.js'
-import { parseLocalDate, parseListCursor } from '../validators/common.js'
+import { INVALID_CURSOR, INVALID_TODAY, MAX_RANGE_DAYS, parseLocalDate, parseListCursor, validateDailyTimeRange } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
-import { limitedCollection, limitedCollectionWithTotal, windowedCollection } from './limitedCollectionService.js'
+import { assertMyBandWritable } from './myBandService.js'
+import {
+  limitedCollectionWithCursor,
+  limitedCollectionWithTotal,
+  windowedCollection,
+} from './limitedCollectionService.js'
 
 const NOT_FOUND = notFound('Not found')
-const INVALID_TODAY = 'today must be a valid ISO date (YYYY-MM-DD)'
-const INVALID_CURSOR = 'cursorDate and cursorId must be provided together and valid'
 
 // ---------- notifications ----------
 
@@ -173,84 +181,84 @@ async function withTasksAndParticipants(db, tenantId, gigId, gig) {
 
 // ---------- reads ----------
 
-// Lists all gigs with open task counts and per-member availability derived from
-// availability_slots (a band-wide slot wins over a member-specific one).
+// Every gig with its open task count, for export, duplicate checks and gig
+// pickers. Deliberately NOT availability-enriched: this feed is unbounded, so
+// its window spans the tenant's whole history — the most expensive matrix the
+// endpoint could build, for a verdict none of its callers render. The bounded
+// feeds below (upcoming/past/range) are the ones that show the column.
 export async function listGigs(db, tenantId) {
-  return enrichGigsWithAvailability(db, tenantId, await listGigsWithTaskCounts(db, tenantId))
+  return listGigsWithTaskCounts(db, tenantId)
 }
 
-// Attaches members_availability to gig rows (band-wide slot wins over a
-// member-specific one). Shared by the full list and the windowed range read.
-async function enrichGigsWithAvailability(db, tenantId, gigs) {
+// Attaches members_availability to gig rows. A gig is a single day, so this is
+// the span rules (server/domain/availabilitySpan.js) applied to a span of one,
+// over the same redacted matrix the availability grid reads — a linked member
+// busy in another band shows up here too. One query for the whole batch.
+// `shared` is the user-level half of the matrix, pre-fetched once when a caller
+// enriches several bands at a time (the cross-tenant hub). Omitted, each call
+// loads its own.
+export async function enrichGigsWithAvailability(db, tenantId, gigs, viewer = null, shared = null) {
   if (!gigs.length) return []
 
-  const members = await listBandMembers(db, tenantId)
-
   const dates = gigs.map((g) => toDateStr(g.event_date)).filter(Boolean)
+  if (!dates.length) return gigs.map((gig) => ({ ...gig, members_availability: [] }))
   const minDate = dates.reduce((a, b) => (a < b ? a : b))
   const maxDate = dates.reduce((a, b) => (a > b ? a : b))
 
-  const slots = await listAvailabilitySlotsOverlapping(db, tenantId, minDate, maxDate)
+  const [matrix, participantsByGig] = await Promise.all([
+    loadAvailabilityMatrix(db, tenantId, minDate, maxDate, viewer, shared),
+    loadParticipants(db, gigs.map((gig) => gig.id), tenantId),
+  ])
+  // Normalized and indexed once for the whole batch; each gig only evaluates
+  // its own participants against it.
+  const prepared = prepareMatrix(matrix)
 
   return gigs.map((gig) => {
     const dateStr = toDateStr(gig.event_date)
     if (!dateStr) return { ...gig, members_availability: [] }
-
-    const gigSlots = slots.filter(
-      (s) => toDateStr(s.start_date) <= dateStr && toDateStr(s.end_date) >= dateStr,
-    )
-    const bandWide = gigSlots.findLast((s) => s.band_member_id === null) ?? null
-
-    const membersAvail = members.map((m) => {
-      const memberSlot = gigSlots.findLast((s) => s.band_member_id === m.id)
-      const winner = bandWide ?? memberSlot
-      return {
-        member_id: m.id,
-        name: m.name,
-        color: m.color,
-        position: m.position,
-        status: winner ? winner.status : 'default',
-        reason: winner?.reason ?? null,
-      }
+    const selected = new Set((participantsByGig.get(gig.id) ?? []).map((participant) => participant.band_member_id))
+    const participants = matrix.members.filter((member) => selected.has(member.id))
+    const { members } = summarizeSpan(withMembers(prepared, participants), dateStr, dateStr, {
+      start_date: dateStr,
+      end_date: dateStr,
+      start_time: gig.start_time,
+      end_time: gig.end_time,
+      exclude: { type: 'gig', id: gig.id },
     })
-
-    return { ...gig, members_availability: membersAvail }
+    return { ...gig, members_availability: members }
   })
 }
 
-export async function listUpcomingGigs(db, tenantId, query = {}) {
+export async function listUpcomingGigs(db, tenantId, query = {}, viewer = null) {
   const today = parseLocalDate(query.today)
   if (today === null) return badRequest(INVALID_TODAY)
   const result = await limitedCollectionWithTotal(query.limit, (limit) => listUpcomingGigRows(db, tenantId, today, limit))
   if (result.error) return result
-  return { ...result, items: await enrichGigsWithAvailability(db, tenantId, result.items) }
+  return { ...result, items: await enrichGigsWithAvailability(db, tenantId, result.items, viewer) }
 }
 
 // Past gigs, most recent first, capped and keyset-paginated via
 // ?cursorDate=&cursorId= (never offset/page params) so "load more" can walk
 // arbitrarily deep history without re-scanning already-seen rows.
-export async function listPastGigs(db, tenantId, query = {}) {
+export async function listPastGigs(db, tenantId, query = {}, viewer = null) {
   const today = parseLocalDate(query.today)
   if (today === null) return badRequest(INVALID_TODAY)
   const parsedCursor = parseListCursor(query)
   if (parsedCursor === null) return badRequest(INVALID_CURSOR)
 
-  const result = await limitedCollection(query.limit, (limit) =>
-    listPastGigRows(db, tenantId, today, limit, parsedCursor.cursor))
+  const result = await limitedCollectionWithCursor(query.limit, (limit) =>
+    listPastGigRows(db, tenantId, today, limit, parsedCursor.cursor), (gig) => gig.event_date)
   if (result.error) return result
 
-  const items = await enrichGigsWithAvailability(db, tenantId, result.items)
-  const last = items[items.length - 1]
-  const nextCursor = last && items.length === result.meta.limit
-    ? { date: toDateStr(last.event_date), id: last.id }
-    : null
-
-  return { items, meta: { ...result.meta, nextCursor } }
+  return { ...result, items: await enrichGigsWithAvailability(db, tenantId, result.items, viewer) }
 }
 
-export async function listGigsInRange(db, tenantId, query = {}) {
+// Availability-enriched, so the window is capped — unlike the map read below,
+// which is a single lean projection and spans all history on purpose.
+export async function listGigsInRange(db, tenantId, query = {}, viewer = null) {
   return windowedCollection(query, async (range) =>
-    enrichGigsWithAvailability(db, tenantId, await listGigsInRangeRows(db, tenantId, range.from, range.to)))
+    enrichGigsWithAvailability(db, tenantId, await listGigsInRangeRows(db, tenantId, range.from, range.to), viewer),
+  { maxDays: MAX_RANGE_DAYS })
 }
 
 export async function listGigMapData(db, tenantId, query = {}) {
@@ -353,13 +361,12 @@ export async function importGigs(tenantId, userId, body) {
 // Creates a gig plus its initial lead-member participants in one transaction.
 // The caller fires the created notification. Returns { error } | { gig }.
 export async function createGig(tenantId, userId, body) {
-  const {
-    event_date, event_description, start_time, end_time, status,
-    has_pa_system, has_drumkit, has_stage_lights,
-  } = body
+  const { event_date, event_description, start_time, end_time, status } = body
   if (!event_date || !event_description) {
     return { error: { status: 400, body: { error: 'event_date and event_description are required' } } }
   }
+  const timeError = validateDailyTimeRange(start_time, end_time)
+  if (timeError) return badRequest(timeError)
   const refs = normalizeGigVenueRefs(body)
   if (refs.error) return { error: { status: 400, body: { error: refs.error } } }
   const venueId = refs.body.venue_id ?? null
@@ -373,11 +380,15 @@ export async function createGig(tenantId, userId, body) {
     if (venueCheck.error) {
       abortTransaction({ error: { status: 400, body: { error: venueCheck.error } } })
     }
+    // Holds the My Bands row for the rest of this transaction, so a concurrent
+    // removal cannot turn this insert into a foreign-key violation.
+    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    if (bandCheck) abortTransaction(bandCheck)
 
     const gig = await insertGigWithRelations(client, tenantId, {
       event_date, event_description, venueId, festivalId,
       start_time: start_time || null, end_time: end_time || null, status: finalStatus,
-      has_pa_system: !!has_pa_system, has_drumkit: !!has_drumkit, has_stage_lights: !!has_stage_lights,
+      myBandId: body.my_band_id ?? null,
     })
 
     const leadIds = await getLeadMemberIds(client, tenantId)
@@ -397,6 +408,16 @@ export async function patchGig(db, tenantId, gigId, body) {
   if (refs.error) return { error: { status: 400, body: { error: refs.error } } }
   const normalizedBody = refs.body
 
+  if ('start_time' in normalizedBody || 'end_time' in normalizedBody) {
+    const current = await fetchGigWithRelations(db, gigId, tenantId)
+    if (!current) return NOT_FOUND
+    const timeError = validateDailyTimeRange(
+      'start_time' in normalizedBody ? normalizedBody.start_time : current.start_time,
+      'end_time' in normalizedBody ? normalizedBody.end_time : current.end_time,
+    )
+    if (timeError) return badRequest(timeError)
+  }
+
   const venueCheck = await validateVenueAndFestivalForTenant(db, normalizedBody, tenantId)
   if (venueCheck.error) return { error: { status: venueCheck.status, body: { error: venueCheck.error } } }
 
@@ -404,9 +425,19 @@ export async function patchGig(db, tenantId, gigId, body) {
   if (built.error) return { error: { status: 400, body: { error: built.error } } }
   if (!built.fields.length) return { error: { status: 400, body: { error: 'No valid fields to update' } } }
 
-  const gig = await updateGigFields(db, tenantId, gigId, built.fields, built.values)
-  if (!gig) return NOT_FOUND
-  return { gig, confirmed: body.status === 'confirmed' }
+  // In a transaction so the My Bands row stays locked from validation through
+  // the write; the check is a no-op when the body doesn't mention the link.
+  const result = await withTransaction(async (client) => {
+    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    if (bandCheck) abortTransaction(bandCheck)
+
+    const gig = await updateGigFields(client, tenantId, gigId, built.fields, built.values)
+    if (!gig) abortTransaction(NOT_FOUND)
+    return { gig }
+  }, { db })
+
+  if (result.error) return result
+  return { gig: result.gig, confirmed: body.status === 'confirmed' }
 }
 
 // Replaces a gig's complete tag set. Tag rows remain available as suggestions
@@ -436,15 +467,46 @@ export async function setGigTags(db, tenantId, gigId, body) {
   }, { db })
 }
 
-// Deletes the gig and removes its banner object from storage.
+// Replaces a gig's complete equipment set: which catalogue items are involved
+// and, per item, whether the venue provides it or the band brings it.
+export async function setGigEquipment(db, tenantId, gigId, body) {
+  const parsed = parseGigEquipmentPayload(body)
+  if (parsed.error) return { error: { status: 400, body: { error: parsed.error } } }
+
+  return withTransaction(async (client) => {
+    if (!(await gigExistsInTenant(client, gigId, tenantId))) abortTransaction(NOT_FOUND)
+
+    await deleteGigEquipment(client, gigId, tenantId)
+    for (const { item, provider } of parsed.items) {
+      await insertGigEquipment(client, gigId, tenantId, item, provider)
+    }
+    await touchGig(client, gigId, tenantId)
+    return { equipment: await loadGigEquipment(client, gigId, tenantId) }
+  }, { db })
+}
+
+// Deletes the gig and reclaims every object it owns — the banner and each
+// attachment, whose rows cascade away with the gig and whose keys are therefore
+// unreachable once it is gone.
+//
+// Rows go in one transaction; objects are removed only after it commits. The
+// order matters both ways: reading the keys inside the transaction stops a
+// concurrent upload from being missed, and removing the objects outside it
+// stops a rollback from leaving a surviving gig pointing at deleted files.
 export async function deleteGig(db, tenantId, gigId) {
-  const row = await getGigBannerRow(db, gigId, tenantId)
-  if (!row) return NOT_FOUND
+  const result = await withTransaction(async (client) => {
+    const keys = await listGigStorageKeys(client, gigId, tenantId)
+    if (keys === null) abortTransaction(NOT_FOUND)
 
-  const deleted = await deleteGigRow(db, gigId, tenantId)
-  if (!deleted) return NOT_FOUND
+    const deleted = await deleteGigRow(client, gigId, tenantId)
+    if (!deleted) abortTransaction(NOT_FOUND)
 
-  safeRemove(row.banner_path, 'Failed to delete gig banner object:')
+    return { keys }
+  }, { db })
+
+  if (result.error) return result
+
+  for (const key of result.keys) safeRemove(key, 'Failed to delete gig object:')
   return {}
 }
 
@@ -508,7 +570,7 @@ export async function setParticipantVote(db, tenantId, userId, gigId, memberId, 
     return { error: { status: 400, body: { error: 'Invalid vote value' } } }
   }
 
-  return withTransaction(async (client) => {
+  const result = await withTransaction(async (client) => {
     const option = await lockGigOptionResponseState(client, gigId, tenantId)
     if (!option) return NOT_FOUND
 
@@ -536,6 +598,14 @@ export async function setParticipantVote(db, tenantId, userId, gigId, memberId, 
       notifications: { firstUnavailable, allResponded },
     }
   }, { db })
+
+  if (result.error) return result
+
+  // Dispatched here, after the commit, so no caller can forget to act on them.
+  const { gig, notifications } = result
+  if (notifications.firstUnavailable) await notifyGigOptionUnavailable(tenantId, gig)
+  if (notifications.allResponded) await notifyGigOptionResponsesComplete(tenantId, gig)
+  return { gig }
 }
 
 // ---------- banner ----------

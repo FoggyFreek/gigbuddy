@@ -22,6 +22,7 @@ const entitlements = (features = {}, limits = {}) => ({
   features: {
     finance: false, integrations: false, customization: false,
     song_files: false, chordpro: false, public_promotion: false, linkpage: false,
+    custom_slug: false, calendar_sync: false,
     ...features,
   },
   limits: {
@@ -124,6 +125,8 @@ describe('PlanCatalogSection — create', () => {
     expect(api.createAdminPlan).toHaveBeenCalledWith({
       slug: 'platinum',
       name: 'Platinum',
+      // Defaults to the band ladder; the selector is create-only.
+      audience: 'band',
       monthly_price_cents: 1999,
       yearly_price_cents: null,
       is_active: true,

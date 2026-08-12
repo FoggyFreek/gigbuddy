@@ -130,8 +130,12 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
   useEffect(() => {
     const el = viewportRef.current
     if (!el || typeof ResizeObserver === 'undefined') return undefined
+    // Round and drop no-op measurements: the PDF page width is derived from this
+    // value, so echoing every sub-pixel change back into a re-render risks a
+    // resize feedback loop.
     const observer = new ResizeObserver((entries) => {
-      setViewportWidth(entries[0].contentRect.width)
+      const next = Math.round(entries[0].contentRect.width)
+      setViewportWidth((prev) => (prev === next ? prev : next))
     })
     observer.observe(el)
     return () => observer.disconnect()
@@ -324,7 +328,7 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
         }}
       >
         {toolbar}
-        <Box sx={{ height: '100%', overflow: 'auto' }}>
+        <Box sx={{ height: '100%', overflow: 'auto', scrollbarGutter: 'stable' }}>
           <Box
             ref={viewportRef}
             sx={{
@@ -365,7 +369,7 @@ export default function PurchaseAttachmentsViewer({ attachments, busy, error, on
               <Page
                 pageNumber={Math.min(page, currentPages)}
                 rotate={rotation}
-                width={viewportWidth ? Math.max((viewportWidth - 32) * scale, 200) : undefined}
+                width={viewportWidth ? Math.max(Math.floor(viewportWidth * scale), 200) : undefined}
                 renderTextLayer={false}
                 renderAnnotationLayer={false}
                 loading={pdfLoadingSpinner}

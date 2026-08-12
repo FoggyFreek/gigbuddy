@@ -52,8 +52,8 @@ async function createContributorA() {
      VALUES ('sub-contrib', 'contrib@a.local', 'Contrib User', 'approved', false) RETURNING *`,
   )
   await pool.query(
-    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-     VALUES ($1, $2, 'contributor', 'approved', NOW())`,
+    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+     VALUES ($1, $2, 'contributor', 'approved', NOW(), 'admin')`,
     [u[0].id, seed.tenantA.id],
   )
   return (req) => req.set('x-test-user-id', String(u[0].id)).set('x-test-tenant-id', String(seed.tenantA.id))

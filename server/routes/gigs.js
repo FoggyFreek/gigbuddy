@@ -4,7 +4,7 @@ import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { parseId } from '../validators/gigValidators.js'
-import { requireParam, sendError } from './routeHelpers.js'
+import { requireParam, sendError, viewerOf } from './routeHelpers.js'
 import {
   listGigs,
   listUpcomingGigs,
@@ -19,6 +19,7 @@ import {
   createGig,
   patchGig,
   setGigTags,
+  setGigEquipment,
   deleteGig,
   addGigTask,
   patchGigTask,
@@ -37,8 +38,6 @@ import {
   notifyGigCreated,
   notifyGigConfirmed,
   notifyGigsImported,
-  notifyGigOptionUnavailable,
-  notifyGigOptionResponsesComplete,
 } from '../services/gigService.js'
 
 const BANNER_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
@@ -62,13 +61,14 @@ const attachmentUpload = multer({
 
 const router = Router()
 
-// List all gigs with open task count and member availability
+// Every gig with its open task count — the export / duplicate-check / picker
+// feed. No member availability: see listGigs.
 router.get('/', async (req, res) => {
   res.json(await listGigs(pool, req.tenantId))
 })
 
 router.get('/upcoming', async (req, res) => {
-  const result = await listUpcomingGigs(pool, req.tenantId, req.query)
+  const result = await listUpcomingGigs(pool, req.tenantId, req.query, viewerOf(req))
   if (result.error) return sendError(res, result.error)
   res.json(result)
 })
@@ -76,14 +76,14 @@ router.get('/upcoming', async (req, res) => {
 // Past gigs, most recent first. Bounded + keyset-paginated (?cursorDate=&cursorId=)
 // for "load more" — see listPastGigs in gigService.js.
 router.get('/past', async (req, res) => {
-  const result = await listPastGigs(pool, req.tenantId, req.query)
+  const result = await listPastGigs(pool, req.tenantId, req.query, viewerOf(req))
   if (result.error) return sendError(res, result.error)
   res.json(result)
 })
 
 // Calendar month read: gigs inside the inclusive ?from=&to= day window.
 router.get('/range', async (req, res) => {
-  const result = await listGigsInRange(pool, req.tenantId, req.query)
+  const result = await listGigsInRange(pool, req.tenantId, req.query, viewerOf(req))
   if (result.error) return sendError(res, result.error)
   res.json(result)
 })
@@ -113,10 +113,8 @@ router.get('/:id', async (req, res) => {
   res.json(result.gig)
 })
 
-// Merch-sold totals for this gig. Finance-ish: gated on planning.write so
-// readers (the only role without it on this page) get 403 — the same boundary
-// the UI mirrors by hiding the card.
-router.get('/:id/merch-summary', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+// Merch-sold totals are part of the finance-only Terms section.
+router.get('/:id/merch-summary', requirePermission(PERMISSIONS.FINANCE_VIEW), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await gigMerchSummary(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
@@ -258,8 +256,6 @@ router.patch('/:id/participants/:bandMemberId', requirePermission(PERMISSIONS.PL
   const memberId = requireParam(req, res, 'bandMemberId'); if (memberId === null) return
   const result = await setParticipantVote(pool, req.tenantId, req.user.id, gigId, memberId, req.body)
   if (result.error) return sendError(res, result.error)
-  if (result.notifications.firstUnavailable) await notifyGigOptionUnavailable(req.tenantId, result.gig)
-  if (result.notifications.allResponded) await notifyGigOptionResponsesComplete(req.tenantId, result.gig)
   res.json(result.gig)
 })
 
@@ -268,6 +264,13 @@ router.put('/:id/tags', requirePermission(PERMISSIONS.PLANNING_WRITE), async (re
   const result = await setGigTags(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.tags)
+})
+
+router.put('/:id/equipment', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await setGigEquipment(pool, req.tenantId, id, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.equipment)
 })
 
 // --- Gig contacts (mirrors venue_contacts; links are informational) ---

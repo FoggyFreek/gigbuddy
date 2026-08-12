@@ -9,6 +9,7 @@
       "preferences": "My preferences",
       "billing": "Billing",
       "connectedAccounts": "Connected accounts",
+      "myAvailability": "My availability",
       "accent": "Accent color",
       "membersAndInvites": "Members and invites",
       "storage": "Storage",
@@ -16,12 +17,42 @@
       "chartOfAccounts": "Chart of accounts",
       "defaultAccounts": "Accounting Settings",
       "financialProfile": "Financial profile",
-      "accountingProfile": "Accounting profile"
-    }
+      "accountingProfile": "Accounting profile",
+      "bandProfile": "Public band profile",
+      "manageAccounts": "Manage account"
+    },
+    "workspaceSettings": "Workspace settings"
   },
   "subscription": {
     "current": "Current plan",
     "manage": "Manage subscription"
+  },
+  "tenantDeletion": {
+    "title": "Delete account permanently",
+    "description": "Permanently delete this workspace and all of its content.",
+    "open": "Delete account permanently",
+    "dialogTitle": "Delete {{name}} permanently?",
+    "warning": "This account and all of its content will be permanently deleted. This cannot be undone.",
+    "downloadWarning": "Download any financial records and other relevant data before continuing.",
+    "confirmationHelp": "Type the exact account name, {{name}}, to confirm.",
+    "confirmationLabel": "Type {{name}} to confirm",
+    "acknowledgement": "I understand that this account and all its content will be permanently deleted.",
+    "confirm": "Delete permanently",
+    "failed": "Account deletion failed. Please try again."
+  },
+  "tenantSlug": {
+    "title": "Change band slug",
+    "description": "Change the unique name used in your band's public web address. The old address stops working immediately.",
+    "label": "Slug name",
+    "helper": "Use 1–64 lowercase letters, numbers, or hyphens. It must start and end with a letter or number.",
+    "save": "Save slug name",
+    "success": "Band slug updated.",
+    "linkpagePending": "Your GigBuddy address changed. Your LinkBuddy pages are still updating.",
+    "errors": {
+      "invalid": "Enter a valid slug name.",
+      "inUse": "That slug name is already in use.",
+      "failed": "Could not update the slug. Please try again."
+    }
   },
   "financeWizard": {
     "title": "Finance setup wizard",
@@ -52,7 +83,8 @@
       "cannotRemoveSuperAdmin": "Cannot remove a super admin",
       "onlySuperAdminRemoveTenantAdmin": "Only super admins can remove a tenant admin",
       "removeFromTenant": "Remove from this tenant",
-      "onlySuperAdminApproveTenantAdmin": "Only super admins can approve a tenant_admin membership"
+      "onlySuperAdminApproveTenantAdmin": "Only super admins can approve a tenant_admin membership",
+      "lastTenantAdmin": "This band must keep at least one admin. Make someone else an admin first."
     },
     "aria": {
       "removeMember": "remove member"
@@ -60,7 +92,15 @@
     "errors": {
       "updateFailed": "Update failed",
       "deleteFailed": "Delete failed"
-    }
+    },
+    "source": {
+      "invite": "Redeemed an invite",
+      "request": "Asked to join",
+      "admin": "Added by an admin",
+      "owner": "Created this band",
+      "legacy": ""
+    },
+    "requestMessage": "Their message"
   },
   "invites": {
     "title": "Invites",
@@ -419,6 +459,71 @@
       "notImplemented": "This scheme will be recorded, but suppressing VAT on invoices is currently only implemented for the Dutch KOR. Your invoices will keep charging VAT.",
       "destinationOnlyNote": "The cross-border scheme applies to sales into the destination country only. It does not change the VAT returns you file at home.",
       "issuedUnaffected": "Invoices you have already sent keep the VAT treatment they were issued with, so correcting these dates is safe."
+    }
+  },
+  "bands": {
+    "title": "Bands",
+    "intro": "The bands you play in. Each band keeps its own separate agenda and books — this workspace stays yours.",
+    "empty": "You are not in any band yet.",
+    "awaitingApproval": "Waiting for the band to approve you",
+    "joinTitle": "Join a band",
+    "joinHelp": "Paste the invite link a band admin sent you, or just the code from it.",
+    "codeLabel": "Invite link or code",
+    "join": "Join",
+    "joinPending": "Request sent. You'll get access once a band admin approves you.",
+    "errors": {
+      "noCode": "That doesn't contain an invite code.",
+      "joinFailed": "Could not join with that invite."
+    }
+  },
+  "directory": {
+    "title": "Find a band",
+    "help": "Some bands let musicians find them and ask to join. Search by name.",
+    "searchLabel": "Band name",
+    "searchHelp": "Type at least 3 characters.",
+    "noResults": "No bands found. Bands only appear here if they chose to be findable.",
+    "ask": "Ask to join",
+    "askTitle": "Ask to join {{band}}",
+    "askHelp": "Tell them who you are and what you play. The band's admins decide.",
+    "messageLabel": "Message (optional)",
+    "cancel": "Cancel",
+    "send": "Send request",
+    "openRequests": "Your open requests",
+    "withdraw": "Withdraw",
+    "already": {
+      "none": "",
+      "pending": "Request sent",
+      "approved": "You're in this band",
+      "rejected": "Not available"
+    },
+    "errors": {
+      "tooManyRequests": "You already have three open requests. Wait for an answer, or withdraw one first.",
+      "requestFailed": "Could not send that request.",
+      "withdrawFailed": "Could not withdraw that request."
+    }
+  },
+  "discoverability": {
+    "title": "Let musicians find us",
+    "help": "When this is on, musicians can find this band by name and ask to join. Their request lands here for you to approve or decline. Off by default.",
+    "toggle": "Findable in the band directory"
+  },
+  "bandProfileClaim": {
+    "title": "Global band profile",
+    "description": "Musicians can create public band profiles for bands that aren't yet on gigBuddy. They may already be tagging their events with your global band profile. Claim that profile so it becomes yours.",
+    "searchLabel": "Find your band",
+    "searchHint": "Type at least 3 characters.",
+    "noResults": "No unclaimed band profiles match that name.",
+    "messageLabel": "Message for the reviewer",
+    "messageHint": "Optional. Tell us how we can verify you're this band.",
+    "submit": "Claim this profile",
+    "withdraw": "Withdraw claim",
+    "pendingHelp": "We're verifying your claim. We may email you for proof.",
+    "approvedHelp": "This profile is yours. Musicians that have added you as their band and have been tagging events with it, can now join your band.",
+    "tryAgain": "You can claim a different profile.",
+    "status": {
+      "pending": "Under review",
+      "approved": "Approved",
+      "rejected": "Rejected"
     }
   }
 }

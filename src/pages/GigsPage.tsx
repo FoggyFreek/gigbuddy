@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
@@ -12,7 +12,7 @@ import AddIcon from '@mui/icons-material/Add'
 import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined'
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined'
 import ShareIcon from '@mui/icons-material/Share'
-import GigsTable, { type GigsFilterSelection, type GigsTab } from '../components/GigsTable.tsx'
+import GigsTable, { type GigsFilterSelection } from '../components/GigsTable.tsx'
 import GigFormModal from '../components/GigFormModal.tsx'
 import SplitView from '../components/SplitView.tsx'
 import TourShareDialog from '../components/TourShareDialog.tsx'
@@ -20,25 +20,28 @@ import TourExportDialog from '../components/TourExportDialog.tsx'
 import BannerMosaicDialog from '../components/BannerMosaicDialog.tsx'
 import BandsintownImportDialog from '../components/BandsintownImportDialog.tsx'
 import BandsintownApiImportDialog from '../components/BandsintownApiImportDialog.tsx'
-import { listGigs, listPastGigs, listUpcomingGigs, searchGigs } from '../api/gigs.ts'
+import { listGigs } from '../api/gigs.ts'
 import { getProfile } from '../api/profile.ts'
+import { usePagedEventTabs } from '../hooks/usePagedEventTabs.ts'
+import { usePlanningSource } from '../hooks/usePlanningSource.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { downloadBandsintownCsv } from '../utils/bandsintownExport.ts'
 import { ALL_STATUSES } from '../utils/gigStatus.ts'
-import { isPastDate, localDateString } from '../utils/dateFormat.ts'
-import type { ListCollectionCursor } from '../types/api.ts'
 import type { Gig } from '../types/entities.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
 import { useProfile } from '../contexts/profileContext.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 
-// Bounded page size for the Upcoming/Past tabs — matches the server's
-// MAX_LIST_LIMIT. Past gigs paginate further via a keyset cursor ("load more").
-const TAB_PAGE_SIZE = 100
 const SEARCH_MIN_CHARS = 3
 
 export default function GigsPage() {
   const { t } = useTranslation(['gigs', 'common'])
   const { canWritePlanning } = usePermissions()
   const { isIntegrationConfigured } = useProfile()
+  const { supports } = useTenantKind()
+  const gigSource = usePlanningSource('gigs')
+  const hasBandShare = supports(TENANT_CAPABILITIES.BAND_SHARE)
   const bandsintownConfigured = isIntegrationConfigured('bandsintown')
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
@@ -51,33 +54,28 @@ export default function GigsPage() {
   const [allGigs, setAllGigs] = useState<Gig[]>([])
   const [allGigsRequested, setAllGigsRequested] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  const [activeTab, setActiveTab] = useState<GigsTab>('upcoming')
-  // Read by handleDetailLoaded without being a dependency, so that callback
-  // stays stable across ordinary tab switches (see outletContext below).
-  const activeTabRef = useRef(activeTab)
-  activeTabRef.current = activeTab
-  const [tabGigs, setTabGigs] = useState<Gig[]>([])
-  const [tabLoading, setTabLoading] = useState(true)
-  const [pastCursor, setPastCursor] = useState<ListCollectionCursor | null>(null)
-  const [pastHasMore, setPastHasMore] = useState(false)
-  const [loadingMore, setLoadingMore] = useState(false)
-
-  // On a fresh deep link (/gigs/:id landed on directly, e.g. page refresh or
-  // shared URL) the gig's date — and so its tab — isn't known yet. Defer the
-  // default 'upcoming' fetch until handleDetailLoaded resolves the real tab,
-  // so a past-gig deep link doesn't fire a throwaway upcoming request.
-  const deferInitialTabLoadRef = useRef(selectedIdParam != null)
-  // Guards against out-of-order responses (fast tab switching, or the
-  // deep-link resolution flipping tabs while a request is in flight) — only
-  // the most recently issued loadTab() may commit its result.
-  const tabRequestIdRef = useRef(0)
+  const {
+    activeTab, setActiveTab,
+    items: tabGigs, setItems: setTabGigs,
+    loading: tabLoading, loadingMore, hasMore: pastHasMore,
+    error, setError,
+    reload: reloadTab, loadMore: handleLoadMorePast,
+    onDetailLoaded, onDetailLoadError,
+  } = usePagedEventTabs({
+    aggregate: 'gigs',
+    dateOf: (gig) => gig.event_date,
+    // A gig deep-linked at /gigs/:id has an unknown date, so its tab is resolved
+    // from the detail pane's own fetch rather than guessed as 'upcoming'.
+    deferInitialLoad: selectedIdParam != null,
+  })
 
   const [search, setSearch] = useState('')
-  const [searchResults, setSearchResults] = useState<Gig[]>([])
-  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchResults, setSearchResults] = useState<MaybeCrossTenant<Gig>[]>([])
   const isSearching = search.trim().length >= SEARCH_MIN_CHARS
+  const searchKey = isSearching ? `${gigSource.kind}|${search.trim()}` : null
+  const [loadedSearchKey, setLoadedSearchKey] = useState<string | null>(null)
+  const searchLoading = searchKey !== null && loadedSearchKey !== searchKey
 
   const [modal, setModal] = useState<{ mode: 'create' } | null>(null)
   const [tourMenuAnchor, setTourMenuAnchor] = useState<HTMLElement | null>(null)
@@ -105,90 +103,25 @@ export default function GigsPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
-
-  const loadTab = useCallback(async (tab: GigsTab) => {
-    const requestId = ++tabRequestIdRef.current
-    try {
-      setTabLoading(true)
-      const today = localDateString()
-      if (tab === 'upcoming') {
-        const res = await listUpcomingGigs(TAB_PAGE_SIZE, today)
-        if (tabRequestIdRef.current !== requestId) return
-        setTabGigs(res.items)
-        setPastCursor(null)
-        setPastHasMore(false)
-      } else {
-        const res = await listPastGigs(TAB_PAGE_SIZE, today)
-        if (tabRequestIdRef.current !== requestId) return
-        setTabGigs(res.items)
-        setPastCursor(res.meta.nextCursor)
-        setPastHasMore(res.meta.nextCursor !== null)
-      }
-    } catch (e) {
-      if (tabRequestIdRef.current === requestId) setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      if (tabRequestIdRef.current === requestId) setTabLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (allGigsRequested) load()
-  }, [allGigsRequested, load])
-  useEffect(() => {
-    if (deferInitialTabLoadRef.current) return
-    loadTab(activeTab)
-  }, [activeTab, loadTab])
+  }, [setError])
 
   function requestAllGigs() {
+    if (allGigsRequested) return
     setAllGigsRequested(true)
+    void load()
   }
-
-  // Resolve which tab a deep-linked gig (/gigs/:id) belongs to from its
-  // event_date, so the split view opens on the right tab instead of showing
-  // an empty list until the user switches. Fed by the detail pane's own
-  // getGig() fetch (via onGigDetailLoaded in the outlet context) rather than
-  // a second, redundant fetch of the same gig here.
-  const handleDetailLoaded = useCallback((gig: Gig) => {
-    const wasDeferred = deferInitialTabLoadRef.current
-    deferInitialTabLoadRef.current = false
-    const tab: GigsTab = isPastDate(gig.event_date) ? 'past' : 'upcoming'
-    if (tab === activeTabRef.current) {
-      // Already the default tab (e.g. an upcoming-gig deep link) — setActiveTab
-      // wouldn't change state and so wouldn't re-trigger the load effect, so
-      // fire the deferred load explicitly.
-      if (wasDeferred) loadTab(tab)
-    } else {
-      setActiveTab(tab)
-    }
-  }, [loadTab])
-
-  // The deep-linked gig failed to load (deleted, 404, network error) — the
-  // tab it belongs to will never be resolved, so fall back to loading the
-  // default tab instead of leaving the list stuck deferred forever.
-  const handleDetailLoadError = useCallback(() => {
-    if (!deferInitialTabLoadRef.current) return
-    deferInitialTabLoadRef.current = false
-    loadTab(activeTabRef.current)
-  }, [loadTab])
 
   useEffect(() => {
     // `search` only changes after GigsTable's own debounce has settled, so no
     // further debouncing is needed here.
-    const q = search.trim()
-    if (q.length < SEARCH_MIN_CHARS) {
-      setSearchResults([])
-      setSearchLoading(false)
-      return
-    }
+    if (searchKey === null) return
     let cancelled = false
-    setSearchLoading(true)
-    searchGigs(q)
+    gigSource.api.search(search.trim())
       .then((rows) => { if (!cancelled) setSearchResults(rows) })
       .catch(() => { if (!cancelled) setSearchResults([]) })
-      .finally(() => { if (!cancelled) setSearchLoading(false) })
+      .finally(() => { if (!cancelled) setLoadedSearchKey(searchKey) })
     return () => { cancelled = true }
-  }, [search])
+  }, [search, searchKey, gigSource])
 
   useEffect(() => {
     if (!bandsintownConfigured) return
@@ -197,7 +130,7 @@ export default function GigsPage() {
 
   function refreshAll() {
     if (allGigsRequested) load()
-    loadTab(activeTab)
+    reloadTab()
   }
 
   function handleClose() {
@@ -205,33 +138,19 @@ export default function GigsPage() {
     refreshAll()
   }
 
-  async function handleLoadMorePast() {
-    if (!pastCursor) return
-    try {
-      setLoadingMore(true)
-      const today = localDateString()
-      const res = await listPastGigs(TAB_PAGE_SIZE, today, pastCursor)
-      setTabGigs((prev) => [...prev, ...res.items])
-      setPastCursor(res.meta.nextCursor)
-      setPastHasMore(res.meta.nextCursor !== null)
-    } finally {
-      setLoadingMore(false)
-    }
-  }
-
   const handleGigUpdate = useCallback((gigId: number, patch: Partial<Gig>) => {
-    const apply = (list: Gig[]) => list.map((g) => (g.id === gigId ? { ...g, ...patch } : g))
+    const apply = (list: MaybeCrossTenant<Gig>[]) => list.map((g) => (g.id === gigId ? { ...g, ...patch } : g))
     setAllGigs(apply)
     setTabGigs(apply)
     setSearchResults(apply)
-  }, [])
+  }, [setTabGigs])
 
   const handleGigDelete = useCallback((gigId: number) => {
-    const apply = (list: Gig[]) => list.filter((g) => g.id !== gigId)
+    const apply = (list: MaybeCrossTenant<Gig>[]) => list.filter((g) => g.id !== gigId)
     setAllGigs(apply)
     setTabGigs(apply)
     setSearchResults(apply)
-  }, [])
+  }, [setTabGigs])
 
   const filteredForExport = useMemo(() => allGigs
     .filter((gig) => gig.status === 'confirmed' || gig.status === 'announced')
@@ -255,10 +174,10 @@ export default function GigsPage() {
     () => ({
       onGigUpdate: handleGigUpdate,
       onGigDelete: handleGigDelete,
-      onGigDetailLoaded: handleDetailLoaded,
-      onGigDetailLoadError: handleDetailLoadError,
+      onGigDetailLoaded: onDetailLoaded,
+      onGigDetailLoadError: onDetailLoadError,
     }),
-    [handleGigUpdate, handleGigDelete, handleDetailLoaded, handleDetailLoadError],
+    [handleGigUpdate, handleGigDelete, onDetailLoaded, onDetailLoadError],
   )
 
   return (
@@ -336,35 +255,39 @@ export default function GigsPage() {
             </MenuItem>
           )}
         </Menu>
-        <Tooltip title={t($ => $.toolbar.shareTourDates)}>
-          <IconButton onClick={(e) => { requestAllGigs(); setTourMenuAnchor(e.currentTarget) }}>
-            <ShareIcon />
-          </IconButton>
-        </Tooltip>
-        <Menu
-          anchorEl={tourMenuAnchor}
-          open={!!tourMenuAnchor}
-          onClose={() => setTourMenuAnchor(null)}
-        >
-          <MenuItem
-            disabled={loading || filteredForCardShare.length === 0}
-            onClick={() => { setTourMenuAnchor(null); setTourShareOpen(true) }}
-            dense
-          >
-            <Button variant="contained" size="small" fullWidth>
-              {t($ => $.toolbar.createTourCard)}
-            </Button>
-          </MenuItem>
-          <MenuItem
-            disabled={loading || filteredForCardShare.length === 0}
-            onClick={() => { setTourMenuAnchor(null); setMosaicOpen(true) }}
-            dense
-          >
-            <Button variant="contained" size="small" fullWidth>
-              {t($ => $.toolbar.bannerMosaic)}
-            </Button>
-          </MenuItem>
-        </Menu>
+        {hasBandShare && (
+          <>
+            <Tooltip title={t($ => $.toolbar.shareTourDates)}>
+              <IconButton onClick={(e) => { requestAllGigs(); setTourMenuAnchor(e.currentTarget) }}>
+                <ShareIcon />
+              </IconButton>
+            </Tooltip>
+            <Menu
+              anchorEl={tourMenuAnchor}
+              open={!!tourMenuAnchor}
+              onClose={() => setTourMenuAnchor(null)}
+            >
+              <MenuItem
+                disabled={loading || filteredForCardShare.length === 0}
+                onClick={() => { setTourMenuAnchor(null); setTourShareOpen(true) }}
+                dense
+              >
+                <Button variant="contained" size="small" fullWidth>
+                  {t($ => $.toolbar.createTourCard)}
+                </Button>
+              </MenuItem>
+              <MenuItem
+                disabled={loading || filteredForCardShare.length === 0}
+                onClick={() => { setTourMenuAnchor(null); setMosaicOpen(true) }}
+                dense
+              >
+                <Button variant="contained" size="small" fullWidth>
+                  {t($ => $.toolbar.bannerMosaic)}
+                </Button>
+              </MenuItem>
+            </Menu>
+          </>
+        )}
         {canWritePlanning && (
           <Button
             variant="contained"
@@ -396,6 +319,7 @@ export default function GigsPage() {
         hasMore={pastHasMore}
         loadingMore={loadingMore}
         onLoadMore={handleLoadMorePast}
+        showBand={gigSource.labelsTenant}
       />
 
       {modal && (
@@ -405,11 +329,13 @@ export default function GigsPage() {
         />
       )}
 
-      <TourShareDialog
-        open={tourShareOpen}
-        onClose={() => setTourShareOpen(false)}
-        gigs={filteredForCardShare}
-      />
+      {hasBandShare && (
+        <TourShareDialog
+          open={tourShareOpen}
+          onClose={() => setTourShareOpen(false)}
+          gigs={filteredForCardShare}
+        />
+      )}
 
       <TourExportDialog
         open={tourExportOpen}
@@ -417,11 +343,13 @@ export default function GigsPage() {
         gigs={filteredForExport}
       />
 
-      <BannerMosaicDialog
-        open={mosaicOpen}
-        onClose={() => setMosaicOpen(false)}
-        gigs={filteredForCardShare}
-      />
+      {hasBandShare && (
+        <BannerMosaicDialog
+          open={mosaicOpen}
+          onClose={() => setMosaicOpen(false)}
+          gigs={filteredForCardShare}
+        />
+      )}
 
       {bandsintownConfigured && bandsintownApiImportOpen && (
         <BandsintownApiImportDialog

@@ -28,7 +28,34 @@ export interface CreateOwnedTenantPayload {
 export const createOwnedTenant = (payload: CreateOwnedTenantPayload) =>
   request<Tenant>('/api/tenants', { method: 'POST', body: JSON.stringify(payload) })
 
+export interface CreatePersonalTenantPayload {
+  /** Accounting country (ISO alpha-2, lowercase). Required, never defaulted. */
+  country_code: string
+  /** Omitted → named after the caller's own display name. */
+  display_name?: string
+  /** Marks the workspace as the caller's onboarding resume pointer. */
+  onboarding?: boolean
+}
+
+/**
+ * The caller's own artist workspace. Idempotent server-side: calling it again
+ * returns the existing workspace rather than creating a second.
+ */
+export const createPersonalTenant = (payload: CreatePersonalTenantPayload) =>
+  request<Tenant>('/api/tenants/personal', { method: 'POST', body: JSON.stringify(payload) })
+
 export const listOwnedTenants = () => request<Tenant[]>('/api/tenants/owned')
+
+export interface DeleteManagedTenantPayload {
+  confirmationName: string
+  acknowledged: true
+}
+
+export const deleteManagedTenant = (id: Id, payload: DeleteManagedTenantPayload) =>
+  request<void>(`/api/tenants/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify(payload),
+  })
 
 export interface TenantOnboardingStatus {
   tenantOnboardingEnabled: boolean
@@ -41,6 +68,17 @@ export const updateTenantOnboardingStatus = (tenantOnboardingEnabled: boolean) =
   request<TenantOnboardingStatus>('/api/admin/platform-settings/tenant-onboarding', {
     method: 'PATCH',
     body: JSON.stringify({ tenantOnboardingEnabled }),
+  })
+
+export interface TenantSlugResponse {
+  slug: string
+  linkpageSync?: 'synced' | 'pending'
+}
+
+export const updateActiveTenantSlug = (slug: string) =>
+  request<TenantSlugResponse>('/api/tenant/slug', {
+    method: 'PATCH',
+    body: JSON.stringify({ slug }),
   })
 
 export const listTenants = () => api<Tenant[]>('/')

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -60,6 +60,10 @@ export default function LoginPage() {
         alignItems: 'center',
         minHeight: '100vh',
         bgcolor: '#F4F1FB',
+        backgroundImage: 'url(/backgrounds/bg_01_light.webp)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
         px: 2,
       }}
     >

@@ -53,6 +53,8 @@ function completeEntitlements() {
       chordpro: true,
       public_promotion: false,
       linkpage: true,
+      custom_slug: true,
+      calendar_sync: true,
     },
     limits: { storage_mb: 250, members: 10, bands: 2, linkpage_pages: 5, linkpage_stats_days: 30 },
   }
@@ -124,9 +126,20 @@ describe('shared/entitlements validateEntitlements', () => {
 })
 
 describe('seeded default plans', () => {
-  it('seeds bronze, silver, and gold in sort order', async () => {
+  // Grouped by ladder, ranked within it: sort_order is per-audience now.
+  it('seeds both ladders, band first, ranked within each', async () => {
     const res = await asSuper(request(app).get('/api/admin/plans')).expect(200)
-    expect(res.body.map((p) => p.slug)).toEqual(['bronze', 'silver', 'gold'])
+    expect(res.body.map((p) => p.slug))
+      .toEqual(['bronze', 'silver', 'gold', 'artist_bronze', 'artist_gold'])
+    expect(res.body.map((p) => p.audience))
+      .toEqual(['band', 'band', 'band', 'artist', 'artist'])
+  })
+
+  it('artist_gold owns no band and does not advertise the band-only link page', async () => {
+    const res = await asSuper(request(app).get('/api/admin/plans')).expect(200)
+    const artist = res.body.find((p) => p.slug === 'artist_gold')
+    expect(artist.entitlements.features.linkpage).toBe(false)
+    expect(artist.entitlements.limits).toMatchObject({ bands: 0, linkpage_pages: 0 })
   })
 
   it('bronze is the active, free fallback plan', async () => {

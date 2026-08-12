@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet } from 'react-router'
 import { useEntitlements } from '../hooks/useEntitlements.ts'
 import type { Feature } from '../auth/entitlements.ts'
 

@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import Box from '@mui/material/Box'
 import Skeleton from '@mui/material/Skeleton'
 import PublicIcon from '@mui/icons-material/Public'

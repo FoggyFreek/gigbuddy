@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import theme from '../theme.ts'
 import FinanceOnboardingPage from '../pages/FinanceOnboardingPage.tsx'
@@ -17,10 +17,19 @@ vi.mock('../api/profile.ts', () => ({
   getProfile: vi.fn(),
   updateProfile: vi.fn(),
   // Read by the reused Mollie/Shopify integration cards on the integrations step.
+  // The cards hand the whole get/set/clear trio to SecretKeySection while
+  // rendering, so the writers must exist even though these tests never save.
   getMollieKey: vi.fn(),
+  setMollieKey: vi.fn(),
+  clearMollieKey: vi.fn(),
   getShopifySecret: vi.fn(),
+  setShopifySecret: vi.fn(),
+  clearShopifySecret: vi.fn(),
   getShopifyDomain: vi.fn(),
+  setShopifyDomain: vi.fn(),
   getShopifyClientId: vi.fn(),
+  setShopifyClientId: vi.fn(),
+  clearShopifyClientId: vi.fn(),
 }))
 vi.mock('../api/accounts.ts', () => ({
   listAccounts: vi.fn(),

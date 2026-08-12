@@ -1,7 +1,7 @@
 // The accounting regime is deliberately absent: it lives on
 // tenant_accounting_profiles and is served by GET /api/accounting-profile.
 const SAFE_TENANT_COLUMNS = Object.freeze([
-  'id', 'slug', 'band_name', 'bio', 'short_bio',
+  'id', 'slug', 'kind', 'band_name', 'display_name', 'bio', 'short_bio',
   'instagram_handle', 'facebook_handle', 'tiktok_handle', 'youtube_handle', 'spotify_handle',
   'logo_path', 'created_by_user_id', 'created_at', 'updated_at', 'archived_at',
   'accent_color',
@@ -11,6 +11,7 @@ const SAFE_TENANT_COLUMNS = Object.freeze([
   'iban', 'tax_id',
   'banner_path', 'avatar_path', 'logo_dark_path',
   'owner_user_id',
+  'join_policy',
 ])
 
 export function tenantSafeProjection(alias = null) {

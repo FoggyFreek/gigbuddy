@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import Box from '@mui/material/Box'
 import Checkbox from '@mui/material/Checkbox'
 import Chip from '@mui/material/Chip'
@@ -30,7 +30,7 @@ import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { listLedger, listLedgerPeriods } from '../api/ledger.ts'
 import { formatEur } from '../utils/invoiceTotals.ts'
 import { formatShortDate } from '../utils/dateFormat.ts'
-import { defaultPeriodForDates } from '../utils/invoicePeriod.ts'
+import { defaultPeriodForDates, periodKey } from '../utils/invoicePeriod.ts'
 import useFiscalYearStart from '../hooks/useFiscalYearStart.ts'
 import { ALL_LEDGER_GROUPS } from '../utils/ledgerEntryType.ts'
 import { loadLedgerFilters, saveLedgerFilters } from '../utils/ledgerFilterStorage.ts'
@@ -38,6 +38,10 @@ import MoneyCells, { MoneyHeaderCells } from '../components/shared/MoneyCells.ts
 import type { LedgerEntryRow, Period } from '../types/entities.ts'
 
 type SortField = 'id' | 'entry_date'
+
+// Stable empty fallback: a fresh [] each render would change the identity of
+// every memo that depends on the entry list.
+const NO_ENTRIES: LedgerEntryRow[] = []
 
 export default function LedgerEntriesPage() {
   const fiscalYearStart = useFiscalYearStart()
@@ -49,9 +53,8 @@ export default function LedgerEntriesPage() {
   // Restore the previous session's filters so navigating into an entry detail
   // and back keeps the user's view.
   const saved = loadLedgerFilters()
-  const [entries, setEntries] = useState<LedgerEntryRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // Raised by the periods fetch below; the list fetch carries its own error.
+  const [periodsError, setPeriodsError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState<string>(typeof saved?.searchQuery === 'string' ? saved.searchQuery : '')
   const [showVoided, setShowVoided] = useState<boolean>(typeof saved?.showVoided === 'boolean' ? saved.showVoided : false)
   const [activeGroups, setActiveGroups] = useState<Set<string>>(() => new Set(saved?.activeGroups ?? ALL_LEDGER_GROUPS))
@@ -81,26 +84,41 @@ export default function LedgerEntriesPage() {
           return defaultPeriodForDates(dateStrings, fiscalYearStart)
         })
       })
-      .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
+      .catch((e: unknown) => { if (!cancelled) setPeriodsError(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (!cancelled) setPeriodsLoaded(true) })
     return () => { cancelled = true }
   }, [fiscalYearStart])
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      setEntries(await listLedger(period))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [period])
+  // Entries are tagged with the request they answered (period + reload), so
+  // `loading` is derived from whether the newest request has landed rather than
+  // flipped synchronously before it goes out.
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const reload = useCallback(() => setReloadNonce((n) => n + 1), [])
+  const entriesKey = periodsLoaded ? `${periodKey(period)}|${reloadNonce}` : null
+  const [entriesState, setEntriesState] = useState<{ key: string; entries: LedgerEntryRow[]; error: string | null } | null>(null)
+  const entries = entriesState?.entries ?? NO_ENTRIES
+  const loading = entriesKey == null || entriesState?.key !== entriesKey
+  const loadError = entriesKey != null && entriesState?.key === entriesKey ? entriesState.error : null
+  const error = periodsError ?? loadError
 
   useEffect(() => {
-    if (periodsLoaded) load()
-  }, [load, periodsLoaded])
+    if (entriesKey == null) return
+    let cancelled = false
+    listLedger(period)
+      .then((rows) => {
+        if (!cancelled) setEntriesState({ key: entriesKey, entries: rows, error: null })
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setEntriesState((prev) => ({
+            key: entriesKey,
+            entries: prev?.entries ?? [],
+            error: e instanceof Error ? e.message : String(e),
+          }))
+        }
+      })
+    return () => { cancelled = true }
+  }, [entriesKey, period])
 
   const visibleEntries = useMemo(() => {
     let list = entries.filter((row) => activeGroups.has(row.group ?? ''))
@@ -205,7 +223,7 @@ export default function LedgerEntriesPage() {
         <BankStatementImportDialog
           onClose={(imported) => {
             setImportOpen(false)
-            if (imported) load()
+            if (imported) reload()
           }}
         />
       )}

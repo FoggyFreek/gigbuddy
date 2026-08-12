@@ -35,7 +35,7 @@ const asUserA = (req) => req
 const TODAY = '2026-05-01'
 
 describe('GET /api/gigs/past', () => {
-  it('returns past gigs most-recent-first, isolated by tenant, with availability enriched', async () => {
+  it('returns past gigs most-recent-first and isolated by tenant', async () => {
     await pool.query(
       `INSERT INTO gigs (tenant_id, event_date, event_description)
        VALUES ($1, DATE '2026-05-01', 'Today is not past'),
@@ -48,7 +48,7 @@ describe('GET /api/gigs/past', () => {
     const res = await asUserA(request(app).get('/api/gigs/past').query({ limit: 10, today: TODAY })).expect(200)
     expect(res.body.items.map((g) => g.event_description)).toEqual(['Last A', 'Earlier A'])
     expect(res.body.meta).toEqual({ limit: 10, returned: 2, nextCursor: null })
-    expect(res.body.items[0].members_availability).toMatchObject([{ name: 'Alpha Member', status: 'default' }])
+    expect(res.body.items[0].members_availability).toEqual([])
   })
 
   it('paginates with a keyset cursor instead of offset, never repeating or skipping rows', async () => {
@@ -87,7 +87,7 @@ describe('GET /api/gigs/past', () => {
 })
 
 describe('GET /api/gigs/upcoming', () => {
-  it('includes member availability in the response', async () => {
+  it('does not attach availability for non-participants', async () => {
     await pool.query(
       `INSERT INTO gigs (tenant_id, event_date, event_description)
        VALUES ($1, DATE '2099-07-17', 'Next A')`,
@@ -95,6 +95,6 @@ describe('GET /api/gigs/upcoming', () => {
     )
 
     const res = await asUserA(request(app).get('/api/gigs/upcoming').query({ limit: 10, today: TODAY })).expect(200)
-    expect(res.body.items[0].members_availability).toMatchObject([{ name: 'Alpha Member', status: 'default' }])
+    expect(res.body.items[0].members_availability).toEqual([])
   })
 })

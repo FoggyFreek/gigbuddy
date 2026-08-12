@@ -10,11 +10,12 @@ import {
   GIG_STATUS_COLORS,
   REHEARSAL_STATUS_COLORS,
   BAND_EVENT_COLOR,
+  canManageAvailabilityForMember,
   getMemberColor,
 } from '../../utils/availabilityUtils.ts'
 import { venueHeadline } from '../../utils/venueDisplay.ts'
 import { getEventTextColor, resolvePaletteColor } from './calendarColors.ts'
-import type { CalendarCell as CalendarCellData, Member, Slot, Gig, Rehearsal, BandEvent } from '../../types/entities.ts'
+import type { CalendarCell as CalendarCellData, Member, Slot, Gig, Rehearsal, BandEvent, UnassignedSlotLane } from '../../types/entities.ts'
 
 const SLOT_BAR_SX = {
   minHeight: 20,
@@ -83,19 +84,35 @@ function DayNumber({ date, mobile, isToday, isSelected, inMonth, theme }: Readon
 interface DotProps {
   bgcolor?: string
   opacity?: number
+  dashed?: boolean
   dataAttr?: Record<string, string | number>
 }
 
-function Dot({ bgcolor, opacity, dataAttr }: Readonly<DotProps>) {
-  return <Box {...dataAttr} sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor, opacity }} />
+function Dot({ bgcolor, opacity, dashed = false, dataAttr }: Readonly<DotProps>) {
+  return (
+    <Box
+      {...dataAttr}
+      sx={{
+        width: 7,
+        height: 7,
+        boxSizing: 'border-box',
+        borderRadius: '50%',
+        bgcolor: dashed ? 'transparent' : bgcolor,
+        border: dashed ? '1px dashed' : 'none',
+        borderColor: bgcolor,
+        opacity,
+      }}
+    />
+  )
 }
 
 interface MobileDotsProps {
   cell: CalendarCellData
   members: Member[]
+  unassignedLane?: UnassignedSlotLane
 }
 
-function MobileDots({ cell, members }: Readonly<MobileDotsProps>) {
+function MobileDots({ cell, members, unassignedLane }: Readonly<MobileDotsProps>) {
   return (
     <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, justifyContent: 'center', flexWrap: 'wrap', gap: 0.5, rowGap: 0.25 }}>
       {(cell.cellGigs ?? []).map((gig) => (
@@ -107,9 +124,22 @@ function MobileDots({ cell, members }: Readonly<MobileDotsProps>) {
       {(cell.cellBandEvents ?? []).map((ev) => (
         <Dot key={`be-${ev.id}`} dataAttr={{ 'data-band-event-id': String(ev.id) }} bgcolor={BAND_EVENT_COLOR} />
       ))}
-      {(cell.cellSlots ?? []).map((slot) => (
-        <Dot key={`s-${slot.id}`} dataAttr={{ 'data-slot-id': String(slot.id) }} bgcolor={getMemberColor(slot, members)} />
-      ))}
+      {(cell.cellSlots ?? []).map((slot) => {
+        const color = getMemberColor(slot, members, unassignedLane?.color)
+        const isUnavailable = slot.status === 'unavailable'
+        return (
+          <Dot
+            key={`s-${slot.id}`}
+            dataAttr={{
+              'data-slot-id': String(slot.id),
+              'data-member-color': color,
+              'data-availability-appearance': isUnavailable ? 'dashed' : 'filled',
+            }}
+            bgcolor={color}
+            dashed={isUnavailable}
+          />
+        )
+      })}
     </Stack>
   )
 }
@@ -175,8 +205,9 @@ function RehearsalBar({ reh, theme, onRehearsalClick }: Readonly<RehearsalBarPro
   const statusLabel = reh.status
     ? t($ => $.status[reh.status as 'option' | 'planned'], { ns: 'rehearsals' })
     : ''
+  const calendarLabel = reh.calendar_description
   return (
-    <Tooltip title={[t($ => $.events.rehearsalTooltip, { status: statusLabel }), reh.location, t($ => $.events.votesYes, { yes, total })].filter(Boolean).join(' — ')}>
+    <Tooltip title={[calendarLabel ?? t($ => $.events.rehearsalTooltip, { status: statusLabel }), reh.location, t($ => $.events.votesYes, { yes, total })].filter(Boolean).join(' — ')}>
       <Box
         data-rehearsal-id={reh.id}
         onClick={(e) => { e.stopPropagation(); onRehearsalClick?.(reh) }}
@@ -197,7 +228,7 @@ function RehearsalBar({ reh, theme, onRehearsalClick }: Readonly<RehearsalBarPro
           </Box>
         )}
         <Box sx={{ fontSize: '0.7rem', lineHeight: 1.3, color: 'text.primary', fontWeight: 500, wordBreak: 'break-word' }}>
-          {t($ => $.events.rehearsalAbbrev, { yes, total })}
+          {calendarLabel ?? t($ => $.events.rehearsalAbbrev, { yes, total })}
         </Box>
       </Box>
     </Tooltip>
@@ -240,32 +271,53 @@ interface SlotBarProps {
   slot: Slot
   members: Member[]
   theme: Theme
+  unassignedLane?: UnassignedSlotLane
   onSlotClick: (slot: Slot) => void
 }
 
-function SlotBar({ slot, members, theme, onSlotClick }: Readonly<SlotBarProps>) {
+function SlotBar({ slot, members, theme, unassignedLane, onSlotClick }: Readonly<SlotBarProps>) {
   const { t } = useTranslation('availability')
-  const color = getMemberColor(slot, members)
+  const color = getMemberColor(slot, members, unassignedLane?.color)
+  const resolvedColor = resolvePaletteColor(theme, color)
   const isUnavailable = slot.status === 'unavailable'
-  const memberName = slot.band_member_id === null
-    ? t($ => $.events.band)
-    : members.find((m) => m.id === slot.band_member_id)?.name || ''
+  const isUnassigned = slot.band_member_id == null
+  const unassignedName = unassignedLane?.name ?? t($ => $.events.band)
+  const member = isUnassigned
+    ? null
+    : members.find((m) => String(m.id) === String(slot.band_member_id))
+  const memberName = isUnassigned
+    ? unassignedName
+    : member?.name || ''
   const statusLabel = slot.status
     ? t($ => $.status[slot.status as 'available' | 'unavailable'])
     : null
+  const isDerivedBooking = slot.source === 'booking' || slot.source === 'summary'
+  const isManageable = isUnassigned || canManageAvailabilityForMember(member)
+  const isReadOnly = isDerivedBooking || !isManageable
+  // A redacted entry renders as a plain busy block with a "details hidden"
+  // hint, so bandmates understand WHY they see nothing rather than assuming a
+  // bug. The server already withheld the detail — there is nothing here to hide.
+  const detail = slot.redacted
+    ? t($ => $.projection.hidden)
+    : slot.description || [slot.reason, slot.title, slot.tenantName].filter(Boolean).join(' — ')
   return (
-    <Tooltip title={[slot.band_member_id === null ? t($ => $.events.bandWide) : memberName, statusLabel, slot.reason].filter(Boolean).join(' — ')}>
+    <Tooltip title={[isUnassigned ? (unassignedLane?.name ?? t($ => $.events.bandWide)) : memberName, statusLabel, detail].filter(Boolean).join(' — ')}>
       <Box
         data-slot-id={slot.id}
-        onClick={(e) => { e.stopPropagation(); onSlotClick(slot) }}
+        data-member-color={color}
+        data-availability-appearance={isUnavailable ? 'dashed' : 'filled'}
+        aria-disabled={isReadOnly || undefined}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (!isReadOnly) onSlotClick(slot)
+        }}
         sx={{
           ...SLOT_BAR_SX,
-          bgcolor: color,
-          color: getEventTextColor(theme, color),
-          cursor: 'pointer',
-          backgroundImage: isUnavailable
-            ? 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.35) 3px, rgba(0,0,0,0.35) 6px)'
-            : 'none',
+          boxSizing: 'border-box',
+          bgcolor: isUnavailable ? alpha(resolvedColor, 0.04) : color,
+          border: isUnavailable ? `2px dashed ${resolvedColor}` : 'none',
+          color: isUnavailable ? resolvedColor : getEventTextColor(theme, color),
+          cursor: isReadOnly ? 'default' : 'pointer',
         }}
       >
         {memberName}
@@ -278,13 +330,14 @@ interface DesktopEventsProps {
   cell: CalendarCellData
   members: Member[]
   theme: Theme
+  unassignedLane?: UnassignedSlotLane
   onGigClick?: (gig: Gig) => void
   onRehearsalClick?: (reh: Rehearsal) => void
   onBandEventClick?: (ev: BandEvent) => void
   onSlotClick: (slot: Slot) => void
 }
 
-function DesktopEvents({ cell, members, theme, onGigClick, onRehearsalClick, onBandEventClick, onSlotClick }: Readonly<DesktopEventsProps>) {
+function DesktopEvents({ cell, members, theme, unassignedLane, onGigClick, onRehearsalClick, onBandEventClick, onSlotClick }: Readonly<DesktopEventsProps>) {
   return (
     <>
       <Stack spacing={0.375} sx={{ mt: 0.25 }}>
@@ -300,7 +353,7 @@ function DesktopEvents({ cell, members, theme, onGigClick, onRehearsalClick, onB
       </Stack>
       <Stack spacing={0.375} sx={{ mt: 0.375 }}>
         {(cell.cellSlots ?? []).map((slot) => (
-          <SlotBar key={slot.id} slot={slot} members={members} theme={theme} onSlotClick={onSlotClick} />
+          <SlotBar key={slot.id} slot={slot} members={members} theme={theme} unassignedLane={unassignedLane} onSlotClick={onSlotClick} />
         ))}
       </Stack>
     </>
@@ -311,6 +364,7 @@ interface CalendarCellProps {
   cell: CalendarCellData
   members: Member[]
   mobile?: boolean
+  unassignedLane?: UnassignedSlotLane
   onDayClick: (iso: string, shift: boolean, target: EventTarget) => void
   onSlotClick: (slot: Slot) => void
   onGigClick?: (gig: Gig) => void
@@ -319,7 +373,7 @@ interface CalendarCellProps {
 }
 
 export default function CalendarCell({
-  cell, members, mobile, onDayClick, onSlotClick, onGigClick, onRehearsalClick, onBandEventClick,
+  cell, members, mobile, unassignedLane, onDayClick, onSlotClick, onGigClick, onRehearsalClick, onBandEventClick,
 }: Readonly<CalendarCellProps>) {
   const theme = useTheme()
   const { iso, date, inMonth, isRowStart, week, isSelected, isToday, bgcolor } = cell
@@ -371,12 +425,13 @@ export default function CalendarCell({
       >
         <DayNumber date={date!} mobile={mobile} isToday={isToday} isSelected={isSelected} inMonth={inMonth} theme={theme} />
         {mobile ? (
-          <MobileDots cell={cell} members={members} />
+          <MobileDots cell={cell} members={members} unassignedLane={unassignedLane} />
         ) : (
           <DesktopEvents
             cell={cell}
             members={members}
             theme={theme}
+            unassignedLane={unassignedLane}
             onGigClick={onGigClick}
             onRehearsalClick={onRehearsalClick}
             onBandEventClick={onBandEventClick}

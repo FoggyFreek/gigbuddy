@@ -1,3 +1,4 @@
+import PersonOutlinedIcon from '@mui/icons-material/PersonOutlined'
 import type { SvgIconComponent } from '@mui/icons-material'
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined'
 import PhotoCameraOutlinedIcon from '@mui/icons-material/PhotoCameraOutlined'
@@ -89,6 +90,7 @@ export const ACHIEVEMENT_CATEGORY_ICONS: Record<AchievementCategory, SvgIconComp
   platform: EmojiEventsOutlinedIcon,
   repertoire: LibraryMusicOutlinedIcon,
   network: ContactsOutlinedIcon,
+  artist: PersonOutlinedIcon,
 }
 
 export function getAchievementIcon(

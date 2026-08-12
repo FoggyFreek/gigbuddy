@@ -51,7 +51,7 @@ import {
   clearMemoryTile,
   updateMemoryTile,
 } from '../repositories/dashboardTileRepository.js'
-import { lockTenantRow } from '../repositories/tenantRepository.js'
+import { lockTenantRow, updateJoinPolicy } from '../repositories/tenantRepository.js'
 import { loadAccountingProfile } from './accountingProfileService.js'
 import { withTransaction } from '../db/withTransaction.js'
 import { DEFAULT_VAT_COUNTRY } from '../../shared/vatRates.js'
@@ -65,6 +65,7 @@ import { invalidateToken } from './shopifyTokenService.js'
 import { withFeatureWriteGuard, withIntegrationWriteLock } from './featureGuards.js'
 import { resolveTenantEntitlements } from './entitlementService.js'
 import { FEATURES } from '../auth/entitlements.js'
+import { isKnownJoinPolicy } from '../domain/membership.js'
 import { badRequest, notFound } from './serviceErrors.js'
 import { getIntegrationConfiguration } from './integrationService.js'
 
@@ -167,6 +168,21 @@ export async function patchProfile(db, tenantId, body, isAdmin) {
 
   // No consistency check and no customization data: a plain unlocked write.
   return runProfileWrite(db, tenantId, body, false)
+}
+
+// Discoverability opt-in: "let musicians find us and ask to join". A
+// tenant.manage decision, not a profile edit, and only a band can be
+// discoverable (the repository's WHERE enforces the kind too).
+export async function setJoinPolicy(db, tenantId, body) {
+  const joinPolicy = body?.join_policy
+  if (!isKnownJoinPolicy(joinPolicy)) return badRequest('invalid_join_policy')
+
+  const updated = await updateJoinPolicy(db, tenantId, joinPolicy)
+  if (!updated) return notFound('Profile not found')
+  return {
+    profile: updated,
+    audit: { action: 'tenant.join_policy', details: { joinPolicy } },
+  }
 }
 
 // Locks the tenant row and resolves the accounting country that tax_id/kvk_number

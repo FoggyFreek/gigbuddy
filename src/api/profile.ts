@@ -1,6 +1,7 @@
 import { request, requestForm } from './_client.ts'
 import type { Tenant, Id } from '../types/entities.ts'
 import type { IntegrationConfiguration } from '../utils/integrations.ts'
+import type { JoinPolicy } from '../utils/membership.ts'
 
 interface ProfileLink {
   id?: Id
@@ -25,6 +26,11 @@ const api = <T = unknown>(path: string, options?: RequestInit) =>
 export const getProfile = () => api<Profile>('/')
 export const updateProfile = (body: Partial<Profile>) =>
   api<Profile>('/', { method: 'PATCH', body: JSON.stringify(body) })
+
+/** Discoverability in the band directory. Its own endpoint: tenant.manage, not
+ *  the planning.write that governs the rest of the profile. */
+export const setJoinPolicy = (join_policy: JoinPolicy) =>
+  api<Profile>('/join-policy', { method: 'PATCH', body: JSON.stringify({ join_policy }) })
 
 // Band banner path, cached for the session. The banner only changes via
 // uploadBanner() (there is no removal path), so display-only callers that open

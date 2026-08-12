@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router'
 import AppBar from '@mui/material/AppBar'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
@@ -38,6 +38,7 @@ import ChecklistOutlined from '@mui/icons-material/ChecklistOutlined'
 import EventNoteOutlined from '@mui/icons-material/EventNoteOutlined'
 import EmailOutlined from '@mui/icons-material/EmailOutlined'
 import LocationOnOutlined from '@mui/icons-material/LocationOnOutlined'
+import GroupsOutlined from '@mui/icons-material/GroupsOutlined'
 import ContactsOutlined from '@mui/icons-material/ContactsOutlined'
 import StorefrontOutlined from '@mui/icons-material/StorefrontOutlined'
 import ReceiptLongOutlined from '@mui/icons-material/ReceiptLongOutlined'
@@ -68,6 +69,10 @@ import TutorialHost from '../tutorials/TutorialHost.tsx'
 import SearchPanel from './appShell/SearchPanel.tsx'
 import SettingsMenu from './appShell/SettingsMenu.tsx'
 import UserMenu from './appShell/UserMenu.tsx'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { TENANT_CAPABILITIES, type TenantCapability } from '../auth/tenantCapabilities.ts'
+import CreatePersonalWorkspaceDialog from './appShell/CreatePersonalWorkspaceDialog.tsx'
+import AddBandDialog from './myBands/AddBandDialog.tsx'
 import type { Id } from '../types/entities.ts'
 
 // Local type for NAV_GROUPS. Group/item display labels come from the `navigation`
@@ -79,7 +84,7 @@ type NavGroupKey = 'overview' | 'planning' | 'repertoire' | 'network' | 'financi
 type NavItemKey =
   | 'dashboard' | 'financial' | 'profile' | 'availability' | 'gigs' | 'rehearsals'
   | 'bandEvents' | 'tasks' | 'songs' | 'setlists' | 'contacts' | 'suppliers'
-  | 'venues' | 'emailTemplates' | 'invoices' | 'purchases' | 'merch' | 'reimbursements'
+  | 'venues' | 'myBands' | 'emailTemplates' | 'invoices' | 'purchases' | 'merch' | 'reimbursements'
   | 'journal' | 'ledger' | 'ledgerEntries' | 'vatReturns' | 'reports'
 
 interface NavChildEntry {
@@ -91,6 +96,8 @@ interface NavChildEntry {
   // item stays VISIBLE but renders a diamond icon and links to the upsell page
   // (it is NOT hidden — that's what permission does). See project memory.
   feature?: Feature
+  // Named kind capability. Absent means the surface is kind-neutral.
+  capability?: TenantCapability
 }
 
 interface NavGroupEntry {
@@ -112,12 +119,16 @@ const NAV_GROUPS: NavGroupEntry[] = [
       { to: '/', i18nKey: 'dashboard', icon: DashboardOutlined },
       { to: '/financial', i18nKey: 'financial', icon: QueryStatsOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
       { to: '/profile', i18nKey: 'profile', icon: PersonOutlined },
+      // Personal-only: a band workspace's bands are itself.
+      { to: '/my-bands', i18nKey: 'myBands', icon: GroupsOutlined, capability: TENANT_CAPABILITIES.MY_BANDS },
     ],
   },
   {
     key: 'planning',
     icon: EventNoteTwoTone,
     children: [
+      // Both kinds have a calendar: bands see their roster grid, while a
+      // personal workspace weaves the artist's required bookings together.
       { to: '/availability', i18nKey: 'availability', icon: CalendarMonthOutlined },
       { to: '/gigs', i18nKey: 'gigs', icon: EventOutlined },
       { to: '/rehearsals', i18nKey: 'rehearsals', icon: MusicNoteOutlined },
@@ -130,7 +141,7 @@ const NAV_GROUPS: NavGroupEntry[] = [
     icon: LibraryMusicTwoTone,
     children: [
       { to: '/songs', i18nKey: 'songs', icon: LibraryMusicOutlined },
-      { to: '/setlists', i18nKey: 'setlists', icon: QueueMusicOutlined },
+      { to: '/setlists', i18nKey: 'setlists', icon: QueueMusicOutlined, capability: TENANT_CAPABILITIES.SETLISTS },
     ],
   },
   {
@@ -149,7 +160,7 @@ const NAV_GROUPS: NavGroupEntry[] = [
     children: [
       { to: '/invoices', i18nKey: 'invoices', icon: ReceiptLongOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
       { to: '/purchases', i18nKey: 'purchases', icon: ShoppingCartOutlined, permission: PERMISSIONS.PURCHASE_CREATE, feature: FEATURES.FINANCE },
-      { to: '/merch', i18nKey: 'merch', icon: SellOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
+      { to: '/merch', i18nKey: 'merch', icon: SellOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE, capability: TENANT_CAPABILITIES.MERCH },
       { to: '/reimbursements', i18nKey: 'reimbursements', icon: VolunteerActivismOutlined, permission: PERMISSIONS.FINANCE_VIEW, feature: FEATURES.FINANCE },
     ],
   },
@@ -171,7 +182,7 @@ export default function AppShell() {
   const { t } = useTranslation('navigation')
   const { pathname } = useLocation()
   const { bandName } = useProfile()
-  const { user, logout, switchTenant } = useAuth()
+  const { user, logout, switchTenant, refreshUser } = useAuth()
   const { mode, toggleTheme } = useThemeMode()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
@@ -180,6 +191,8 @@ export default function AppShell() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [navCollapsed, setNavCollapsed] = useState(false)
   const [userMenuAnchor, setUserMenuAnchor] = useState<HTMLElement | null>(null)
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
+  const [createBandOpen, setCreateBandOpen] = useState(false)
   const [settingsMenuAnchor, setSettingsMenuAnchor] = useState<HTMLElement | null>(null)
   // When a SplitView opens its master-detail layout it asks for full width;
   // otherwise content stays capped and centered (see CONTENT_MAX_WIDTH).
@@ -195,6 +208,7 @@ export default function AppShell() {
   const isSuperAdmin = !!user?.isSuperAdmin
   const { can } = usePermissions()
   const { has, financeReadOnly, planSlug, locked, unenforced } = useEntitlements()
+  const { supports } = useTenantKind()
 
   // Header logo reflects the active subscription tier; fallback-locked or
   // unenforced (ownerless) tenants keep the standard logo.
@@ -245,11 +259,11 @@ export default function AppShell() {
           icon: g.icon,
           label: t($ => $.groups[g.key]),
           children: g.children
-            .filter((c) => !c.permission || can(c.permission))
+            .filter((c) => (!c.permission || can(c.permission)) && (!c.capability || supports(c.capability)))
             .map(toNavChild),
         }))
         .filter((g) => g.children.length > 0),
-    [can, toNavChild, t],
+    [can, supports, toNavChild, t],
   )
 
   // Single-open accordion: the group containing the active route auto-expands,
@@ -272,8 +286,16 @@ export default function AppShell() {
   const memberships = user?.memberships || []
   const approvedMemberships = memberships
     .filter((m) => m.status === 'approved' && m.tenantId != null)
-    .map((m) => ({ tenantId: m.tenantId!, tenantName: m.tenantName, role: m.role }))
+    .map((m) => ({
+      tenantId: m.tenantId!,
+      tenantName: m.displayName ?? m.tenantName,
+      kind: m.kind,
+      role: m.role,
+    }))
   const activeTenantId: Id | null = user?.activeTenantId ?? null
+  const bandLimit = user?.bandCapacity?.limit
+  const bandCreationDisabled = bandLimit !== null && bandLimit !== undefined
+    && (user?.bandCapacity?.used ?? 0) >= bandLimit
 
   const handleSwitch = async (tenantId: Id) => {
     setUserMenuAnchor(null)
@@ -445,6 +467,15 @@ export default function AppShell() {
                 activeTenantId={activeTenantId ?? undefined}
                 onSwitch={handleSwitch}
                 onLogout={() => { setUserMenuAnchor(null); logout() }}
+                onCreateBand={() => {
+                  setUserMenuAnchor(null)
+                  setCreateBandOpen(true)
+                }}
+                bandCreationDisabled={bandCreationDisabled}
+                onCreatePersonalWorkspace={() => {
+                  setUserMenuAnchor(null)
+                  setCreateWorkspaceOpen(true)
+                }}
               />
             </>
           )}
@@ -482,6 +513,28 @@ export default function AppShell() {
           </ClickAwayListener>
         )}
       </AppBar>
+
+      <CreatePersonalWorkspaceDialog
+        open={createWorkspaceOpen}
+        onClose={() => setCreateWorkspaceOpen(false)}
+        onCreated={(tenantId) => { void handleSwitch(tenantId) }}
+        defaultName={user?.name ?? ''}
+      />
+
+      {createBandOpen && (
+        <AddBandDialog
+          onClose={() => setCreateBandOpen(false)}
+          onAdded={() => setCreateBandOpen(false)}
+          onJoined={() => {
+            setCreateBandOpen(false)
+            void refreshUser()
+          }}
+          onCreated={(tenantId) => {
+            setCreateBandOpen(false)
+            void handleSwitch(tenantId)
+          }}
+        />
+      )}
 
       {isMobile ? (
         <Drawer

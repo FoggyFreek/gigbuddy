@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { NavLink } from 'react-router-dom'
+import { NavLink } from 'react-router'
 import Divider from '@mui/material/Divider'
 import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
@@ -13,6 +13,7 @@ import ApartmentIcon from '@mui/icons-material/Apartment'
 import SettingsIcon from '@mui/icons-material/Settings'
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt'
 import CreditCardIcon from '@mui/icons-material/CreditCard'
+import VerifiedOutlinedIcon from '@mui/icons-material/VerifiedOutlined'
 import type { SvgIconComponent } from '@mui/icons-material'
 
 interface NavMenuItemDef {
@@ -54,6 +55,8 @@ export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTh
     { to: '/admin/users', label: t($ => $.admin.allUsers, { ns: 'navigation' }), icon: PeopleAltIcon },
     // Hardcoded English (billing copy is not localized yet, per the rollout plan).
     { to: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCardIcon },
+    // Likewise hardcoded — the whole /admin surface is English-only.
+    { to: '/admin/band-profile-claims', label: 'Band profile claims', icon: VerifiedOutlinedIcon },
   ]
   // The unified settings page is reachable by every member; each section gates
   // its own content by role, so this entry is not permission-gated.

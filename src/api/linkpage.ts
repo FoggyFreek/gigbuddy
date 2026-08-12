@@ -3,6 +3,7 @@ import { request } from './_client.ts'
 export interface LinkpageStatus {
   configured: boolean
   publicUrl: string | null
+  linkpageSync?: 'synced' | 'pending'
 }
 
 export interface LinkpageHandoff {

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import Paper from '@mui/material/Paper'
 import Box from '@mui/material/Box'
@@ -29,6 +29,8 @@ import QueueMusicOutlined from '@mui/icons-material/QueueMusicOutlined'
 import StorefrontOutlined from '@mui/icons-material/StorefrontOutlined'
 import PlaceOutlined from '@mui/icons-material/PlaceOutlined'
 import ListAltOutlined from '@mui/icons-material/ListAltOutlined'
+import TaskAltOutlined from '@mui/icons-material/TaskAltOutlined'
+import CheckCircleOutlined from '@mui/icons-material/CheckCircleOutlined'
 import { useRecentSearches } from '../../hooks/useRecentSearches.ts'
 import { useSearchCategories } from '../../hooks/useSearchCategories.ts'
 import { usePermissions } from '../../hooks/usePermissions.ts'
@@ -38,13 +40,14 @@ import {
   COLLAPSED_COUNT,
   EXPANDED_COUNT,
 } from '../../hooks/useCategorySearch.ts'
-import type { SearchResultItem } from '../../hooks/useCategorySearch.ts'
+import type { SearchResultItem, SearchResultMarker } from '../../hooks/useCategorySearch.ts'
 import { PERMISSIONS } from '../../auth/permissions.ts'
 import type { Id } from '../../types/entities.ts'
 
 type CategoryKey =
   | 'contacts'
   | 'gigs'
+  | 'tasks'
   | 'files'
   | 'invoices'
   | 'purchases'
@@ -70,6 +73,7 @@ interface SearchPanelProps {
 const ALL_CATEGORIES: SearchCategory[] = [
   { key: 'contacts', icon: ContactsOutlined },
   { key: 'gigs', icon: EventOutlined },
+  { key: 'tasks', icon: TaskAltOutlined },
   { key: 'files', icon: InsertDriveFileOutlined },
   { key: 'invoices', icon: ReceiptLongOutlined },
   { key: 'purchases', icon: ShoppingCartOutlined },
@@ -81,6 +85,10 @@ const ALL_CATEGORIES: SearchCategory[] = [
 ]
 
 const DEFAULT_KEYS = ['contacts', 'gigs', 'files']
+// Icon per result-row state marker; the searchers only name the state.
+const MARKER_ICONS: Record<SearchResultMarker, SvgIconComponent> = {
+  finished: CheckCircleOutlined,
+}
 // Results list indents to line up with the category name: icon width + gap.
 const RESULT_INDENT = '28px'
 
@@ -102,6 +110,31 @@ function CountCircle({ count }: Readonly<{ count: number }>) {
       }}
     >
       {count}
+    </Box>
+  )
+}
+
+// A result's primary line: the label plus, when present, a state marker (a
+// checkmark on a finished task) and a category badge (venue vs festival).
+function ResultLabel({ item }: Readonly<{ item: SearchResultItem }>) {
+  const { t } = useTranslation('navigation')
+  const marker = item.marker
+  if (!marker && !item.badge) return <>{item.label}</>
+  const MarkerIcon = marker ? MARKER_ICONS[marker] : null
+  return (
+    <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {item.label}
+      </Box>
+      {MarkerIcon && marker && (
+        <MarkerIcon
+          titleAccess={t($ => $.search.markers[marker])}
+          sx={{ fontSize: 16, flexShrink: 0, color: 'success.main' }}
+        />
+      )}
+      {item.badge && (
+        <Chip label={item.badge} size="small" variant="outlined" sx={{ height: 18, fontSize: 10 }} />
+      )}
     </Box>
   )
 }
@@ -290,18 +323,7 @@ export default function SearchPanel({ query, tenantId, onNavigate }: Readonly<Se
                           sx={{ borderRadius: 1, py: 0.25 }}
                         >
                           <ListItemText
-                            primary={
-                              item.badge ? (
-                                <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
-                                  <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {item.label}
-                                  </Box>
-                                  <Chip label={item.badge} size="small" variant="outlined" sx={{ height: 18, fontSize: 10 }} />
-                                </Box>
-                              ) : (
-                                item.label
-                              )
-                            }
+                            primary={<ResultLabel item={item} />}
                             secondary={item.sublabel}
                             slotProps={{
                               primary: { variant: 'body2', noWrap: true, component: 'div' },

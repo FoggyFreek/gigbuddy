@@ -29,6 +29,7 @@
     "colVenueCity": "Locatie / Stad",
     "colTime": "Tijd",
     "colBand": "Band",
+    "colAvailability": "Beschikbaarheid",
     "colOpenTasks": "Open taken",
     "emptyUpcoming": "Geen aankomende optredens.",
     "emptyPast": "Geen eerdere optredens.",
@@ -49,6 +50,8 @@
     "create": "Aanmaken",
     "required": "Verplicht",
     "unavailableTitle": "Lid niet beschikbaar",
+    "travelMarginTitle": "Waarschuwing reistijdmarge",
+    "travelMarginBody": "{{names}} heeft een ander evenement binnen de ingestelde reistijdmarge. Weet je zeker dat je dit optreden wilt aanmaken?",
     "unavailableBody_one": "{{names}} is op deze datum als niet beschikbaar gemarkeerd. Weet je zeker dat je dit optreden wilt aanmaken?",
     "unavailableBody_other": "{{names}} zijn op deze datum als niet beschikbaar gemarkeerd. Weet je zeker dat je dit optreden wilt aanmaken?",
     "goBack": "Terug",
@@ -152,7 +155,7 @@
     "tabs": {
       "event": "Evenement",
       "terms": "Afspraken",
-      "availability": "Beschikbaarheid",
+      "participants": "Deelnemers",
       "tasks": "Taken"
     },
     "banner": {
@@ -200,11 +203,27 @@
       "paid": "Betaald",
       "void": "Vervallen"
     },
-    "equipmentOnSite": "Beschikbare apparatuur ter plaatse",
-    "paSystem": "PA-systeem",
-    "drumkit": "Drumstel",
-    "stageLight": "Podiumverlichting",
+    "equipment": {
+      "title": "Apparatuur",
+      "add": "Apparatuur toevoegen",
+      "empty": "Nog geen apparatuur vastgelegd",
+      "remove": "Verwijderen",
+      "saveFailed": "Opslaan van apparatuur mislukt",
+      "providerLabel": "Wie zorgt voor {{item}}",
+      "provider": {
+        "event": "Op locatie",
+        "band": "Wij nemen mee"
+      },
+      "items": {
+        "pa_system": "PA-systeem",
+        "drumkit": "Drumstel",
+        "bass_amp": "Basversterker",
+        "guitar_amp": "Gitaarversterker",
+        "stage_lights": "Podiumverlichting"
+      }
+    },
     "memberAvailability": "Beschikbaarheid",
+    "participants": "Deelnemers",
     "contacts": "Contacten",
     "tasks": "Taken",
     "attachments": "Bijlagen",
@@ -227,15 +246,13 @@
     "unassigned": "Niet toegewezen",
     "deleteTask": "Taak {{title}} verwijderen",
     "dueDateFor": "Vervaldatum voor {{title}}",
-    "openDuePickerFor": "vervaldatumkiezer openen voor {{title}}",
     "assignTask": "{{title}} toewijzen",
-    "doneEditing": "Klaar met bewerken",
     "taskLabel": "Taak",
-    "taskPlaceholder": "Taaknaam…",
     "addTask": "Taak toevoegen",
-    "openDuePicker": "vervaldatumkiezer openen",
-    "due": "Vervaldatum",
-    "completed": "Voltooid ({{count}})"
+    "completed": "Voltooid ({{count}})",
+    "setDueDate": "Vervaldatum instellen",
+    "clearDueDate": "Vervaldatum wissen",
+    "assign": "Toewijzen"
   },
   "contacts": {
     "sourceVenue": "Locatie",

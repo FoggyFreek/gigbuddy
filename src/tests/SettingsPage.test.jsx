@@ -1,12 +1,13 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthContext } from '../contexts/authContext.ts'
 import SettingsPage from '../pages/SettingsPage.tsx'
 import theme from '../theme.ts'
 import { clearResendKey, setResendKey } from '../api/profile.ts'
+import { updateActiveTenantSlug } from '../api/tenants.ts'
 
 vi.mock('../api/billing.ts', async (importOriginal) => {
   const actual = await importOriginal()
@@ -19,7 +20,15 @@ vi.mock('../api/notifications.ts', () => ({
 vi.mock('../hooks/usePushNotifications.ts', () => ({
   usePushNotifications: () => ({ status: 'unsubscribed', subscribe: vi.fn(), unsubscribe: vi.fn() }),
 }))
+vi.mock('../api/userAvailability.ts', () => ({
+  getAvailabilitySettings: vi.fn().mockResolvedValue({
+    availabilityDetailVisible: false, crossBandGigDetailVisible: false, delegations: [],
+  }),
+  updateAvailabilitySettings: vi.fn(),
+}))
 vi.mock('../api/profile.ts', () => ({
+  getProfile: vi.fn().mockResolvedValue({ join_policy: 'invite_only' }),
+  setJoinPolicy: vi.fn().mockResolvedValue({ join_policy: 'request' }),
   updateProfile: vi.fn().mockResolvedValue({}),
   getMollieKey: vi.fn().mockResolvedValue({ isSet: false }),
   getResendKey: vi.fn().mockResolvedValue({ isSet: false }),
@@ -48,16 +57,37 @@ vi.mock('../api/invites.ts', async (importOriginal) => {
   const actual = await importOriginal()
   return { ...actual, listInvites: vi.fn().mockResolvedValue([]) }
 })
+vi.mock('../api/tenants.ts', async (importOriginal) => {
+  const actual = await importOriginal()
+  return { ...actual, updateActiveTenantSlug: vi.fn() }
+})
 const lockedEntitlements = {
   planSlug: 'free', locked: false, financeReadOnly: false,
   flags: { finance: false, integrations: false, customization: false },
   limits: { storage_mb: 100, members: 5, bands: 1 },
 }
 
-function wrap(route, { role = 'tenant_admin', entitlements = null } = {}) {
-  const user = { id: 1, isSuperAdmin: false, activeTenantRole: role, entitlements }
+function wrap(route, {
+  role = 'tenant_admin', entitlements = null, activeTenantKind = 'band', refreshUser = vi.fn(),
+} = {}) {
+  const user = {
+    id: 1,
+    isSuperAdmin: false,
+    activeTenantId: 11,
+    activeTenantRole: role,
+    activeTenantKind,
+    entitlements,
+    memberships: [{
+      tenantId: 11,
+      tenantSlug: activeTenantKind === 'personal' ? 'solo-artist' : 'test-band',
+      displayName: activeTenantKind === 'personal' ? 'Solo Artist' : 'Test Band',
+      role,
+      status: 'approved',
+      kind: activeTenantKind,
+    }],
+  }
   return render(
-    <AuthContext.Provider value={{ user, logout: vi.fn() }}>
+    <AuthContext.Provider value={{ user, logout: vi.fn(), refreshUser }}>
       <ThemeProvider theme={theme}>
         <MemoryRouter initialEntries={[route]}>
           <Routes>
@@ -81,6 +111,8 @@ describe('SettingsPage — nav gating', () => {
     expect(screen.getByText('Members and invites')).toBeInTheDocument()
     expect(screen.getByText('Integrations')).toBeInTheDocument()
     expect(screen.getByText('Chart of accounts')).toBeInTheDocument()
+    expect(screen.getByText('Manage account')).toBeInTheDocument()
+    expect(screen.getByTestId('ManageAccountsIcon')).toBeInTheDocument()
   })
 
   it('hides tenant-admin settings for a plain member', async () => {
@@ -90,9 +122,10 @@ describe('SettingsPage — nav gating', () => {
     expect(screen.queryByText('Members and invites')).not.toBeInTheDocument()
     expect(screen.queryByText('Integrations')).not.toBeInTheDocument()
     expect(screen.queryByText('Chart of accounts')).not.toBeInTheDocument()
+    expect(screen.queryByText('Manage account')).not.toBeInTheDocument()
   })
 
-  it('groups the finance items under their own subheader, after band settings', async () => {
+  it('keeps Manage account inside band settings, before the finance group', async () => {
     wrap('/settings')
     await screen.findByText('Finance and accounting settings')
     const texts = [...document.querySelectorAll('.MuiListSubheader-root, .MuiListItemText-primary')]
@@ -104,7 +137,9 @@ describe('SettingsPage — nav gating', () => {
       'Accounting Settings',
       'Chart of accounts',
     ])
-    expect(texts.indexOf('Band settings')).toBeLessThan(texts.indexOf('Finance and accounting settings'))
+    expect(texts.indexOf('Band settings')).toBeLessThan(texts.indexOf('Manage account'))
+    expect(texts.indexOf('Manage account')).toBeLessThan(texts.indexOf('Finance and accounting settings'))
+    expect(screen.queryByText('Delete account (permanent)')).not.toBeInTheDocument()
   })
 
   it('hides the finance subheader when the member cannot manage finance', async () => {
@@ -121,6 +156,21 @@ describe('SettingsPage — nav gating', () => {
     }
     expect(screen.queryByText('Band settings')).not.toBeInTheDocument()
     expect(screen.queryByText('Accent color')).not.toBeInTheDocument()
+  })
+
+  // My Bands has its own personal-workspace page; these sections are band-only
+  // and administrative.
+  it('hides the band-only sections in a personal workspace', async () => {
+    wrap('/settings', { activeTenantKind: 'personal' })
+    expect(await screen.findAllByText('My preferences')).not.toHaveLength(0)
+    expect(screen.queryByText('Members and invites')).not.toBeInTheDocument()
+    expect(screen.queryByText('Band profile')).not.toBeInTheDocument()
+    expect(screen.queryByText('Manage account')).not.toBeInTheDocument()
+  })
+
+  it('offers the band profile claim to a band admin', async () => {
+    wrap('/settings')
+    expect(await screen.findAllByText('Public band profile')).not.toHaveLength(0)
   })
 })
 
@@ -179,7 +229,7 @@ describe('SettingsPage — plan gating', () => {
     const logo = await screen.findByAltText('Resend')
     let card = logo.closest('.MuiPaper-outlined')
     await user.click(within(card).getByRole('button', { name: 'Add integration' }))
-    card = (await screen.findByText('Send Emails through Resend')).closest('.MuiPaper-outlined')
+    card = (await screen.findByText('Send emails through Resend')).closest('.MuiPaper-outlined')
     await user.click(within(card).getByRole('button', { name: 'Configure' }))
     await user.type(within(card).getByLabelText('Resend API key'), `re_${'a'.repeat(32)}`)
     await user.click(within(card).getByRole('button', { name: 'Save' }))
@@ -195,5 +245,79 @@ describe('SettingsPage — plan gating', () => {
     // Wait for the nav (unique subheader) to settle, then assert no diamond link.
     await screen.findByText('Band settings')
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  it('shows a locked slug editor above account deletion without the Gold feature', async () => {
+    wrap('/settings/delete-account', { entitlements: lockedEntitlements })
+
+    const title = await screen.findByText('Change band slug')
+    const deleteTitle = screen.getByRole('heading', { name: 'Delete account permanently' })
+    expect(title.compareDocumentPosition(deleteTitle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('link', { name: /premium feature/i })).toHaveAttribute('href', '/upgrade/custom_slug')
+    expect(screen.getByLabelText('Slug name')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save slug name' })).toBeDisabled()
+  })
+
+  it('changes the slug and refreshes the auth payload for an entitled admin', async () => {
+    updateActiveTenantSlug.mockResolvedValue({ slug: 'new-stage-name' })
+    const refreshUser = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    const entitlements = {
+      ...lockedEntitlements,
+      planSlug: 'gold',
+      flags: { ...lockedEntitlements.flags, custom_slug: true },
+    }
+    wrap('/settings/delete-account', { entitlements, refreshUser })
+
+    const input = await screen.findByLabelText('Slug name')
+    expect(input).toHaveValue('test-band')
+    await user.clear(input)
+    await user.type(input, 'new-stage-name')
+    await user.click(screen.getByRole('button', { name: 'Save slug name' }))
+
+    expect(updateActiveTenantSlug).toHaveBeenCalledWith('new-stage-name')
+    expect(refreshUser).toHaveBeenCalledOnce()
+    expect(await screen.findByText('Band slug updated.')).toBeInTheDocument()
+  })
+
+  it('reports LinkBuddy synchronization as a non-blocking pending update', async () => {
+    updateActiveTenantSlug.mockResolvedValue({ slug: 'new-stage-name', linkpageSync: 'pending' })
+    const user = userEvent.setup()
+    const entitlements = {
+      ...lockedEntitlements,
+      planSlug: 'gold',
+      flags: { ...lockedEntitlements.flags, custom_slug: true },
+    }
+    wrap('/settings/delete-account', { entitlements, refreshUser: vi.fn().mockResolvedValue(undefined) })
+
+    const input = await screen.findByLabelText('Slug name')
+    await user.clear(input)
+    await user.type(input, 'new-stage-name')
+    await user.click(screen.getByRole('button', { name: 'Save slug name' }))
+
+    expect(await screen.findByText(
+      'Your GigBuddy address changed. Your LinkBuddy pages are still updating.',
+    )).toBeInTheDocument()
+  })
+
+  it('shows the localized uniqueness error returned by the server', async () => {
+    updateActiveTenantSlug.mockRejectedValue(Object.assign(new Error('Slug already in use'), {
+      status: 409,
+      code: 'slug_in_use',
+    }))
+    const user = userEvent.setup()
+    const entitlements = {
+      ...lockedEntitlements,
+      planSlug: 'gold',
+      flags: { ...lockedEntitlements.flags, custom_slug: true },
+    }
+    wrap('/settings/delete-account', { entitlements })
+
+    const input = await screen.findByLabelText('Slug name')
+    await user.clear(input)
+    await user.type(input, 'existing-band')
+    await user.click(screen.getByRole('button', { name: 'Save slug name' }))
+
+    expect(await screen.findByText('That slug name is already in use.')).toBeInTheDocument()
   })
 })

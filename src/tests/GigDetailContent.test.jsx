@@ -3,13 +3,14 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import GigDetailContent from '../components/GigDetailContent.tsx'
+import GigDetailContent from '../components/gigdetails/GigDetailContent.tsx'
 import theme from '../theme.ts'
 
 vi.mock('../api/availability.ts', () => ({
   getAvailabilityOn: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
+  evaluateEventAvailability: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
   listAvailability: vi.fn().mockResolvedValue([]),
   createSlot: vi.fn(),
   updateSlot: vi.fn(),
@@ -34,9 +35,6 @@ vi.mock('../api/gigs.ts', () => ({
     admission: 'free',
     ticket_link: null,
     notes: 'Bring own PA',
-    has_pa_system: false,
-    has_drumkit: false,
-    has_stage_lights: false,
     tasks: [],
     attachments: [],
     participants: [],
@@ -56,6 +54,22 @@ vi.mock('../api/gigs.ts', () => ({
   searchGigTags: vi.fn().mockResolvedValue([{ id: 7, name: 'Summer Tour' }]),
   setGigTags: vi.fn().mockImplementation(async (_id, tags) =>
     tags.map((name, index) => ({ id: index + 1, name }))),
+  createTask: vi.fn().mockResolvedValue({}),
+  updateTask: vi.fn().mockResolvedValue({}),
+  deleteTask: vi.fn().mockResolvedValue(undefined),
+  uploadGigAttachment: vi.fn().mockResolvedValue({}),
+  deleteGigAttachment: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('../api/me.ts', () => ({
+  getMyGig: vi.fn(),
+  setMyTaskDone: vi.fn(),
+}))
+
+// The blurred header banner behind the gig is the active tenant's own.
+vi.mock('../api/profile.ts', async (importOriginal) => ({
+  ...(await importOriginal()),
+  getBannerPath: vi.fn().mockResolvedValue('tenants/1/banner/own.jpg'),
 }))
 
 vi.mock('../api/invoices.ts', () => ({
@@ -65,7 +79,7 @@ vi.mock('../api/invoices.ts', () => ({
 }))
 
 const navigate = vi.fn()
-vi.mock('react-router-dom', async (orig) => ({
+vi.mock('react-router', async (orig) => ({
   ...(await orig()),
   useNavigate: () => navigate,
 }))
@@ -95,8 +109,11 @@ vi.mock('../components/map/GigLocationMap.tsx', () => ({
   ),
 }))
 
-import { getGig, getGigMerchSummary, setGigTags, updateGig } from '../api/gigs.ts'
+import { getGig, getGigMerchSummary, listGigContacts, setGigTags, setGigVote, updateGig, updateTask } from '../api/gigs.ts'
 import { createInvoice, draftFromGig, listInvoicesByGig } from '../api/invoices.ts'
+import { evaluateEventAvailability, getAvailabilityOn } from '../api/availability.ts'
+import { listMembers } from '../api/bandMembers.ts'
+import { getMyGig, setMyTaskDone } from '../api/me.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 import { geocodePlace } from '../utils/geocode.ts'
 
@@ -113,26 +130,60 @@ const GIG_PAID = {
   admission: 'paid',
   ticket_link: 'https://tickets.example.com',
   notes: '',
-  has_pa_system: false,
-  has_drumkit: false,
-  has_stage_lights: false,
   tasks: [],
   attachments: [],
   participants: [],
   tags: [],
 }
 
+const DEFAULT_USER = {
+  id: 9,
+  activeTenantRole: 'tenant_admin',
+  permissions: ['app.view', 'planning.write', 'finance.view', 'finance.manage'],
+  bandMemberId: 3,
+}
+
 function wrap(ui) {
   return render(
     <MemoryRouter>
-      <ThemeProvider theme={theme}>
-        <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
-      </ThemeProvider>
+      <AuthContext.Provider
+        value={{
+          user: DEFAULT_USER,
+          setUser: () => {},
+          logout: async () => {},
+          switchTenant: async () => undefined,
+          refreshUser: async () => undefined,
+        }}
+      >
+        <ThemeProvider theme={theme}>
+          <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+        </ThemeProvider>
+      </AuthContext.Provider>
     </MemoryRouter>
   )
 }
 
-// The detail body is split across tabbed panels (Event/Terms/Availability/
+function wrapAsRole(user, ui) {
+  return render(
+    <MemoryRouter>
+      <AuthContext.Provider
+        value={{
+          user,
+          setUser: () => {},
+          logout: async () => {},
+          switchTenant: async () => undefined,
+          refreshUser: async () => undefined,
+        }}
+      >
+        <ThemeProvider theme={theme}>
+          <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+        </ThemeProvider>
+      </AuthContext.Provider>
+    </MemoryRouter>
+  )
+}
+
+// The detail body is split across tabbed panels (Event/Terms/Participants/
 // Tasks). Panels stay mounted but inactive ones are display:none, so a test
 // must activate the owning tab before interacting with (or role-querying) its
 // fields. Label/text/display-value queries still match across hidden panels.
@@ -368,6 +419,235 @@ describe('GigDetailContent — reader mode (canWrite=false)', () => {
   })
 })
 
+describe('GigDetailContent — task tab count', () => {
+  const GIG_WITH_TASKS = {
+    ...GIG_PAID,
+    tasks: [
+      { id: 1, title: 'Confirm arrival time', done: false },
+      { id: 2, title: 'Bring cables', done: false },
+      { id: 3, title: 'Send rider', done: true },
+    ],
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows the number of open tasks in a primary-colour badge', async () => {
+    getGig.mockResolvedValueOnce(GIG_WITH_TASKS)
+    wrap(<GigDetailContent gigId={1} />)
+
+    const tasksTab = await screen.findByRole('button', { name: 'Tasks' })
+    const badge = within(tasksTab).getByText('2')
+    expect(badge).toHaveClass('MuiBadge-colorPrimary')
+    expect(badge).toHaveClass('MuiBadge-anchorOriginTopLeftRectangular')
+  })
+
+  it('updates the badge when an open task is completed', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce(GIG_WITH_TASKS)
+    updateTask.mockResolvedValueOnce({ ...GIG_WITH_TASKS.tasks[0], done: true })
+    wrap(<GigDetailContent gigId={1} />)
+
+    const tasksTab = await screen.findByRole('button', { name: 'Tasks' })
+    await user.click(tasksTab)
+    await user.click(screen.getAllByRole('checkbox')[0])
+
+    await waitFor(() => expect(within(tasksTab).getByText('1')).toBeInTheDocument())
+  })
+})
+
+describe('GigDetailContent — Terms role gating', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getGigMerchSummary.mockResolvedValue({ unitsSold: 2, netCents: 10000, grossCents: 10900 })
+    listInvoicesByGig.mockResolvedValue([
+      { id: 5, invoice_number: '2026-001', status: 'draft', issue_date: '2026-06-16', total_cents: 15000 },
+    ])
+  })
+
+  it.each([
+    ['reader', ['app.view', 'task.complete.self', 'rehearsal.respond.self', 'availability.write.self'], false],
+    ['contributor', ['app.view', 'task.complete.self', 'rehearsal.respond.self', 'availability.write.self', 'planning.write', 'purchase.create'], true],
+  ])('hides financial terms and related invoices for %s', async (role, permissions, canWrite) => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce({
+      ...GIG_PAID,
+      equipment: [{ item: 'pa_system', provider: 'venue' }],
+    })
+    wrapAsRole(
+      { id: 9, activeTenantRole: role, permissions, bandMemberId: 3 },
+      <GigDetailContent gigId={1} canWrite={canWrite} />,
+    )
+
+    await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
+    await openTab(user, 'Terms')
+
+    expect(screen.queryByRole('heading', { name: /^terms$/i })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/paid admission/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/guaranteed fee/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/merchandise cut/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/percentage of net sales/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/ticket link/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/merchandise sold/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/related invoices/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /equipment/i })).toBeInTheDocument()
+    expect(getGigMerchSummary).not.toHaveBeenCalled()
+    expect(listInvoicesByGig).not.toHaveBeenCalled()
+  })
+})
+
+describe('GigDetailContent — participants voting', () => {
+  const GIG_WITH_VOTE = (vote) => ({
+    id: 1,
+    event_date: '2099-06-15',
+    event_description: 'Jazz Night',
+    venue: { id: 11, name: 'Bimhuis', category: 'venue', city: 'Amsterdam' },
+    event_link: '',
+    start_time: '20:00:00',
+    end_time: '23:00:00',
+    status: 'option',
+    booking_fee_cents: 15000,
+    admission: 'free',
+    ticket_link: null,
+    notes: '',
+    tasks: [],
+    attachments: [],
+    participants: [{ band_member_id: 1, name: 'Alice', position: 'guitar', color: '#f00', vote }],
+    tags: [],
+  })
+
+  beforeEach(() => {
+    getGig.mockClear()
+    setGigVote.mockClear()
+  })
+
+  it('does not save when Yes is clicked on a participant already voted yes', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce(GIG_WITH_VOTE('yes'))
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
+    await openTab(user, 'Participants')
+    await user.click(screen.getByRole('button', { name: 'Yes' }))
+    expect(setGigVote).not.toHaveBeenCalled()
+    expect(getGig).toHaveBeenCalledTimes(1)
+  })
+
+  it('saves when Yes is clicked on a participant who has not voted yes', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce(GIG_WITH_VOTE('no'))
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
+    await openTab(user, 'Participants')
+    await user.click(screen.getByRole('button', { name: 'Yes' }))
+    await waitFor(() => expect(setGigVote).toHaveBeenCalledWith(1, 1, 'yes'))
+  })
+
+  it('does not save when No is clicked on a participant already voted no', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce(GIG_WITH_VOTE('no'))
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
+    await openTab(user, 'Participants')
+    await user.click(screen.getByRole('button', { name: 'No' }))
+    expect(setGigVote).not.toHaveBeenCalled()
+    expect(getGig).toHaveBeenCalledTimes(1)
+  })
+
+  it('saves when No is clicked on a participant who has not voted no', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce(GIG_WITH_VOTE('yes'))
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByText('Alice')).toBeInTheDocument())
+    await openTab(user, 'Participants')
+    await user.click(screen.getByRole('button', { name: 'No' }))
+    await waitFor(() => expect(setGigVote).toHaveBeenCalledWith(1, 1, 'no'))
+  })
+
+  it('shows the participant roster on the Participants tab even when status is not "option"', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce({ ...GIG_WITH_VOTE('yes'), status: 'confirmed' })
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
+    await openTab(user, 'Participants')
+    expect(screen.getByText('Alice')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Participants' })).toBeInTheDocument()
+  })
+
+  it.each(['Confirmed', 'Announced'])(
+    'hides vote toggles immediately when status changes from option to %s',
+    async (status) => {
+      const user = userEvent.setup()
+      getGig.mockResolvedValueOnce(GIG_WITH_VOTE('yes'))
+      wrap(<GigDetailContent gigId={1} />)
+      await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
+
+      await user.click(screen.getByRole('combobox', { name: 'Status' }))
+      await user.click(screen.getByRole('option', { name: status }))
+      await openTab(user, 'Participants')
+
+      expect(screen.queryByRole('button', { name: 'Yes' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'No' })).not.toBeInTheDocument()
+    },
+  )
+
+  it.each(['confirmed', 'announced'])(
+    'shows vote toggles immediately when status changes from %s to option',
+    async (status) => {
+      const user = userEvent.setup()
+      getGig.mockResolvedValueOnce({ ...GIG_WITH_VOTE('yes'), status })
+      wrap(<GigDetailContent gigId={1} />)
+      await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
+
+      await user.click(screen.getByRole('combobox', { name: 'Status' }))
+      await user.click(screen.getByRole('option', { name: 'Option' }))
+      await openTab(user, 'Participants')
+
+      expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument()
+    },
+  )
+})
+
+describe('GigDetailContent — participant availability', () => {
+  beforeEach(() => {
+    getGig.mockClear()
+    evaluateEventAvailability.mockClear()
+    evaluateEventAvailability.mockResolvedValue({ bandWide: null, members: [] })
+  })
+
+  it('renders availability inside the matching participant row', async () => {
+    const user = userEvent.setup()
+    getGig.mockResolvedValueOnce({
+      ...GIG_PAID,
+      admission: 'free',
+      participants: [
+        { band_member_id: 1, name: 'Alice', position: 'guitar', color: '#f00', vote: 'yes' },
+      ],
+    })
+    evaluateEventAvailability.mockResolvedValueOnce({
+      bandWide: null,
+      members: [
+        { member_id: 1, name: 'Alice', position: 'guitar', status: 'available', reason: null },
+      ],
+    })
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
+    await openTab(user, 'Participants')
+
+    const participantSection = screen.getByRole('heading', { name: 'Participants' }).parentElement
+    expect(participantSection).not.toBeNull()
+    expect(await within(participantSection).findByText('Available')).toBeInTheDocument()
+    expect(within(participantSection).getByText('Alice')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /member availability/i })).not.toBeInTheDocument()
+    await waitFor(() => expect(evaluateEventAvailability).toHaveBeenCalledWith(expect.objectContaining({
+      event_type: 'gig',
+      event_id: 1,
+      start_date: '2026-06-15',
+    })), { timeout: 1000 })
+  })
+})
+
 describe('GigDetailContent — merch sold summary', () => {
   beforeEach(() => {
     getGig.mockClear()
@@ -519,9 +799,6 @@ describe('GigDetailContent — location map', () => {
     admission: 'free',
     ticket_link: null,
     notes: '',
-    has_pa_system: false,
-    has_drumkit: false,
-    has_stage_lights: false,
     tasks: [],
     attachments: [],
     participants: [],
@@ -747,5 +1024,206 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
 
     await waitFor(() => expect(listInvoicesByGig).toHaveBeenCalled())
     expect(screen.queryByRole('button', { name: /create invoice/i })).not.toBeInTheDocument()
+  })
+})
+
+// A personal workspace reads through the cross-tenant hub instead of the active
+// tenant — usePlanningSource decides that from the tenant kind on /auth/me, so
+// the component takes no source prop. A gig owned by another band is read-only
+// and loses the Terms and Participants tabs; a gig owned by the personal
+// workspace itself behaves like any other.
+describe('GigDetailContent — personal workspace', () => {
+  const ARTIST_USER = {
+    id: 9,
+    activeTenantId: 1,
+    activeTenantKind: 'personal',
+    activeTenantRole: 'tenant_admin',
+    permissions: ['app.view', 'planning.write', 'finance.view', 'finance.manage'],
+    bandMemberId: 3,
+  }
+
+  const CROSS_BAND_GIG = {
+    id: 1,
+    tenantId: 9,
+    tenantName: 'Other Band',
+    tenantAvatarPath: null,
+    event_date: '2026-08-12',
+    event_description: 'Festival set',
+    venue: { id: 11, name: 'Bimhuis', category: 'venue', city: 'Amsterdam' },
+    event_link: '',
+    start_time: '20:00:00',
+    end_time: '23:00:00',
+    // Status no longer gates anything: the Participants tab always renders
+    // BandParticipantsSection, whose inline availability is gated on tenant
+    // kind/cross-band rather than status.
+    status: 'confirmed',
+    booking_fee_cents: 15000,
+    admission: 'free',
+    ticket_link: null,
+    notes: 'Bring own PA',
+    viewerBandMemberId: 22,
+    tasks: [{ id: 5, title: 'Bring charts', assigned_to: 22, done: false }],
+    attachments: [{ id: 6, original_filename: 'rider.pdf', file_size: 10 }],
+    tags: [],
+  }
+
+  const OWN_GIG = { ...CROSS_BAND_GIG, tenantId: 1, tenantName: 'Solo', viewerBandMemberId: null }
+
+  function asArtist(ui) {
+    return (
+      <MemoryRouter>
+        <AuthContext.Provider
+          value={{
+            user: ARTIST_USER,
+            setUser: () => {},
+            logout: async () => {},
+            switchTenant: async () => undefined,
+            refreshUser: async () => undefined,
+          }}
+        >
+          <ThemeProvider theme={theme}>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+          </ThemeProvider>
+        </AuthContext.Provider>
+      </MemoryRouter>
+    )
+  }
+
+  const wrapAsArtist = (ui) => render(asArtist(ui))
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getMyGig.mockResolvedValue(CROSS_BAND_GIG)
+    setMyTaskDone.mockImplementation(async (id, done) => ({ ...CROSS_BAND_GIG.tasks[0], id, done }))
+    getGigMerchSummary.mockResolvedValue({ unitsSold: 0, netCents: 0, grossCents: 0 })
+    listInvoicesByGig.mockResolvedValue([])
+    listMembers.mockResolvedValue([])
+    getAvailabilityOn.mockResolvedValue({ bandWide: null, members: [] })
+  })
+
+  // The split view swaps the gig id under a mounted detail pane. Until the new
+  // gig arrives nothing is known about who owns it, so no tenant-scoped
+  // sub-resource may be fetched for it — the previous gig's ownership says
+  // nothing about this one, and in a personal workspace every such read 404s.
+  it('fetches no sub-resources for a gig id whose owner is not known yet', async () => {
+    getMyGig.mockResolvedValue(OWN_GIG)
+    const view = wrapAsArtist(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    listGigContacts.mockClear()
+    getGigMerchSummary.mockClear()
+    listInvoicesByGig.mockClear()
+    getMyGig.mockResolvedValue({ ...CROSS_BAND_GIG, id: 2 })
+
+    view.rerender(asArtist(<GigDetailContent gigId={2} />))
+    await act(async () => {})
+
+    for (const fetcher of [listGigContacts, getGigMerchSummary, listInvoicesByGig]) {
+      expect(fetcher.mock.calls.map(([id]) => id)).not.toContain(2)
+    }
+  })
+
+  it("shows only Event and Tasks for another band's gig", async () => {
+    wrapAsArtist(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    expect(screen.getByRole('button', { name: 'Event' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tasks' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Terms' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Participants' })).not.toBeInTheDocument()
+
+    // The Terms/Participants panels are unmounted, not merely hidden, so their
+    // fields are gone too. The Event tab's band-availability panel is gated on
+    // tenant kind (personal here) regardless, so it never mounts either.
+    expect(screen.queryByLabelText(/paid admission/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/guaranteed fee/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/member availability/i)).not.toBeInTheDocument()
+    expect(getAvailabilityOn).not.toHaveBeenCalled()
+  })
+
+  it('gives the event-banner slot to the source band', async () => {
+    wrapAsArtist(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    // The gig banner is stripped cross-tenant, so the source band stands in for
+    // it. The artist's own blurred banner behind it is untouched.
+    expect(screen.getByTestId('source-tenant-switch')).toBeInTheDocument()
+    expect(screen.getByText('Other Band')).toBeInTheDocument()
+    expect(screen.queryByText(/no event banner/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /add event banner/i })).not.toBeInTheDocument()
+  })
+
+  // The header banner is the viewer's own artist profile, so it frames every
+  // gig they open from here — their own and the ones they play in other bands.
+  it("keeps the artist's own header banner behind another band's gig", async () => {
+    wrapAsArtist(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    expect(screen.getByTestId('band-banner')).toBeInTheDocument()
+  })
+
+  it('reads through /api/me and never calls a tenant-scoped endpoint', async () => {
+    wrapAsArtist(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    expect(getMyGig.mock.calls[0][0]).toBe(1)
+    expect(getGig).not.toHaveBeenCalled()
+    expect(listMembers).not.toHaveBeenCalled()
+    expect(getGigMerchSummary).not.toHaveBeenCalled()
+    expect(listInvoicesByGig).not.toHaveBeenCalled()
+    expect(getAvailabilityOn).not.toHaveBeenCalled()
+  })
+
+  it('renders the event fields read-only and saves nothing', async () => {
+    const user = userEvent.setup()
+    wrapAsArtist(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    expect(screen.getByLabelText(/event description/i)).toHaveAttribute('readonly')
+    expect(screen.getByText(/you have read-only access/i)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/event description/i), 'x')
+    expect(updateGig).not.toHaveBeenCalled()
+  })
+
+  it('lists attachments as plain text and drops the open-venue shortcut', async () => {
+    wrapAsArtist(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    // object_key is stripped from the cross-tenant payload, so there is nothing
+    // to link to; /venues/:id is tenant-scoped and would 404 from here.
+    expect(screen.getByText('rider.pdf')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'rider.pdf' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('OpenInNewIcon')).not.toBeInTheDocument()
+  })
+
+  it('completes the viewer\'s own task through /api/me', async () => {
+    const user = userEvent.setup()
+    wrapAsArtist(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    await openTab(user, 'Tasks')
+    await user.click(screen.getByRole('checkbox'))
+
+    await waitFor(() => expect(setMyTaskDone).toHaveBeenCalledWith(5, true))
+    expect(updateTask).not.toHaveBeenCalled()
+  })
+
+  it('keeps all four tabs and stays editable for the workspace\'s own gig', async () => {
+    const user = userEvent.setup()
+    getMyGig.mockResolvedValue(OWN_GIG)
+    wrapAsArtist(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    expect(screen.getByRole('button', { name: 'Terms' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Participants' })).toBeInTheDocument()
+    expect(screen.queryByTestId('source-tenant-switch')).not.toBeInTheDocument()
+    // /band-members is band-only, so a personal workspace has no roster to load
+    // even for its own gig — asking would 403.
+    expect(listMembers).not.toHaveBeenCalled()
+
+    await openTab(user, 'Terms')
+    await user.type(screen.getByLabelText(/merchandise cut/i), '15')
+    await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, { merchandise_cut: 15 }))
   })
 })

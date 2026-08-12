@@ -1,4 +1,4 @@
-import { ACHIEVEMENT_DEFINITIONS } from '../achievements/definitions.js'
+import { definitionsForKind, getDefinition } from '../achievements/definitions.js'
 import { buildFacts } from '../achievements/factsBuilder.js'
 import { fetchUnlocked, insertUnlocked } from '../repositories/achievementRepository.js'
 import { dispatchNotification } from './notificationService.js'
@@ -25,8 +25,11 @@ function safeTest(definition, facts, unlockedKeys) {
   }
 }
 
-function buildPayload(unlockedAtByKey) {
-  return ACHIEVEMENT_DEFINITIONS.map((d) => ({
+// Built from the KIND's own catalogue: totals are only comparable within a
+// kind, so a band definition must never appear in a personal workspace's list
+// (and vice versa) — not even as a locked row.
+function buildPayload(definitions, unlockedAtByKey) {
+  return definitions.map((d) => ({
     key: d.key,
     category: d.category,
     cheers: d.cheers,
@@ -36,7 +39,7 @@ function buildPayload(unlockedAtByKey) {
 
 async function notifyUnlocked(tenantId, insertedRows) {
   for (const row of insertedRows) {
-    const definition = ACHIEVEMENT_DEFINITIONS.find((d) => d.key === row.achievement_key)
+    const definition = getDefinition(row.achievement_key)
     if (!definition) continue
     try {
       await dispatchNotification({
@@ -56,11 +59,11 @@ async function notifyUnlocked(tenantId, insertedRows) {
 
 // Evaluate the still-locked definitions against fresh facts and persist any
 // new unlocks, updating unlockedAtByKey in place.
-async function unlockNewAchievements(db, tenantId, unlockedAtByKey, isBaselinePass) {
-  const facts = await buildFacts(db, tenantId)
+async function unlockNewAchievements(db, tenantId, kind, definitions, unlockedAtByKey, isBaselinePass) {
+  const facts = await buildFacts(db, tenantId, kind)
   const unlockedKeys = new Set(unlockedAtByKey.keys())
   const newKeys = []
-  for (const definition of ACHIEVEMENT_DEFINITIONS) {
+  for (const definition of definitions) {
     if (unlockedKeys.has(definition.key)) continue
     if (safeTest(definition, facts, unlockedKeys)) {
       unlockedKeys.add(definition.key)
@@ -73,11 +76,14 @@ async function unlockNewAchievements(db, tenantId, unlockedAtByKey, isBaselinePa
   if (!isBaselinePass) await notifyUnlocked(tenantId, inserted)
 }
 
-export async function listAchievements(db, tenantId) {
+export async function listAchievements(db, tenantId, kind) {
   const cached = fullyUnlockedCache.get(tenantId)
   if (cached) return cached
 
+  const definitions = definitionsForKind(kind)
   const unlockedRows = await fetchUnlocked(db, tenantId)
+  // An unlock is sticky (UNIQUE (tenant_id, achievement_key)); rows outside this
+  // kind's catalogue are simply not shown, never deleted.
   const unlockedAtByKey = new Map(unlockedRows.map((r) => [r.achievement_key, r.unlocked_at]))
   // Baseline pass: a tenant with zero rows is being evaluated for the first
   // time (fresh tenant, or an existing tenant right after this feature
@@ -85,12 +91,14 @@ export async function listAchievements(db, tenantId) {
   // suppress notifications so members don't get a burst of stale pings.
   const isBaselinePass = unlockedRows.length === 0
 
-  if (unlockedAtByKey.size < ACHIEVEMENT_DEFINITIONS.length) {
-    await unlockNewAchievements(db, tenantId, unlockedAtByKey, isBaselinePass)
+  const unlockedInKind = () => definitions.filter((d) => unlockedAtByKey.has(d.key)).length
+
+  if (unlockedInKind() < definitions.length) {
+    await unlockNewAchievements(db, tenantId, kind, definitions, unlockedAtByKey, isBaselinePass)
   }
 
-  const payload = buildPayload(unlockedAtByKey)
-  if (unlockedAtByKey.size === ACHIEVEMENT_DEFINITIONS.length) {
+  const payload = buildPayload(definitions, unlockedAtByKey)
+  if (unlockedInKind() === definitions.length) {
     fullyUnlockedCache.set(tenantId, payload)
   }
   return payload

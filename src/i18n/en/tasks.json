@@ -1,11 +1,13 @@
 {
   "title": "Tasks",
   "myTasks": "Assigned to me",
-  "showFinished": "Finished",
   "filters": "Filters",
-  "taskLimit": "Tasks shown",
-  "maxTaskLimit": "Max. tasks shown",
-  "newTask": "New task",
+  "allStatuses": "All statuses",
+  "status": {
+    "open": "Open",
+    "finished": "Finished"
+  },
+  "newTask": "Add",
   "empty": "No tasks yet.",
   "unassigned": "Unassigned",
   "openGig": "Open gig",

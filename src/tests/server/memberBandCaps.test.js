@@ -61,8 +61,8 @@ async function createPendingUser(email, tenantId) {
     [`sub-${email}`, email],
   )
   await pool.query(
-    `INSERT INTO memberships (user_id, tenant_id, role, status)
-     VALUES ($1, $2, 'contributor', 'pending')`,
+    `INSERT INTO memberships (user_id, tenant_id, role, status, source)
+     VALUES ($1, $2, 'contributor', 'pending', 'admin')`,
     [user.id, tenantId],
   )
   return user

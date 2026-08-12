@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/gigs.ts', () => ({
@@ -16,17 +16,33 @@ vi.mock('../api/gigs.ts', () => ({
   createGig: vi.fn(),
   updateGig: vi.fn(),
   deleteGig: vi.fn().mockResolvedValue({}),
+  addGigParticipant: vi.fn().mockResolvedValue({}),
+  removeGigParticipant: vi.fn().mockResolvedValue({}),
+  setGigVote: vi.fn().mockResolvedValue({}),
   listGigContacts: vi.fn().mockResolvedValue([]),
   addGigContact: vi.fn().mockResolvedValue({}),
   setGigContactPrimary: vi.fn().mockResolvedValue({}),
   removeGigContact: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock('../api/me.ts', () => ({
+  listMyUpcomingGigs: vi.fn(),
+  listMyPastGigs: vi.fn(),
+  searchMyGigs: vi.fn(),
+  getMyGig: vi.fn(),
+  setMyTaskDone: vi.fn(),
+}))
 vi.mock('../api/venues.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   listVenueContacts: vi.fn().mockResolvedValue([]),
 }))
+vi.mock('../api/invoices.ts', () => ({
+  listInvoicesByGig: vi.fn().mockResolvedValue([]),
+  draftFromGig: vi.fn(),
+  createInvoice: vi.fn(),
+}))
 vi.mock('../api/availability.ts', () => ({
   getAvailabilityOn: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
+  evaluateEventAvailability: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
   listAvailability: vi.fn().mockResolvedValue([]),
   createSlot: vi.fn(),
   updateSlot: vi.fn(),
@@ -52,7 +68,10 @@ vi.mock('../components/BannerMosaicDialog.tsx', () => ({
 
 import GigsPage from '../pages/GigsPage.tsx'
 import GigDetailPage from '../pages/GigDetailPage.tsx'
-import { deleteGig, getGig, listGigs, listPastGigs, listUpcomingGigs, searchGigs } from '../api/gigs.ts'
+import { addGigParticipant, deleteGig, getGig, listGigs, listPastGigs, listUpcomingGigs, removeGigParticipant, searchGigs } from '../api/gigs.ts'
+import { evaluateEventAvailability } from '../api/availability.ts'
+import { listMembers } from '../api/bandMembers.ts'
+import { listMyUpcomingGigs } from '../api/me.ts'
 import theme from '../theme.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 import { ProfileContext } from '../contexts/profileContext.ts'
@@ -71,11 +90,11 @@ const integrationProfile = (configured = true) => ({
   setIntegrationConfigured: vi.fn(),
 })
 
-function wrap(ui, { initialEntries = ['/'], integrationsConfigured = true } = {}) {
+function wrap(ui, { initialEntries = ['/'], integrationsConfigured = true, auth = writerAuth } = {}) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <ThemeProvider theme={theme}>
-        <AuthContext.Provider value={writerAuth}>
+        <AuthContext.Provider value={auth}>
           <ProfileContext.Provider value={integrationProfile(integrationsConfigured)}>
             <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
           </ProfileContext.Provider>
@@ -127,6 +146,8 @@ describe('GigsPage', () => {
     listPastGigs.mockResolvedValue(pastCollection([]))
     searchGigs.mockReset()
     searchGigs.mockResolvedValue([])
+    listMyUpcomingGigs.mockReset()
+    listMyUpcomingGigs.mockResolvedValue(limitedCollection([]))
   })
 
   it('renders header, Add button, and loaded gigs without fetching the full unscoped gig list', async () => {
@@ -138,6 +159,31 @@ describe('GigsPage', () => {
     // The Upcoming tab is served entirely by the bounded /upcoming fetch —
     // the legacy bare listGigs() (used only by Tour Share/Export/Banner
     // Mosaic) must stay untouched until one of those is actually opened.
+    expect(listGigs).not.toHaveBeenCalled()
+  })
+
+  it('uses the aggregate upcoming API and renders source-band identity in a personal workspace', async () => {
+    listMyUpcomingGigs.mockResolvedValue(limitedCollection([{
+      ...GIGS[0], tenantId: 9, tenantName: 'Other Band', tenantAvatarPath: null,
+    }]))
+    wrap(<GigsPage />, {
+      auth: { user: { isSuperAdmin: true, activeTenantId: 1, activeTenantKind: 'personal' } },
+    })
+    await screen.findByText('Other Band')
+    expect(listMyUpcomingGigs).toHaveBeenCalledWith(100, expect.any(String))
+    expect(listUpcomingGigs).not.toHaveBeenCalled()
+  })
+
+  it('hides band sharing actions in a personal workspace', async () => {
+    listMyUpcomingGigs.mockResolvedValue(limitedCollection([GIGS[0]]))
+    wrap(<GigsPage />, {
+      auth: { user: { isSuperAdmin: true, activeTenantId: 1, activeTenantKind: 'personal' } },
+    })
+
+    await screen.findByText('Jazz Night')
+    expect(screen.queryByRole('button', { name: /share tour dates/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /create tour card/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /banner mosaic/i })).not.toBeInTheDocument()
     expect(listGigs).not.toHaveBeenCalled()
   })
 
@@ -212,9 +258,6 @@ describe('GigsPage — split-view detail route', () => {
     ...GIGS[0],
     booking_fee_cents: null,
     notes: '',
-    has_pa_system: false,
-    has_drumkit: false,
-    has_stage_lights: false,
     tasks: [],
     participants: [],
   }
@@ -230,7 +273,79 @@ describe('GigsPage — split-view detail route', () => {
     searchGigs.mockResolvedValue([])
     getGig.mockClear()
     getGig.mockResolvedValue(GIG_DETAIL)
+    addGigParticipant.mockClear()
+    removeGigParticipant.mockClear()
+    listMembers.mockReset()
+    listMembers.mockResolvedValue([])
+    evaluateEventAvailability.mockReset()
+    evaluateEventAvailability.mockResolvedValue({ bandWide: null, members: [] })
     deleteGig.mockClear()
+  })
+
+  it('updates the selected list row after adding a participant in the detail pane', async () => {
+    const user = userEvent.setup()
+    const alice = {
+      member_id: 7,
+      name: 'Alice',
+      position: 'lead',
+      color: '#e53935',
+      status: 'available',
+      reason: null,
+    }
+    getGig
+      .mockResolvedValueOnce(GIG_DETAIL)
+      .mockResolvedValueOnce({
+        ...GIG_DETAIL,
+        participants: [{ band_member_id: 7, name: 'Alice', position: 'lead', color: '#e53935' }],
+      })
+    listMembers.mockResolvedValueOnce([{ id: 7, name: 'Alice', position: 'lead', color: '#e53935' }])
+    evaluateEventAvailability.mockImplementation(async ({ participant_ids }) => ({
+      bandWide: null,
+      members: participant_ids?.includes(7) ? [alice] : [],
+    }))
+
+    wrapWithRoutes({ initialEntries: ['/gigs/42?tab=participants'] })
+
+    const participantPicker = await screen.findByRole('combobox', { name: /add participant/i })
+    await user.click(participantPicker)
+    await user.click(screen.getByRole('option', { name: /Alice/ }))
+
+    await waitFor(() => expect(addGigParticipant).toHaveBeenCalledWith(42, 7))
+    expect(await screen.findByText('A')).toBeInTheDocument()
+  })
+
+  it('updates the selected list row after removing a participant in the detail pane', async () => {
+    const user = userEvent.setup()
+    const alice = {
+      member_id: 7,
+      name: 'Alice',
+      position: 'lead',
+      color: '#e53935',
+      status: 'available',
+      reason: null,
+    }
+    listUpcomingGigs.mockResolvedValue(limitedCollection([{
+      ...GIGS[0],
+      members_availability: [alice],
+    }]))
+    getGig
+      .mockResolvedValueOnce({
+        ...GIG_DETAIL,
+        participants: [{ band_member_id: 7, name: 'Alice', position: 'lead', color: '#e53935' }],
+      })
+      .mockResolvedValueOnce(GIG_DETAIL)
+    evaluateEventAvailability.mockImplementation(async ({ participant_ids }) => ({
+      bandWide: null,
+      members: participant_ids?.includes(7) ? [alice] : [],
+    }))
+
+    wrapWithRoutes({ initialEntries: ['/gigs/42?tab=participants'] })
+    expect(await screen.findByText('A')).toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: /remove Alice/i }))
+
+    await waitFor(() => expect(removeGigParticipant).toHaveBeenCalledWith(42, 7))
+    await waitFor(() => expect(screen.queryByText('A')).not.toBeInTheDocument())
   })
 
   it('renders detail alongside the list at /gigs/:id and the Close button returns to /gigs', async () => {

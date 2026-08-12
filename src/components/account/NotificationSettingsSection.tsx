@@ -11,6 +11,7 @@ import { usePushNotifications } from '../../hooks/usePushNotifications.ts'
 import { getNotificationPrefs, updateNotificationPrefs } from '../../api/notifications.ts'
 import type { NotificationPrefs } from '../../types/entities.ts'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
+import { tenantAvatarUrl } from '../../utils/tenantAvatarUrl.ts'
 
 // Maps the server's dash-cased notification types onto the camelCase i18n leaf
 // keys so the typed selector index stays compile-checked (nav-items pattern).
@@ -18,8 +19,11 @@ type TypeLabelKey =
   | 'gigNew' | 'gigConfirmed' | 'gigImport'
   | 'rehearsalNew' | 'rehearsalConfirmed'
   | 'optionMemberUnavailable' | 'optionAllResponded'
-  | 'invoicePaid' | 'taskAssigned' | 'inviteRedeemed'
+  | 'invoicePaid' | 'taskAssigned' | 'inviteRedeemed' | 'membershipRequested'
   | 'achievementUnlocked'
+  | 'bandProfileClaimed' | 'bandProfileClaimDecided'
+
+type TypeGroupKey = 'events' | 'tasks' | 'management' | 'financial' | 'other'
 
 const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
   'gig-new': 'gigNew',
@@ -32,17 +36,36 @@ const TYPE_LABEL_KEYS: Record<string, TypeLabelKey> = {
   'invoice-paid': 'invoicePaid',
   'task-assigned': 'taskAssigned',
   'invite-redeemed': 'inviteRedeemed',
+  'membership-requested': 'membershipRequested',
   'achievement-unlocked': 'achievementUnlocked',
+  'band-profile-claimed': 'bandProfileClaimed',
+  'band-profile-claim-decided': 'bandProfileClaimDecided',
 }
 
-// Cross-tenant profile pictures use the membership-authorized notification
-// endpoint. The generic app logo is the fallback when no picture is uploaded.
-function tenantAvatarSrc(
-  tenantId: number,
-  avatarPath: string | null,
-): string {
-  if (!avatarPath) return '/share/logo.png'
-  return `/api/notifications/tenant-avatar/${tenantId}`
+const TYPE_GROUP_ORDER: TypeGroupKey[] = ['events', 'tasks', 'management', 'financial', 'other']
+
+const FIRST_COLUMN_GROUPS: TypeGroupKey[] = ['events', 'tasks']
+
+const TYPE_GROUP_KEYS: Record<string, TypeGroupKey> = {
+  'gig-new': 'events',
+  'gig-confirmed': 'events',
+  'gig-import': 'events',
+  'rehearsal-new': 'events',
+  'rehearsal-confirmed': 'events',
+  'option-member-unavailable': 'events',
+  'option-all-responded': 'events',
+  'task-assigned': 'tasks',
+  'invite-redeemed': 'management',
+  'membership-requested': 'management',
+  'band-profile-claimed': 'management',
+  'band-profile-claim-decided': 'management',
+  'invoice-paid': 'financial',
+  'achievement-unlocked': 'other',
+}
+
+// The generic app logo is the fallback when no picture is uploaded.
+function tenantAvatarSrc(tenantId: number, avatarPath: string | null): string {
+  return tenantAvatarUrl(tenantId, avatarPath) ?? '/share/logo.png'
 }
 
 export default function NotificationSettingsSection() {
@@ -55,7 +78,11 @@ export default function NotificationSettingsSection() {
     getNotificationPrefs().then(setPrefs).catch(() => { })
   }, [])
 
-  const pushDisabled = pushStatus === 'denied' || pushStatus === 'unsupported' || pushStatus === 'loading'
+  const pushDisabled = pushStatus !== 'subscribed' && pushStatus !== 'unsubscribed'
+  const groupedTypePrefs = TYPE_GROUP_ORDER.map((key) => ({
+    key,
+    entries: prefs?.types.filter(({ type }) => (TYPE_GROUP_KEYS[type] ?? 'other') === key) ?? [],
+  })).filter(({ entries }) => entries.length > 0)
 
   const handlePushToggle = () => {
     if (pushStatus === 'subscribed') void unsubscribe()
@@ -113,6 +140,16 @@ export default function NotificationSettingsSection() {
               {t($ => $.settings.push.unsupported)}
             </Typography>
           )}
+          {pushStatus === 'loading' && (
+            <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+              {t($ => $.settings.push.loading)}
+            </Typography>
+          )}
+          {pushStatus === 'unavailable' && (
+            <Typography variant="caption" sx={{ color: 'warning.main', display: 'block' }}>
+              {t($ => $.settings.push.unavailable)}
+            </Typography>
+          )}
         </Box>
       </Paper>
 
@@ -125,23 +162,54 @@ export default function NotificationSettingsSection() {
           {t($ => $.settings.types.description)}
         </Typography>
 
-        <Box sx={{ display: 'flex', ml: 2, flexDirection: 'column' }}>
-          {prefs?.types.map(({ type, enabled }) => {
-            const labelKey = TYPE_LABEL_KEYS[type]
-            return (
-              <FormControlLabel
-                key={type}
-                control={
-                  <Switch
-                    sx={{ mr: 1 }}
-                    checked={enabled}
-                    onChange={(_e, checked) => saveTypePref(type, checked)}
-                  />
-                }
-                label={labelKey ? t($ => $.settings.types.labels[labelKey]) : type}
-              />
-            )
-          })}
+        <Box
+          sx={{
+            display: 'flex',
+            ml: 2,
+            flexDirection: compact ? 'column' : 'row',
+            gap: compact ? 2 : 4,
+          }}
+        >
+          {(compact
+            ? [groupedTypePrefs]
+            : [
+              groupedTypePrefs.filter(({ key }) => FIRST_COLUMN_GROUPS.includes(key)),
+              groupedTypePrefs.filter(({ key }) => !FIRST_COLUMN_GROUPS.includes(key)),
+            ]
+          ).map((column, columnIndex) => (
+            <Box
+              key={columnIndex}
+              sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}
+            >
+              {column.map(({ key, entries }) => (
+                <Box
+                  component="fieldset"
+                  key={key}
+                  sx={{ border: 0, display: 'flex', flexDirection: 'column', m: 0, p: 0 }}
+                >
+                  <Typography component="legend" variant="subtitle2" sx={{ color: 'text.secondary', mb: 0.5 }}>
+                    {t($ => $.settings.types.groups[key])}
+                  </Typography>
+                  {entries.map(({ type, enabled }) => {
+                    const labelKey = TYPE_LABEL_KEYS[type]
+                    return (
+                      <FormControlLabel
+                        key={type}
+                        control={
+                          <Switch
+                            sx={{ mr: 1 }}
+                            checked={enabled}
+                            onChange={(_e, checked) => saveTypePref(type, checked)}
+                          />
+                        }
+                        label={labelKey ? t($ => $.settings.types.labels[labelKey]) : type}
+                      />
+                    )
+                  })}
+                </Box>
+              ))}
+            </Box>
+          ))}
         </Box>
       </Paper>
 

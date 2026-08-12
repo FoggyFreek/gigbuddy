@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import BandMembersSection from '../components/BandMembersSection.tsx'
@@ -77,11 +77,15 @@ describe('BandMembersSection', () => {
     await user.click(screen.getByRole('button', { name: /add member/i }))
     expect(screen.getByRole('dialog', { name: /add band member/i })).toBeInTheDocument()
     await user.type(screen.getByLabelText(/^name$/i), 'Bob')
-    await user.click(screen.getByLabelText(/^roles$/i))
+    const rolesInput = screen.getByLabelText(/^roles$/i)
+    expect(rolesInput).toHaveAttribute('type', 'text')
+    await user.click(rolesInput)
+    await user.type(rolesInput, 'drum')
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     const drumsOption = screen.getByRole('option', { name: 'Drums' })
     await user.click(drumsOption)
     expect(drumsOption).toHaveAttribute('aria-selected', 'true')
+    await user.clear(rolesInput)
     await user.click(screen.getByRole('option', { name: 'Background Vocals' }))
     await user.keyboard('{Escape}')
     await user.click(screen.getByRole('button', { name: /^add$/i }))

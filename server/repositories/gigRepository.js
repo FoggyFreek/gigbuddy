@@ -1,5 +1,8 @@
 // Data-access helpers and shared SQL fragments for gigs. Each query takes an
 // `executor` (a pool or transaction client) so callers control transactions.
+import { gigScopeSql } from './memberEventScope.js'
+import { myBandSelect } from './myBandRepository.js'
+import { appendDateCursor } from './listCursorSql.js'
 
 export const VENUE_JSON_SELECT = `CASE WHEN v.id IS NULL THEN NULL ELSE jsonb_build_object(
   'id', v.id,
@@ -25,6 +28,17 @@ export const FESTIVAL_JSON_SELECT = `CASE WHEN fv.id IS NULL THEN NULL ELSE json
   'country', fv.country
 ) END AS festival`
 
+// Just enough of a place to plot it: the gig map needs coordinates and a city
+// label, nothing else.
+const MAP_PLACE_JSON = (alias) => `CASE WHEN ${alias}.id IS NULL THEN NULL ELSE jsonb_build_object(
+  'id', ${alias}.id,
+  'city', ${alias}.city,
+  'region', ${alias}.region,
+  'country', ${alias}.country,
+  'latitude', ${alias}.latitude,
+  'longitude', ${alias}.longitude
+) END`
+
 export const VENUE_JOIN = `LEFT JOIN venues v ON v.id = g.venue_id AND v.tenant_id = g.tenant_id`
 export const FESTIVAL_JOIN = `LEFT JOIN venues fv ON fv.id = g.festival_id AND fv.tenant_id = g.tenant_id`
 
@@ -34,6 +48,14 @@ export const GIG_TAGS_SELECT = `COALESCE((
     JOIN gig_tags gt ON gt.id = gtl.tag_id AND gt.tenant_id = gtl.tenant_id
    WHERE gtl.gig_id = g.id AND gtl.tenant_id = g.tenant_id
 ), '[]'::jsonb) AS tags`
+
+// Detail-only: no list view shows equipment. The column is item_key, the wire
+// field is item — loadGigEquipment aliases it the same way.
+export const GIG_EQUIPMENT_SELECT = `COALESCE((
+  SELECT jsonb_agg(jsonb_build_object('item', ge.item_key, 'provider', ge.provider) ORDER BY ge.item_key)
+    FROM gig_equipment ge
+   WHERE ge.gig_id = g.id AND ge.tenant_id = g.tenant_id
+), '[]'::jsonb) AS equipment`
 
 export const GIG_LIST_PROJECTION = `g.*,
   (
@@ -45,7 +67,14 @@ export const GIG_LIST_PROJECTION = `g.*,
   ) AS open_task_count,
   ${VENUE_JSON_SELECT},
   ${FESTIVAL_JSON_SELECT},
-  ${GIG_TAGS_SELECT}`
+  ${GIG_TAGS_SELECT},
+  ${myBandSelect('g')}`
+
+const GIG_DATE_ASC_ORDER = 'g.event_date ASC, g.id ASC'
+const GIG_DATE_DESC_ORDER = 'g.event_date DESC, g.id DESC'
+const GIG_MAP_PROJECTION = `g.id, g.event_date, g.event_description,
+  ${MAP_PLACE_JSON('v')} AS venue,
+  ${MAP_PLACE_JSON('fv')} AS festival`
 
 // Throws a 400 Error when venueId is set but does not reference a row of the
 // expected category in the tenant. A null/undefined id is a no-op.
@@ -139,7 +168,7 @@ export async function listUpcomingGigs(executor, tenantId, today, limit) {
      ${VENUE_JOIN}
      ${FESTIVAL_JOIN}
      WHERE g.tenant_id = $1 AND g.event_date >= $2
-     ORDER BY g.event_date ASC, g.id ASC
+     ORDER BY ${GIG_DATE_ASC_ORDER}
      LIMIT $3`,
     [tenantId, today, limit],
   )
@@ -153,11 +182,7 @@ export async function listUpcomingGigs(executor, tenantId, today, limit) {
 // last (event_date, id) pair of a previous page for "load more" pagination.
 export async function listPastGigs(executor, tenantId, today, limit, cursor = null) {
   const params = [tenantId, today]
-  let cursorClause = ''
-  if (cursor) {
-    params.push(cursor.date, cursor.id)
-    cursorClause = `AND (g.event_date, g.id) < ($${params.length - 1}, $${params.length})`
-  }
+  const cursorClause = appendDateCursor(params, cursor, 'g.event_date', 'g.id')
   params.push(limit)
   const { rows } = await executor.query(
     `SELECT
@@ -166,9 +191,130 @@ export async function listPastGigs(executor, tenantId, today, limit, cursor = nu
      ${VENUE_JOIN}
      ${FESTIVAL_JOIN}
      WHERE g.tenant_id = $1 AND g.event_date < $2 ${cursorClause}
-     ORDER BY g.event_date DESC, g.id DESC
+     ORDER BY ${GIG_DATE_DESC_ORDER}
      LIMIT $${params.length}`,
     params,
+  )
+  return rows
+}
+
+// ---- cross-tenant artist reads (/api/me) ----
+//
+// These are the ONLY gig queries not scoped to a single tenant. The id list is
+// resolved server-side from the caller's approved memberships
+// (resolveMemberTenantIds) — never taken from the client. Band-tenant rows are
+// further limited to events where the caller's linked roster member is a
+// participant; their personal workspace is intrinsically user-owned. An empty
+// tenant list is valid and `= ANY('{}')` correctly matches nothing.
+
+export async function listGigsInRangeForMemberTenants(executor, userId, tenantIds, from, to) {
+  const { rows } = await executor.query(
+    `SELECT
+       ${GIG_LIST_PROJECTION}
+     FROM gigs g
+     ${VENUE_JOIN}
+     ${FESTIVAL_JOIN}
+     WHERE g.tenant_id = ANY($2) AND g.event_date BETWEEN $3 AND $4
+       AND ${gigScopeSql('g', '$1')}
+     ORDER BY ${GIG_DATE_ASC_ORDER}`,
+    [userId, tenantIds, from, to],
+  )
+  return rows
+}
+
+// Mirrors listUpcomingGigs, including the windowed count that feeds the
+// dashboard's badge.
+export async function listUpcomingGigsForMemberTenants(executor, userId, tenantIds, today, limit) {
+  const { rows } = await executor.query(
+    `SELECT
+       ${GIG_LIST_PROJECTION},
+       (COUNT(*) OVER ())::int AS collection_total
+     FROM gigs g
+     ${VENUE_JOIN}
+     ${FESTIVAL_JOIN}
+     WHERE g.tenant_id = ANY($2) AND g.event_date >= $3
+       AND ${gigScopeSql('g', '$1')}
+     ORDER BY ${GIG_DATE_ASC_ORDER}
+     LIMIT $4`,
+    [userId, tenantIds, today, limit],
+  )
+  return {
+    items: rows.map(({ collection_total: _collectionTotal, ...gig }) => gig),
+    total: rows[0]?.collection_total ?? 0,
+  }
+}
+
+export async function listPastGigsForMemberTenants(executor, userId, tenantIds, today, limit, cursor = null) {
+  const params = [userId, tenantIds, today]
+  const cursorClause = appendDateCursor(params, cursor, 'g.event_date', 'g.id')
+  params.push(limit)
+  const { rows } = await executor.query(
+    `SELECT ${GIG_LIST_PROJECTION}
+       FROM gigs g
+       ${VENUE_JOIN}
+       ${FESTIVAL_JOIN}
+      WHERE g.tenant_id = ANY($2) AND g.event_date < $3 ${cursorClause}
+        AND ${gigScopeSql('g', '$1')}
+      ORDER BY ${GIG_DATE_DESC_ORDER}
+      LIMIT $${params.length}`,
+    params,
+  )
+  return rows
+}
+
+export async function searchGigsForMemberTenants(executor, userId, tenantIds, { like, limit }) {
+  const { rows } = await executor.query(
+    `SELECT g.id, g.tenant_id, g.event_date, g.event_description, g.status,
+            g.venue_id, g.festival_id,
+            ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT},
+            ${myBandSelect('g')}
+       FROM gigs g
+       ${VENUE_JOIN}
+       ${FESTIVAL_JOIN}
+      WHERE g.tenant_id = ANY($2)
+        AND ${gigScopeSql('g', '$1')}
+        AND (
+          g.event_description ILIKE $3 OR v.name ILIKE $3 OR v.city ILIKE $3
+          OR fv.name ILIKE $3 OR fv.city ILIKE $3
+          OR EXISTS (
+            SELECT 1 FROM gig_tag_links search_link
+            JOIN gig_tags search_tag ON search_tag.id = search_link.tag_id
+              AND search_tag.tenant_id = search_link.tenant_id
+            WHERE search_link.gig_id = g.id
+              AND search_link.tenant_id = g.tenant_id
+              AND search_tag.name ILIKE $3
+          )
+        )
+      ORDER BY CASE WHEN g.event_description ILIKE $3 THEN 0 ELSE 1 END,
+               g.event_date DESC, g.id DESC
+      LIMIT $4`,
+    [userId, tenantIds, like, limit],
+  )
+  return rows
+}
+
+export async function findGigTenantForMember(executor, userId, tenantIds, gigId) {
+  const { rows } = await executor.query(
+    `SELECT g.tenant_id FROM gigs g
+      WHERE g.id = $3 AND g.tenant_id = ANY($2)
+        AND ${gigScopeSql('g', '$1')}`,
+    [userId, tenantIds, gigId],
+  )
+  return rows[0]?.tenant_id ?? null
+}
+
+// Mirrors listGigMapData, plus the tenant id the service needs to label each
+// row with its band.
+export async function listGigMapDataForMemberTenants(executor, userId, tenantIds, from, to) {
+  const { rows } = await executor.query(
+    `SELECT g.tenant_id, ${GIG_MAP_PROJECTION}
+       FROM gigs g
+       ${VENUE_JOIN}
+       ${FESTIVAL_JOIN}
+      WHERE g.tenant_id = ANY($2) AND g.event_date BETWEEN $3 AND $4
+        AND ${gigScopeSql('g', '$1')}
+      ORDER BY ${GIG_DATE_ASC_ORDER}`,
+    [userId, tenantIds, from, to],
   )
   return rows
 }
@@ -181,7 +327,7 @@ export async function listGigsInRange(executor, tenantId, from, to) {
      ${VENUE_JOIN}
      ${FESTIVAL_JOIN}
      WHERE g.tenant_id = $1 AND g.event_date BETWEEN $2 AND $3
-     ORDER BY g.event_date ASC, g.id ASC`,
+     ORDER BY ${GIG_DATE_ASC_ORDER}`,
     [tenantId, from, to],
   )
   return rows
@@ -190,24 +336,14 @@ export async function listGigsInRange(executor, tenantId, from, to) {
 // Minimal projection used by the gig map. It intentionally omits gig detail,
 // task, tag, participant, and availability data.
 export async function listGigMapData(executor, tenantId, from, to) {
-  const placeJson = (alias) => `CASE WHEN ${alias}.id IS NULL THEN NULL ELSE jsonb_build_object(
-    'id', ${alias}.id,
-    'city', ${alias}.city,
-    'region', ${alias}.region,
-    'country', ${alias}.country,
-    'latitude', ${alias}.latitude,
-    'longitude', ${alias}.longitude
-  ) END`
   const { rows } = await executor.query(
-    `SELECT g.id, g.event_date, g.event_description,
-            ${placeJson('v')} AS venue,
-            ${placeJson('fv')} AS festival
+    `SELECT ${GIG_MAP_PROJECTION}
        FROM gigs g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}
       WHERE g.tenant_id = $1
         AND g.event_date BETWEEN $2 AND $3
-      ORDER BY g.event_date ASC, g.id ASC`,
+      ORDER BY ${GIG_DATE_ASC_ORDER}`,
     [tenantId, from, to],
   )
   return rows
@@ -240,7 +376,8 @@ export async function searchGigs(executor, tenantId, { like, limit }) {
        g.venue_id, g.festival_id,
        ${VENUE_JSON_SELECT},
        ${FESTIVAL_JSON_SELECT},
-       ${GIG_TAGS_SELECT}
+       ${GIG_TAGS_SELECT},
+       ${myBandSelect('g')}
      FROM gigs g
      ${VENUE_JOIN}
      ${FESTIVAL_JOIN}
@@ -291,25 +428,6 @@ export async function upcomingBandFeesByStatus(executor, tenantId) {
   return rows
 }
 
-export async function listBandMembers(executor, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT * FROM band_members WHERE tenant_id = $1 ORDER BY sort_order ASC, id ASC',
-    [tenantId],
-  )
-  return rows
-}
-
-// Slots whose [start_date, end_date] range overlaps the [minDate, maxDate] window.
-export async function listAvailabilitySlotsOverlapping(executor, tenantId, minDate, maxDate) {
-  const { rows } = await executor.query(
-    `SELECT * FROM availability_slots
-     WHERE tenant_id = $1 AND start_date <= $2 AND end_date >= $3
-     ORDER BY created_at ASC`,
-    [tenantId, maxDate, minDate],
-  )
-  return rows
-}
-
 export async function listGigTasks(executor, gigId, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM gig_tasks WHERE gig_id = $1 AND tenant_id = $2 ORDER BY created_at ASC',
@@ -329,7 +447,8 @@ export async function listGigAttachments(executor, gigId, tenantId) {
 
 export async function getLeadMemberIds(executor, tenantId) {
   const { rows } = await executor.query(
-    `SELECT id FROM band_members WHERE tenant_id = $1 AND position = 'lead'`,
+    `SELECT id FROM band_members
+      WHERE tenant_id = $1 AND position = 'lead' AND deleted_at IS NULL`,
     [tenantId],
   )
   return rows.map((r) => r.id)
@@ -363,11 +482,11 @@ export async function insertGigWithRelations(executor, tenantId, data) {
   const { rows } = await executor.query(
     `WITH inserted AS (
        INSERT INTO gigs (tenant_id, event_date, event_description, venue_id, festival_id, start_time, end_time, status,
-                         has_pa_system, has_drumkit, has_stage_lights)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                         my_band_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *
      )
-     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}
+     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}, ${GIG_EQUIPMENT_SELECT}, ${myBandSelect('g')}
        FROM inserted g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}`,
@@ -375,7 +494,7 @@ export async function insertGigWithRelations(executor, tenantId, data) {
       tenantId,
       data.event_date, data.event_description, data.venueId, data.festivalId,
       data.start_time, data.end_time, data.status,
-      data.has_pa_system, data.has_drumkit, data.has_stage_lights,
+      data.myBandId ?? null,
     ],
   )
   return rows[0]
@@ -518,6 +637,35 @@ export async function insertGigTagLink(executor, gigId, tagId, tenantId) {
   )
 }
 
+// ---------- equipment ----------
+
+// Aliased to match GIG_EQUIPMENT_SELECT so the PUT response and the detail
+// payload are the same shape.
+export async function loadGigEquipment(executor, gigId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT item_key AS item, provider
+       FROM gig_equipment
+      WHERE gig_id = $1 AND tenant_id = $2
+      ORDER BY item_key`,
+    [gigId, tenantId],
+  )
+  return rows
+}
+
+export async function deleteGigEquipment(executor, gigId, tenantId) {
+  await executor.query(
+    'DELETE FROM gig_equipment WHERE gig_id = $1 AND tenant_id = $2',
+    [gigId, tenantId],
+  )
+}
+
+export async function insertGigEquipment(executor, gigId, tenantId, item, provider) {
+  await executor.query(
+    'INSERT INTO gig_equipment (gig_id, tenant_id, item_key, provider) VALUES ($1, $2, $3, $4)',
+    [gigId, tenantId, item, provider],
+  )
+}
+
 // Returns { banner_path } for the gig, or null when the gig does not exist
 // in the tenant (a gig with no banner still returns a row).
 export async function getGigBannerRow(executor, gigId, tenantId) {
@@ -526,6 +674,27 @@ export async function getGigBannerRow(executor, gigId, tenantId) {
     [gigId, tenantId],
   )
   return rows[0] ?? null
+}
+
+// Every object-store key the gig owns, for reclamation before it is deleted.
+// Attachments cascade away with the gig row (composite FK), so their keys are
+// unreachable afterwards and must be collected here or leak forever.
+// Returns null when the gig does not exist, distinguishing that from a gig
+// that simply owns no objects.
+export async function listGigStorageKeys(executor, gigId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT g.banner_path,
+            COALESCE((
+              SELECT array_agg(ga.object_key)
+                FROM gig_attachments ga
+               WHERE ga.gig_id = g.id AND ga.tenant_id = g.tenant_id
+            ), '{}') AS attachment_keys
+       FROM gigs g
+      WHERE g.id = $1 AND g.tenant_id = $2`,
+    [gigId, tenantId],
+  )
+  if (!rows[0]) return null
+  return [rows[0].banner_path, ...rows[0].attachment_keys].filter(Boolean)
 }
 
 export async function setGigBannerPath(executor, gigId, tenantId, objectKey) {
@@ -542,14 +711,6 @@ export async function clearGigBannerPath(executor, gigId, tenantId) {
     'UPDATE gigs SET banner_path = NULL, updated_at = NOW() WHERE id = $1 AND tenant_id = $2',
     [gigId, tenantId],
   )
-}
-
-export async function getBandMemberIdForUser(executor, userId, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT id FROM band_members WHERE user_id = $1 AND tenant_id = $2',
-    [userId, tenantId],
-  )
-  return rows[0]?.id ?? null
 }
 
 export async function insertGigAttachment(executor, tenantId, gigId, file, objectKey) {
@@ -636,7 +797,7 @@ export async function deleteGigContact(executor, gigId, contactId, tenantId) {
 
 export async function fetchGigWithRelations(executor, gigId, tenantId) {
   const { rows } = await executor.query(
-    `SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}
+    `SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}, ${GIG_EQUIPMENT_SELECT}, ${myBandSelect('g')}
        FROM gigs g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}
@@ -658,7 +819,7 @@ export async function updateGigFields(executor, tenantId, gigId, fields, values)
        WHERE id = $${whereIdx} AND tenant_id = $${whereIdx + 1}
        RETURNING *
      )
-     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}
+     SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}, ${GIG_EQUIPMENT_SELECT}, ${myBandSelect('g')}
        FROM updated g
        ${VENUE_JOIN}
        ${FESTIVAL_JOIN}`,
@@ -666,4 +827,3 @@ export async function updateGigFields(executor, tenantId, gigId, fields, values)
   )
   return rows[0] || null
 }
-

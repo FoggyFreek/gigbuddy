@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -20,37 +20,48 @@ export default function SongsPage() {
   const navigate = useNavigate()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
-  const [songs, setSongs] = useState<Song[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [modal, setModal] = useState<{ mode: 'create' } | null>(null)
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await listSongs()
-      setSongs(data as Song[])
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  // The fetched list is tagged with the reload it answered, so `loading` and
+  // `error` are derived from whether the newest reload has landed.
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const reload = useCallback(() => setReloadNonce((n) => n + 1), [])
+  const [songsState, setSongsState] = useState<{ key: number; songs: Song[]; error: string | null } | null>(null)
+  const songs = songsState?.songs ?? []
+  const loading = songsState?.key !== reloadNonce
+  const error = songsState?.key === reloadNonce ? songsState.error : null
+
+  useEffect(() => {
+    let cancelled = false
+    listSongs()
+      .then((data) => {
+        if (!cancelled) setSongsState({ key: reloadNonce, songs: data as Song[], error: null })
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setSongsState((prev) => ({
+            key: reloadNonce,
+            songs: prev?.songs ?? [],
+            error: e instanceof Error ? e.message : String(e),
+          }))
+        }
+      })
+    return () => { cancelled = true }
+  }, [reloadNonce])
 
   const handleSongUpdate = useCallback((id: Id, patch: Partial<Song>) => {
-    setSongs((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)))
+    setSongsState((prev) => (prev
+      ? { ...prev, songs: prev.songs.map((s) => (s.id === id ? { ...s, ...patch } : s)) }
+      : prev))
   }, [])
 
   const handleSongDelete = useCallback((id: Id) => {
-    setSongs((prev) => prev.filter((s) => s.id !== id))
+    setSongsState((prev) => (prev ? { ...prev, songs: prev.songs.filter((s) => s.id !== id) } : prev))
   }, [])
-
-  useEffect(() => { load() }, [load])
 
   function handleClose() {
     setModal(null)
-    load()
+    reload()
   }
 
   return (
@@ -64,7 +75,7 @@ export default function SongsPage() {
         </Typography>
         {canWritePlanning && (
           <SongImportMenu
-            onImported={load}
+            onImported={reload}
             onSongCreated={(song) => navigate(`/songs/${song.id}`)}
           />
         )}

@@ -21,6 +21,7 @@
     "contacts": "Contacten",
     "suppliers": "Leveranciers",
     "venues": "Locaties",
+    "myBands": "Mijn bands",
     "emailTemplates": "E-mailsjablonen",
     "invoices": "Facturen",
     "purchases": "Inkopen",
@@ -66,9 +67,13 @@
     "noResults": "Geen resultaten",
     "removeRecentAria": "recente zoekopdracht verwijderen",
     "addCategoryAria": "zoekcategorie toevoegen",
+    "markers": {
+      "finished": "Voltooid"
+    },
     "categories": {
       "contacts": "Contacten",
       "gigs": "Optredens",
+      "tasks": "Taken",
       "files": "Bestanden",
       "invoices": "Facturen",
       "purchases": "Inkopen",
@@ -78,5 +83,13 @@
       "venues": "Locaties",
       "transaction": "Transactie"
     }
+  },
+  "userMenu": {
+    "me": "Ik",
+    "switchBand": "Wissel van band",
+    "addBand": "Band toevoegen",
+    "createPersonalWorkspace": "Artist profiel",
+    "admin": "beheerder",
+    "logout": "Uitloggen"
   }
 }

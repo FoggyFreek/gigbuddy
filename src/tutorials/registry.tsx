@@ -3,6 +3,7 @@ import { PERMISSIONS } from '../auth/permissions.ts'
 import { FEATURES } from '../auth/entitlements.ts'
 import { getFinanceOnboardingStatus } from '../api/financeOnboarding.ts'
 import FinanceWelcomeCard from './cards/FinanceWelcomeCard.tsx'
+import PersonalWorkspaceWelcomeCard from './cards/PersonalWorkspaceWelcomeCard.tsx'
 
 // The ordered tutorial registry — the single place tutorials are declared.
 //
@@ -14,7 +15,16 @@ import FinanceWelcomeCard from './cards/FinanceWelcomeCard.tsx'
 // async `condition` (if any) resolves true — so order = priority.
 export const TUTORIALS: TutorialDef[] = [
   {
+    key: 'personal_workspace_welcome',
+    // What this tenant is for, said once on arrival. Ahead of the finance
+    // welcome so a brand-new workspace explains itself before its books.
+    kinds: ['personal'],
+    Card: PersonalWorkspaceWelcomeCard,
+  },
+  {
     key: 'finance_welcome',
+    // Written in a band voice; the personal workspace gets its own instead.
+    kinds: ['band'],
     // Finance managers on a finance-capable plan, anywhere except the wizard itself.
     eligible: (ctx) =>
       ctx.can(PERMISSIONS.FINANCE_MANAGE)

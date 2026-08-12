@@ -113,6 +113,53 @@ describe('PATCH/DELETE /api/tasks/:id', () => {
   })
 })
 
+describe('GET /api/tasks/search — global search on task description', () => {
+  async function addTask(tenantId, title, { gigId = null, done = false, dueDate = null } = {}) {
+    const { rows } = await pool.query(
+      `INSERT INTO gig_tasks (tenant_id, gig_id, title, done, due_date)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      [tenantId, gigId, title, done, dueDate],
+    )
+    return rows[0].id
+  }
+
+  it('matches on the task description, case-insensitively and mid-word', async () => {
+    await addTask(seed.tenantA.id, 'Rent a PA system')
+    const res = await asUserA(request(app).get('/api/tasks/search?q=pa%20sys')).expect(200)
+    expect(res.body.map((task) => task.title)).toEqual(['Rent a PA system'])
+  })
+
+  it('returns nothing for queries shorter than 3 characters', async () => {
+    await addTask(seed.tenantA.id, 'Rent a PA system')
+    const res = await asUserA(request(app).get('/api/tasks/search?q=Re')).expect(200)
+    expect(res.body).toEqual([])
+  })
+
+  it('carries gig context for gig-linked tasks and null for standalone ones', async () => {
+    await addTask(seed.tenantA.id, 'Backline booking', { gigId: seed.gigA.id })
+    await addTask(seed.tenantA.id, 'Backline invoice')
+    const res = await asUserA(request(app).get('/api/tasks/search?q=Backline')).expect(200)
+    const byTitle = Object.fromEntries(res.body.map((task) => [task.title, task]))
+    expect(byTitle['Backline booking'].gig_id).toBe(seed.gigA.id)
+    expect(byTitle['Backline booking'].event_description).toBe('Alpha Gig')
+    expect(byTitle['Backline invoice'].gig_id).toBeNull()
+    expect(byTitle['Backline invoice'].event_description).toBeNull()
+  })
+
+  it('sorts open tasks before finished ones', async () => {
+    await addTask(seed.tenantA.id, 'Mixdesk finished', { done: true })
+    await addTask(seed.tenantA.id, 'Mixdesk open')
+    const res = await asUserA(request(app).get('/api/tasks/search?q=Mixdesk')).expect(200)
+    expect(res.body.map((task) => task.title)).toEqual(['Mixdesk open', 'Mixdesk finished'])
+  })
+
+  it('never returns another tenant\'s tasks (isolation)', async () => {
+    await addTask(seed.tenantB.id, 'Secret bravo chore')
+    const res = await asUserA(request(app).get('/api/tasks/search?q=bravo')).expect(200)
+    expect(res.body).toEqual([])
+  })
+})
+
 describe('nested gig task routes stay gig-scoped after unification', () => {
   it('PATCH/DELETE via the wrong (but same-tenant) gig URL returns 404', async () => {
     // A second gig in tenant A; taskA() belongs to gigA, not this one.

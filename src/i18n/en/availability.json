@@ -7,6 +7,7 @@
   },
   "subscribe": {
     "tooltip": "Subscribe to calendar",
+    "locked": "Calendar sync is part of a higher plan",
     "aria": "subscribe to calendar"
   },
   "export": {
@@ -18,16 +19,20 @@
     "availability": "Availability",
     "gig": "Gig",
     "rehearsal": "Rehearsal",
-    "bandEvent": "Band Event"
+    "bandEvent": "Band Event",
+    "artistEvent": "Personal event"
   },
   "status": {
     "available": "Available",
+    "travel_margin": "Travel margin",
     "unavailable": "Unavailable"
   },
   "events": {
     "noEvents": "No events.",
     "band": "Band",
     "bandWide": "Band-wide",
+    "me": "Me",
+    "myAvailability": "My availability",
     "gigFallback": "Gig",
     "rehearsalTooltip": "Rehearsal — {{status}}",
     "rehearsalAbbrev": "Reh {{yes}}/{{total}}",
@@ -41,5 +46,40 @@
     "bandEvents": "Band events",
     "note": "Only confirmed and announced gigs and planned rehearsals are exported. Options are excluded.",
     "export": "Export"
+  },
+  "mine": {
+    "title": "My availability",
+    "help": "Your calendar belongs to you, not to any band. Each band you play in sees only what you allow here.",
+    "travelMargin": "Time / travel margin (hours)",
+    "travelMarginHelp": "Required total gap between consecutive events. Availability inside this gap is shown in orange.",
+    "detailVisible": "Let my bands see why I'm unavailable",
+    "detailVisibleHelp": "Off: bands see that you're busy, not the reason.",
+    "crossBandVisible": "Let my bands see what I'm booked for elsewhere",
+    "crossBandVisibleHelp": "Off: other bands' gigs show as busy, without naming the band or the show.",
+    "delegationTitle": "Who may maintain my calendar",
+    "delegationHelp": "Turn this on for a band whose planner you trust to record your availability for you. You can always change or remove what they entered.",
+    "delegationNone": "You're not in any band yet.",
+    "delegationLabel": "{{band}} may manage my availability",
+    "saveFailed": "Could not save your availability settings.",
+    "loadFailed": "Could not load your availability settings."
+  },
+  "slotDialog": {
+    "createTitle": "Add availability slot",
+    "editTitle": "Edit slot",
+    "member": "Member",
+    "wholeBand": "Whole band",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "statusLabel": "Status",
+    "reason": "Reason (optional)",
+    "required": "Required",
+    "endBeforeStart": "Must be on or after start date",
+    "create": "Create"
+  },
+  "projection": {
+    "hidden": "Details hidden",
+    "hiddenHelp": "This member keeps the reason private.",
+    "setBy": "Set by {{name}}",
+    "setByBand": "Set by {{name}} ({{band}})"
   }
 }

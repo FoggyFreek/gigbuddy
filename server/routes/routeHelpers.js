@@ -22,3 +22,10 @@ export function requireParam(req, res, name, options = {}) {
 export function sendError(res, error) {
   res.status(error.status).json(error.body)
 }
+
+// Who is looking, and from which band's screen. Every read that projects a
+// musician's availability takes this, because it decides how much of each
+// linked member's entry is revealed (server/services/availabilityProjection.js).
+export function viewerOf(req) {
+  return { userId: req.user.id, tenantId: req.tenantId }
+}

@@ -69,6 +69,13 @@ export default defineConfig([
     },
   },
   {
+    // Build/test config files read env vars at config time.
+    files: ['*.config.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
     files: ['public/sw.js'],
     languageOptions: {
       globals: globals.serviceworker,

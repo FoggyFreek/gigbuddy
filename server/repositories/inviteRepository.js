@@ -76,10 +76,13 @@ export async function getMembership(executor, userId, tenantId) {
   return rows[0] || null
 }
 
-export async function insertPendingMembership(executor, userId, tenantId, role) {
+// `source` records how the membership came to exist ('invite' from redemption,
+// 'request' from the band directory). It has no SQL default — every insert
+// site names its own value.
+export async function insertPendingMembership(executor, userId, tenantId, role, source, requestMessage = null) {
   await executor.query(
-    `INSERT INTO memberships (user_id, tenant_id, role, status)
-     VALUES ($1, $2, $3, 'pending')`,
-    [userId, tenantId, role],
+    `INSERT INTO memberships (user_id, tenant_id, role, status, source, request_message)
+     VALUES ($1, $2, $3, 'pending', $4, $5)`,
+    [userId, tenantId, role, source, requestMessage],
   )
 }

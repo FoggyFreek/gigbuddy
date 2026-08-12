@@ -2,7 +2,7 @@
 // that can fail with a specific HTTP outcome return { error: { status, body } };
 // success returns a domain payload (see each function).
 import pool from '../db/index.js'
-import { withTransaction } from '../db/withTransaction.js'
+import { withTransaction, abortTransaction } from '../db/withTransaction.js'
 import { hasPermission, PERMISSIONS } from '../auth/permissions.js'
 import { dispatchNotification } from './notificationService.js'
 import { logger } from '../utils/logger.js'
@@ -22,7 +22,6 @@ import {
   rehearsalExistsInTenant,
   loadParticipants,
   loadSongs,
-  getBandMemberIdForUser,
   getLeadMemberIds,
   filterMemberIdsInTenant,
   insertRehearsal,
@@ -41,15 +40,21 @@ import {
   insertRehearsalSong,
   deleteRehearsalSong,
 } from '../repositories/rehearsalRepository.js'
-import { bandMemberExistsInTenant } from '../repositories/bandMemberRepository.js'
+import {
+  bandMemberExistsInTenant,
+  getBandMemberIdForUser,
+} from '../repositories/bandMemberRepository.js'
 import { songExistsInTenant } from '../repositories/songRepository.js'
-import { parseListCursor, parseLocalDate } from '../validators/common.js'
+import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate, validateDailyTimeRange } from '../validators/common.js'
 import { badRequest, notFound } from './serviceErrors.js'
-import { limitedCollection, windowedCollection } from './limitedCollectionService.js'
+import { assertMyBandWritable } from './myBandService.js'
+import {
+  limitedCollection,
+  limitedCollectionWithCursor,
+  windowedCollection,
+} from './limitedCollectionService.js'
 
 const NOT_FOUND = notFound('Not found')
-const INVALID_TODAY = 'today must be a valid ISO date (YYYY-MM-DD)'
-const INVALID_CURSOR = 'cursorDate and cursorId must be provided together and valid'
 
 // ---------- notifications ----------
 
@@ -153,16 +158,11 @@ export async function listPastRehearsals(db, tenantId, query = {}) {
   const parsedCursor = parseListCursor(query)
   if (parsedCursor === null) return badRequest(INVALID_CURSOR)
 
-  const result = await limitedCollection(query.limit, (limit) =>
-    listPastRehearsalRows(db, tenantId, today, limit, parsedCursor.cursor))
+  const result = await limitedCollectionWithCursor(query.limit, (limit) =>
+    listPastRehearsalRows(db, tenantId, today, limit, parsedCursor.cursor), (r) => r.proposed_date)
   if (result.error) return result
 
-  const items = await attachParticipants(db, tenantId, result.items)
-  const last = items[items.length - 1]
-  const nextCursor = last && items.length === result.meta.limit
-    ? { date: rehearsalDateStr(last), id: last.id }
-    : null
-  return { items, meta: { ...result.meta, nextCursor } }
+  return { ...result, items: await attachParticipants(db, tenantId, result.items) }
 }
 
 export async function listRehearsalsInRange(db, tenantId, query = {}) {
@@ -193,9 +193,16 @@ export async function createRehearsal(tenantId, userId, body) {
   if (!body.proposed_date) {
     return { error: { status: 400, body: { error: 'proposed_date is required' } } }
   }
+  const timeError = validateDailyTimeRange(body.start_time, body.end_time)
+  if (timeError) return badRequest(timeError)
   const extras = normalizeExtraMemberIds(body.extra_member_ids)
 
   const rehearsal = await withTransaction(async (client) => {
+    // Holds the My Bands row for the rest of this transaction, so a concurrent
+    // removal cannot turn this insert into a foreign-key violation.
+    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    if (bandCheck) abortTransaction(bandCheck)
+
     const created = await insertRehearsal(client, tenantId, body, userId)
 
     const leadIds = await getLeadMemberIds(client, tenantId)
@@ -211,6 +218,8 @@ export async function createRehearsal(tenantId, userId, body) {
     return created
   })
 
+  if (rehearsal.error) return rehearsal
+
   // Post-commit read (on the pool): the created rehearsal with its participants.
   return { rehearsal: await withParticipants(pool, rehearsal, tenantId) }
 }
@@ -219,6 +228,15 @@ export async function createRehearsal(tenantId, userId, body) {
 // { rehearsal, confirmed } — `confirmed` is true when this PATCH set the
 // status to planned; the caller fires the confirmed notification.
 export async function patchRehearsal(db, tenantId, rehearsalId, body) {
+  if ('start_time' in body || 'end_time' in body) {
+    const current = await fetchRehearsal(db, rehearsalId, tenantId)
+    if (!current) return NOT_FOUND
+    const timeError = validateDailyTimeRange(
+      'start_time' in body ? body.start_time : current.start_time,
+      'end_time' in body ? body.end_time : current.end_time,
+    )
+    if (timeError) return badRequest(timeError)
+  }
   if ('status' in body) {
     if (!VALID_STATUSES.has(body.status)) {
       return { error: { status: 400, body: { error: 'Invalid status value' } } }
@@ -236,8 +254,19 @@ export async function patchRehearsal(db, tenantId, rehearsalId, body) {
     return { error: { status: 400, body: { error: 'No valid fields to update' } } }
   }
 
-  const updated = await updateRehearsalFields(db, tenantId, rehearsalId, built.fields, built.values)
-  if (!updated) return NOT_FOUND
+  // In a transaction so the My Bands row stays locked from validation through
+  // the write; the check is a no-op when the body doesn't mention the link.
+  const result = await withTransaction(async (client) => {
+    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    if (bandCheck) abortTransaction(bandCheck)
+
+    const row = await updateRehearsalFields(client, tenantId, rehearsalId, built.fields, built.values)
+    if (!row) abortTransaction(NOT_FOUND)
+    return { row }
+  }, { db })
+
+  if (result.error) return result
+  const updated = result.row
 
   return {
     rehearsal: await withParticipants(db, updated, tenantId),
@@ -302,7 +331,7 @@ export async function setParticipantVote(db, tenantId, userId, rehearsalId, memb
     }
   }
 
-  return withTransaction(async (client) => {
+  const result = await withTransaction(async (client) => {
     const option = await lockRehearsalOptionResponseState(client, rehearsalId, tenantId)
     if (!option) return NOT_FOUND
 
@@ -334,6 +363,14 @@ export async function setParticipantVote(db, tenantId, userId, rehearsalId, memb
       notifications: { firstUnavailable, allResponded },
     }
   }, { db })
+
+  if (result.error) return result
+
+  // Dispatched here, after the commit, so no caller can forget to act on them.
+  const { rehearsal, notifications } = result
+  if (notifications.firstUnavailable) await notifyRehearsalOptionUnavailable(tenantId, rehearsal)
+  if (notifications.allResponded) await notifyRehearsalOptionResponsesComplete(tenantId, rehearsal)
+  return { rehearsal }
 }
 
 // ---------- songs ----------

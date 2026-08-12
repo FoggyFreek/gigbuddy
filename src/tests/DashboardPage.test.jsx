@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter, Routes, Route, useParams } from 'react-router-dom'
+import { MemoryRouter, Routes, Route, useParams } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/gigs.ts', () => ({
@@ -25,6 +25,12 @@ vi.mock('../api/profile.ts', () => ({
   uploadMemoryImage: vi.fn(),
 }))
 vi.mock('../api/achievements.ts', () => ({ listAchievements: vi.fn() }))
+vi.mock('../api/me.ts', () => ({
+  listMyUpcomingGigs: vi.fn(),
+  getMyNextRehearsal: vi.fn(),
+  listMyUpcomingBandEvents: vi.fn(),
+  listMyTasks: vi.fn(),
+}))
 
 import DashboardPage from '../pages/DashboardPage.tsx'
 import { listGigs, listUpcomingGigs, getGig, searchGigs } from '../api/gigs.ts'
@@ -33,6 +39,12 @@ import { listUpcomingBandEvents } from '../api/bandEvents.ts'
 import { listTasks } from '../api/tasks.ts'
 import { getProfile, updateProfile } from '../api/profile.ts'
 import { listAchievements } from '../api/achievements.ts'
+import {
+  getMyNextRehearsal,
+  listMyTasks,
+  listMyUpcomingBandEvents,
+  listMyUpcomingGigs,
+} from '../api/me.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import theme from '../theme.ts'
 
@@ -342,5 +354,95 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/couldn't load/i)).toBeInTheDocument()
     // a healthy card still renders
     expect(screen.getByText('Send invoice')).toBeInTheDocument()
+  })
+})
+
+// In an artist workspace the same tiles are fed by /api/me/* instead of the
+// active tenant, so every row can belong to a different band.
+describe('DashboardPage in an artist workspace', () => {
+  const ARTIST_GIGS = [
+    { id: 2, event_date: '2026-06-15', event_description: 'Jazz Night', venue: { id: 12, name: 'Cafe X', city: 'Amsterdam' }, festival: null, status: 'confirmed', tenantId: 9, tenantName: 'The Nightowls', tenantAvatarPath: 'tenants/9/avatar/nightowls.png', kind: 'band' },
+    { id: 3, event_date: '2026-07-01', event_description: 'Summer Festival', venue: null, festival: { id: 13, name: 'Park Fest', city: 'Rotterdam' }, status: 'announced', tenantId: 4, tenantName: 'Quartet Blue', tenantAvatarPath: 'tenants/4/avatar/quartet.png', kind: 'band' },
+  ]
+  const ARTIST_TASKS = [
+    { id: 50, gig_id: 3, title: 'Send invoice', done: false, due_date: null, event_description: 'Tour Stop', tenantId: 4, tenantName: 'Quartet Blue', kind: 'band' },
+  ]
+  let switchTenant
+
+  beforeEach(() => {
+    vi.setSystemTime(new Date('2026-05-30T12:00:00Z'))
+    switchTenant = vi.fn().mockResolvedValue(undefined)
+    useAuth.mockReturnValue({
+      user: { id: 1, activeTenantId: 1, activeTenantKind: 'personal' },
+      switchTenant,
+    })
+    resolveAll()
+    listMyUpcomingGigs.mockResolvedValue(collection(ARTIST_GIGS, 6))
+    getMyNextRehearsal.mockResolvedValue({ id: 20, proposed_date: '2026-06-01', location: 'Studio A', status: 'planned', tenantId: 9, tenantName: 'The Nightowls', tenantAvatarPath: 'tenants/9/avatar/nightowls.png', kind: 'band' })
+    listMyUpcomingBandEvents.mockResolvedValue(collection([
+      { id: 30, start_date: '2026-06-08', title: 'Photo shoot', location: 'Studio B', tenantId: 7, tenantName: 'Brass Dept', tenantAvatarPath: 'tenants/7/avatar/brass.png', kind: 'band' },
+    ], 1))
+    listMyTasks.mockResolvedValue(collection(ARTIST_TASKS, 5))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.clearAllMocks()
+  })
+
+  it('reads the cross-band feeds and never the active-tenant ones', async () => {
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
+    const today = new Date()
+    const localToday = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+    expect(listMyUpcomingGigs).toHaveBeenCalledWith(6, localToday)
+    expect(listMyTasks).toHaveBeenCalledWith({ limit: 5, done: false })
+    expect(listMyUpcomingBandEvents).toHaveBeenCalledWith(1, localToday)
+    expect(getMyNextRehearsal).toHaveBeenCalledTimes(1)
+
+    expect(listUpcomingGigs).not.toHaveBeenCalled()
+    expect(listTasks).not.toHaveBeenCalled()
+    expect(listUpcomingBandEvents).not.toHaveBeenCalled()
+    expect(getNextRehearsal).not.toHaveBeenCalled()
+    expect(listGigs).not.toHaveBeenCalled()
+  })
+
+  it('identifies event rows with source-band avatars and keeps task labels unchanged', async () => {
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
+
+    expect(screen.getAllByRole('img', { name: 'The Nightowls' })).toHaveLength(2)
+    expect(screen.getByRole('img', { name: 'Quartet Blue' })).toHaveAttribute(
+      'src',
+      '/api/tenants/4/avatar',
+    )
+    expect(screen.getByRole('img', { name: 'Brass Dept' })).toHaveAttribute(
+      'src',
+      '/api/tenants/7/avatar',
+    )
+    expect(screen.queryByText('The Nightowls')).not.toBeInTheDocument()
+    expect(screen.queryByText('Brass Dept')).not.toBeInTheDocument()
+    expect(screen.getByText('Tour Stop — Quartet Blue')).toBeInTheDocument()
+  })
+
+  it('opens an ordinary event detail without leaving the artist workspace', async () => {
+    const user = userEvent.setup()
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
+
+    await user.click(screen.getByText('Jazz Night'))
+    expect(switchTenant).not.toHaveBeenCalled()
+    expect(await screen.findByText('gig-detail-2')).toBeInTheDocument()
+  })
+
+  it('uses intentional tenant switching for a gig-linked task and stays put when it fails', async () => {
+    switchTenant.mockRejectedValue(new Error('nope'))
+    const user = userEvent.setup()
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('Jazz Night')).toBeInTheDocument())
+
+    await user.click(screen.getByText('Send invoice'))
+    await waitFor(() => expect(switchTenant).toHaveBeenCalledWith(4))
+    expect(screen.queryByText('gig-detail-3')).not.toBeInTheDocument()
   })
 })

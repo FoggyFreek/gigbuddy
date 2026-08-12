@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Paper from '@mui/material/Paper'
@@ -7,6 +7,7 @@ import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { redeemInvite } from '../api/invites.ts'
+import { parseInviteCode } from '../utils/inviteCode.ts'
 import { useAuth } from '../contexts/authContext.ts'
 
 export default function RedeemInvitePage() {
@@ -45,11 +46,13 @@ export default function RedeemInvitePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!code.trim()) return
+    // People paste the whole invite link, not just the code.
+    const parsed = parseInviteCode(code)
+    if (!parsed) return
     setError('')
     setSubmitting(true)
     try {
-      const res = await redeemInvite(code.trim())
+      const res = await redeemInvite(parsed)
       setResult(res as { tenant: { name: string } })
       await refreshUser()
     } catch (err: unknown) {

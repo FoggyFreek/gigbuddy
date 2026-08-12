@@ -28,6 +28,8 @@ import LinkpageEditButton from '../components/profile/LinkpageEditButton.tsx'
 import type { Id } from '../types/entities.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 
 interface ProfileLink {
   id?: Id
@@ -40,6 +42,9 @@ export default function ProfilePage() {
   const { t } = useTranslation('profile')
   const { user } = useAuth()
   const { canWritePlanning } = usePermissions()
+  const { supports } = useTenantKind()
+  const hasBandRoster = supports(TENANT_CAPABILITIES.BAND_ROSTER)
+  const hasLinkpage = supports(TENANT_CAPABILITIES.BAND_LINKPAGE)
   const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
 
   const [form, setForm] = useState<ProfileForm>(EMPTY_FORM)
@@ -151,7 +156,7 @@ export default function ProfilePage() {
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>{t($ => $.title)}</Typography>
-        {isAdmin && <LinkpageEditButton />}
+        {isAdmin && hasLinkpage && <LinkpageEditButton />}
         {canWritePlanning && <SaveStatusLabel status={saveStatus} />}
       </Box>
 
@@ -184,9 +189,11 @@ export default function ProfilePage() {
             avatar={avatar.cardProps}
           />
         </Grid>
-        <Grid size={{ xs: 12, lg: 4 }}>
-          <BandMembersSection />
-        </Grid>
+        {hasBandRoster && (
+          <Grid size={{ xs: 12, lg: 4 }}>
+            <BandMembersSection />
+          </Grid>
+        )}
       </Grid>
 
       <Grid container spacing={3} sx={{ mb: 3, alignItems: 'flex-start' }}>

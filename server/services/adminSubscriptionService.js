@@ -6,7 +6,7 @@
 import { fetchPlan } from '../repositories/planRepository.js'
 import {
   fetchLiveSubscriptionForUser,
-  fetchLiveSubscriptionForUpdate,
+  fetchSubscriptionByIdForUpdate,
   insertSubscription,
   cancelSubscriptionNow,
   listSubscriptionsForAdmin,
@@ -43,7 +43,9 @@ export async function grantComplimentary(db, body) {
 
   const plan = await fetchPlan(db, planId)
   if (!plan || !plan.is_active) return { error: { status: 404, body: { error: 'Plan not found' } } }
-  if (await fetchLiveSubscriptionForUser(db, userId)) {
+  // Per-ladder: a band subscriber can still be granted an artist plan, which is
+  // the point of granting one as a perk.
+  if (await fetchLiveSubscriptionForUser(db, userId, plan.audience)) {
     return { error: { status: 409, body: { error: 'User already has a subscription', code: 'already_subscribed' } } }
   }
   try {
@@ -65,10 +67,17 @@ export async function grantComplimentary(db, body) {
   }
 }
 
-export async function revokeComplimentary(db, userId) {
+// Keyed on the subscription id, not the user: a user may hold a complimentary
+// grant on each ladder, and the admin table already renders one row per
+// subscription. The user id is still checked so an id from another account
+// cannot be revoked through the wrong URL.
+export async function revokeComplimentary(db, userId, subscriptionId) {
+  if (!Number.isInteger(subscriptionId) || subscriptionId <= 0) {
+    return badRequest('subscriptionId must be a positive integer')
+  }
   return withTransaction(async (client) => {
-    const sub = await fetchLiveSubscriptionForUpdate(client, userId)
-    if (!sub || !sub.is_complimentary) {
+    const sub = await fetchSubscriptionByIdForUpdate(client, subscriptionId)
+    if (!sub || sub.user_id !== userId || !sub.is_complimentary || sub.status === 'canceled') {
       abortTransaction({ error: { status: 404, body: { error: 'No complimentary subscription' } } })
     }
     await cancelSubscriptionNow(client, sub.id, 'admin_revoked')

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/bandEvents.ts', () => ({
@@ -22,11 +22,24 @@ vi.mock('../api/bandEvents.ts', () => ({
   createBandEvent: vi.fn().mockResolvedValue({ id: 99 }),
   updateBandEvent: vi.fn().mockResolvedValue({}),
   deleteBandEvent: vi.fn().mockResolvedValue({}),
+  addBandEventParticipant: vi.fn().mockResolvedValue({}),
+  removeBandEventParticipant: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('../api/bandMembers.ts', () => ({
+  listMembers: vi.fn().mockResolvedValue([]),
+}))
+vi.mock('../api/me.ts', () => ({
+  listMyUpcomingBandEvents: vi.fn().mockResolvedValue({ items: [], meta: { limit: 100, returned: 0 } }),
+  listMyPastBandEvents: vi.fn().mockResolvedValue({ items: [], meta: { limit: 100, returned: 0, nextCursor: null } }),
+  getMyBandEvent: vi.fn(),
 }))
 
 import BandEventsPage from '../pages/BandEventsPage.tsx'
 import BandEventDetailPage from '../pages/BandEventDetailPage.tsx'
-import { deleteBandEvent, listBandEvents, listPastBandEvents, listUpcomingBandEvents, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
+import { addBandEventParticipant, deleteBandEvent, listBandEvents, listPastBandEvents, listUpcomingBandEvents, getBandEvent, removeBandEventParticipant, updateBandEvent } from '../api/bandEvents.ts'
+import { listMembers } from '../api/bandMembers.ts'
+import { getMyBandEvent } from '../api/me.ts'
 import theme from '../theme.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 
@@ -83,6 +96,11 @@ describe('BandEventsPage', () => {
     listUpcomingBandEvents.mockResolvedValue({ items: EVENTS, meta: { limit: 100, returned: EVENTS.length } })
     listPastBandEvents.mockReset()
     listPastBandEvents.mockResolvedValue({ items: [], meta: { limit: 100, returned: 0, nextCursor: null } })
+    listMembers.mockReset()
+    listMembers.mockResolvedValue([])
+    addBandEventParticipant.mockReset()
+    addBandEventParticipant.mockResolvedValue({})
+    removeBandEventParticipant.mockClear()
     deleteBandEvent.mockClear()
   })
 
@@ -153,6 +171,85 @@ describe('BandEventsPage', () => {
     expect(listUpcomingBandEvents).toHaveBeenCalledTimes(1)
   })
 
+  it('updates the selected list row after adding a participant in the detail pane', async () => {
+    const user = userEvent.setup()
+    const eventDetail = {
+      id: 1,
+      title: 'Studio session',
+      start_date: '2099-06-15',
+      end_date: '2099-06-15',
+      start_time: null,
+      end_time: null,
+      location: null,
+      notes: '',
+      members_availability: [],
+      availability_days: [],
+    }
+    const alice = {
+      member_id: 7,
+      name: 'Alice',
+      position: 'lead',
+      color: '#e53935',
+      status: 'available',
+      reason: null,
+    }
+    getBandEvent.mockResolvedValueOnce(eventDetail)
+    listMembers.mockResolvedValueOnce([{ id: 7, name: 'Alice', position: 'lead', color: '#e53935' }])
+    addBandEventParticipant.mockResolvedValueOnce({
+      ...eventDetail,
+      members_availability: [alice],
+    })
+
+    wrapWithRoutes({ initialEntries: ['/events/1'] })
+
+    const participantSelect = await screen.findByRole('combobox', { name: /add band member/i })
+    await user.click(participantSelect)
+    await user.click(screen.getByRole('option', { name: /Alice/ }))
+    await user.click(screen.getAllByRole('button', { name: /^add$/i }).at(-1))
+
+    await waitFor(() => expect(addBandEventParticipant).toHaveBeenCalledWith(1, 7))
+    expect(await screen.findByText('A')).toBeInTheDocument()
+  })
+
+  it('updates the selected list row after removing a participant in the detail pane', async () => {
+    const user = userEvent.setup()
+    const alice = {
+      member_id: 7,
+      name: 'Alice',
+      position: 'lead',
+      color: '#e53935',
+      status: 'available',
+      reason: null,
+    }
+    const eventDetail = {
+      id: 1,
+      title: 'Studio session',
+      start_date: '2099-06-15',
+      end_date: '2099-06-15',
+      start_time: null,
+      end_time: null,
+      location: null,
+      notes: '',
+      members_availability: [alice],
+      availability_days: [],
+    }
+    listUpcomingBandEvents.mockResolvedValue({
+      items: [{ ...EVENTS[0], members_availability: [alice] }],
+      meta: { limit: 100, returned: 1 },
+    })
+    getBandEvent
+      .mockResolvedValueOnce(eventDetail)
+      .mockResolvedValueOnce({ ...eventDetail, members_availability: [] })
+
+    wrapWithRoutes({ initialEntries: ['/events/1'] })
+    expect(await screen.findByText('A')).toBeInTheDocument()
+
+    await user.click(await screen.findByRole('button', { name: /remove Alice/i }))
+
+    await waitFor(() => expect(removeBandEventParticipant).toHaveBeenCalledWith(1, 7))
+    await waitFor(() => expect(screen.queryByText('A')).not.toBeInTheDocument())
+  })
+
   it('renders detail alongside the list at /events/:id and the Close button returns to /events', async () => {
     const user = userEvent.setup()
     wrapWithRoutes({ initialEntries: ['/events/1'] })
@@ -178,5 +275,88 @@ describe('BandEventsPage', () => {
     await waitFor(() => expect(deleteBandEvent).toHaveBeenCalledWith(1))
     expect(screen.queryByText('Studio session')).not.toBeInTheDocument()
     expect(screen.getByText(/no upcoming events/i)).toBeInTheDocument()
+  })
+})
+
+// The band event's own copy of the read-only-for-foreign-rows rule
+// (useCrossTenantRow): a row the artist workspace doesn't own is labelled with
+// its band, and that label alone decides.
+describe('BandEventDetailPage — cross-band event in a personal workspace', () => {
+  const ARTIST_USER = {
+    id: 9,
+    activeTenantId: 1,
+    activeTenantKind: 'personal',
+    activeTenantRole: 'tenant_admin',
+    permissions: ['app.view', 'planning.write'],
+    bandMemberId: 3,
+  }
+
+  const CROSS_BAND_EVENT = {
+    id: 1,
+    title: 'Studio session',
+    start_date: '2099-06-15',
+    end_date: '2099-06-15',
+    start_time: null,
+    end_time: null,
+    location: 'Studio A',
+    notes: '',
+    tenantId: 9,
+    tenantName: 'Other Band',
+    tenantAvatarPath: null,
+  }
+
+  function renderAsArtist(event) {
+    const switchTenant = vi.fn().mockResolvedValue(undefined)
+    getMyBandEvent.mockResolvedValue(event)
+    render(
+      <MemoryRouter initialEntries={['/events/1']}>
+        <ThemeProvider theme={theme}>
+          <AuthContext.Provider
+            value={{
+              user: ARTIST_USER,
+              setUser: () => {},
+              logout: async () => {},
+              switchTenant,
+              refreshUser: async () => undefined,
+            }}
+          >
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <Routes>
+                <Route path="/events/:id" element={<BandEventDetailPage />} />
+              </Routes>
+            </LocalizationProvider>
+          </AuthContext.Provider>
+        </ThemeProvider>
+      </MemoryRouter>
+    )
+    return switchTenant
+  }
+
+  beforeEach(() => {
+    getBandEvent.mockClear()
+    getMyBandEvent.mockReset()
+  })
+
+  it('names the source band and offers no editing', async () => {
+    const user = userEvent.setup()
+    const switchTenant = renderAsArtist(CROSS_BAND_EVENT)
+
+    await screen.findByTestId('source-tenant-switch')
+    expect(screen.getByText('Other Band')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Studio session')).toHaveAttribute('readonly')
+    expect(screen.queryByRole('button', { name: /^delete$/i })).not.toBeInTheDocument()
+    expect(getBandEvent).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Switch to band' }))
+    expect(switchTenant).toHaveBeenCalledWith(9)
+  })
+
+  it("keeps the full editor for the workspace's own event", async () => {
+    renderAsArtist({ ...CROSS_BAND_EVENT, tenantId: 1, tenantName: 'Solo' })
+    await waitFor(() => expect(screen.getByDisplayValue('Studio session')).toBeInTheDocument())
+
+    expect(screen.queryByTestId('source-tenant-switch')).not.toBeInTheDocument()
+    expect(screen.getByDisplayValue('Studio session')).not.toHaveAttribute('readonly')
+    expect(screen.getByRole('button', { name: /^delete$/i })).toBeInTheDocument()
   })
 })

@@ -3,15 +3,18 @@
 import {
   getTenantBySlug,
   getTenantSlug,
+  getTenantSlugState,
   listProfileLinks,
   listSongsWithLinks,
   listActiveProducts,
   listAnnouncedUpcomingGigs,
 } from '../repositories/linkpageRepository.js'
 import { signPayload, verifyPayload, linkpageConfigured, linkpageEditorUrl } from '../security/linkpageTokens.js'
+import { TENANT_CAPABILITIES, tenantKindSupports } from '../../shared/tenantCapabilities.js'
 import { resolveTenantEntitlements } from './entitlementService.js'
 import { FEATURES, LIMITS } from '../auth/entitlements.js'
 import { notFound, serviceError } from './serviceErrors.js'
+import { hasPendingSlugSync } from '../repositories/linkpageSlugSyncRepository.js'
 
 const NOT_FOUND = notFound('Not found')
 const NOT_CONFIGURED = serviceError(503, 'Link page integration is not configured')
@@ -58,7 +61,9 @@ async function linkpageEntitlements(db, tenantId) {
 export async function buildExport(db, slug) {
   if (!linkpageConfigured()) return NOT_CONFIGURED
   const tenant = await getTenantBySlug(db, slug)
-  if (!tenant) return NOT_FOUND
+  // Link pages are a band surface. A personal workspace's slug is treated as
+  // unknown here, the same as the editor mount refusing the capability.
+  if (!tenant || !tenantKindSupports(tenant.kind, TENANT_CAPABILITIES.BAND_LINKPAGE)) return NOT_FOUND
 
   const [entitlements, links, songs, products, gigs] = await Promise.all([
     linkpageEntitlements(db, tenant.id),
@@ -71,9 +76,12 @@ export async function buildExport(db, slug) {
   return {
     export: {
       entitlements,
+      // Wire keys `band` / `name` are the link-page app's external contract and
+      // stay put whatever the tenant's kind is — a solo artist's page reads the
+      // same shape. Only the source column follows the internal rename.
       band: {
         slug: tenant.slug,
-        name: nullable(tenant.band_name),
+        name: nullable(tenant.display_name),
         // Wire key stays `bio` (the linkpage app reads it under that name); the
         // source is the 150-char short bio, not the long-form profile bio.
         bio: nullable(tenant.short_bio),
@@ -129,10 +137,16 @@ export function resolveImageToken(token) {
 // editor for the active tenant, and the URL to send the browser to.
 export async function createHandoff(db, tenantId) {
   if (!linkpageConfigured()) return NOT_CONFIGURED
-  const slug = await getTenantSlug(db, tenantId)
-  if (!slug) return NOT_FOUND
+  const state = await getTenantSlugState(db, tenantId)
+  if (!state) return NOT_FOUND
   const exp = Math.floor(Date.now() / 1000) + HANDOFF_TTL_SECONDS
-  const token = signPayload({ t: 'handoff', slug, tenantId, exp })
+  const token = signPayload({
+    t: 'handoff',
+    slug: state.slug,
+    slugRevision: Number(state.slug_revision),
+    tenantId,
+    exp,
+  })
   // The token rides in the fragment so it never hits server logs on the way in.
   return { url: `${linkpageEditorUrl()}/edit#gbtoken=${encodeURIComponent(token)}` }
 }
@@ -141,5 +155,10 @@ export async function getStatus(db, tenantId) {
   if (!linkpageConfigured()) return { configured: false, publicUrl: null }
   const slug = await getTenantSlug(db, tenantId)
   if (!slug) return NOT_FOUND
-  return { configured: true, publicUrl: `${linkpageEditorUrl()}/${slug}` }
+  const pending = await hasPendingSlugSync(db, tenantId)
+  return {
+    configured: true,
+    publicUrl: `${linkpageEditorUrl()}/${slug}`,
+    linkpageSync: pending ? 'pending' : 'synced',
+  }
 }

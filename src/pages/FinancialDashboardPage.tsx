@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink } from 'react-router-dom'
+import { Link as RouterLink } from 'react-router'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -129,8 +129,11 @@ export default function FinancialDashboardPage() {
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
   const [data, setData] = useState<OverviewData | null>(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const requestKey = JSON.stringify(period)
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null)
+  const loading = !periodsLoaded || loadedRequestKey !== requestKey
+  const visibleError = !periodsLoaded || loadedRequestKey === requestKey ? error : null
 
   useEffect(() => {
     let cancelled = false
@@ -150,21 +153,21 @@ export default function FinancialDashboardPage() {
     return () => { cancelled = true }
   }, [fiscalYearStart])
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      setData(await getLedgerOverview(period) as OverviewData)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [period])
-
   useEffect(() => {
-    if (periodsLoaded) load()
-  }, [load, periodsLoaded])
+    if (!periodsLoaded) return
+    let cancelled = false
+    getLedgerOverview(period)
+      .then((overview) => {
+        if (cancelled) return
+        setData(overview as OverviewData)
+        setError(null)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => { if (!cancelled) setLoadedRequestKey(requestKey) })
+    return () => { cancelled = true }
+  }, [period, periodsLoaded, requestKey])
 
   return (
     <Box>
@@ -182,11 +185,11 @@ export default function FinancialDashboardPage() {
           <CircularProgress />
         </Box>
       )}
-      {error && (
-        <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>
+      {visibleError && (
+        <Typography color="error" sx={{ mb: 2 }}>{visibleError}</Typography>
       )}
 
-      {!loading && !error && data && (
+      {!loading && !visibleError && data && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: isCompact ? 1.5 : 2 }}>
           {/* The result chart stays full-width above the masonry — it's a wide
               time-series that would be cramped inside a single column. */}

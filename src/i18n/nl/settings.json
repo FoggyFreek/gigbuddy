@@ -9,6 +9,7 @@
       "preferences": "Mijn voorkeuren",
       "billing": "Facturering",
       "connectedAccounts": "Gekoppelde accounts",
+      "myAvailability": "Mijn beschikbaarheid",
       "accent": "Accentkleur",
       "membersAndInvites": "Leden en uitnodigingen",
       "storage": "Opslag",
@@ -16,12 +17,42 @@
       "chartOfAccounts": "Grootboekschema",
       "defaultAccounts": "Boekhoudinstellingen",
       "financialProfile": "Financieel profiel",
-      "accountingProfile": "Boekhoudprofiel"
-    }
+      "accountingProfile": "Boekhoudprofiel",
+      "bandProfile": "Openbaar bandprofiel",
+      "manageAccounts": "Toegang en beheer"
+    },
+    "workspaceSettings": "Werkruimte-instellingen"
   },
   "subscription": {
     "current": "Huidig abonnement",
     "manage": "Abonnement beheren"
+  },
+  "tenantDeletion": {
+    "title": "Account permanent verwijderen",
+    "description": "Verwijder deze werkruimte en alle inhoud permanent.",
+    "open": "Account permanent verwijderen",
+    "dialogTitle": "{{name}} permanent verwijderen?",
+    "warning": "Dit account en alle inhoud worden permanent verwijderd. Dit kan niet ongedaan worden gemaakt.",
+    "downloadWarning": "Download alle financiële gegevens en andere relevante data voordat je doorgaat.",
+    "confirmationHelp": "Typ de exacte accountnaam, {{name}}, ter bevestiging.",
+    "confirmationLabel": "Typ {{name}} ter bevestiging",
+    "acknowledgement": "Ik begrijp dat dit account en alle inhoud permanent worden verwijderd.",
+    "confirm": "Permanent verwijderen",
+    "failed": "Het verwijderen van het account is mislukt. Probeer het opnieuw."
+  },
+  "tenantSlug": {
+    "title": "Band slug wijzigen",
+    "description": "Wijzig de unieke naam in het openbare webadres van je band. Het oude adres werkt daarna direct niet meer.",
+    "label": "Slug naam",
+    "helper": "Gebruik 1–64 kleine letters, cijfers of koppeltekens. Begin en eindig met een letter of cijfer.",
+    "save": "Slug naam opslaan",
+    "success": "Band slug bijgewerkt.",
+    "linkpagePending": "Je GigBuddy-adres is gewijzigd. Je LinkBuddy-pagina's worden nog bijgewerkt.",
+    "errors": {
+      "invalid": "Voer een geldige slug in.",
+      "inUse": "Deze slug is al in gebruik.",
+      "failed": "De band slug kon niet worden bijgewerkt. Probeer het opnieuw."
+    }
   },
   "financeWizard": {
     "title": "Financiële setup-wizard",
@@ -52,7 +83,8 @@
       "cannotRemoveSuperAdmin": "Een super admin kan niet worden verwijderd",
       "onlySuperAdminRemoveTenantAdmin": "Alleen super admins kunnen een tenant admin verwijderen",
       "removeFromTenant": "Verwijder uit deze band",
-      "onlySuperAdminApproveTenantAdmin": "Alleen super admins kunnen een tenant_admin-lidmaatschap goedkeuren"
+      "onlySuperAdminApproveTenantAdmin": "Alleen super admins kunnen een tenant_admin-lidmaatschap goedkeuren",
+      "lastTenantAdmin": "Deze band moet minstens één admin houden. Maak eerst iemand anders admin."
     },
     "aria": {
       "removeMember": "lid verwijderen"
@@ -60,7 +92,15 @@
     "errors": {
       "updateFailed": "Bijwerken mislukt",
       "deleteFailed": "Verwijderen mislukt"
-    }
+    },
+    "source": {
+      "invite": "Uitnodiging ingewisseld",
+      "request": "Heeft zich aangemeld",
+      "admin": "Toegevoegd door een beheerder",
+      "owner": "Heeft deze band aangemaakt",
+      "legacy": ""
+    },
+    "requestMessage": "Hun bericht"
   },
   "invites": {
     "title": "Uitnodigingen",
@@ -419,6 +459,71 @@
       "notImplemented": "Deze regeling wordt vastgelegd, maar het onderdrukken van btw op facturen is op dit moment alleen geïmplementeerd voor de Nederlandse KOR. Je facturen blijven btw rekenen.",
       "destinationOnlyNote": "De grensoverschrijdende regeling geldt alleen voor verkopen naar het land van bestemming. Het verandert niets aan de btw-aangifte die je in eigen land doet.",
       "issuedUnaffected": "Facturen die je al hebt verstuurd houden de btw-behandeling waarmee ze zijn uitgereikt, dus deze data corrigeren is veilig."
+    }
+  },
+  "bands": {
+    "title": "Bands",
+    "intro": "De bands waarin je speelt. Elke band houdt een eigen agenda en boekhouding — deze werkruimte blijft van jou.",
+    "empty": "Je zit nog niet in een band.",
+    "awaitingApproval": "Wacht op goedkeuring door de band",
+    "joinTitle": "Bij een band aansluiten",
+    "joinHelp": "Plak de uitnodigingslink die een bandbeheerder je stuurde, of alleen de code daaruit.",
+    "codeLabel": "Uitnodigingslink of code",
+    "join": "Aansluiten",
+    "joinPending": "Verzoek verstuurd. Je krijgt toegang zodra een bandbeheerder je goedkeurt.",
+    "errors": {
+      "noCode": "Daar staat geen uitnodigingscode in.",
+      "joinFailed": "Aansluiten met deze uitnodiging is niet gelukt."
+    }
+  },
+  "directory": {
+    "title": "Een band zoeken",
+    "help": "Sommige bands laten muzikanten hen vinden en zich aanmelden. Zoek op naam.",
+    "searchLabel": "Bandnaam",
+    "searchHelp": "Typ minstens 3 tekens.",
+    "noResults": "Geen bands gevonden. Bands verschijnen hier alleen als ze zelf vindbaar willen zijn.",
+    "ask": "Aanmelden",
+    "askTitle": "Aanmelden bij {{band}}",
+    "askHelp": "Vertel wie je bent en wat je speelt. De beheerders van de band beslissen.",
+    "messageLabel": "Bericht (optioneel)",
+    "cancel": "Annuleren",
+    "send": "Verzoek versturen",
+    "openRequests": "Je openstaande verzoeken",
+    "withdraw": "Intrekken",
+    "already": {
+      "none": "",
+      "pending": "Verzoek verstuurd",
+      "approved": "Je zit in deze band",
+      "rejected": "Niet beschikbaar"
+    },
+    "errors": {
+      "tooManyRequests": "Je hebt al drie openstaande verzoeken. Wacht op antwoord of trek er eerst één in.",
+      "requestFailed": "Het verzoek kon niet worden verstuurd.",
+      "withdrawFailed": "Het verzoek kon niet worden ingetrokken."
+    }
+  },
+  "discoverability": {
+    "title": "Laat muzikanten ons vinden",
+    "help": "Als dit aanstaat, kunnen muzikanten deze band op naam vinden en zich aanmelden. Hun verzoek komt hier binnen om goed te keuren of af te wijzen. Standaard uit.",
+    "toggle": "Vindbaar in de bandengids"
+  },
+  "bandProfileClaim": {
+    "title": "Openbaar bandprofiel",
+    "description": "Muzikanten kunnen voor bands die nog niet op gigBuddy zitten een openbaar profiel aanmaken. Muzikanten koppelen hun evenementen misschien al dit bandprofiel. Claim dat profiel zodat het van jullie wordt.",
+    "searchLabel": "Zoek je band",
+    "searchHint": "Typ minstens 3 tekens.",
+    "noResults": "Geen niet-geclaimde bandprofielen met die naam.",
+    "messageLabel": "Bericht voor de beoordelaar",
+    "messageHint": "Optioneel. Vertel hoe we kunnen controleren dat jullie deze band zijn.",
+    "submit": "Dit profiel claimen",
+    "withdraw": "Claim intrekken",
+    "pendingHelp": "We controleren je claim. Mogelijk mailen we je om bewijs.",
+    "approvedHelp": "Dit profiel is nu van jullie. Muzikanten die jullie als openbaar bandprofiel hebben toegevoegd kunnen nu lid worden van je band.",
+    "tryAgain": "Je kunt een ander profiel claimen.",
+    "status": {
+      "pending": "In behandeling",
+      "approved": "Goedgekeurd",
+      "rejected": "Afgewezen"
     }
   }
 }

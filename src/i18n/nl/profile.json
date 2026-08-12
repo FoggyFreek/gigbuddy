@@ -9,21 +9,21 @@
     "error": "Kon de linkpagina-editor niet openen"
   },
   "crop": {
-    "logo": "Bandlogo bijsnijden",
+    "logo": "Profiellogo bijsnijden",
     "logoDark": "Donker logo bijsnijden",
     "banner": "Profielbanner bijsnijden",
     "avatar": "Profielfoto bijsnijden"
   },
   "identity": {
     "bannerAlt": "Profielbanner",
-    "logoAlt": "Bandlogo",
+    "logoAlt": "Profiellogo",
     "avatarAlt": "Profielfoto",
     "changeBanner": "Banner wijzigen",
     "changeLogo": "Logo wijzigen",
     "changeAvatar": "Profielfoto wijzigen",
     "lightLogo": "Logo voor lichte modus",
     "darkLogo": "Logo voor donkere modus",
-    "bandName": "Bandnaam",
+    "bandName": "Weergavenaam",
     "shortBio": "Korte bio",
     "shortBioHelp": "Wordt getoond op je linkpagina",
     "fullBio": "Volledige bio"

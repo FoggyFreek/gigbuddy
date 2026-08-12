@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { listGigMapData } from '../api/gigs.ts'
-import { lookupVenueGeocode } from '../api/geocode.ts'
+import { listMyGigMapData } from '../api/me.ts'
+import { lookupGeocode, lookupVenueGeocode } from '../api/geocode.ts'
+import { useTenantKind } from './useTenantKind.ts'
+import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 import type { GigMapGig, GigMapPlace } from '../types/api.ts'
 
 const MAP_HISTORY_START = '0001-01-01'
@@ -123,11 +126,31 @@ function storedCoordinates(place: GigMapPlace): { lat: number; lon: number } | n
   return Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon } : null
 }
 
-async function resolveGroupCoordinates(group: CityGroup): Promise<{ lat: number; lon: number } | null> {
+async function resolveGroupCoordinates(
+  group: CityGroup,
+  crossBand: boolean,
+): Promise<{ lat: number; lon: number } | null> {
   let coordinates = group.places.map(storedCoordinates).find(Boolean) ?? null
+  if (coordinates && crossBand) return coordinates
 
   // Persist every missing place once. The server-side provider cache prevents
   // duplicate external lookups when multiple venues share a city.
+  //
+  // Cross-band, the venue belongs to another tenant: /geocode/venue/:id is
+  // scoped to the active one, and persisting into a band we're only reading
+  // from would break the hub's read-only contract. Geocode the city instead —
+  // same provider cache, no write, and the marker is a city marker anyway.
+  if (crossBand) {
+    try {
+      const result = await lookupGeocode({
+        city: group.city, region: group.region, country: group.country,
+      })
+      return result.status === 'hit' && result.coords ? result.coords : null
+    } catch {
+      return null
+    }
+  }
+
   for (const place of group.places) {
     if (storedCoordinates(place)) continue
     try {
@@ -142,9 +165,15 @@ async function resolveGroupCoordinates(group: CityGroup): Promise<{ lat: number;
 
 const INITIAL: GigMapState = { status: 'ok', loading: true, cityCount: 0, gigCount: 0, markers: [] }
 
-/** Loads the minimal past-gig projection and progressively resolves its city markers. */
+/**
+ * Loads the minimal past-gig projection and progressively resolves its city
+ * markers. In an artist workspace the projection spans every band the musician
+ * played in, not just the active tenant.
+ */
 export function useGigMapData(): GigMapState {
   const [state, setState] = useState<GigMapState>(INITIAL)
+  const { supports } = useTenantKind()
+  const crossBand = supports(TENANT_CAPABILITIES.ARTIST_CALENDAR)
 
   useEffect(() => {
     let cancelled = false
@@ -152,7 +181,8 @@ export function useGigMapData(): GigMapState {
     async function run() {
       let gigs: GigMapGig[]
       try {
-        const response = await listGigMapData({ from: MAP_HISTORY_START, to: yesterdayStr() })
+        const window = { from: MAP_HISTORY_START, to: yesterdayStr() }
+        const response = crossBand ? await listMyGigMapData(window) : await listGigMapData(window)
         gigs = response.items
       } catch {
         if (!cancelled) setState({ ...INITIAL, status: 'error', loading: false })
@@ -166,7 +196,7 @@ export function useGigMapData(): GigMapState {
 
       let markers: MapMarker[] = []
       for (const group of groups) {
-        const coords = await resolveGroupCoordinates(group)
+        const coords = await resolveGroupCoordinates(group, crossBand)
         if (cancelled) return
         if (coords) {
           const { places: _places, ...markerGroup } = group
@@ -184,7 +214,7 @@ export function useGigMapData(): GigMapState {
 
     run()
     return () => { cancelled = true }
-  }, [])
+  }, [crossBand])
 
   return state
 }

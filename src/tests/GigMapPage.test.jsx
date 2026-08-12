@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../hooks/useGigMapData.ts', () => ({ useGigMapData: vi.fn() }))
@@ -20,6 +20,7 @@ vi.mock('leaflet', () => ({
 
 import GigMapPage from '../pages/GigMapPage.tsx'
 import { useGigMapData } from '../hooks/useGigMapData.ts'
+import i18n from '../i18n/index.ts'
 import theme from '../theme.ts'
 
 function wrap() {
@@ -32,7 +33,10 @@ function wrap() {
   )
 }
 
-afterEach(() => vi.clearAllMocks())
+afterEach(async () => {
+  vi.clearAllMocks()
+  await i18n.changeLanguage('en')
+})
 
 describe('GigMapPage', () => {
   it('shows a spinner while loading', () => {
@@ -71,5 +75,15 @@ describe('GigMapPage', () => {
 
     expect(screen.getByText(/couldn't load the gig map/i)).toBeInTheDocument()
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+  })
+
+  it('renders the page copy in Dutch', async () => {
+    await i18n.changeLanguage('nl')
+    useGigMapData.mockReturnValue({ status: 'ok', loading: false, cityCount: 2, gigCount: 3, markers: [] })
+
+    wrap()
+
+    expect(screen.getByRole('heading', { name: 'Hier gespeeld' })).toBeInTheDocument()
+    expect(screen.getByText('3 optredens in 2 steden')).toBeInTheDocument()
   })
 })

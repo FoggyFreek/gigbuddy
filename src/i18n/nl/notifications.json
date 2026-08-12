@@ -16,11 +16,20 @@
     },
     "theme": {
       "title": "Thema",
-      "description": "Kies jouw favorite stijl. De accentkleur van je band blijft binnen elk thema gelden.",
+      "description": "Kies jouw favorite stijl. De accentkleur van jouw artiest of band blijft binnen elk thema gelden.",
       "variants": {
-        "default": { "label": "Standaard", "description": "Material 3-violet" },
-        "warm": { "label": "Warm", "description": "Zand- en aardetinten" },
-        "slate": { "label": "Leisteen", "description": "Koel blauwgrijs" }
+        "default": {
+          "label": "Standaard",
+          "description": "Material 3-violet"
+        },
+        "warm": {
+          "label": "Warm",
+          "description": "Zand- en aardetinten"
+        },
+        "slate": {
+          "label": "Leisteen",
+          "description": "Koel blauwgrijs"
+        }
       }
     },
     "push": {
@@ -28,11 +37,20 @@
       "label": "Browser-pushmeldingen",
       "description": "Ontvang meldingen in deze browser, zelfs als gigBuddy gesloten is.",
       "denied": "Meldingen zijn geblokkeerd in de browser",
-      "unsupported": "Pushmeldingen worden niet ondersteund in deze browser"
+      "unsupported": "Pushmeldingen worden niet ondersteund in deze browser",
+      "loading": "Ondersteuning voor browsermeldingen controleren…",
+      "unavailable": "Kon de meldingsdienst van de browser niet bereiken. Herlaad de pagina om het opnieuw te proberen."
     },
     "types": {
       "title": "Soorten meldingen",
       "description": "Kies welke meldingen je ontvangt.",
+      "groups": {
+        "events": "Evenementen",
+        "tasks": "Taken",
+        "management": "Beheer",
+        "financial": "Financieel",
+        "other": "Overig"
+      },
       "labels": {
         "gigNew": "Nieuwe optreden-opties",
         "gigConfirmed": "Bevestigde optredens",
@@ -44,7 +62,10 @@
         "invoicePaid": "Betaalde facturen",
         "taskAssigned": "Aan jou toegewezen taken",
         "inviteRedeemed": "Nieuwe leden in afwachting van goedkeuring",
-        "achievementUnlocked": "Behaalde prestaties"
+        "membershipRequested": "Muzikanten die zich willen aansluiten",
+        "achievementUnlocked": "Behaalde prestaties",
+        "bandProfileClaimed": "Bands die op gigbuddy zijn gekomen",
+        "bandProfileClaimDecided": "Beslissingen over je bandprofielclaim"
       }
     },
     "bands": {

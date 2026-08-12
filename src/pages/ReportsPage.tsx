@@ -1,4 +1,4 @@
-﻿import { Fragment, useCallback, useEffect, useState } from 'react'
+﻿import { Fragment, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
@@ -461,10 +461,13 @@ export default function ReportsPage() {
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
   const [report, setReport] = useState<FinancialReportData | null>(null)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null)
   const isCompact = useCompactLayout()
+  const requestKey = JSON.stringify(period)
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null)
+  const loading = !periodsLoaded || loadedRequestKey !== requestKey
+  const visibleError = !periodsLoaded || loadedRequestKey === requestKey ? error : null
 
   useEffect(() => {
     let cancelled = false
@@ -483,21 +486,21 @@ export default function ReportsPage() {
     return () => { cancelled = true }
   }, [fiscalYearStart])
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      setReport(await getFinancialReport(period) as unknown as FinancialReportData)
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [period])
-
   useEffect(() => {
-    if (periodsLoaded) load()
-  }, [load, periodsLoaded])
+    if (!periodsLoaded) return
+    let cancelled = false
+    getFinancialReport(period)
+      .then((nextReport) => {
+        if (cancelled) return
+        setReport(nextReport as unknown as FinancialReportData)
+        setError(null)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => { if (!cancelled) setLoadedRequestKey(requestKey) })
+    return () => { cancelled = true }
+  }, [period, periodsLoaded, requestKey])
 
   async function handleExport(format: 'xlsx' | 'pdf') {
     try {
@@ -545,11 +548,11 @@ export default function ReportsPage() {
           <CircularProgress />
         </Box>
       )}
-      {error && (
-        <Typography sx={{ color: 'error.main', mb: 2 }}>{error}</Typography>
+      {visibleError && (
+        <Typography sx={{ color: 'error.main', mb: 2 }}>{visibleError}</Typography>
       )}
 
-      {!loading && !error && report && (
+      {!loading && !visibleError && report && (
         <Box sx={{ display: 'grid', gap: isCompact ? 1.5 : 2, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' } }}>
           <ProfitLossCard profitLoss={report.profit_loss} />
           <BalanceSheetCard balanceSheet={report.balance_sheet} />

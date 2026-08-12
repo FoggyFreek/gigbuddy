@@ -40,7 +40,12 @@
     "title": "Hier gespeeld",
     "viewMap": "Kaart bekijken",
     "empty": "Nog geen eerdere optredens",
-    "openAria": "Open de wereldkaart met optredens"
+    "openAria": "Open de wereldkaart met optredens",
+    "loadError": "Kon de kaart met optredens niet laden.",
+    "gigCount_one": "{{count}} optreden",
+    "gigCount_other": "{{count}} optredens",
+    "summary_one": "{{gigCount}} in {{count}} stad",
+    "summary_other": "{{gigCount}} in {{count}} steden"
   },
   "memory": {
     "title": "In beeld",

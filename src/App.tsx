@@ -1,10 +1,12 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router'
 import AppShell from './components/AppShell.tsx'
 import RequireAuth from './components/RequireAuth.tsx'
 import RequireSuperAdmin from './components/RequireSuperAdmin.tsx'
 import RequirePermission from './components/RequirePermission.tsx'
+import RequireTenantCapability from './components/RequireTenantCapability.tsx'
 import { PERMISSIONS } from './auth/permissions.ts'
+import { TENANT_CAPABILITIES } from './auth/tenantCapabilities.ts'
 
 const AchievementsPage = lazy(() => import('./pages/AchievementsPage.tsx'))
 const AvailabilityPage = lazy(() => import('./pages/AvailabilityPage.tsx'))
@@ -21,6 +23,8 @@ const SongDetailPage = lazy(() => import('./pages/SongDetailPage.tsx'))
 const SetlistsPage = lazy(() => import('./pages/SetlistsPage.tsx'))
 const SetlistEditorPage = lazy(() => import('./pages/SetlistEditorPage.tsx'))
 const EmailTemplatesPage = lazy(() => import('./pages/EmailTemplatesPage.tsx'))
+const MyBandsPage = lazy(() => import('./pages/MyBandsPage.tsx'))
+const BandProfileClaimsPage = lazy(() => import('./pages/admin/BandProfileClaimsPage.tsx'))
 const GigDetailPage = lazy(() => import('./pages/GigDetailPage.tsx'))
 const GigMapPage = lazy(() => import('./pages/GigMapPage.tsx'))
 const GigsPage = lazy(() => import('./pages/GigsPage.tsx'))
@@ -106,8 +110,10 @@ export default function App() {
             <Route path="/songs" element={<SongsPage />}>
               <Route path=":id" element={<SongDetailPage />} />
             </Route>
-            <Route path="/setlists" element={<SetlistsPage />} />
-            <Route path="/setlists/:id" element={<SetlistEditorPage />} />
+            <Route element={<RequireTenantCapability capability={TENANT_CAPABILITIES.SETLISTS} />}>
+              <Route path="/setlists" element={<SetlistsPage />} />
+              <Route path="/setlists/:id" element={<SetlistEditorPage />} />
+            </Route>
             {/* Contributors+ (purchase.create) may add purchases for reimbursement. */}
             <Route element={<RequirePermission permission={PERMISSIONS.PURCHASE_CREATE} />}>
               <Route path="/purchases" element={<PurchasesPage />}>
@@ -124,8 +130,10 @@ export default function App() {
               <Route path="/invoices" element={<InvoicesPage />}>
                 <Route path=":id" element={<InvoiceDetailPage />} />
               </Route>
-              <Route path="/merch" element={<MerchPage />}>
-                <Route path=":id" element={<MerchandiseDetailsPage />} />
+              <Route element={<RequireTenantCapability capability={TENANT_CAPABILITIES.MERCH} />}>
+                <Route path="/merch" element={<MerchPage />}>
+                  <Route path=":id" element={<MerchandiseDetailsPage />} />
+                </Route>
               </Route>
               <Route path="/journal" element={<JournalPage />} />
               <Route path="/ledger" element={<LedgerEntriesPage />} />
@@ -143,9 +151,13 @@ export default function App() {
               <Route path="events/:id" element={<BandEventDetailPage />} />
             </Route>
             <Route path="/email-templates" element={<EmailTemplatesPage />} />
+            <Route element={<RequireTenantCapability capability={TENANT_CAPABILITIES.MY_BANDS} />}>
+              <Route path="/my-bands" element={<MyBandsPage />} />
+            </Route>
             <Route element={<RequireSuperAdmin />}>
               <Route path="/admin/tenants" element={<TenantsPage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
+              <Route path="/admin/band-profile-claims" element={<BandProfileClaimsPage />} />
               <Route path="/admin/subscriptions" element={<SubscriptionsPage />} />
             </Route>
           </Route>

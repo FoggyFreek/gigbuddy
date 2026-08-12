@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -32,7 +32,10 @@ const GIGS = [
     end_time: '23:00:00',
     status: 'confirmed',
     open_task_count: 2,
-    tags: [{ id: 101, name: 'Summer Tour' }],
+    tags: [
+      { id: 101, name: 'Summer Tour' },
+      { id: 103, name: 'Outdoor' },
+    ],
   },
   {
     id: 2,
@@ -52,9 +55,20 @@ describe('GigsTable', () => {
     wrap(<GigsTable gigs={[]} onRowClick={() => {}} />)
     expect(screen.getByText('Date')).toBeInTheDocument()
     expect(screen.getByText('Event')).toBeInTheDocument()
-    expect(screen.getByText('Open tasks')).toBeInTheDocument()
+    expect(screen.queryByText('Open tasks')).not.toBeInTheDocument()
     // Status is shown as a header-less colour dot, not a labelled column.
     expect(screen.queryByText('Status')).not.toBeInTheDocument()
+  })
+
+  it('adds source Band identity while retaining Availability in personal mode', () => {
+    wrap(<GigsTable
+      gigs={[{ ...GIGS[0], tenantId: 9, tenantName: 'Other Band', tenantAvatarPath: null }]}
+      showBand
+      onRowClick={() => {}}
+    />)
+    expect(screen.getByText('Band')).toBeInTheDocument()
+    expect(screen.getByText('Availability')).toBeInTheDocument()
+    expect(screen.getByText('Other Band')).toBeInTheDocument()
   })
 
   it('renders Upcoming/Past tabs and reports tab changes', async () => {
@@ -89,11 +103,20 @@ describe('GigsTable', () => {
     expect(screen.queryByText('option')).not.toBeInTheDocument()
   })
 
-  it('renders the open-task badge only when there are open tasks', () => {
+  it('renders the task icon and count followed by all gig tags in the last column', () => {
     wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
-    // Jazz Night has 2 open tasks → badge visible; Summer Festival has 0 → no badge.
-    expect(screen.getByText('2')).toBeInTheDocument()
-    expect(screen.queryByText('0')).not.toBeInTheDocument()
+    const jazzRow = screen.getByText('Jazz Night').closest('tr')
+    const festivalRow = screen.getByText('Summer Festival').closest('tr')
+
+    expect(jazzRow).not.toBeNull()
+    expect(festivalRow).not.toBeNull()
+    expect(within(jazzRow).getByTestId('ChecklistIcon')).toBeInTheDocument()
+    expect(within(jazzRow).getByText('2')).toBeInTheDocument()
+    expect(within(jazzRow).getByText('Summer Tour')).toBeInTheDocument()
+    expect(within(jazzRow).getByText('Outdoor')).toBeInTheDocument()
+    expect(within(festivalRow).queryByTestId('ChecklistIcon')).not.toBeInTheDocument()
+    expect(within(festivalRow).queryByText('0')).not.toBeInTheDocument()
+    expect(within(festivalRow).getByText('Festival Circuit')).toBeInTheDocument()
   })
 
   it('calls onRowClick with the gig when a row is clicked', async () => {
@@ -155,7 +178,7 @@ describe('GigsTable', () => {
 
     expect(screen.getByRole('button', { name: 'Types' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Tags' }))
-    await user.click(screen.getByText('Summer Tour'))
+    await user.click(screen.getByRole('menuitem', { name: /Summer Tour/ }))
 
     expect(screen.getByText('Jazz Night')).toBeInTheDocument()
     expect(screen.queryByText('Summer Festival')).not.toBeInTheDocument()
@@ -201,6 +224,15 @@ describe('GigsTable', () => {
       // Jazz Night has 2 open tasks → badge visible; Summer Festival has 0 → no badge.
       expect(screen.getByText('2')).toBeInTheDocument()
       expect(screen.queryByText('0')).not.toBeInTheDocument()
+    })
+
+    it('shows all gig tags at the bottom right, flowing from right to left', () => {
+      wrap(<GigsTable gigs={GIGS} onRowClick={() => {}} />)
+      const tagContainer = screen.getByTestId('gig-card-tags-1')
+
+      expect(within(tagContainer).getByText('Summer Tour')).toBeInTheDocument()
+      expect(within(tagContainer).getByText('Outdoor')).toBeInTheDocument()
+      expect(tagContainer).toHaveStyle({ flexDirection: 'row-reverse' })
     })
 
     it('clicking a card calls onRowClick with the gig', async () => {

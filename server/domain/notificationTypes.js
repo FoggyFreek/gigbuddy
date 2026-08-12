@@ -12,7 +12,12 @@ export const NOTIFICATION_TYPES = Object.freeze([
   'invoice-paid',
   'task-assigned',
   'invite-redeemed',
+  'membership-requested',
   'achievement-unlocked',
+  // A band an artist tags events against has arrived on gigbuddy.
+  'band-profile-claimed',
+  // A super admin approved or rejected this band's claim.
+  'band-profile-claim-decided',
 ])
 
 // User-level billing notification types. Deliberately NOT in NOTIFICATION_TYPES:

@@ -20,6 +20,7 @@ interface TaskFormDialogProps {
   onClose: () => void
   onSaved: () => void
   onDeleted?: () => void
+  onEnter?: () => void
 }
 
 function toDateInputValue(val: string | null | undefined): string {
@@ -27,7 +28,7 @@ function toDateInputValue(val: string | null | undefined): string {
   return String(val).slice(0, 10)
 }
 
-export default function TaskFormDialog({ open, task, onClose, onSaved, onDeleted }: Readonly<TaskFormDialogProps>) {
+export default function TaskFormDialog({ open, task, onClose, onSaved, onDeleted, onEnter }: Readonly<TaskFormDialogProps>) {
   const { t } = useTranslation(['tasks', 'common'])
   const isEdit = task != null
   const [title, setTitle] = useState('')
@@ -36,14 +37,19 @@ export default function TaskFormDialog({ open, task, onClose, onSaved, onDeleted
   const [members, setMembers] = useState<Member[]>([])
   const [saving, setSaving] = useState(false)
 
-  // Reset form state whenever the dialog opens (create) or its task changes (edit).
-  useEffect(() => {
-    if (!open) return
-    setTitle(task?.title ?? '')
-    setDueDate(toDateInputValue(task?.due_date))
-    setAssignedTo(task?.assigned_to != null ? String(task.assigned_to) : '')
-    setSaving(false)
-  }, [open, task])
+  // Reset form state whenever the dialog opens (create) or its task changes
+  // (edit). Adjusted during render rather than in an effect so the dialog's
+  // first painted frame already shows this task's values.
+  const [formFor, setFormFor] = useState<{ open: boolean; task: Task | null | undefined }>({ open: false, task: undefined })
+  if (open !== formFor.open || task !== formFor.task) {
+    setFormFor({ open, task })
+    if (open) {
+      setTitle(task?.title ?? '')
+      setDueDate(toDateInputValue(task?.due_date))
+      setAssignedTo(task?.assigned_to != null ? String(task.assigned_to) : '')
+      setSaving(false)
+    }
+  }
 
   useEffect(() => {
     if (!open) return
@@ -92,7 +98,13 @@ export default function TaskFormDialog({ open, task, onClose, onSaved, onDeleted
   const gigDisplay = task?.event_description || t($ => $.dialog.noGig)
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+    <Dialog
+      open={open}
+      onClose={onClose}
+      fullWidth
+      maxWidth="sm"
+      slotProps={{ transition: { onEnter } }}
+    >
       <DialogTitle>{isEdit ? t($ => $.dialog.editTitle) : t($ => $.dialog.createTitle)}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>

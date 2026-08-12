@@ -170,8 +170,8 @@ describe('audit logging', () => {
        VALUES ('sub-pend', 'pend@test.local', 'Pending', 'approved') RETURNING id`,
     )
     await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status)
-       VALUES ($1, $2, 'contributor', 'pending')`,
+      `INSERT INTO memberships (user_id, tenant_id, role, status, source)
+       VALUES ($1, $2, 'contributor', 'pending', 'admin')`,
       [pending.id, seed.tenantA.id],
     )
 
@@ -198,8 +198,8 @@ describe('audit logging', () => {
        VALUES ('sub-rm', 'rm@test.local', 'Removable', 'approved') RETURNING id`,
     )
     await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-       VALUES ($1, $2, 'contributor', 'approved', NOW())`,
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+       VALUES ($1, $2, 'contributor', 'approved', NOW(), 'admin')`,
       [removable.id, seed.tenantA.id],
     )
 
@@ -253,8 +253,8 @@ describe('audit logging', () => {
        VALUES ('sub-deny', 'deny@test.local', 'Denied', 'approved') RETURNING id`,
     )
     await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-       VALUES ($1, $2, 'contributor', 'approved', NOW())`,
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+       VALUES ($1, $2, 'contributor', 'approved', NOW(), 'admin')`,
       [target.id, seed.tenantA.id],
     )
 

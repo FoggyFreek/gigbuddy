@@ -44,6 +44,9 @@ const SAFE_EXTRA_KEYS = new Set([
   'oldCountry',
   'newCountry',
   'affectedCount',
+  'bandProfileId',
+  'claimId',
+  'mode',
 ])
 
 export function sanitizeAuditExtra(extra = {}) {

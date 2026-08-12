@@ -91,16 +91,16 @@ router.get('/*objectKey', async (req, res) => {
     const rangeUsable = !ifRange || (etag !== null && ifRange === etag)
 
     // req.range() (range-parser) validates the untrusted header for us: it
-    // clamps end to size-1 and discards inverted, negative or non-numeric
-    // specs, reporting -1 once nothing usable is left.
+    // clamps end to size-1 and reports -1 once a well-formed spec is left
+    // unsatisfiable — out of bounds, inverted or negative.
     const parsed = rangeUsable ? req.range(size) : undefined
     if (parsed === -1) {
       res.setHeader('Content-Range', `bytes */${size}`)
       return res.status(416).end()
     }
-    // A unit-less header (-2), a unit other than bytes, and multi-range requests
-    // fall through to the full 200 body, which RFC 9110 allows for any Range the
-    // server declines to honour.
+    // A malformed header (-2 — unit-less or non-numeric), a unit other than
+    // bytes, and multi-range requests fall through to the full 200 body, which
+    // RFC 9110 allows for any Range the server declines to honour.
     const range = Array.isArray(parsed) && parsed.type === 'bytes' && parsed.length === 1
       ? parsed[0]
       : null

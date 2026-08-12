@@ -23,12 +23,12 @@ export async function runMigrations() {
   `)
 
   const files = (await readdir(migrationsDir)).filter((f) => f.endsWith('.sql')).sort()
+  // One lookup rather than one per migration: against a template-cloned database
+  // every file is already applied, and this runs again for each test file.
+  const { rows: appliedRows } = await pool.query('SELECT filename FROM migrations')
+  const applied = new Set(appliedRows.map((r) => r.filename))
   for (const file of files) {
-    const { rows } = await pool.query(
-      'SELECT 1 FROM migrations WHERE filename = $1',
-      [file],
-    )
-    if (rows.length > 0) continue
+    if (applied.has(file)) continue
     const sql = await readFile(join(migrationsDir, file), 'utf8')
     await pool.query(sql)
     await pool.query('INSERT INTO migrations (filename) VALUES ($1)', [file])
@@ -50,15 +50,13 @@ export async function runMigrations() {
   )
 }
 
-// Wipe all test-relevant data. Preserves the schema and the `migrations` table.
-export async function truncateAll() {
-  await assertTestDatabase(pool)
-  await pool.query(`
+const TRUNCATE_SQL = `
     TRUNCATE
       gig_tag_links, gig_tags, gig_contacts, gig_participants, gig_tasks, gigs,
       rehearsal_participants, rehearsals,
-      band_events, availability_slots,
+      band_event_participants, band_events, availability_slots,
       band_members,
+      band_profile_claims, my_bands, band_profiles,
       profile_links,
       email_templates, venue_contacts, venues, contact_notes, contacts, share_photos,
       setlist_items, setlist_sets, setlists,
@@ -74,17 +72,39 @@ export async function truncateAll() {
       platform_settings,
       users
     RESTART IDENTITY CASCADE
-  `)
+`
+
+const DEADLOCK_DETECTED = '40P01'
+
+// Wipe all test-relevant data. Preserves the schema and the `migrations` table.
+//
+// TRUNCATE takes ACCESS EXCLUSIVE on every table in the list, in list order. A
+// request handler that kicked off work without awaiting it (notifications,
+// achievements, storage cleanup) can still hold locks from the *previous* test
+// and take them in a different order, which PostgreSQL resolves by killing one
+// side. That race predates per-worker databases — parallel load just makes the
+// interleaving likely enough to hit. Retrying is correct here: the loser's
+// transaction is fully rolled back, so a second attempt starts clean.
+export async function truncateAll(attempts = 3) {
+  await assertTestDatabase(pool)
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await pool.query(TRUNCATE_SQL)
+      return
+    } catch (err) {
+      if (err.code !== DEADLOCK_DETECTED || attempt >= attempts) throw err
+    }
+  }
 }
 
 // All 13 inserts in a single round-trip. Returns one row with json_agg columns.
 const SEED_SQL = `
 WITH
   t AS (
-    INSERT INTO tenants (slug, band_name, address_street, address_postal_code, address_city, tax_id)
+    INSERT INTO tenants (slug, band_name, display_name, address_street, address_postal_code, address_city, tax_id)
     VALUES
-      ('alpha', 'Alpha Band', 'Alpha Street 1', '1000 AA', 'Amsterdam', 'NL123456789B01'),
-      ('beta',  'Beta Band',  'Beta Street 2',  '2000 BB', 'Rotterdam', 'NL123456789B02')
+      ('alpha', 'Alpha Band', 'Alpha Band', 'Alpha Street 1', '1000 AA', 'Amsterdam', 'NL123456789B01'),
+      ('beta',  'Beta Band',  'Beta Band',  'Beta Street 2',  '2000 BB', 'Rotterdam', 'NL123456789B02')
     RETURNING id, slug
   ),
   u AS (
@@ -96,8 +116,8 @@ WITH
     RETURNING id, email
   ),
   m AS (
-    INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-    SELECT u.id, t.id, 'tenant_admin', 'approved', NOW()
+    INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+    SELECT u.id, t.id, 'tenant_admin', 'approved', NOW(), 'owner'
     FROM u, t
     WHERE (u.email = 'a@test.local'  AND t.slug = 'alpha')
        OR (u.email = 'b@test.local'  AND t.slug = 'beta')

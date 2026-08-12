@@ -149,6 +149,13 @@ describe('TasksTable', () => {
     expect(onEditTask).not.toHaveBeenCalled()
   })
 
+  it('top-aligns the completion checkbox with the task description', () => {
+    wrap(<TasksTable tasks={[TASKS[0]]} onToggleDone={noop} canToggleDone={yes} onOpenGig={noop} />)
+
+    const checkboxRoot = screen.getByRole('checkbox').closest('.MuiCheckbox-root')
+    expect(checkboxRoot).toHaveStyle({ marginTop: 0 })
+  })
+
   it('disables the checkbox when canToggleDone returns false', () => {
     wrap(
       <TasksTable

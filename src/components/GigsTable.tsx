@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
+import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -29,10 +30,12 @@ import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import { venueHeadline, venueCity } from '../utils/venueDisplay.ts'
 import MemberAvatarStack from './MemberAvatarStack.tsx'
 import GigStatusIcon from './GigStatusIcon.tsx'
+import SourceTenantIdentity from './SourceTenantIdentity.tsx'
 import { ALL_STATUSES } from '../utils/gigStatus.ts'
-import type { Gig, Member, Id } from '../types/entities.ts'
+import type { Gig, Member, MemberAvailability, Id } from '../types/entities.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
 
-const COLUMN_COUNT = 7
+const BASE_COLUMN_COUNT = 7
 // Search text is kept as component-local state so keystrokes never touch the
 // parent page's state — the parent (and anything sibling to it, like an open
 // split-view detail pane) would otherwise re-render on every keypress. Only
@@ -43,8 +46,10 @@ export type GigsTab = 'upcoming' | 'past'
 
 type GigStatusKey = 'option' | 'confirmed' | 'announced'
 
-type GigWithExtras = Gig & {
-  members_availability?: Member[]
+// `showBand` rows come from the cross-tenant `/api/me` feeds, so the band label
+// fields may be present.
+type GigWithExtras = MaybeCrossTenant<Gig> & {
+  members_availability?: MemberAvailability[]
   open_task_count?: number
 }
 
@@ -52,6 +57,7 @@ interface GigCardProps {
   gig: GigWithExtras
   active?: boolean
   onClick?: () => void
+  showBand?: boolean
 }
 
 interface GigsTableProps {
@@ -68,6 +74,7 @@ interface GigsTableProps {
   hasMore?: boolean
   loadingMore?: boolean
   onLoadMore?: () => void
+  showBand?: boolean
 }
 
 export interface GigsFilterSelection {
@@ -102,7 +109,7 @@ function filterGigs(
   return filtered
 }
 
-function GigCard({ gig, active, onClick }: Readonly<GigCardProps>) {
+function GigCard({ gig, active, onClick, showBand = false }: Readonly<GigCardProps>) {
   const taskCount = gig.open_task_count ?? 0
   const displayVenue = gig.venue ?? gig.festival
   const eventText = [gig.event_description, venueHeadline(displayVenue), venueCity(displayVenue)].filter(Boolean)
@@ -145,7 +152,41 @@ function GigCard({ gig, active, onClick }: Readonly<GigCardProps>) {
             {eventText.length ? eventText.join(' · ') : '—'}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+            {showBand && (
+              <Box sx={{ mr: 1 }}>
+                <SourceTenantIdentity
+                  tenantId={gig.tenantId}
+                  tenantName={gig.tenantName}
+                  tenantAvatarPath={gig.tenantAvatarPath}
+                  withName
+                />
+              </Box>
+            )}
             <MemberAvatarStack members={gig.members_availability} />
+            {(gig.tags ?? []).some((tag) => tag.name) && (
+              <Box
+                data-testid={`gig-card-tags-${String(gig.id)}`}
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'row-reverse',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  minWidth: 0,
+                  ml: 'auto',
+                  pl: 1,
+                }}
+              >
+                {(gig.tags ?? []).filter((tag) => tag.name).map((tag) => (
+                  <Chip
+                    key={`${String(tag.id ?? 'tag')}-${tag.name}`}
+                    label={tag.name}
+                    size="small"
+                    variant="filled"
+                  />
+                ))}
+              </Box>
+            )}
           </Box>
         </Box>
       </Box>
@@ -153,7 +194,7 @@ function GigCard({ gig, active, onClick }: Readonly<GigCardProps>) {
   )
 }
 
-function DesktopRow({ gig, active, onClick }: Readonly<GigCardProps>) {
+function DesktopRow({ gig, active, onClick, showBand = false }: Readonly<GigCardProps>) {
   return (
     <TableRow
       hover
@@ -187,31 +228,41 @@ function DesktopRow({ gig, active, onClick }: Readonly<GigCardProps>) {
         </Box>
       </TableCell>
       <TableCell>{formatTime(gig.start_time)}–{formatTime(gig.end_time)}</TableCell>
+      {showBand && (
+        <TableCell>
+          <SourceTenantIdentity
+            tenantId={gig.tenantId}
+            tenantName={gig.tenantName}
+            tenantAvatarPath={gig.tenantAvatarPath}
+          />
+        </TableCell>
+      )}
       <TableCell>
         <MemberAvatarStack members={gig.members_availability} />
       </TableCell>
-      <TableCell align="center">
-        {(gig.open_task_count ?? 0) > 0 && (
-          <Box
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              bgcolor: 'action.hover',
-            }}
-          >
-            {gig.open_task_count}
-          </Box>
-        )}
+      <TableCell>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+          {(gig.open_task_count ?? 0) > 0 && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, color: 'text.secondary' }}>
+              <ChecklistIcon fontSize="small" />
+              <Typography variant="caption">{gig.open_task_count}</Typography>
+            </Box>
+          )}
+          {(gig.tags ?? []).filter((tag) => tag.name).map((tag) => (
+            <Chip
+              key={`${String(tag.id ?? 'tag')}-${tag.name}`}
+              label={tag.name}
+              size="small"
+              variant="filled"
+            />
+          ))}
+        </Box>
       </TableCell>
     </TableRow>
   )
 }
 
-function DesktopHead() {
+function DesktopHead({ showBand = false }: Readonly<{ showBand?: boolean }>) {
   const { t } = useTranslation('gigs')
   return (
     <TableHead>
@@ -221,8 +272,9 @@ function DesktopHead() {
         <TableCell>{t($ => $.table.colEvent)}</TableCell>
         <TableCell>{t($ => $.table.colVenueCity)}</TableCell>
         <TableCell>{t($ => $.table.colTime)}</TableCell>
-        <TableCell>{t($ => $.table.colBand)}</TableCell>
-        <TableCell align="center">{t($ => $.table.colOpenTasks)}</TableCell>
+        {showBand && <TableCell>{t($ => $.table.colBand)}</TableCell>}
+        <TableCell>{t($ => $.table.colAvailability)}</TableCell>
+        <TableCell />
       </TableRow>
     </TableHead>
   )
@@ -412,9 +464,10 @@ interface GigListBodyProps {
   emptyMessage: string
   selectedId?: Id
   onRowClick?: (gig: GigWithExtras) => void
+  showBand?: boolean
 }
 
-function CompactGigList({ loading, gigs, emptyMessage, selectedId, onRowClick }: Readonly<GigListBodyProps>) {
+function CompactGigList({ loading, gigs, emptyMessage, selectedId, onRowClick, showBand }: Readonly<GigListBodyProps>) {
   let content: ReactNode
   if (loading) {
     content = (
@@ -430,7 +483,7 @@ function CompactGigList({ loading, gigs, emptyMessage, selectedId, onRowClick }:
     )
   } else {
     content = gigs.map((gig) => (
-      <GigCard key={String(gig.id)} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick?.(gig)} />
+      <GigCard key={String(gig.id)} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick?.(gig)} showBand={showBand} />
     ))
   }
 
@@ -441,28 +494,28 @@ function CompactGigList({ loading, gigs, emptyMessage, selectedId, onRowClick }:
   )
 }
 
-function DesktopGigTable({ loading, gigs, emptyMessage, selectedId, onRowClick }: Readonly<GigListBodyProps>) {
+function DesktopGigTable({ loading, gigs, emptyMessage, selectedId, onRowClick, showBand }: Readonly<GigListBodyProps>) {
   return (
     <TableContainer component={Paper} variant="outlined">
       <Table size="small">
-        <DesktopHead />
+        <DesktopHead showBand={showBand} />
         <TableBody>
           {loading && (
             <TableRow>
-              <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ py: 4 }}>
+              <TableCell colSpan={BASE_COLUMN_COUNT + (showBand ? 1 : 0)} align="center" sx={{ py: 4 }}>
                 <CircularProgress size={24} />
               </TableCell>
             </TableRow>
           )}
           {!loading && gigs.length === 0 && (
             <TableRow>
-              <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
+              <TableCell colSpan={BASE_COLUMN_COUNT + (showBand ? 1 : 0)} align="center" sx={{ color: 'text.secondary', py: 4 }}>
                 {emptyMessage}
               </TableCell>
             </TableRow>
           )}
           {!loading && gigs.map((gig) => (
-            <DesktopRow key={String(gig.id)} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick?.(gig)} />
+            <DesktopRow key={String(gig.id)} gig={gig} active={gig.id === selectedId} onClick={() => onRowClick?.(gig)} showBand={showBand} />
           ))}
         </TableBody>
       </Table>
@@ -484,6 +537,7 @@ export default function GigsTable({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  showBand = false,
 }: Readonly<GigsTableProps>) {
   const { t } = useTranslation('gigs')
   const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set(ALL_STATUSES))
@@ -549,8 +603,8 @@ export default function GigsTable({
   )
 
   const list = isCompact
-    ? <CompactGigList loading={loading} gigs={filtered} emptyMessage={emptyMessage} selectedId={selectedId} onRowClick={onRowClick} />
-    : <DesktopGigTable loading={loading} gigs={filtered} emptyMessage={emptyMessage} selectedId={selectedId} onRowClick={onRowClick} />
+    ? <CompactGigList loading={loading} gigs={filtered} emptyMessage={emptyMessage} selectedId={selectedId} onRowClick={onRowClick} showBand={showBand} />
+    : <DesktopGigTable loading={loading} gigs={filtered} emptyMessage={emptyMessage} selectedId={selectedId} onRowClick={onRowClick} showBand={showBand} />
 
   return (
     <Stack spacing={isCompact ? 1.5 : 2}>

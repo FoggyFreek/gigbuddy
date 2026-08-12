@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -9,7 +9,7 @@ import Typography from '@mui/material/Typography'
 import PeriodPicker from './shared/periodPicker.tsx'
 import PurchasesList from './purchases/PurchasesList.tsx'
 import { listPurchasePeriods, listPurchases } from '../api/purchases.ts'
-import { defaultPeriodForDates } from '../utils/invoicePeriod.ts'
+import { defaultPeriodForDates, periodKey } from '../utils/invoicePeriod.ts'
 import type { Purchase, Id, Period } from '../types/entities.ts'
 import useFiscalYearStart from '../hooks/useFiscalYearStart.ts'
 
@@ -24,43 +24,42 @@ export default function SupplierPurchasesSection({ contactId }: Readonly<Supplie
   const fiscalYearStart = useFiscalYearStart()
   const { t } = useTranslation('contacts')
   const navigate = useNavigate()
-  const [purchases, setPurchases] = useState<Purchase[]>([])
   const [period, setPeriod] = useState<Period>(() => defaultPeriodForDates([], fiscalYearStart))
-  const [availableDates, setAvailableDates] = useState<string[]>([])
-  const [periodsLoaded, setPeriodsLoaded] = useState(false)
-  const [loading, setLoading] = useState(true)
+
+  // Both fetches tag their result with the request it answered, so "which
+  // supplier is this data for" and "are we still loading" are derived during
+  // render instead of being reset by the effect that starts the next fetch.
+  const [periodsState, setPeriodsState] = useState<{ contactId: Id; dates: string[] } | null>(null)
+  const periodsLoaded = periodsState?.contactId === contactId
+  const availableDates = periodsState?.contactId === contactId ? periodsState.dates : []
 
   // Seed the available dates + default period from this supplier's own purchase
   // dates so the picker lands on a period that actually has data.
   useEffect(() => {
     let active = true
-    setPeriodsLoaded(false)
     listPurchasePeriods({ supplierContactId: contactId })
       .then((dates) => {
         if (!active) return
-        setAvailableDates(dates.filter(Boolean))
+        setPeriodsState({ contactId, dates: dates.filter(Boolean) })
         setPeriod(defaultPeriodForDates(dates, fiscalYearStart))
       })
-      .catch(() => { if (active) setAvailableDates([]) })
-      .finally(() => { if (active) setPeriodsLoaded(true) })
+      .catch(() => { if (active) setPeriodsState({ contactId, dates: [] }) })
     return () => { active = false }
   }, [contactId, fiscalYearStart])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await listPurchases(period, { supplierContactId: contactId })
-      setPurchases(data)
-    } catch {
-      setPurchases([])
-    } finally {
-      setLoading(false)
-    }
-  }, [contactId, period])
+  const purchasesKey = periodsLoaded ? `${contactId}|${periodKey(period)}` : null
+  const [purchasesState, setPurchasesState] = useState<{ key: string; purchases: Purchase[] } | null>(null)
+  const purchases = purchasesState?.purchases ?? []
+  const loading = purchasesKey == null || purchasesState?.key !== purchasesKey
 
   useEffect(() => {
-    if (periodsLoaded) load()
-  }, [load, periodsLoaded])
+    if (purchasesKey == null) return
+    let active = true
+    listPurchases(period, { supplierContactId: contactId })
+      .then((data) => { if (active) setPurchasesState({ key: purchasesKey, purchases: data }) })
+      .catch(() => { if (active) setPurchasesState({ key: purchasesKey, purchases: [] }) })
+    return () => { active = false }
+  }, [purchasesKey, period, contactId])
 
   return (
     <>

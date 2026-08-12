@@ -1,0 +1,122 @@
+{
+  "title": "Mijn bands",
+  "subtitle": "De bands waarin je speelt — op gigbuddy of daarbuiten.",
+  "empty": "Je hebt nog geen bands toegevoegd.",
+  "selectLabel": "Band",
+  "selectNone": "Geen band",
+  "addButton": "Band toevoegen",
+  "table": {
+    "columns": {
+      "band": "Band",
+      "country": "Land",
+      "status": "Status",
+      "events": "Evenementen",
+      "actions": "Acties"
+    }
+  },
+  "status": {
+    "onGigbuddy": "Op gigbuddy",
+    "offGigbuddy": "Niet op gigbuddy",
+    "requested": "Wacht op goedkeuring",
+    "pendingMembership": "Wacht op goedkeuring",
+    "claimable": "Niet op gigbuddy",
+    "pending_claim": "Claim in behandeling",
+    "claimed": "Nu op gigbuddy"
+  },
+  "eventCount_one": "{{count}} evenement",
+  "eventCount_other": "{{count}} evenementen",
+  "actions": {
+    "open": "Band openen",
+    "edit": "Bewerken",
+    "remove": "Verwijderen",
+    "leave": "Band verlaten",
+    "withdraw": "Intrekken",
+    "askToJoin": "Vraag om lid te worden"
+  },
+  "readOnly": "Iemand anders heeft deze band toegevoegd, alleen zij kunnen hem bewerken.",
+  "claimedHint": "Deze band staat nu op gigbuddy. Vraag om lid te worden en krijg hun evenementen automatisch.",
+  "fields": {
+    "name": "Bandnaam",
+    "country": "Land van herkomst",
+    "spotify": "Spotify-artiestlink",
+    "spotifyHint": "Plak de link naar de artiestpagina op Spotify.",
+    "website": "Website",
+    "linkHint": "Een Spotify-link of een website is verplicht.",
+    "contactEmail": "Contact-e-mailadres",
+    "contactEmailHint": "Optioneel."
+  },
+  "errors": {
+    "nameRequired": "Een bandnaam is verplicht",
+    "countryRequired": "Kies een land",
+    "needsLink": "Voeg een Spotify-link of een website toe",
+    "loadFailed": "Kon je bands niet laden",
+    "removeFailed": "Kon deze band niet verwijderen"
+  },
+  "add": {
+    "title": "Band toevoegen",
+    "tabs": {
+      "search": "Zoeken",
+      "invite": "Uitnodigingscode"
+    },
+    "searchLabel": "Bandnaam",
+    "searchHint": "Typ minstens 3 tekens.",
+    "workflow": {
+      "intro": "Voeg een band toe door eerst naar bestaande bands te zoeken. Als je band nog niet op gigBuddy staat en nog geen openbaar profiel heeft, kun je een nieuwe band of een openbaar bandprofiel aanmaken.",
+      "createBand": {
+        "title": "Een nieuwe band aanmaken",
+        "body": "Als je deze band beheert en meer leden wilt uitnodigen. Dit telt mee voor je gigBuddy-bandlimiet.",
+        "action": "Band aanmaken"
+      },
+      "createProfile": {
+        "title": "Een openbaar bandprofiel aanmaken",
+        "body": "Voor een band waarin je speelt, maar die (nog) niet op gigBuddy staat. Je kunt evenementen aan deze band koppelen om overzicht te houden.",
+        "action": "Openbaar profiel aanmaken"
+      }
+    },
+    "groups": {
+      "onGigbuddy": "Op gigbuddy",
+      "offGigbuddy": "Niet op gigbuddy"
+    },
+    "askToJoin": "Vraag om lid te worden van deze band",
+    "alreadyRequested": "Je hebt al gevraagd om lid te worden",
+    "nowOnGigbuddy": "Op gigbuddy",
+    "noResults": "Geen bands gevonden. Je kunt deze zelf toevoegen.",
+    "createInstead": "\"{{name}}\" als nieuwe band toevoegen",
+    "create": "Band toevoegen",
+    "useExisting": "Gebruik deze",
+    "websiteMatch": "\"{{name}}\" gebruikt deze website al. Is dat dezelfde band?",
+    "inviteHelp": "Heb je een uitnodigingscode van een band op gigbuddy? Wissel die hier in.",
+    "inviteCode": "Uitnodigingscode",
+    "join": "Word lid",
+    "errors": {
+      "noCode": "Voer een geldige uitnodigingscode in"
+    },
+    "full": {
+      "title": "Deze band zit vol",
+      "body": "Vijf muzikanten volgen deze band al, en dat is het maximum voor een bandprofiel.",
+      "invite": "Vraag hen om lid te worden op gigbuddy, of nodig de band uit zich aan te melden."
+    }
+  },
+  "editProfile": {
+    "title": "Band bewerken",
+    "locked": "Deze band wordt geclaimd door de eigenaren en kan nu niet bewerkt worden."
+  },
+  "remove": {
+    "title": "{{name}} verwijderen?",
+    "body": "Deze band wordt uit je lijst verwijderd.",
+    "noEvents": "Er zijn geen evenementen aan gekoppeld.",
+    "linked": "{{count}} van je evenementen zijn aan deze band gekoppeld.",
+    "keep": "Mijn evenementen behouden",
+    "keepHint": "De evenementen blijven bestaan, zonder band.",
+    "delete": "Mijn evenementen verwijderen",
+    "deleteHint": "De evenementen worden definitief verwijderd.",
+    "confirmDelete": "Ja, verwijder {{count}} evenementen",
+    "confirm": "Band verwijderen"
+  },
+  "leave": {
+    "title": "{{name}} verlaten?",
+    "body": "Je verliest toegang tot de optredens, repetities en bestanden van deze band.",
+    "confirm": "Band verlaten",
+    "lastAdmin": "Je bent de enige beheerder van deze band. Maak eerst iemand anders beheerder, of archiveer de band via de instellingen."
+  }
+}

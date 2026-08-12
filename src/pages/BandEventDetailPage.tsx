@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { useNavigate, useOutletContext, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -14,20 +14,32 @@ import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
-import { deleteBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
-import type { BandEvent } from '../types/entities.ts'
+import {
+  addBandEventParticipant,
+  deleteBandEvent,
+  removeBandEventParticipant,
+  updateBandEvent,
+} from '../api/bandEvents.ts'
+import { listMembers } from '../api/bandMembers.ts'
+import type { BandEvent, Id, Member } from '../types/entities.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { toDateInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
 import BandEventFields from '../components/BandEventFields.tsx'
+import BandEventAvailabilitySection from '../components/BandEventAvailabilitySection.tsx'
 import PastEventAlert from '../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
-import { usePermissions } from '../hooks/usePermissions.ts'
+import { useCrossTenantRow } from '../hooks/useCrossTenantRow.ts'
 import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
+import { usePlanningSource } from '../hooks/usePlanningSource.ts'
+import { SourceTenantSwitch } from '../components/SourceTenantIdentity.tsx'
 
 const REQUIRED_FIELDS = ['title', 'start_date']
 
-interface BandEventDetail extends BandEvent {
+// Read through `/api/me/band-events/:id` when opened on another band's event,
+// so the band label fields may be present.
+interface BandEventDetail extends MaybeCrossTenant<BandEvent> {
   start_time?: string
   end_time?: string
   notes?: string
@@ -48,7 +60,7 @@ export default function BandEventDetailPage() {
   const { t } = useTranslation(['bandEvents', 'common'])
   const { id } = useParams()
   const bandEventId = Number(id)
-  const { canWritePlanning } = usePermissions()
+  const source = usePlanningSource('bandEvents')
   const navigate = useNavigate()
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
   const insideSplitView = !!outletCtx.insideSplitView
@@ -67,6 +79,25 @@ export default function BandEventDetailPage() {
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})
   const [loading, setLoading] = useState(true)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  // Derived server-side from the event's date span, so it is reloaded whenever
+  // those dates change. Absent in a personal workspace.
+  const [availability, setAvailability] = useState<Pick<BandEvent, 'members_availability' | 'availability_days'>>({})
+  const [members, setMembers] = useState<Member[]>([])
+  const [event, setEvent] = useState<BandEventDetail | null>(null)
+  const { isCrossBand, canWrite: detailCanWrite } = useCrossTenantRow(event)
+
+  const setEventAvailability = useCallback((event: BandEvent) => {
+    setAvailability({
+      members_availability: event.members_availability,
+      availability_days: event.availability_days,
+    })
+  }, [])
+
+  const refreshAvailability = useCallback(async () => {
+    const updatedEvent = await source.api.detail(bandEventId)
+    setEventAvailability(updatedEvent)
+    return updatedEvent
+  }, [bandEventId, setEventAvailability, source])
 
   const saveFn = useCallback(
     async (patch: Partial<BandEventForm>) => { await updateBandEvent(bandEventId, patch) },
@@ -79,13 +110,18 @@ export default function BandEventDetailPage() {
       if (typeof outletCtx.onBandEventUpdate === 'function') {
         outletCtx.onBandEventUpdate(bandEventId, patch)
       }
+      // The span moved, so the worst-day summary no longer describes it.
+      if ('start_date' in patch || 'end_date' in patch || 'start_time' in patch || 'end_time' in patch) {
+        refreshAvailability().catch(() => {})
+      }
     }
   )
 
   useEffect(() => {
-    getBandEvent(bandEventId)
+    source.api.detail(bandEventId)
       .then((ev) => {
         const detail = ev as BandEventDetail
+        setEvent(detail)
         onBandEventDetailLoaded?.(detail)
         setForm({
           title: detail.title || '',
@@ -96,13 +132,18 @@ export default function BandEventDetailPage() {
           location: detail.location || '',
           notes: detail.notes || '',
         })
+        setEventAvailability(detail)
       })
       .catch(() => onBandEventDetailLoadError?.())
       .finally(() => setLoading(false))
-  }, [bandEventId, onBandEventDetailLoaded, onBandEventDetailLoadError])
+  }, [bandEventId, onBandEventDetailLoaded, onBandEventDetailLoadError, setEventAvailability, source])
+
+  useEffect(() => {
+    if (source.canLoadRoster) listMembers().then(setMembers).catch(() => {})
+  }, [source])
 
   function handleChange(field: string, value: string | boolean | null) {
-    if (!canWritePlanning) return
+    if (!detailCanWrite) return
     setForm((prev) => ({ ...prev, [field]: value }))
     setErrors((prev) => ({ ...prev, [field]: undefined }))
     if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
@@ -114,6 +155,29 @@ export default function BandEventDetailPage() {
     if (typeof outletCtx.onClose === 'function') outletCtx.onClose()
     else navigate(-1)
   }
+
+  async function handleAddMember(memberId: Id) {
+    const updatedEvent = await addBandEventParticipant(bandEventId, memberId)
+    setEventAvailability(updatedEvent)
+    if (typeof outletCtx.onBandEventUpdate === 'function') {
+      outletCtx.onBandEventUpdate(bandEventId, {
+        members_availability: updatedEvent.members_availability,
+      })
+    }
+  }
+
+  async function handleRemoveMember(memberId: Id) {
+    await removeBandEventParticipant(bandEventId, memberId)
+    const updatedEvent = await refreshAvailability()
+    if (typeof outletCtx.onBandEventUpdate === 'function') {
+      outletCtx.onBandEventUpdate(bandEventId, {
+        members_availability: updatedEvent.members_availability,
+      })
+    }
+  }
+
+  const selectedMemberIds = new Set(availability.members_availability?.map((member) => member.member_id))
+  const candidateMembers = members.filter((member) => member.id !== undefined && !selectedMemberIds.has(member.id))
 
   return (
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
@@ -134,8 +198,16 @@ export default function BandEventDetailPage() {
         )}
       </Box>
 
+      {isCrossBand && event && (
+        <SourceTenantSwitch
+          tenantId={event.tenantId}
+          tenantName={event.tenantName}
+          tenantAvatarPath={event.tenantAvatarPath}
+        />
+      )}
+
       {!loading && <PastEventAlert date={form.end_date || form.start_date} />}
-      <PlanningReadOnlyAlert canWrite={canWritePlanning} />
+      <PlanningReadOnlyAlert canWrite={detailCanWrite} />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -147,18 +219,34 @@ export default function BandEventDetailPage() {
             form={form}
             onChange={handleChange}
             errors={{ ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors }}
-            readOnly={!canWritePlanning}
+            readOnly={!detailCanWrite}
           />
         </Grid>
       )}
 
-      {canWritePlanning && (
+      {!loading && availability.members_availability && (
+        <Box sx={{ mt: 3 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+            {t($ => $.availability.title)}
+          </Typography>
+          <BandEventAvailabilitySection
+            members={availability.members_availability}
+            days={availability.availability_days}
+            candidateMembers={candidateMembers}
+            canWrite={detailCanWrite}
+            onAddMember={handleAddMember}
+            onRemoveMember={handleRemoveMember}
+          />
+        </Box>
+      )}
+
+      {detailCanWrite && (
         <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
           <SaveStatusLabel status={saveStatus} />
         </Box>
       )}
 
-      {canWritePlanning && (
+      {detailCanWrite && (
         <Box sx={{ mt: 4 }}>
           <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
             {t($ => $.actions.delete, { ns: 'common' })}

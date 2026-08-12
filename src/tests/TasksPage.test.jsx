@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api/tasks.ts', () => ({
@@ -10,6 +10,10 @@ vi.mock('../api/tasks.ts', () => ({
   updateTask: vi.fn(),
   deleteTask: vi.fn(),
 }))
+vi.mock('../api/me.ts', () => ({
+  listMyTasks: vi.fn(),
+  setMyTaskDone: vi.fn(),
+}))
 vi.mock('../api/bandMembers.ts', () => ({
   listMembers: vi.fn(() => Promise.resolve([])),
 }))
@@ -17,24 +21,30 @@ vi.mock('../contexts/authContext.ts', () => ({ useAuth: vi.fn() }))
 vi.mock('../hooks/usePermissions.ts', () => ({ usePermissions: vi.fn() }))
 
 const navigate = vi.fn()
-vi.mock('react-router-dom', async (orig) => ({
+vi.mock('react-router', async (orig) => ({
   ...(await orig()),
   useNavigate: () => navigate,
 }))
 
 import TasksPage from '../pages/TasksPage.tsx'
 import { listTasks, createTask, updateTask, deleteTask } from '../api/tasks.ts'
+import { listMyTasks, setMyTaskDone } from '../api/me.ts'
 import { useAuth } from '../contexts/authContext.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { CompactLayoutContext } from '../hooks/useCompactLayout.ts'
 import theme from '../theme.ts'
 
-function wrap(ui, { compact = false } = {}) {
+function LocationProbe() {
+  return <div data-testid="location-search">{useLocation().search}</div>
+}
+
+function wrap(ui, { compact = false, route = '/tasks' } = {}) {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[route]}>
       <ThemeProvider theme={theme}>
         <CompactLayoutContext.Provider value={compact}>
           {ui}
+          <LocationProbe />
         </CompactLayoutContext.Provider>
       </ThemeProvider>
     </MemoryRouter>,
@@ -70,6 +80,8 @@ describe('TasksPage', () => {
     createTask.mockResolvedValue({ id: 99 })
     updateTask.mockResolvedValue({})
     deleteTask.mockResolvedValue(undefined)
+    listMyTasks.mockResolvedValue(collection([]))
+    setMyTaskDone.mockResolvedValue({})
     useAuth.mockReturnValue({ user: { id: 1, bandMemberId: 1 } })
     usePermissions.mockReturnValue({ canWritePlanning: true })
   })
@@ -80,6 +92,30 @@ describe('TasksPage', () => {
     expect(listTasks).toHaveBeenCalledWith({ limit: 50 })
     expect(screen.getByText('Confirm rider')).toBeInTheDocument()
     expect(screen.getByText('Buy strings')).toBeInTheDocument()
+  })
+
+  it('uses the personal aggregate API, completes cross-band tasks, and switches on gig open', async () => {
+    const switchTenant = vi.fn().mockResolvedValue({})
+    const crossTask = {
+      ...TASKS[0], tenantId: 9, tenantName: 'Other Band', tenantAvatarPath: null,
+    }
+    useAuth.mockReturnValue({
+      user: { id: 1, activeTenantId: 1, activeTenantKind: 'personal' },
+      switchTenant,
+    })
+    listMyTasks.mockResolvedValue(collection([crossTask]))
+    const user = userEvent.setup()
+
+    wrap(<TasksPage />)
+    await screen.findByText('Send invoice')
+    expect(listMyTasks).toHaveBeenCalledWith({ limit: 50 })
+    expect(listTasks).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('checkbox'))
+    await waitFor(() => expect(setMyTaskDone).toHaveBeenCalledWith(10, true))
+    await user.click(screen.getByRole('button', { name: /open gig/i }))
+    await waitFor(() => expect(switchTenant).toHaveBeenCalledWith(9))
+    expect(navigate).toHaveBeenCalledWith('/gigs/1?tab=tasks')
   })
 
   it('keeps a finished gig task visible and disabled while that gig has open tasks', async () => {
@@ -110,39 +146,23 @@ describe('TasksPage', () => {
 
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
     // No inline filter toggles; a single Filters button opens a menu instead.
-    expect(screen.getByTestId('FilterAltIcon')).toBeInTheDocument()
+    expect(screen.getByTestId('FilterListIcon')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Assigned to me' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Finished' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /filters/i }))
-    // The menu items carry the filter labels as plain text (no icons).
     expect(await screen.findByRole('menuitem', { name: 'Assigned to me' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'All statuses' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Open' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'Finished' })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: 'Max. tasks shown' })).toBeInTheDocument()
-    expect(screen.queryByRole('combobox', { name: 'Tasks shown' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /tasks shown/i })).not.toBeInTheDocument()
   })
 
-  it('reloads with the selected task limit in desktop view', async () => {
-    const user = userEvent.setup()
+  it('always loads with the fixed task cap', async () => {
     wrap(<TasksPage />)
+
     await waitFor(() => expect(listTasks).toHaveBeenCalledWith({ limit: 50 }))
-
-    await user.click(screen.getByRole('combobox', { name: 'Tasks shown' }))
-    await user.click(await screen.findByRole('option', { name: '200' }))
-
-    await waitFor(() => expect(listTasks).toHaveBeenLastCalledWith({ limit: 200 }))
-  })
-
-  it('reloads with the selected task limit from the compact menu', async () => {
-    const user = userEvent.setup()
-    wrap(<TasksPage />, { compact: true })
-    await waitFor(() => expect(listTasks).toHaveBeenCalledWith({ limit: 50 }))
-
-    await user.click(screen.getByRole('button', { name: /filters/i }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Max. tasks shown' }))
-    await user.click(await screen.findByRole('menuitem', { name: '500' }))
-
-    await waitFor(() => expect(listTasks).toHaveBeenLastCalledWith({ limit: 500 }))
+    expect(screen.queryByRole('combobox', { name: /tasks shown/i })).not.toBeInTheDocument()
   })
 
   it('filters via the compact filter menu', async () => {
@@ -161,9 +181,46 @@ describe('TasksPage', () => {
 
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
     expect(screen.getByRole('button', { name: 'Assigned to me' })).toHaveStyle({ height: '31px' })
-    expect(screen.getByRole('button', { name: 'Finished' })).toHaveStyle({ height: '31px' })
     expect(screen.getByText('Assigned to me')).toBeInTheDocument()
-    expect(screen.getByText('Finished')).toBeInTheDocument()
+    // The status filter lives behind the filter icon menu, not an inline toggle.
+    expect(screen.queryByRole('button', { name: 'Finished' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('FilterListIcon')).toBeInTheDocument()
+  })
+
+  it('shows finished tasks once the status filter selects them in desktop view', async () => {
+    const user = userEvent.setup()
+    listTasks.mockResolvedValue(collection([
+      { ...TASKS[2], id: 30, title: 'Restring guitar', done: true },
+      TASKS[2],
+    ]))
+    wrap(<TasksPage />)
+
+    await waitFor(() => expect(screen.getByText('Buy strings')).toBeInTheDocument())
+    expect(screen.queryByText('Restring guitar')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /filters/i }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Finished' }))
+
+    expect(screen.getByText('Restring guitar')).toBeInTheDocument()
+    expect(screen.getByText('Buy strings')).toBeInTheDocument()
+  })
+
+  it('hides open tasks when the status filter deselects them', async () => {
+    const user = userEvent.setup()
+    listTasks.mockResolvedValue(collection([
+      { ...TASKS[2], id: 30, title: 'Restring guitar', done: true },
+      TASKS[2],
+    ]))
+    wrap(<TasksPage />)
+
+    await waitFor(() => expect(screen.getByText('Buy strings')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /filters/i }))
+    await user.click(await screen.findByRole('menuitem', { name: 'All statuses' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Open' }))
+
+    expect(screen.getByText('Restring guitar')).toBeInTheDocument()
+    expect(screen.queryByText('Buy strings')).not.toBeInTheDocument()
   })
 
   it('navigates to the gig tasks tab when the open-gig button is clicked', async () => {
@@ -208,7 +265,7 @@ describe('TasksPage', () => {
     const user = userEvent.setup()
     wrap(<TasksPage />)
     await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
-    await user.click(screen.getByRole('button', { name: /new task/i }))
+    await user.click(screen.getByRole('button', { name: /^add$/i }))
     const titleField = await screen.findByLabelText(/title/i)
     await user.type(titleField, 'Practice set')
     await user.click(screen.getByRole('button', { name: /^save$/i }))
@@ -235,15 +292,46 @@ describe('TasksPage', () => {
     )
   })
 
+  describe('?task= deep link from global search', () => {
+    it('opens the linked task in the edit dialog and consumes the param', async () => {
+      wrap(<TasksPage />, { route: '/tasks?task=12' })
+
+      const titleField = await screen.findByLabelText(/title/i)
+      expect(titleField).toHaveValue('Buy strings')
+      // Consumed, so closing the dialog can't reopen it.
+      await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent(''))
+    })
+
+    it('leaves other query params intact', async () => {
+      wrap(<TasksPage />, { route: '/tasks?task=12&foo=bar' })
+
+      await screen.findByLabelText(/title/i)
+      await waitFor(() => expect(screen.getByTestId('location-search')).toHaveTextContent('?foo=bar'))
+    })
+
+    it('lands on the list without a dialog when the task is not in the loaded set', async () => {
+      wrap(<TasksPage />, { route: '/tasks?task=999' })
+
+      await waitFor(() => expect(screen.getByText('Buy strings')).toBeInTheDocument())
+      expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument()
+    })
+  })
+
   describe('reader (no planning.write)', () => {
     beforeEach(() => {
       usePermissions.mockReturnValue({ canWritePlanning: false })
     })
 
-    it('hides the New task button', async () => {
+    it('hides the add task button', async () => {
       wrap(<TasksPage />)
       await waitFor(() => expect(screen.getByText('Send invoice')).toBeInTheDocument())
-      expect(screen.queryByRole('button', { name: /new task/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^add$/i })).not.toBeInTheDocument()
+    })
+
+    it('ignores a ?task= deep link (the dialog is an edit affordance)', async () => {
+      wrap(<TasksPage />, { route: '/tasks?task=12' })
+      await waitFor(() => expect(screen.getByText('Buy strings')).toBeInTheDocument())
+      expect(screen.queryByLabelText(/title/i)).not.toBeInTheDocument()
     })
 
     it('disables the checkbox for a task not assigned to the reader', async () => {

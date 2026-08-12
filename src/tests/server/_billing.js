@@ -2,6 +2,7 @@
 // direct subscription rows (billing flows arrive in a later phase; tests
 // craft subscription state directly).
 import { pool } from './_db.js'
+import { createAccountingProfileForTenant } from '../../../server/services/accountingProfileService.js'
 
 export function daysFromNow(days) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000)
@@ -14,6 +15,32 @@ export async function setTenantOwner(tenantId, userId) {
 export async function getPlanBySlug(slug) {
   const { rows } = await pool.query('SELECT * FROM subscription_plans WHERE slug = $1', [slug])
   return rows[0] ?? null
+}
+
+// A personal workspace owned by `userId` — the tenant the ARTIST ladder governs.
+// Unique per owner and outside the band cap, so tests that need both ladders
+// live give the same user a band tenant and one of these.
+//
+// Comes with the approved membership and accounting profile a real workspace
+// gets, so it can be used as an active tenant over HTTP (resolveTenantId needs
+// the membership; finance reads need the profile).
+let personalSeq = 0
+
+export async function createPersonalTenant(userId, name = 'Solo Artist') {
+  const { rows } = await pool.query(
+    `INSERT INTO tenants (band_name, display_name, slug, kind, owner_user_id)
+     VALUES ($1, $1, $2, 'personal', $3)
+     RETURNING *`,
+    [name, `solo-artist-${userId}-${personalSeq++}`, userId],
+  )
+  const tenant = rows[0]
+  await pool.query(
+    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+     VALUES ($1, $2, 'tenant_admin', 'approved', NOW(), 'owner')`,
+    [userId, tenant.id],
+  )
+  await createAccountingProfileForTenant(pool, tenant.id, 'nl')
+  return tenant
 }
 
 // Inserts a subscription row. Defaults: an active monthly gold subscription in

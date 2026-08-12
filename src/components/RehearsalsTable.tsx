@@ -1,4 +1,5 @@
 import type { Rehearsal, Participant, Id } from '../types/entities.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
@@ -21,8 +22,9 @@ import Tooltip from '@mui/material/Tooltip'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
 import VoteToggle from './VoteToggle.tsx'
 import RehearsalStatusIcon from './RehearsalStatusIcon.tsx'
+import SourceTenantIdentity from './SourceTenantIdentity.tsx'
 
-const COLUMN_COUNT = 6
+const BASE_COLUMN_COUNT = 6
 
 function formatDate(val: string | undefined | null) {
   if (!val) return '—'
@@ -35,6 +37,10 @@ function formatTime(val: string | undefined | null) {
 }
 
 export type RehearsalsTab = 'upcoming' | 'past'
+
+// `showBand` rows come from the cross-tenant `/api/me` feeds, so the band label
+// fields may be present.
+type RehearsalRow = MaybeCrossTenant<Rehearsal>
 
 function tallyCounts(participants: Participant[] | undefined) {
   const total = participants?.length ?? 0
@@ -67,18 +73,20 @@ function ParticipantProgress({ participants }: Readonly<{ participants?: Partici
 }
 
 interface RehearsalCardProps {
-  rehearsal: Rehearsal
+  rehearsal: RehearsalRow
   bandMemberId?: Id | null
   active?: boolean
   onClick?: () => void
-  onShare?: (rehearsal: Rehearsal) => void
+  onShare?: (rehearsal: RehearsalRow) => void
   onVote?: (rehearsalId: Id | undefined, memberId: Id | undefined, vote: string | null) => void
+  showBand?: boolean
 }
 
-function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onShare, onVote }: Readonly<RehearsalCardProps>) {
+function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onShare, onVote, showBand = false }: Readonly<RehearsalCardProps>) {
   const { t } = useTranslation('rehearsals')
-  const myParticipant = bandMemberId
-    ? (rehearsal.participants ?? []).find((p) => p.band_member_id === bandMemberId)
+  const viewerMemberId = rehearsal.viewerBandMemberId ?? bandMemberId
+  const myParticipant = viewerMemberId
+    ? (rehearsal.participants ?? []).find((p) => p.band_member_id === viewerMemberId)
     : null
 
   return (
@@ -119,6 +127,14 @@ function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onShare, onVo
             {rehearsal.location || '—'}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+            {showBand && (
+              <SourceTenantIdentity
+                tenantId={rehearsal.tenantId}
+                tenantName={rehearsal.tenantName}
+                tenantAvatarPath={rehearsal.tenantAvatarPath}
+                withName
+              />
+            )}
             <ParticipantProgress participants={rehearsal.participants} />
           </Box>
           {myParticipant && rehearsal.status !== 'planned' && (
@@ -129,7 +145,7 @@ function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onShare, onVo
               <Typography variant="caption" color="text.secondary">{t($ => $.table.myVote)}</Typography>
               <VoteToggle
                 vote={myParticipant.vote}
-                onChange={(v) => onVote?.(rehearsal.id, bandMemberId ?? undefined, v)}
+                onChange={(v) => onVote?.(rehearsal.id, viewerMemberId ?? undefined, v)}
               />
             </Box>
           )}
@@ -140,13 +156,14 @@ function RehearsalCard({ rehearsal, bandMemberId, active, onClick, onShare, onVo
 }
 
 interface DesktopRowProps {
-  rehearsal: Rehearsal
+  rehearsal: RehearsalRow
   active?: boolean
   onClick?: () => void
-  onShare?: (rehearsal: Rehearsal) => void
+  onShare?: (rehearsal: RehearsalRow) => void
+  showBand?: boolean
 }
 
-function DesktopRow({ rehearsal, active, onClick, onShare }: Readonly<DesktopRowProps>) {
+function DesktopRow({ rehearsal, active, onClick, onShare, showBand = false }: Readonly<DesktopRowProps>) {
   const { t } = useTranslation('rehearsals')
   return (
     <TableRow
@@ -164,6 +181,15 @@ function DesktopRow({ rehearsal, active, onClick, onShare }: Readonly<DesktopRow
       <TableCell>{formatDate(rehearsal.proposed_date)}</TableCell>
       <TableCell>{formatTime((rehearsal as Record<string, unknown>).start_time as string)} – {formatTime((rehearsal as Record<string, unknown>).end_time as string)}</TableCell>
       <TableCell>{rehearsal.location || '—'}</TableCell>
+      {showBand && (
+        <TableCell>
+          <SourceTenantIdentity
+            tenantId={rehearsal.tenantId}
+            tenantName={rehearsal.tenantName}
+            tenantAvatarPath={rehearsal.tenantAvatarPath}
+          />
+        </TableCell>
+      )}
       <TableCell sx={{ minWidth: 180 }}>
         <ParticipantProgress participants={rehearsal.participants} />
       </TableCell>
@@ -182,7 +208,7 @@ function DesktopRow({ rehearsal, active, onClick, onShare }: Readonly<DesktopRow
   )
 }
 
-function DesktopHead() {
+function DesktopHead({ showBand = false }: Readonly<{ showBand?: boolean }>) {
   const { t } = useTranslation('rehearsals')
   return (
     <TableHead>
@@ -191,6 +217,7 @@ function DesktopHead() {
         <TableCell>{t($ => $.table.colDate)}</TableCell>
         <TableCell>{t($ => $.table.colTime)}</TableCell>
         <TableCell>{t($ => $.table.colLocation)}</TableCell>
+        {showBand && <TableCell>{t($ => $.table.colBand)}</TableCell>}
         <TableCell>{t($ => $.table.colVotes)}</TableCell>
         <TableCell />
       </TableRow>
@@ -199,7 +226,7 @@ function DesktopHead() {
 }
 
 interface RehearsalsTableProps {
-  rehearsals?: Rehearsal[]
+  rehearsals?: RehearsalRow[]
   loading?: boolean
   activeTab?: RehearsalsTab
   onTabChange?: (tab: RehearsalsTab) => void
@@ -212,6 +239,7 @@ interface RehearsalsTableProps {
   hasMore?: boolean
   loadingMore?: boolean
   onLoadMore?: () => void
+  showBand?: boolean
 }
 
 export default function RehearsalsTable({
@@ -228,6 +256,7 @@ export default function RehearsalsTable({
   hasMore = false,
   loadingMore = false,
   onLoadMore,
+  showBand = false,
 }: Readonly<RehearsalsTableProps>) {
   const { t } = useTranslation('rehearsals')
   const isCompact = useCompactLayout()
@@ -283,7 +312,7 @@ export default function RehearsalsTable({
       )
     } else {
       content = filtered.map((r) => (
-        <RehearsalCard key={String(r.id)} rehearsal={r} bandMemberId={bandMemberId} active={r.id === selectedId} onVote={onVote} onClick={() => onRowClick?.(r)} onShare={onShare} />
+        <RehearsalCard key={String(r.id)} rehearsal={r} bandMemberId={bandMemberId} active={r.id === selectedId} onVote={onVote} onClick={() => onRowClick?.(r)} onShare={onShare} showBand={showBand} />
       ))
     }
 
@@ -303,24 +332,24 @@ export default function RehearsalsTable({
       {tabs}
       <TableContainer component={Paper} variant="outlined">
         <Table size="small">
-          <DesktopHead />
+          <DesktopHead showBand={showBand} />
           <TableBody>
             {loading && (
               <TableRow>
-                <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={BASE_COLUMN_COUNT + (showBand ? 1 : 0)} align="center" sx={{ py: 4 }}>
                   <CircularProgress size={24} />
                 </TableCell>
               </TableRow>
             )}
             {!loading && filtered.length === 0 && (
               <TableRow>
-                <TableCell colSpan={COLUMN_COUNT} align="center" sx={{ color: 'text.secondary', py: 4 }}>
+                <TableCell colSpan={BASE_COLUMN_COUNT + (showBand ? 1 : 0)} align="center" sx={{ color: 'text.secondary', py: 4 }}>
                   {emptyMessage}
                 </TableCell>
               </TableRow>
             )}
             {!loading && filtered.map((r) => (
-              <DesktopRow key={String(r.id)} rehearsal={r} active={r.id === selectedId} onClick={() => onRowClick?.(r)} onShare={onShare} />
+              <DesktopRow key={String(r.id)} rehearsal={r} active={r.id === selectedId} onClick={() => onRowClick?.(r)} onShare={onShare} showBand={showBand} />
             ))}
           </TableBody>
         </Table>

@@ -22,12 +22,25 @@ describe('planning detail fields in reader mode', () => {
         form={{ proposed_date: '2026-07-10', location: 'Studio', start_time: '19:00', end_time: '21:00' }}
         onChange={vi.fn()}
         readOnly
+        dateTimeFirst
       />,
     )
 
-    expect(screen.getByLabelText(/^date/i)).toHaveAttribute('readonly')
-    expect(screen.getByLabelText(/location/i)).toHaveAttribute('readonly')
+    const date = screen.getByLabelText(/^date/i)
+    const location = screen.getByLabelText(/location/i)
     const startTime = screen.getByRole('group', { name: /start time/i })
+    const endTime = screen.getByRole('group', { name: /end time/i })
+
+    expect(date).toHaveAttribute('readonly')
+    expect(location).toHaveAttribute('readonly')
+    expect(date.closest('.MuiGrid-root')).toHaveClass('MuiGrid-grid-xs-12', 'MuiGrid-grid-sm-4')
+    expect(startTime.closest('.MuiGrid-root')).toHaveClass('MuiGrid-grid-xs-6', 'MuiGrid-grid-sm-4')
+    expect(endTime.closest('.MuiGrid-root')).toHaveClass('MuiGrid-grid-xs-6', 'MuiGrid-grid-sm-4')
+    expect(location.closest('.MuiGrid-root')).toHaveClass('MuiGrid-grid-xs-12')
+    expect(date.compareDocumentPosition(startTime) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(startTime.compareDocumentPosition(endTime) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(endTime.compareDocumentPosition(location) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
     for (const section of within(startTime).getAllByRole('spinbutton')) {
       expect(section).toHaveAttribute('aria-readonly', 'true')
     }

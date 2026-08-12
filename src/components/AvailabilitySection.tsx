@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router'
 import Typography from '@mui/material/Typography'
 import Box from '@mui/material/Box'
 import List from '@mui/material/List'
 import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
 import ListItemIcon from '@mui/material/ListItemIcon'
-import Fab from '@mui/material/Fab'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Button from '@mui/material/Button'
@@ -18,18 +17,21 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import FormGroup from '@mui/material/FormGroup'
-import AddIcon from '@mui/icons-material/Add'
 import EventAvailableIcon from '@mui/icons-material/EventAvailable'
 import MicIcon from '@mui/icons-material/Mic'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
 import GroupIcon from '@mui/icons-material/Group'
 import { useCompactLayout } from '../hooks/useCompactLayout.ts'
+import { useEntitlements } from '../hooks/useEntitlements.ts'
+import { FEATURES } from '../auth/entitlements.ts'
 import AvailabilityCalendar from './AvailabilityCalendar.tsx'
+import CalendarAddFab from './calendar/CalendarAddFab.tsx'
 import { venueHeadline } from '../utils/venueDisplay.ts'
 import {
   GIG_STATUS_COLORS,
   REHEARSAL_STATUS_COLORS,
   BAND_EVENT_COLOR,
+  canManageAvailabilityForMember,
   getMemberColor,
   normalizeIsoDate,
   toIsoDate,
@@ -38,7 +40,7 @@ import AvailabilitySlotDialog from './AvailabilitySlotDialog.tsx'
 import GigFormModal from './GigFormModal.tsx'
 import RehearsalFormModal from './RehearsalFormModal.tsx'
 import BandEventFormModal from './BandEventFormModal.tsx'
-import { buildCalendarCells } from './calendar/calendarGrid.ts'
+import { buildCalendarCells, summarizeCalendarSlots } from './calendar/calendarGrid.ts'
 import { listMembers } from '../api/bandMembers.ts'
 import { createSlot, deleteSlot, listAvailability, updateSlot } from '../api/availability.ts'
 import { getGig, listGigsInRange } from '../api/gigs.ts'
@@ -83,8 +85,10 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
   const [createModal, setCreateModal] = useState<{ type: string; date: string } | null>(null)
   const [exportModal, setExportModal] = useState(false)
   const [calendarFeedOpen, setCalendarFeedOpen] = useState(false)
+  const manageableMembers = members.filter(canManageAvailabilityForMember)
+  const canSyncCalendar = useEntitlements().has(FEATURES.CALENDAR_SYNC)
   const [exportOptions, setExportOptions] = useState({ gigs: true, rehearsals: true, bandEvents: true })
-  const fabRef = useRef<HTMLButtonElement | null>(null)
+  const focusedRouteRef = useRef<string | null>(null)
   const escapedBasePath = basePath.replace(/[/\\^$*+?.()|[\]{}]/g, '\\$&')
   const focusMatch = basePath
     ? new RegExp(`^${escapedBasePath}/(gigs|rehearsals|events)/(\\d+)`).exec(pathname)
@@ -127,11 +131,20 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
   // Sync calendar focus to the item opened in the split-view detail pane
   // (URL is the source of truth; deep links may fall outside the loaded grid).
   useEffect(() => {
-    if (!focusType || focusId === null) return
+    const focusKey = focusType && focusId !== null ? `${focusType}:${focusId}` : null
+    if (!focusKey || !focusType || focusId === null) {
+      focusedRouteRef.current = null
+      return
+    }
+
+    // Focus once when a detail route is opened. Range reloads can remove the
+    // focused event from these arrays and must not pull the user back afterward.
+    if (focusedRouteRef.current === focusKey) return
     let cancelled = false
 
     function focusDate(dateStr: string | null) {
       if (cancelled || !dateStr) return
+      focusedRouteRef.current = focusKey
       setSelectedDay(dateStr)
       const [yStr, mStr] = dateStr.split('-')
       setViewYear(Number(yStr))
@@ -183,6 +196,10 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
   }
 
   function handleSlotClick(slot: Slot) {
+    if (slot.source === 'booking' || slot.source === 'summary') return
+    if (slot.band_member_id != null && !manageableMembers.some(
+      (member) => String(member.id) === String(slot.band_member_id),
+    )) return
     setDialog({ slot })
   }
 
@@ -233,12 +250,10 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
         return selectedDay >= start && selectedDay <= end
       })
     : []
-  const daySlots = selectedDay
-    ? slots.filter((s) => selectedDay >= (s.start_date ?? '') && selectedDay <= (s.end_date ?? ''))
-    : []
+  const daySlots = selectedDay ? (summarizeCalendarSlots(slots, [selectedDay])[selectedDay] ?? []) : []
 
   return (
-    <Box sx={{ mb: 3 }}>
+    <Box sx={{ mb: 3, display: 'flex', flexDirection: 'column', flex: 1 }}>
       <AvailabilityCalendar
         year={viewYear}
         month={viewMonth}
@@ -259,7 +274,11 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
         onNext={handleNext}
         onMonthJump={(y, m) => { setViewYear(y); setViewMonth(m) }}
         onExport={() => setExportModal(true)}
-        onSubscribe={() => setCalendarFeedOpen(true)}
+        onSubscribe={() => {
+          if (canSyncCalendar) setCalendarFeedOpen(true)
+          else navigate(`/upgrade/${FEATURES.CALENDAR_SYNC}`)
+        }}
+        subscribeLocked={!canSyncCalendar}
       />
 
       {isMobile && selectedDay && (
@@ -336,23 +355,41 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
               {daySlots.map((slot) => {
                 const member = slot.band_member_id === null
                   ? null
-                  : members.find((m) => m.id === slot.band_member_id)
+                  : members.find((candidate) => String(candidate.id) === String(slot.band_member_id))
                 const name = slot.band_member_id === null ? t($ => $.events.band) : member?.name || ''
+                const isDerivedBooking = slot.source === 'booking' || slot.source === 'summary'
+                const isManageable = slot.band_member_id == null || manageableMembers.some(
+                  (candidate) => String(candidate.id) === String(slot.band_member_id),
+                )
+                const isReadOnly = isDerivedBooking || !isManageable
+                const color = getMemberColor(slot, members)
+                const isUnavailable = slot.status === 'unavailable'
                 return (
-                  <ListItemButton key={`s-${slot.id}`} onClick={() => handleSlotClick(slot)}>
+                  <ListItemButton
+                    key={`s-${slot.id}`}
+                    onClick={isReadOnly ? undefined : () => handleSlotClick(slot)}
+                    aria-disabled={isReadOnly || undefined}
+                    sx={isReadOnly ? { cursor: 'default' } : undefined}
+                  >
                     <Box
+                      data-availability-marker={slot.id}
+                      data-member-color={color}
+                      data-availability-appearance={isUnavailable ? 'dashed' : 'filled'}
                       sx={{
                         width: 10,
                         height: 10,
+                        boxSizing: 'border-box',
                         borderRadius: '50%',
-                        bgcolor: getMemberColor(slot, members),
+                        bgcolor: isUnavailable ? 'transparent' : color,
+                        border: isUnavailable ? '1px dashed' : 'none',
+                        borderColor: color,
                         mr: 1.5,
                         flexShrink: 0,
                       }}
                     />
                     <ListItemText
                       primary={name}
-                      secondary={[slot.status, slot.reason].filter(Boolean).join(' — ')}
+                      secondary={[slot.status, slot.description || slot.reason].filter(Boolean).join(' — ')}
                     />
                   </ListItemButton>
                 )
@@ -363,15 +400,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
       )}
 
       {isMobile && (
-        <Fab
-          ref={fabRef}
-          color="primary"
-          aria-label={t($ => $.addEventAria)}
-          onClick={handleFabClick}
-          sx={{ position: 'fixed', bottom: 24, right: 24, zIndex: (t) => t.zIndex.fab }}
-        >
-          <AddIcon />
-        </Fab>
+        <CalendarAddFab label={t($ => $.addEventAria)} onClick={handleFabClick} />
       )}
 
       <Menu
@@ -437,7 +466,7 @@ export default function AvailabilitySection({ basePath = '', eventReloadKey = 0 
         <AvailabilitySlotDialog
           open
           slot={dialog.slot}
-          members={members}
+          members={manageableMembers}
           onSave={handleSave}
           onDelete={handleDelete}
           onClose={() => { setDialog(null); setSelectionStart(null) }}

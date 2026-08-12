@@ -7,6 +7,10 @@ const MEMBERSHIP_COLUMNS = `m.id              AS membership_id,
         m.status,
         m.created_at      AS membership_created_at,
         m.approved_at,
+        m.source,
+        -- The requester's note is for deciding on a PENDING row. Once approved
+        -- it stops being shown (the row stays, it just isn't served any more).
+        CASE WHEN m.status = 'pending' THEN m.request_message END AS request_message,
         u.id               AS user_id,
         u.email,
         u.name,
@@ -20,7 +24,7 @@ export async function listMemberships(executor, tenantId) {
        FROM memberships m
        JOIN users u            ON u.id = m.user_id
        LEFT JOIN band_members bm
-         ON bm.user_id = u.id AND bm.tenant_id = m.tenant_id
+         ON bm.user_id = u.id AND bm.tenant_id = m.tenant_id AND bm.deleted_at IS NULL
       WHERE m.tenant_id = $1
       ORDER BY
         CASE m.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END,
@@ -36,7 +40,7 @@ export async function readMembershipRow(executor, tenantId, userId) {
        FROM memberships m
        JOIN users u            ON u.id = m.user_id
        LEFT JOIN band_members bm
-         ON bm.user_id = u.id AND bm.tenant_id = m.tenant_id
+         ON bm.user_id = u.id AND bm.tenant_id = m.tenant_id AND bm.deleted_at IS NULL
       WHERE m.tenant_id = $1 AND m.user_id = $2`,
     [tenantId, userId],
   )
@@ -60,13 +64,28 @@ export async function deleteMembership(executor, tenantId, userId) {
   )
 }
 
+// How many approved tenant_admins the tenant would still have if this user
+// stopped being one. Callers must already hold the tenant row lock: without it
+// two concurrent demotions of different admins could each see the other and
+// both proceed, leaving the tenant with none.
+export async function countOtherApprovedTenantAdmins(executor, tenantId, excludeUserId) {
+  const { rows } = await executor.query(
+    `SELECT COUNT(*)::int AS count FROM memberships
+      WHERE tenant_id = $1 AND user_id <> $2
+        AND role = 'tenant_admin' AND status = 'approved'`,
+    [tenantId, excludeUserId],
+  )
+  return rows[0].count
+}
+
 // ---------- band-member link ----------
 
 // Locks the target band member row to serialize concurrent reassignments.
 // Returns the row (or null if it doesn't belong to the tenant).
 export async function lockBandMember(executor, bandMemberId, tenantId) {
   const { rows } = await executor.query(
-    'SELECT user_id FROM band_members WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
+    `SELECT user_id FROM band_members
+      WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL FOR UPDATE`,
     [bandMemberId, tenantId],
   )
   return rows[0] || null
@@ -74,14 +93,16 @@ export async function lockBandMember(executor, bandMemberId, tenantId) {
 
 export async function clearUserBandMember(executor, userId, tenantId) {
   await executor.query(
-    'UPDATE band_members SET user_id = NULL WHERE user_id = $1 AND tenant_id = $2',
+    `UPDATE band_members SET user_id = NULL
+      WHERE user_id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
     [userId, tenantId],
   )
 }
 
 export async function assignBandMember(executor, userId, bandMemberId, tenantId) {
   await executor.query(
-    'UPDATE band_members SET user_id = $1 WHERE id = $2 AND tenant_id = $3',
+    `UPDATE band_members SET user_id = $1
+      WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL`,
     [userId, bandMemberId, tenantId],
   )
 }

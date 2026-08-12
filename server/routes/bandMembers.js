@@ -17,14 +17,14 @@ router.get('/', async (req, res) => {
 })
 
 router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
-  const result = await createMember(pool, req.tenantId, req.body)
+  const result = await createMember(pool, req.tenantId, req.body, req.user.id)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.member)
 })
 
 router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
-  const result = await patchMember(pool, req.tenantId, id, req.body)
+  const result = await patchMember(pool, req.tenantId, id, req.body, req.user.id)
   if (result.error) return sendError(res, result.error)
   res.json(result.member)
 })

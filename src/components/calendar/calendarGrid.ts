@@ -89,6 +89,94 @@ export function indexByDateRange<T>(
   return byDate
 }
 
+const SLOT_SEVERITY: Record<string, number> = { available: 0, unavailable: 1 }
+
+function bookingStatusOnDay(slot: Slot, date: string): 'unavailable' | null {
+  const start = slot.start_date
+  if (!start) return null
+  const end = slot.end_date || start
+  return inRange(date, start, end) ? 'unavailable' : null
+}
+
+/** One availability block per member/day for the month view. */
+export function summarizeCalendarSlots(slots: Slot[], days: string[]): Record<string, Slot[]> {
+  const result: Record<string, Slot[]> = Object.fromEntries(days.map((day) => [day, []]))
+  for (const date of days) {
+    const explicit = new Map<string, Slot[]>()
+    const bookings: { slot: Slot; status: 'unavailable' }[] = []
+    for (const slot of slots) {
+      const key = slot.band_member_id == null ? 'band' : String(slot.band_member_id)
+      if (slot.source === 'booking') {
+        const status = bookingStatusOnDay(slot, date)
+        if (status) bookings.push({ slot, status })
+      } else if (slot.start_date && inRange(date, slot.start_date, slot.end_date || slot.start_date)) {
+        const entries = explicit.get(key) ?? []
+        entries.push(slot)
+        explicit.set(key, entries)
+      }
+    }
+
+    const groups = new Map<string, {
+      memberId: Slot['band_member_id']
+      status: string
+      details: string[]
+      ids: NonNullable<Slot['id']>[]
+      editableSlot: Slot | null
+      bookingCount: number
+    }>()
+    for (const [key, entries] of explicit) {
+      const status = entries.some((slot) => slot.status === 'unavailable') ? 'unavailable' : 'available'
+      const editableSlot = entries.findLast((slot) =>
+        (slot.status === 'unavailable' ? 'unavailable' : 'available') === status) ?? entries.at(-1)!
+      groups.set(key, {
+        memberId: entries[0].band_member_id ?? null,
+        status,
+        details: entries.flatMap((slot) => slot.reason ? [slot.reason] : []),
+        ids: entries.flatMap((slot) => slot.id === undefined ? [] : [slot.id]),
+        editableSlot,
+        bookingCount: 0,
+      })
+    }
+    for (const { slot, status } of bookings) {
+      const key = slot.band_member_id == null ? 'band' : String(slot.band_member_id)
+      const current = groups.get(key)
+      const detail = slot.description || slot.reason || slot.title || ''
+      if (!current) {
+        groups.set(key, {
+          memberId: slot.band_member_id ?? null,
+          status,
+          details: detail ? [detail] : [],
+          ids: slot.id === undefined ? [] : [slot.id],
+          editableSlot: null,
+          bookingCount: 1,
+        })
+      } else {
+        current.bookingCount += 1
+        if ((SLOT_SEVERITY[status] ?? 0) > (SLOT_SEVERITY[current.status] ?? 0)) current.status = status
+        if (detail && !current.details.includes(detail)) current.details.push(detail)
+        if (slot.id !== undefined && !current.ids.includes(slot.id)) current.ids.push(slot.id)
+      }
+    }
+
+    result[date] = [...groups.entries()].map(([key, group]) => {
+      if (group.editableSlot && group.bookingCount === 0) {
+        return { ...group.editableSlot, status: group.status, calendar_summary: true }
+      }
+      return {
+        id: group.ids.length === 1 ? group.ids[0] : `summary-${date}-${key}`,
+        source: 'summary',
+        band_member_id: group.memberId,
+        start_date: date,
+        end_date: date,
+        status: group.status,
+        description: group.details.join(' — ') || null,
+        calendar_summary: true,
+      }
+    })
+  }
+  return result
+}
+
 interface CellBgArgs {
   mobile: boolean
   isSelected: boolean

@@ -31,6 +31,15 @@ import authRouter from './auth.js'
 import usersRouter from './users.js'
 import tenantsRouter from './tenants.js'
 import tenantsSelfRouter from './tenantsSelf.js'
+import tenantSettingsRouter from './tenantSettings.js'
+import bandDirectoryRouter from './bandDirectory.js'
+import meRouter from './me.js'
+import meAvailabilityRouter from './meAvailability.js'
+import meMembershipsRouter from './meMemberships.js'
+import bandProfilesRouter from './bandProfiles.js'
+import myBandsRouter from './myBands.js'
+import bandProfileClaimsRouter from './bandProfileClaims.js'
+import adminBandProfileClaimsRouter from './adminBandProfileClaims.js'
 import platformSettingsRouter from './platformSettings.js'
 import adminUsersRouter from './adminUsers.js'
 import adminPlansRouter from './adminPlans.js'
@@ -55,12 +64,16 @@ import { loadUser, requireApproved, requireCurrentTerms } from '../middleware/au
 import {
   resolveTenantId,
   requireTenantMember,
+  requireTenantCapability,
+  requireTenantCapabilityForBodyFields,
+  resolveMemberTenantIds,
   requireSuperAdmin,
 } from '../middleware/tenant.js'
 import { requirePermission } from '../middleware/permissions.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { requireEntitlement, requireEntitlementForWrites } from '../middleware/entitlements.js'
 import { FEATURES } from '../auth/entitlements.js'
+import { TENANT_CAPABILITIES } from '../../shared/tenantCapabilities.js'
 import { csrf } from '../middleware/csrf.js'
 
 const router = Router()
@@ -119,6 +132,33 @@ const publicWebhookLimiter = rateLimit({
   skip: () => isTest,
 })
 
+// The band directory answers questions about tenants the caller has no
+// membership in. The outstanding-request cap governs how many requests may be
+// OPEN; this limiter governs how fast someone may knock — and bounds scraping
+// of the directory itself.
+const bandDirectoryLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+  keyGenerator,
+  skip: () => isTest,
+})
+
+// Global band profiles are readable by any authenticated user and searched as
+// the artist types, so the same reasoning as the directory applies: bound how
+// fast the table can be enumerated.
+const bandProfileLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 120,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+  keyGenerator,
+  skip: () => isTest,
+})
+
 // Place lookup hits a metered third-party API once per debounced keystroke, so
 // the blanket apiLimiter (1000) is far too loose to bound the upstream bill.
 const placeSearchLimiter = rateLimit({
@@ -169,10 +209,42 @@ const integrations = requireEntitlement(FEATURES.INTEGRATIONS)
 // the matrix stays the single source of truth (see auth/permissions.js).
 const membersManage = [...tenantMember, requirePermission(PERMISSIONS.MEMBERS_MANAGE)]
 const tenantManage = [...tenantMember, requirePermission(PERMISSIONS.TENANT_MANAGE)]
+// Kind-specific surfaces use the shared capability registry. These backend
+// gates are authoritative; the frontend consumes the same registry for UX.
+const bandMembershipAdmin = requireTenantCapability(TENANT_CAPABILITIES.BAND_MEMBERSHIP_ADMIN)
+const bandRoster = requireTenantCapability(TENANT_CAPABILITIES.BAND_ROSTER)
+const bandAvailability = requireTenantCapability(TENANT_CAPABILITIES.BAND_AVAILABILITY)
+const setlists = requireTenantCapability(TENANT_CAPABILITIES.SETLISTS)
+const merch = requireTenantCapability(TENANT_CAPABILITIES.MERCH)
+const bandPromotion = requireTenantCapability(TENANT_CAPABILITIES.BAND_PROMOTION_INTEGRATIONS)
+const bandLinkpage = requireTenantCapability(TENANT_CAPABILITIES.BAND_LINKPAGE)
+const myBands = requireTenantCapability(TENANT_CAPABILITIES.MY_BANDS)
+const bandProfileClaim = requireTenantCapability(TENANT_CAPABILITIES.BAND_PROFILE_CLAIM)
+const bandSlugChange = requireTenantCapability(TENANT_CAPABILITIES.BAND_SLUG_CHANGE)
+// Tagging an event with a band is personal-only, but the planning endpoints
+// themselves are shared. The field variant keeps them shared: it gates only the
+// requests that actually mention my_band_id.
+const myBandField = requireTenantCapabilityForBodyFields(TENANT_CAPABILITIES.MY_BANDS, ['my_band_id'])
 
 router.use('/invites/redeem', redeemLimiter, loadUser, invitesRedeemRouter)
 // Self-service owned tenants: user-level (no active-tenant resolution).
 router.use('/tenants', requireApproved, tenantsSelfRouter)
+// Band directory: user-level too — an artist searches and asks to join from
+// inside their own workspace, with no membership in the target band.
+router.use('/band-directory', currentTermsUser, bandDirectoryLimiter, bandDirectoryRouter)
+// Global band profiles: bands that are not gigbuddy customers. User-level for
+// the same reason — the row belongs to no tenant, so there is none to resolve.
+router.use('/band-profiles', currentTermsUser, bandProfileLimiter, bandProfilesRouter)
+// The cross-tenant artist agenda. Its own tier: authenticated + terms + the member tenant
+// set, and deliberately NO resolveTenantId — see resolveMemberTenantIds.
+// Availability is user-level, so it sits on the /me tier and resolves no
+// tenant at all — mounted before the agenda router so `/me/availability` is not
+// swallowed by it.
+router.use('/me/availability', currentTermsUser, meAvailabilityRouter)
+// Leaving a band is user-level too: no active tenant, no membership admin.
+// Mounted before the agenda router so it is not swallowed by it.
+router.use('/me/memberships', currentTermsUser, meMembershipsRouter)
+router.use('/me', currentTermsUser, resolveMemberTenantIds, meRouter)
 // User-level billing (subscription owner acts regardless of active tenant).
 router.use('/billing', requireApproved, billingRouter)
 router.use('/admin/tenants', superAdmin, tenantsRouter)
@@ -182,32 +254,45 @@ router.use('/admin/plans', superAdmin, adminPlansRouter)
 router.use('/admin/subscriptions', superAdmin, adminSubscriptionsRouter)
 router.use('/admin/statistics', superAdmin, adminStatisticsRouter)
 router.use('/admin/storage', superAdmin, adminStorageRouter)
-router.use('/invites', membersManage, invitesAdminRouter)
-router.use('/users', membersManage, usersRouter)
+router.use('/admin/band-profile-claims', superAdmin, adminBandProfileClaimsRouter)
+router.use('/invites', membersManage, bandMembershipAdmin, invitesAdminRouter)
+router.use('/users', membersManage, bandMembershipAdmin, usersRouter)
 router.use('/statistics', tenantManage, statisticsRouter)
-router.use('/gigs', tenantMember, gigsRouter)
+router.use(
+  '/tenant',
+  tenantManage,
+  bandSlugChange,
+  requireEntitlement(FEATURES.CUSTOM_SLUG),
+  tenantSettingsRouter,
+)
+router.use('/gigs', tenantMember, myBandField, gigsRouter)
 router.use('/geocode', tenantMember, geocodeRouter)
 router.use('/places', tenantMember, placeSearchLimiter, placesRouter)
-router.use('/bandsintown', tenantMember, integrations, bandsintownRouter)
+router.use('/bandsintown', tenantMember, bandPromotion, integrations, bandsintownRouter)
 router.use('/tasks', tenantMember, tasksRouter)
 router.use('/profile', tenantMember, profileRouter)
-router.use('/band-members', tenantMember, bandMembersRouter)
-router.use('/availability', tenantMember, availabilityRouter)
-router.use('/rehearsals', tenantMember, rehearsalsRouter)
+router.use('/band-members', tenantMember, bandRoster, bandMembersRouter)
+router.use('/availability', tenantMember, bandAvailability, availabilityRouter)
+router.use('/rehearsals', tenantMember, myBandField, rehearsalsRouter)
 router.use('/achievements', tenantMember, achievementsRouter)
-router.use('/band-events', tenantMember, bandEventsRouter)
+router.use('/band-events', tenantMember, myBandField, bandEventsRouter)
+// The bands an artist plays in that aren't on gigbuddy. Personal-only: a band
+// workspace's events are already the band's.
+router.use('/my-bands', tenantMember, myBands, myBandsRouter)
+// Claiming a global band profile: band-only, and an administrative act.
+router.use('/band-profile-claims', tenantManage, bandProfileClaim, bandProfileClaimsRouter)
 router.use('/email-templates', tenantMember, emailTemplatesRouter)
 router.use('/venues', tenantMember, venuesRouter)
 router.use('/contacts', tenantMember, contactsRouter)
 router.use('/songs', tenantMember, songsRouter)
-router.use('/setlists', tenantMember, setlistsRouter)
+router.use('/setlists', tenantMember, setlists, setlistsRouter)
 router.use('/invoices', financeView, invoicesRouter)
 // Purchases is mixed: contributors create + view their own purchases
 // (purchase.create); the full register and payments are finance-gated inside.
 // Purchases are finance data (they post to the ledger), so writes fall under
 // the finance entitlement too.
 router.use('/purchases', tenantMember, financeWrites, purchasesRouter)
-router.use('/merch', financeView, merchRouter)
+router.use('/merch', financeView, merch, merchRouter)
 router.use('/accounts', financeView, accountsRouter)
 router.use('/accounting-profile', financeView, accountingProfileRouter)
 router.use('/journal', financeView, journalRouter)
@@ -228,10 +313,11 @@ router.use('/tutorials', currentTermsUser, tutorialsRouter)
 // The public feed itself 404s while the entitlement is missing.
 router.use('/calendar-feed', tenantMember, calendarFeedRouter)
 router.use('/share/photos', tenantMember, sharePhotosRouter)
-// Link-page management is reserved to tenant admins and gated on the linkpage
-// feature (silver/gold). The public export/image routes above stay open — the
-// linkpage app enforces plan state from the entitlements in the export.
-router.use('/linkpage', tenantManage, requireEntitlement(FEATURES.LINKPAGE), linkpageRouter)
+// Link pages are a band surface, reserved to tenant admins and gated on the
+// linkpage feature (silver/gold). The public export/image routes above stay
+// open — the linkpage app enforces plan state from the entitlements in the
+// export, and the export itself refuses a non-band slug.
+router.use('/linkpage', tenantManage, bandLinkpage, requireEntitlement(FEATURES.LINKPAGE), linkpageRouter)
 router.use('/files', tenantMember, filesRouter)
 
 export default router

@@ -69,12 +69,24 @@ import {
   mergeEntitlements,
   featuresToPurge,
 } from '../auth/entitlements.js'
-import { parsePlanSelection, parseDowngradeSelection } from '../validators/billingValidators.js'
+import { parsePlanSelection, parseDowngradeSelection, parseAudience } from '../validators/billingValidators.js'
+import {
+  PLAN_AUDIENCES,
+  PLAN_AUDIENCE_KEYS,
+  tenantKindsForAudience,
+} from '../../shared/planAudiences.js'
+import { fetchPersonalTenant } from '../repositories/tenantRepository.js'
 import { logger } from '../utils/logger.js'
 import { badRequest, conflict } from './serviceErrors.js'
 const NOT_CONFIGURED = { error: { status: 503, body: { error: 'Billing is not configured', code: 'billing_not_configured' } } }
 const PROVIDER_ERROR = { error: { status: 502, body: { error: 'Payment provider error', code: 'provider_error' } } }
 const COMPLIMENTARY = { error: { status: 409, body: { error: 'This subscription is managed by an administrator', code: 'complimentary_managed_by_admin' } } }
+// Backstop only. Every entry point loads the subscription for the TARGET plan's
+// audience, so a mismatch is unreachable through the API — the user-visible
+// contract for "band subscriber names an artist plan" is the ordinary 404 (no
+// subscription on that ladder). This fires only if plan data was corrupted
+// underneath a loaded row, where a 500 would be the alternative.
+const CROSS_AUDIENCE = { error: { status: 409, body: { error: 'That plan belongs to a different product', code: 'cross_audience_change' } } }
 
 // A target with any feature removed or any numeric limit reduced (null =
 // unlimited = largest) relative to the current plan is a downgrade.
@@ -106,25 +118,36 @@ export async function subscribe(db, user, body) {
   if (price === null) return badRequest('This plan is not available for the chosen interval', { code: 'plan_not_priced' })
   if (price <= 0) return badRequest('This plan is not available for the chosen interval', { code: 'plan_not_priced' })
 
-  const existing = await fetchLiveSubscriptionForUser(db, user.id)
-  if (existing) {
-    // An interrupted signup for THIS exact plan/interval left a pending_mandate
-    // row: the mandate checkout was created but the browser never returned (lost
-    // response), or the provider call errored before we could hand back a URL.
-    // Resume it instead of 409ing the user into the 24h stale-signup cleanup —
-    // createMandateCheckout is idempotent (it recovers the URL from the still-
-    // open payment, or re-issues one after a failed attempt). A DIFFERENT plan
-    // is a real conflict (one live subscription per user).
-    if (existing.status === 'pending_mandate' && existing.plan_id === planId && existing.billing_interval === interval) {
-      return startMandateCheckout(db, existing, user, redirect, existing.trial_ends_at !== null)
+  const targetEntitlements = mergeEntitlements(plan.entitlements, null)
+  const outcome = await withTransaction(async (client) => {
+    // Scoped to the target's ladder: holding a band subscription is no obstacle
+    // to buying an artist one, and vice versa. They are separate products.
+    const existing = await fetchLiveSubscriptionForUpdate(client, user.id, plan.audience)
+    if (existing) {
+      if (existing.status === 'pending_mandate'
+        && existing.plan_id === planId
+        && existing.billing_interval === interval) {
+        return { sub: existing, trialEligible: existing.trial_ends_at !== null }
+      }
+      abortTransaction(conflict('You already have an active subscription', { code: 'already_subscribed' }))
     }
-    return conflict('You already have an active subscription', { code: 'already_subscribed' })
-  }
 
-  const trialEligible = !(await hasUsedTrial(db, user.id))
-  let sub
-  try {
-    sub = await insertSubscription(db, {
+    // Initial subscription is also a move to a target capacity, so it takes the
+    // same locked precheck as a downgrade: an admin-priced plan can be tighter
+    // than the ladder's floor, and a concurrent member add or upload must not
+    // slip past while checkout starts.
+    const blockers = await computeDowngradeBlockers(
+      client, user.id, targetEntitlements.limits, { audience: plan.audience, lock: true },
+    )
+    if (blockers.length > 0) {
+      abortTransaction(conflict('Current usage exceeds the target plan limits', {
+        code: 'over_target_limit',
+        blockers,
+      }))
+    }
+
+    const trialEligible = !(await hasUsedTrial(client, user.id, plan.audience))
+    const sub = await insertSubscription(client, {
       user_id: user.id,
       plan_id: planId,
       status: 'pending_mandate',
@@ -132,12 +155,15 @@ export async function subscribe(db, user, body) {
       price_cents: price,
       trial_ends_at: trialEligible ? trialEndFrom() : null,
     })
-  } catch (err) {
-    if (err.code === '23505') return conflict('You already have an active subscription', { code: 'already_subscribed' })
-    throw err
-  }
-
-  return startMandateCheckout(db, sub, user, redirect, trialEligible)
+    return { sub, trialEligible }
+  }, {
+    db,
+    mapError: (err) => (err.code === '23505'
+      ? conflict('You already have an active subscription', { code: 'already_subscribed' })
+      : null),
+  })
+  if (outcome.error) return outcome
+  return startMandateCheckout(db, outcome.sub, user, redirect, outcome.trialEligible)
 }
 
 // Create (or resume) the €0.01 mandate checkout for a committed pending_mandate
@@ -167,9 +193,15 @@ async function startMandateCheckout(db, sub, user, redirect, trialEligible) {
 
 // ---- cancel ----
 
-export async function cancelSubscription(db, userId) {
+// The audience is required and never defaulted: with two live products a
+// silent default would cancel the wrong one, and the user would not find out
+// until the wrong workspace locked.
+export async function cancelSubscription(db, userId, body) {
+  const parsed = parseAudience(body)
+  if (parsed.error) return badRequest(parsed.error)
+
   const outcome = await withTransaction(async (client) => {
-    const sub = await fetchLiveSubscriptionForUpdate(client, userId)
+    const sub = await fetchLiveSubscriptionForUpdate(client, userId, parsed.audience)
     if (!sub) abortTransaction({ error: { status: 404, body: { error: 'No subscription' } } })
     if (sub.is_complimentary) abortTransaction(COMPLIMENTARY)
     if (sub.cancel_at_period_end) return { alreadyScheduled: true }
@@ -209,9 +241,12 @@ async function isPendingChargeNonterminal(executor, sub) {
 
 // ---- resume ----
 
-export async function resumeSubscription(db, userId) {
+export async function resumeSubscription(db, userId, body) {
+  const parsed = parseAudience(body)
+  if (parsed.error) return badRequest(parsed.error)
+
   const outcome = await withTransaction(async (client) => {
-    const sub = await fetchLiveSubscriptionForUpdate(client, userId)
+    const sub = await fetchLiveSubscriptionForUpdate(client, userId, parsed.audience)
     if (!sub) abortTransaction({ error: { status: 404, body: { error: 'No subscription' } } })
     if (sub.is_complimentary) abortTransaction(COMPLIMENTARY)
     if (!sub.cancel_at_period_end) abortTransaction(badRequest('Nothing to resume'))
@@ -286,9 +321,12 @@ export async function changePlan(db, user, body) {
   if (price === null || price <= 0) return badRequest('This plan is not available for the chosen interval', { code: 'plan_not_priced' })
 
   const outcome = await withTransaction(async (client) => {
-    const sub = await fetchLiveSubscriptionForUpdate(client, user.id)
+    // Routed by the target's audience: a band subscriber naming an artist plan
+    // finds no subscription on that ladder and gets the ordinary 404.
+    const sub = await fetchLiveSubscriptionForUpdate(client, user.id, targetPlan.audience)
     const guardError = planChangeGuardError(sub)
     if (guardError) abortTransaction(guardError)
+    if (sub.audience !== targetPlan.audience) abortTransaction(CROSS_AUDIENCE)
 
     const kind = classifyPlanChange(sub, targetPlan, interval)
     if (kind === 'same') abortTransaction(badRequest('Already on this plan'))
@@ -354,18 +392,27 @@ async function tenantDowngradeBlockers(executor, tenant, { membersLimit, storage
   return blockers
 }
 
-async function computeDowngradeBlockers(executor, userId, targetLimits, { lock = false } = {}) {
+// `audience` scopes the whole check to that ladder's tenants: an artist plan is
+// measured against the personal workspace alone, a band plan against the bands
+// alone. That scoping is also what lets an artist plan coexist with owned bands
+// — the band cap below simply never runs for the artist ladder.
+async function computeDowngradeBlockers(executor, userId, targetLimits, { audience, lock = false } = {}) {
   const blockers = []
   if (lock) await lockUserForCapCheck(executor, userId)
   // Archived tenants are checked against the per-tenant limits too — they can
   // be unarchived onto the target plan. Only the band cap counts active ones
   // (archiving is the documented way to satisfy it).
-  const tenants = await listOwnedTenants(executor, userId)
+  const tenants = await listOwnedTenants(executor, userId, tenantKindsForAudience(audience))
 
-  const bandsLimit = targetLimits[LIMITS.BANDS]
-  const activeCount = tenants.filter((t) => !t.archived_at).length
-  if (bandsLimit !== null && activeCount > bandsLimit) {
-    blockers.push({ tenantId: null, tenantName: null, limit: LIMITS.BANDS, current: activeCount, target: bandsLimit })
+  // The band cap belongs to the band product. An artist plan's `bands: 0` is
+  // vestigial (enforceBandCap reads the band subscription), so applying it here
+  // would block every artist subscription for anyone who owns a band.
+  if (audience === PLAN_AUDIENCES.BAND) {
+    const bandsLimit = targetLimits[LIMITS.BANDS]
+    const activeCount = tenants.filter((t) => !t.archived_at).length
+    if (bandsLimit !== null && activeCount > bandsLimit) {
+      blockers.push({ tenantId: null, tenantName: null, limit: LIMITS.BANDS, current: activeCount, target: bandsLimit })
+    }
   }
 
   const membersLimit = targetLimits[LIMITS.MEMBERS]
@@ -418,15 +465,18 @@ export async function previewDowngrade(db, user, body) {
   if (target.error) return target
   const { targetPlan } = target
 
-  const sub = await fetchLiveSubscriptionForUser(db, user.id)
+  const sub = await fetchLiveSubscriptionForUser(db, user.id, targetPlan.audience)
   if (!sub) return { error: { status: 404, body: { error: 'No subscription' } } }
+  if (sub.audience !== targetPlan.audience) return CROSS_AUDIENCE
 
   // Effective entitlements on BOTH sides: per-subscription overrides survive
   // the plan switch, so an override-granted feature is never previewed (or
   // later purged) as lost.
   const effCurrent = mergeEntitlements(sub.plan_entitlements, sub.entitlement_overrides)
   const effTarget = mergeEntitlements(targetPlan.entitlements, sub.entitlement_overrides)
-  const blockers = await computeDowngradeBlockers(db, user.id, effTarget.limits)
+  const blockers = await computeDowngradeBlockers(db, user.id, effTarget.limits, {
+    audience: targetPlan.audience,
+  })
 
   return {
     isDowngrade: isDowngrade(effCurrent, effTarget),
@@ -519,9 +569,10 @@ export async function downgrade(db, user, body) {
   const { targetPlan, price } = target
 
   const outcome = await withTransaction(async (client) => {
-    const sub = await fetchLiveSubscriptionForUpdate(client, user.id)
+    const sub = await fetchLiveSubscriptionForUpdate(client, user.id, targetPlan.audience)
     const guardError = downgradeGuardError(sub, targetPlan, interval)
     if (guardError) abortTransaction(guardError)
+    if (sub.audience !== targetPlan.audience) abortTransaction(CROSS_AUDIENCE)
 
     const effCurrent = mergeEntitlements(sub.plan_entitlements, sub.entitlement_overrides)
     const effTarget = mergeEntitlements(targetPlan.entitlements, sub.entitlement_overrides)
@@ -536,7 +587,9 @@ export async function downgrade(db, user, body) {
 
     // Capacity precheck under the full lock set; growth writes hold the same
     // locks, so nothing can slip over the target limits while this commits.
-    const blockers = await computeDowngradeBlockers(client, user.id, effTarget.limits, { lock: true })
+    const blockers = await computeDowngradeBlockers(client, user.id, effTarget.limits, {
+      audience: sub.audience, lock: true,
+    })
     if (blockers.length) {
       abortTransaction({ error: { status: 409, body: { error: 'Current usage exceeds the target plan limits', code: 'over_target_limit', blockers } } })
     }
@@ -573,6 +626,7 @@ export function serializeSubscription(sub) {
     id: sub.id,
     planId: sub.plan_id,
     planSlug: sub.plan_slug,
+    audience: sub.audience,
     status: sub.status,
     billingInterval: sub.billing_interval,
     priceCents: sub.price_cents,
@@ -593,20 +647,45 @@ export function serializeSubscription(sub) {
   }
 }
 
+// One entry per ladder — a user may hold both at once, and the billing page
+// renders each as its own section.
 export async function getBillingState(db, userId) {
-  const [sub, ownedTenantCount] = await Promise.all([
-    fetchLiveSubscriptionForUser(db, userId),
+  const [bandSub, artistSub, ownedBandCount, personalTenant] = await Promise.all([
+    fetchLiveSubscriptionForUser(db, userId, PLAN_AUDIENCES.BAND),
+    fetchLiveSubscriptionForUser(db, userId, PLAN_AUDIENCES.ARTIST),
     countActiveOwnedTenants(db, userId),
+    fetchPersonalTenant(db, userId),
   ])
-  return { subscription: serializeSubscription(sub), ownedTenantCount }
+  return {
+    subscriptions: {
+      [PLAN_AUDIENCES.BAND]: serializeSubscription(bandSub),
+      [PLAN_AUDIENCES.ARTIST]: serializeSubscription(artistSub),
+    },
+    ownedBandCount,
+    hasPersonalWorkspace: personalTenant !== null,
+  }
 }
 
 // Manual reconcile for the current user's subscription — the dev "sync" button
 // when webhooks are disabled. Re-ingests every nonterminal payment and repairs
 // a stale schedule. Safe to call anytime (ingestion is idempotent).
-export async function syncOwnSubscription(db, userId) {
-  const sub = await fetchLiveSubscriptionForUser(db, userId)
-  if (!sub) return { subscription: null }
+//
+// `audience` null syncs both ladders (the billing page's button, which has no
+// particular purchase in mind). Checkout returns pass the audience they started,
+// so a settled subscription on the OTHER ladder can never be mistaken for the
+// one still being paid for.
+export async function syncOwnSubscription(db, userId, audience = null) {
+  const targets = audience === null ? PLAN_AUDIENCE_KEYS : [audience]
+  const subscriptions = {}
+  for (const key of targets) {
+    subscriptions[key] = serializeSubscription(await syncOneSubscription(db, userId, key))
+  }
+  return { subscriptions }
+}
+
+async function syncOneSubscription(db, userId, audience) {
+  const sub = await fetchLiveSubscriptionForUser(db, userId, audience)
+  if (!sub) return null
   const payments = await listNonterminalPaymentsForSubscription(db, sub.id)
   for (const p of payments) {
     await ingestProviderPayment(sub.id, p.mollie_payment_id).catch((err) =>
@@ -616,6 +695,5 @@ export async function syncOwnSubscription(db, userId) {
     await repairSchedule(pool, sub.id).catch((err) =>
       logger.error('billing.sync_repair_failed', { err, subscriptionId: sub.id }))
   }
-  const refreshed = await fetchLiveSubscriptionForUser(db, userId)
-  return { subscription: serializeSubscription(refreshed) }
+  return fetchLiveSubscriptionForUser(db, userId, audience)
 }

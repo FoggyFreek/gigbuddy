@@ -1,15 +1,16 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import GigFormModal from '../components/GigFormModal.tsx'
 import theme from '../theme.ts'
 
 vi.mock('../api/availability.ts', () => ({
   getAvailabilityOn: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
+  evaluateEventAvailability: vi.fn().mockResolvedValue({ bandWide: null, members: [] }),
   listAvailability: vi.fn().mockResolvedValue([]),
   createSlot: vi.fn(),
   updateSlot: vi.fn(),
@@ -36,9 +37,6 @@ vi.mock('../api/gigs.ts', () => ({
     admission: 'free',
     ticket_link: null,
     notes: 'Bring own PA',
-    has_pa_system: false,
-    has_drumkit: false,
-    has_stage_lights: false,
     tasks: [],
     attachments: [],
     participants: [],
@@ -61,7 +59,12 @@ vi.mock('../api/venues.ts', async (importOriginal) => ({
   listVenueContacts: vi.fn().mockResolvedValue([]),
 }))
 
-import { createGig, getGig, updateGig } from '../api/gigs.ts'
+vi.mock('../api/myBands.ts', () => ({
+  listMyBands: vi.fn().mockResolvedValue({ items: [] }),
+}))
+
+import { createGig, getGig } from '../api/gigs.ts'
+import { getAvailabilityOn } from '../api/availability.ts'
 import { AuthContext } from '../contexts/authContext.ts'
 
 // Editing a gig (auto-save fields) is gated on planning.write, so the modal
@@ -74,10 +77,10 @@ const AUTH_VALUE = {
   refreshUser: async () => undefined,
 }
 
-function wrap(ui) {
+function wrap(ui, tenantKind = 'band') {
   return render(
     <MemoryRouter>
-      <AuthContext.Provider value={AUTH_VALUE}>
+      <AuthContext.Provider value={{ ...AUTH_VALUE, user: { ...AUTH_VALUE.user, activeTenantKind: tenantKind } }}>
         <ThemeProvider theme={theme}>
           <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
         </ThemeProvider>
@@ -124,9 +127,38 @@ describe('GigFormModal — create mode', () => {
     await user.click(screen.getByRole('button', { name: /create/i }))
     await waitFor(() => expect(createGig).toHaveBeenCalled())
     expect(createGig).toHaveBeenCalledWith(
-      expect.objectContaining({ has_pa_system: false, has_drumkit: false })
+      expect.objectContaining({ event_description: 'Rock Show', event_date: '2026-08-01' })
     )
     await waitFor(() => expect(onClose).toHaveBeenCalled())
+  })
+
+  // Regression: my_band_id is personal-workspace-only. The server 403s if the
+  // field is present at all outside one, so a band workspace must omit it —
+  // sending it as null used to trip that gate on every gig creation.
+  it('omits my_band_id when creating from a band workspace', async () => {
+    createGig.mockClear()
+    const user = userEvent.setup()
+    wrap(<GigFormModal mode="create" onClose={() => {}} />, 'band')
+
+    await user.type(screen.getByLabelText(/event description/i), 'Rock Show')
+    await user.type(screen.getByLabelText(/^date$/i), '2026-08-01')
+    await user.click(screen.getByRole('button', { name: /create/i }))
+
+    await waitFor(() => expect(createGig).toHaveBeenCalled())
+    expect(createGig.mock.calls[0][0]).not.toHaveProperty('my_band_id')
+  })
+
+  it('includes my_band_id when creating from a personal workspace', async () => {
+    createGig.mockClear()
+    const user = userEvent.setup()
+    wrap(<GigFormModal mode="create" onClose={() => {}} />, 'personal')
+
+    await user.type(screen.getByLabelText(/event description/i), 'Rock Show')
+    await user.type(screen.getByLabelText(/^date$/i), '2026-08-01')
+    await user.click(screen.getByRole('button', { name: /create/i }))
+
+    await waitFor(() => expect(createGig).toHaveBeenCalled())
+    expect(createGig.mock.calls[0][0]).toHaveProperty('my_band_id', null)
   })
 
   it('calls onClose when Cancel is clicked', async () => {
@@ -135,6 +167,22 @@ describe('GigFormModal — create mode', () => {
     wrap(<GigFormModal mode="create" onClose={onClose} />)
     await user.click(screen.getByRole('button', { name: /cancel/i }))
     expect(onClose).toHaveBeenCalled()
+  })
+
+  // A personal workspace has no roster, and /api/availability is gated on the
+  // band_availability capability — asking would 403.
+  it('skips the member availability panel in a personal workspace', async () => {
+    getAvailabilityOn.mockClear()
+    vi.useFakeTimers()
+    try {
+      wrap(<GigFormModal mode="create" initialDate="2026-08-01" onClose={() => {}} />, 'personal')
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(getAvailabilityOn).not.toHaveBeenCalled()
+    expect(screen.queryByText('Member availability')).not.toBeInTheDocument()
   })
 
   it('hides the notes field in create mode', () => {
@@ -180,23 +228,11 @@ describe('GigFormModal — edit mode', () => {
     expect(screen.getByDisplayValue('Bring own PA')).toBeInTheDocument()
   })
 
-  it('renders availability panel section heading', async () => {
+  it('keeps edit-mode availability inside the participants section', async () => {
     wrap(<GigFormModal mode="edit" gigId={1} onClose={() => {}} />)
     await waitFor(() => screen.getByDisplayValue('Jazz Night'))
-    expect(screen.getByText(/member availability/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Participants' })).toBeInTheDocument()
+    expect(screen.queryByText(/member availability/i)).not.toBeInTheDocument()
   })
 
-  it('auto-saves when PA system toggle is flipped', async () => {
-    updateGig.mockClear()
-    wrap(<GigFormModal mode="edit" gigId={1} onClose={() => {}} />)
-    await waitFor(() => screen.getByDisplayValue('Jazz Night'))
-
-    const user = userEvent.setup()
-    await user.click(screen.getByLabelText('PA system'))
-
-    await waitFor(
-      () => expect(updateGig).toHaveBeenCalledWith(1, { has_pa_system: true }),
-      { timeout: 2000 }
-    )
-  })
 })

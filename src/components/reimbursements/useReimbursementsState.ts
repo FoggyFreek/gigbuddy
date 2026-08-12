@@ -23,31 +23,43 @@ interface UseReimbursementsStateResult {
 // drill-down of each member's purchases, and the register/mark-reimbursed
 // actions (both reload the list so settled rows drop out).
 export function useReimbursementsState(): UseReimbursementsStateResult {
-  const [outstanding, setOutstanding] = useState<MemberOutstanding[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<Id | null>(null)
   const [purchasesByMember, setPurchasesByMember] = useState<Record<string, Purchase[]>>({})
+  const [actionError, setActionError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      setOutstanding(await listOutstanding())
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  // The outstanding list is tagged with the reload it answered, so `loading` is
+  // derived from whether the newest reload has landed.
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const [outstandingState, setOutstandingState] = useState<{ key: number; outstanding: MemberOutstanding[]; error: string | null } | null>(null)
+  const outstanding = outstandingState?.outstanding ?? []
+  const loading = outstandingState?.key !== reloadNonce
+  const loadError = outstandingState?.key === reloadNonce ? outstandingState.error : null
+  const error = actionError ?? loadError
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+    listOutstanding()
+      .then((rows) => {
+        if (!cancelled) setOutstandingState({ key: reloadNonce, outstanding: rows, error: null })
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setOutstandingState((prev) => ({
+            key: reloadNonce,
+            outstanding: prev?.outstanding ?? [],
+            error: e instanceof Error ? e.message : String(e),
+          }))
+        }
+      })
+    return () => { cancelled = true }
+  }, [reloadNonce])
 
   const reload = useCallback(async () => {
     setPurchasesByMember({})
     setExpandedId(null)
-    await load()
-  }, [load])
+    setActionError(null)
+    setReloadNonce((n) => n + 1)
+  }, [])
 
   const toggleExpand = useCallback(async (memberId: Id) => {
     setExpandedId((prev) => (prev === memberId ? null : memberId))
@@ -56,7 +68,7 @@ export function useReimbursementsState(): UseReimbursementsStateResult {
         const rows = await listMemberPurchases(memberId)
         setPurchasesByMember((prev) => ({ ...prev, [String(memberId)]: rows }))
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : String(e))
+        setActionError(e instanceof Error ? e.message : String(e))
       }
     }
   }, [purchasesByMember])

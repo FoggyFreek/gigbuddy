@@ -33,6 +33,9 @@ export const PERMISSIONS = Object.freeze({
   APP_VIEW: 'app.view', // view all non-finance resources
   TASK_COMPLETE_SELF: 'task.complete.self', // mark own assigned task done
   REHEARSAL_RESPOND_SELF: 'rehearsal.respond.self', // vote on own participation
+  // Record your OWN availability. Separate from planning.write so a reader can
+  // still say when they can play — their calendar is theirs, not the band's.
+  AVAILABILITY_WRITE_SELF: 'availability.write.self',
   PLANNING_WRITE: 'planning.write', // create/edit any planning resource
   PURCHASE_CREATE: 'purchase.create', // create purchases + view own purchases
   FINANCE_VIEW: 'finance.view', // read finance (invoices, ledger, reports, …)
@@ -45,6 +48,7 @@ const READER = new Set([
   PERMISSIONS.APP_VIEW,
   PERMISSIONS.TASK_COMPLETE_SELF,
   PERMISSIONS.REHEARSAL_RESPOND_SELF,
+  PERMISSIONS.AVAILABILITY_WRITE_SELF,
 ])
 
 const CONTRIBUTOR = new Set([

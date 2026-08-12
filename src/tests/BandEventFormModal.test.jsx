@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
@@ -20,14 +20,32 @@ vi.mock('../api/bandEvents.ts', () => ({
   updateBandEvent: vi.fn().mockResolvedValue({}),
 }))
 
+vi.mock('../api/availability.ts', () => ({
+  evaluateEventAvailability: vi.fn().mockResolvedValue({ members: [], days: [] }),
+}))
+
+vi.mock('../api/myBands.ts', () => ({
+  listMyBands: vi.fn().mockResolvedValue({ items: [] }),
+}))
+
 import BandEventFormModal from '../components/BandEventFormModal.tsx'
 import { createBandEvent, getBandEvent, updateBandEvent } from '../api/bandEvents.ts'
+import { evaluateEventAvailability } from '../api/availability.ts'
+import { AuthContext } from '../contexts/authContext.ts'
 import theme from '../theme.ts'
 
-function wrap(ui) {
+function wrap(ui, tenantKind = 'band') {
   return render(
     <ThemeProvider theme={theme}>
-      <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+      <AuthContext.Provider value={{
+        user: { id: 1, activeTenantId: 7, activeTenantKind: tenantKind },
+        setUser: () => {},
+        logout: async () => {},
+        switchTenant: async () => undefined,
+        refreshUser: async () => undefined,
+      }}>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
+      </AuthContext.Provider>
     </ThemeProvider>
   )
 }
@@ -35,6 +53,8 @@ function wrap(ui) {
 describe('BandEventFormModal — create mode', () => {
   beforeEach(() => {
     createBandEvent.mockClear()
+    evaluateEventAvailability.mockReset()
+    evaluateEventAvailability.mockResolvedValue({ members: [], days: [] })
   })
 
   it('renders the add event dialog title', () => {
@@ -85,6 +105,77 @@ describe('BandEventFormModal — create mode', () => {
     await user.click(screen.getByRole('button', { name: /cancel/i }))
     expect(onClose).toHaveBeenCalled()
     expect(createBandEvent).not.toHaveBeenCalled()
+  })
+
+  // Regression: my_band_id is personal-workspace-only. The server 403s if the
+  // field is present at all outside one, so a band workspace must omit it —
+  // sending it as null used to trip that gate on every band event creation.
+  it('omits my_band_id when creating from a band workspace', async () => {
+    const user = userEvent.setup()
+    wrap(<BandEventFormModal mode="create" onClose={() => {}} />, 'band')
+
+    await user.type(screen.getByLabelText(/title/i), 'Photo shoot')
+    await user.type(screen.getByLabelText(/start date\s*\*?/i), '2099-09-01')
+    await user.click(screen.getByRole('button', { name: /add event/i }))
+
+    await waitFor(() => expect(createBandEvent).toHaveBeenCalled())
+    expect(createBandEvent.mock.calls[0][0]).not.toHaveProperty('my_band_id')
+  })
+
+  it('includes my_band_id when creating from a personal workspace', async () => {
+    const user = userEvent.setup()
+    wrap(<BandEventFormModal mode="create" onClose={() => {}} />, 'personal')
+
+    await user.type(screen.getByLabelText(/title/i), 'Photo shoot')
+    await user.type(screen.getByLabelText(/start date\s*\*?/i), '2099-09-01')
+    await user.click(screen.getByRole('button', { name: /add event/i }))
+
+    await waitFor(() => expect(createBandEvent).toHaveBeenCalled())
+    expect(createBandEvent.mock.calls[0][0]).toHaveProperty('my_band_id', null)
+  })
+
+  it('checks lead availability across the event span before creation', async () => {
+    evaluateEventAvailability.mockResolvedValueOnce({
+      members: [
+        { member_id: 1, name: 'Ann Bell', position: 'lead', status: 'unavailable', reason: 'Holiday' },
+        { member_id: 2, name: 'Sam Kerr', position: 'optional', status: 'available', reason: null },
+      ],
+      days: [],
+    })
+    const user = userEvent.setup()
+    wrap(<BandEventFormModal mode="create" onClose={() => {}} />)
+
+    await user.type(screen.getByLabelText(/title/i), 'Photo shoot')
+    await user.type(screen.getByLabelText(/start date\s*\*?/i), '2099-09-01')
+    await user.type(screen.getByLabelText(/^end date/i), '2099-09-03')
+
+    await waitFor(() => expect(evaluateEventAvailability).toHaveBeenCalledWith(expect.objectContaining({
+      event_type: 'band_event',
+      start_date: '2099-09-01',
+      end_date: '2099-09-03',
+    })))
+    expect(await screen.findByText('Ann Bell')).toBeInTheDocument()
+    expect(screen.queryByText('Holiday')).not.toBeInTheDocument()
+    expect(screen.queryByText('Sam Kerr')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /add event/i }))
+    expect(await screen.findByText(/lead member unavailable/i)).toBeInTheDocument()
+    expect(createBandEvent).not.toHaveBeenCalled()
+  })
+
+  // A personal workspace has no roster, and /api/availability is gated on the
+  // band_availability capability — asking would 403.
+  it('skips the availability check in a personal workspace', async () => {
+    vi.useFakeTimers()
+    try {
+      wrap(<BandEventFormModal mode="create" initialDate="2099-09-01" onClose={() => {}} />, 'personal')
+      await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(evaluateEventAvailability).not.toHaveBeenCalled()
+    expect(screen.queryByText('Availability')).not.toBeInTheDocument()
   })
 })
 

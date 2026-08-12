@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
 import List from '@mui/material/List'
@@ -17,15 +17,19 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import TuneIcon from '@mui/icons-material/Tune'
 import CreditCardOutlinedIcon from '@mui/icons-material/CreditCardOutlined'
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
+import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined'
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined'
 import GroupIcon from '@mui/icons-material/Group'
+import VerifiedOutlinedIcon from '@mui/icons-material/VerifiedOutlined'
 import StorageIcon from '@mui/icons-material/Storage'
 import ExtensionOutlinedIcon from '@mui/icons-material/ExtensionOutlined'
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined'
 import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined'
 import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined'
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined'
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
 import { usePermissions } from '../hooks/usePermissions.ts'
+import { useAuth } from '../contexts/authContext.ts'
 import { PERMISSIONS, type Permission } from '../auth/permissions.ts'
 import SubscriptionSummaryCard from '../components/settings/SubscriptionSummaryCard.tsx'
 import FinanceWizardCard from '../components/settings/FinanceWizardCard.tsx'
@@ -41,7 +45,14 @@ import ChartOfAccountsSection from '../components/settings/ChartOfAccountsSectio
 import AccountingSettingsSection from '../components/settings/AccountingSettingsSection.tsx'
 import AccountingProfileSection from '../components/settings/AccountingProfileSection.tsx'
 import FinancialProfileSection from '../components/settings/FinancialProfileSection.tsx'
+import BandProfileClaimSection from '../components/settings/BandProfileClaimSection.tsx'
+import MyAvailabilitySection from '../components/settings/MyAvailabilitySection.tsx'
+import DiscoverabilitySection from '../components/settings/DiscoverabilitySection.tsx'
+import TenantDeletionSection from '../components/settings/TenantDeletionSection.tsx'
+import TenantSlugSection from '../components/settings/TenantSlugSection.tsx'
 import InvitesSection from '../components/InvitesSection.tsx'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { TENANT_CAPABILITIES, type TenantCapability } from '../auth/tenantCapabilities.ts'
 
 // A single settings surface that merges the former per-user account settings,
 // members management, and tenant (band) settings. Desktop uses a master-detail
@@ -49,17 +60,17 @@ import InvitesSection from '../components/InvitesSection.tsx'
 // with a back arrow. The nav is role-gated: band and finance items appear only
 // when the active tenant role grants the matching permission.
 type SectionId =
-  | 'preferences' | 'billing' | 'connected-accounts'
-  | 'accent' | 'members' | 'storage'
+  | 'preferences' | 'billing' | 'connected-accounts' | 'my-availability'
+  | 'accent' | 'members' | 'band-profile' | 'storage'
   | 'integrations' | 'chart-of-accounts' | 'default-accounts'
-  | 'financial-profile' | 'accounting-profile'
+  | 'financial-profile' | 'accounting-profile' | 'delete-account'
 
 // camelCase leaf keys under settings.nav.items — a literal union so the typed
 // selector index (`t($ => $.nav.items[labelKey])`) stays compile-checked.
 type ItemLabelKey =
-  | 'preferences' | 'billing' | 'connectedAccounts' | 'accent' | 'membersAndInvites'
+  | 'preferences' | 'billing' | 'connectedAccounts' | 'myAvailability' | 'accent' | 'membersAndInvites' | 'bandProfile'
   | 'storage' | 'integrations' | 'chartOfAccounts' | 'defaultAccounts'
-  | 'financialProfile' | 'accountingProfile'
+  | 'financialProfile' | 'accountingProfile' | 'manageAccounts'
 
 interface NavItemDef {
   id: SectionId
@@ -67,17 +78,26 @@ interface NavItemDef {
   icon: SvgIconComponent
   // Required tenant permission; undefined = available to every member.
   permission?: Permission
+  // Named kind capability; undefined = kind-neutral.
+  capability?: TenantCapability
 }
 
 const ACCOUNT_ITEMS: NavItemDef[] = [
   { id: 'preferences', labelKey: 'preferences', icon: TuneIcon },
   { id: 'billing', labelKey: 'billing', icon: CreditCardOutlinedIcon },
   { id: 'connected-accounts', labelKey: 'connectedAccounts', icon: LinkOutlinedIcon },
+  // Availability belongs to the user, not a tenant, so its privacy and
+  // delegation controls sit with the account items — never under a band.
+  { id: 'my-availability', labelKey: 'myAvailability', icon: EventAvailableOutlinedIcon },
 ]
 
 const BAND_ITEMS: NavItemDef[] = [
   { id: 'accent', labelKey: 'accent', icon: PaletteOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
-  { id: 'members', labelKey: 'membersAndInvites', icon: GroupIcon, permission: PERMISSIONS.MEMBERS_MANAGE },
+  // A workspace of one has no roster to manage and nobody to invite into it.
+  { id: 'members', labelKey: 'membersAndInvites', icon: GroupIcon, permission: PERMISSIONS.MEMBERS_MANAGE, capability: TENANT_CAPABILITIES.BAND_MEMBERSHIP_ADMIN },
+  // Claiming the global profile musicians have been tagging events against.
+  // Band-only, and an administrative act — see docs/tenant-kind-architecture.md.
+  { id: 'band-profile', labelKey: 'bandProfile', icon: VerifiedOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE, capability: TENANT_CAPABILITIES.BAND_PROFILE_CLAIM },
   { id: 'storage', labelKey: 'storage', icon: StorageIcon, permission: PERMISSIONS.TENANT_MANAGE },
   { id: 'integrations', labelKey: 'integrations', icon: ExtensionOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
 ]
@@ -92,16 +112,28 @@ const FINANCE_ITEMS: NavItemDef[] = [
   { id: 'chart-of-accounts', labelKey: 'chartOfAccounts', icon: AccountTreeOutlinedIcon, permission: PERMISSIONS.FINANCE_MANAGE },
 ]
 
+const MANAGE_ACCOUNT_ITEMS: NavItemDef[] = [
+  { id: 'delete-account', labelKey: 'manageAccounts', icon: ManageAccountsIcon },
+]
+
 export default function SettingsPage() {
   const { t } = useTranslation('settings')
   const navigate = useNavigate()
   const { section } = useParams()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
-  const { can, isSuperAdmin } = usePermissions()
+  const { can, isSuperAdmin, role } = usePermissions()
+  const { user } = useAuth()
+  const { supports, isPersonal } = useTenantKind()
 
-  const visible = (items: NavItemDef[]) => items.filter((i) => !i.permission || can(i.permission))
-  const bandItems = visible(BAND_ITEMS)
+  const visible = (items: NavItemDef[]) =>
+    items.filter((i) => (!i.permission || can(i.permission)) && (!i.capability || supports(i.capability)))
+  // This self-service destructive path is deliberately narrower than the
+  // super-admin tenant console: only the band's tenant_admin may use it.
+  const bandItems = [
+    ...visible(BAND_ITEMS),
+    ...(!isPersonal && role === 'tenant_admin' ? MANAGE_ACCOUNT_ITEMS : []),
+  ]
   const financeItems = visible(FINANCE_ITEMS)
   const accessible = [...ACCOUNT_ITEMS, ...bandItems, ...financeItems]
 
@@ -123,6 +155,8 @@ export default function SettingsPage() {
         return <BillingSettingsSection />
       case 'connected-accounts':
         return <ConnectedAccountsSection />
+      case 'my-availability':
+        return <MyAvailabilitySection />
       case 'accent':
         return <AccentColorSection />
       case 'members':
@@ -130,10 +164,13 @@ export default function SettingsPage() {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <MembersSection />
             <InvitesSection canIssueAdmin={isSuperAdmin} />
+            <DiscoverabilitySection />
           </Box>
         )
       case 'storage':
         return <StorageUsageSection />
+      case 'band-profile':
+        return <BandProfileClaimSection />
       case 'integrations':
         return <IntegrationsSection />
       case 'financial-profile':
@@ -144,6 +181,13 @@ export default function SettingsPage() {
         return <AccountingSettingsSection />
       case 'chart-of-accounts':
         return <ChartOfAccountsSection />
+      case 'delete-account':
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <TenantSlugSection key={String(user?.activeTenantId ?? '')} />
+            <TenantDeletionSection />
+          </Box>
+        )
       default:
         return null
     }
@@ -187,7 +231,9 @@ export default function SettingsPage() {
         <ListSubheader disableSticky>{t($ => $.nav.accountSettings)}</ListSubheader>
         {ACCOUNT_ITEMS.map(renderNavItem)}
         {bandItems.length > 0 && [
-          <ListSubheader key="band-header" disableSticky>{t($ => $.nav.bandSettings)}</ListSubheader>,
+          <ListSubheader key="band-header" disableSticky>
+            {isPersonal ? t($ => $.nav.workspaceSettings) : t($ => $.nav.bandSettings)}
+          </ListSubheader>,
           ...bandItems.map(renderNavItem),
         ]}
         {financeItems.length > 0 && [

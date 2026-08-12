@@ -11,5 +11,18 @@
     },
     "getStarted": "Get started",
     "maybeLater": "Maybe later"
+  },
+  "personalWorkspaceWelcome": {
+    "title": "Welcome to your own workspace",
+    "intro": "This is you, as a musician — separate from any band you play in. Your agenda, your contacts, your books.",
+    "points": {
+      "agenda": "Keep your own agenda: gigs, rehearsals and everything you're booked for.",
+      "network": "Your own contacts and venues, kept out of any band's address book.",
+      "books": "Your own set of books.",
+      "booksDetail": "Invoice venues, organisers — and the bands you play in — with your own numbering, VAT rules and reports.",
+      "bands": "Join bands from here with an invite link. Each band keeps its own separate books."
+    },
+    "getStarted": "Set up my profile",
+    "maybeLater": "Maybe later"
   }
 }

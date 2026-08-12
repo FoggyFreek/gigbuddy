@@ -1,7 +1,6 @@
 {
   "steps": {
     "welcome": "Welkom",
-    "band": "Je band",
     "summary": "Overzicht"
   },
   "nextStep": "Volgende",
@@ -28,33 +27,18 @@
     "agree": "Ik heb de algemene voorwaarden gelezen en ga ermee akkoord",
     "accept": "Akkoord en doorgaan"
   },
-  "band": {
-    "title": "Stel je band in",
-    "nameLabel": "Bandnaam",
-    "nameRequired": "Vul je bandnaam in om verder te gaan.",
-    "logoLabel": "Bandlogo (optioneel)",
-    "uploadLogo": "Logo uploaden",
-    "removeLogo": "Verwijderen",
-    "slugPreview": "De webadresnaam van je band: {{slug}}",
-    "slugCaveat": "Als deze naam bezet is, wordt er automatisch een nummer toegevoegd (bijv. {{slug}}-2).",
-    "countryLabel": "Vestigingsland",
-    "countryHelper": "Waar deze band zijn boekhouding voert. Dit bepaalt de btw-regels, het rekeningschema en de verslaggevingsregels, en kan later niet worden gewijzigd."
-  },
   "summary": {
     "title": "Bijna klaar",
     "plan": "Abonnement",
     "interval": "Facturering",
     "monthly": "Maandelijks",
     "yearly": "Jaarlijks",
-    "band": "Band",
     "slug": "Webadresnaam",
     "logo": "Logo",
     "noLogo": "Geen logo",
     "paymentNote": "Je kiest je betaalmethode op de beveiligde pagina van onze betaalprovider. Een eenmalige verificatiebetaling van € 0,01 start je proefperiode.",
     "freeNote": "Voor het gratis abonnement zijn geen betaalgegevens nodig.",
-    "confirmPaid": "Doorgaan naar betaling",
-    "confirmFree": "Maak mijn band aan",
-    "resumeNote": "Je band \"{{name}}\" was al aangemaakt — we gaan verder waar je gebleven was."
+    "confirmPaid": "Doorgaan naar betaling"
   },
   "checkout": {
     "processing": "Je betaling wordt bevestigd…",
@@ -66,7 +50,61 @@
     "loadFailed": "De abonnementen konden niet worden geladen. Probeer het opnieuw.",
     "onboardingDisabled": "Nieuwe tenant-onboarding is momenteel uitgeschakeld. Je kunt nog steeds met een uitnodigingscode aansluiten bij een bestaande band.",
     "bandCapNoPointer": "Je hebt al een band, dus onboarding is niet nodig. Abonnementen beheer je via Instellingen.",
+    "bandCapReached": "Je huidige abonnement heeft de bandlimiet bereikt. Upgrade je abonnement om nog een band toe te voegen.",
     "logoUploadFailed": "Het logo kon niet worden geüpload — je kunt het later toevoegen via Profiel.",
-    "generic": "Er ging iets mis. Probeer het opnieuw."
+    "generic": "Er ging iets mis. Probeer het opnieuw.",
+    "claimFailed": "We konden je bandprofielclaim niet versturen. Probeer het opnieuw via Instellingen."
+  },
+  "workspace": {
+    "band": {
+      "step": "Je band",
+      "title": "Stel je band in",
+      "nameLabel": "Bandnaam",
+      "nameRequired": "Vul je bandnaam in om verder te gaan.",
+      "logoLabel": "Bandlogo (optioneel)",
+      "uploadLogo": "Logo uploaden",
+      "removeLogo": "Verwijderen",
+      "slugPreview": "De webadresnaam van je band: {{slug}}",
+      "slugCaveat": "Als deze naam bezet is, wordt er automatisch een nummer toegevoegd (bijv. {{slug}}-2).",
+      "countryLabel": "Vestigingsland",
+      "countryHelper": "Waar deze band zijn boekhouding voert. Dit bepaalt de btw-regels, het rekeningschema en de verslaggevingsregels, en kan later niet worden gewijzigd.",
+      "summaryLabel": "Band",
+      "confirmFree": "Maak mijn band aan",
+      "resumeNote": "Je band \"{{name}}\" was al aangemaakt — we gaan verder waar je gebleven was."
+    },
+    "personal": {
+      "step": "Je werkruimte",
+      "title": "Stel je artiestenwerkruimte in",
+      "nameLabel": "Artiestennaam",
+      "nameRequired": "Vul je artiestennaam in om verder te gaan.",
+      "logoLabel": "Foto (optioneel)",
+      "uploadLogo": "Foto uploaden",
+      "removeLogo": "Verwijderen",
+      "slugPreview": "Je webadresnaam: {{slug}}",
+      "slugCaveat": "Als deze naam bezet is, wordt er automatisch een nummer toegevoegd (bijv. {{slug}}-2).",
+      "countryLabel": "Vestigingsland",
+      "countryHelper": "Waar jij je eigen boekhouding voert. Dit bepaalt de btw-regels, het rekeningschema en de verslaggevingsregels, en kan later niet worden gewijzigd.",
+      "summaryLabel": "Werkruimte",
+      "confirmFree": "Maak mijn werkruimte aan",
+      "resumeNote": "Je werkruimte \"{{name}}\" was al aangemaakt — we gaan verder waar je gebleven was."
+    }
+  },
+  "kindChoice": {
+    "title": "Wat ga je instellen?",
+    "band": {
+      "label": "Een band",
+      "help": "Een gedeelde werkruimte voor een groep: agenda, bezetting, repertoire en de boekhouding van de band."
+    },
+    "personal": {
+      "label": "Mijn eigen artiestenwerkruimte",
+      "help": "Je eigen agenda, contacten en boekhouding, als muzikant. Je kunt je later bij bands aansluiten."
+    }
+  },
+  "claimProfile": {
+    "title": "Al bekend als deze band?",
+    "description": "Muzikanten die nog niet op gigbuddy zitten koppelen hun evenementen misschien al aan jouw band. Claim dat profiel zodat het van jullie wordt. Optioneel — we controleren het daarna.",
+    "searchLabel": "Zoek je band",
+    "searchHint": "Typ minstens 3 tekens.",
+    "pendingReview": "We beoordelen deze claim nadat je werkruimte is aangemaakt."
   }
 }

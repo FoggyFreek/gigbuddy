@@ -2,14 +2,20 @@ import { Router } from 'express'
 import multer from 'multer'
 import pool from '../db/index.js'
 import { requirePermission } from '../middleware/permissions.js'
+import {
+  requireTenantCapability,
+  requireTenantCapabilityForBodyFields,
+} from '../middleware/tenant.js'
 import { PERMISSIONS } from '../auth/permissions.js'
 import { requireEntitlement, hasEntitledFeature } from '../middleware/entitlements.js'
 import { FEATURES } from '../auth/entitlements.js'
+import { TENANT_CAPABILITIES } from '../../shared/tenantCapabilities.js'
 import { auditLog } from '../utils/auditLog.js'
 import { requireParam, sendError } from './routeHelpers.js'
 import {
   getProfile,
   patchProfile,
+  setJoinPolicy,
   createLink,
   patchLink,
   deleteLink,
@@ -73,6 +79,13 @@ async function handleImageUpload(req, res, uploadFn, allowedTypes) {
 const manageIntegration = requirePermission(PERMISSIONS.TENANT_MANAGE)
 const writeProfile = requirePermission(PERMISSIONS.PLANNING_WRITE)
 const setIntegration = [manageIntegration, requireEntitlement(FEATURES.INTEGRATIONS)]
+const bandDiscovery = requireTenantCapability(TENANT_CAPABILITIES.BAND_DISCOVERY)
+const bandPromotion = requireTenantCapability(TENANT_CAPABILITIES.BAND_PROMOTION_INTEGRATIONS)
+const setBandPromotion = [bandPromotion, ...setIntegration]
+const BAND_PROMOTION_PROFILE_FIELDS = [
+  'bandsintown_artist_name',
+  'bandsintown_artist_id',
+]
 const customization = requireEntitlement(FEATURES.CUSTOMIZATION)
 function noStore(_req, res, next) {
   res.set('Cache-Control', 'no-store')
@@ -86,24 +99,43 @@ router.get('/', async (req, res) => {
   res.json(result.profile)
 })
 
+// Discoverability in the band directory. Gated on tenant.manage (not the
+// planning.write that governs the rest of this router) and on kind: only a
+// band can be found and asked to join.
+router.patch('/join-policy',
+  requirePermission(PERMISSIONS.TENANT_MANAGE),
+  bandDiscovery,
+  async (req, res) => {
+    const result = await setJoinPolicy(pool, req.tenantId, req.body)
+    if (result.error) return sendError(res, result.error)
+    auditLog(req, result.audit.action, result.audit.details)
+    res.json(result.profile)
+  })
+
 // Update tenant profile (partial)
-router.patch('/', writeProfile, async (req, res) => {
-  // accent_color and the dashboard memory tile are part of the customization
-  // feature; the rest of the profile stays editable on any plan, so the gate is
-  // field-level, not route-level.
-  const customizationBodyFields = ['accent_color', 'memory_caption', 'memory_gig_id']
-  if (customizationBodyFields.some((f) => f in (req.body ?? {})) && !(await hasEntitledFeature(req, FEATURES.CUSTOMIZATION))) {
-    return res.status(403).json({
-      error: 'This feature is not included in the current subscription plan',
-      code: 'entitlement_required',
-      feature: FEATURES.CUSTOMIZATION,
-    })
-  }
-  const isAdmin = req.membership?.role === 'tenant_admin' || req.user?.is_super_admin
-  const result = await patchProfile(pool, req.tenantId, req.body, isAdmin)
-  if (result.error) return sendError(res, result.error)
-  res.json(result.profile)
-})
+router.patch(
+  '/',
+  writeProfile,
+  requireTenantCapabilityForBodyFields(
+    TENANT_CAPABILITIES.BAND_PROMOTION_INTEGRATIONS,
+    BAND_PROMOTION_PROFILE_FIELDS,
+  ),
+  async (req, res) => {
+    // Customization is plan-specific; profile applicability is field-specific.
+    const customizationBodyFields = ['accent_color', 'memory_caption', 'memory_gig_id']
+    if (customizationBodyFields.some((f) => f in (req.body ?? {})) && !(await hasEntitledFeature(req, FEATURES.CUSTOMIZATION))) {
+      return res.status(403).json({
+        error: 'This feature is not included in the current subscription plan',
+        code: 'entitlement_required',
+        feature: FEATURES.CUSTOMIZATION,
+      })
+    }
+    const isAdmin = req.membership?.role === 'tenant_admin' || req.user?.is_super_admin
+    const result = await patchProfile(pool, req.tenantId, req.body, isAdmin)
+    if (result.error) return sendError(res, result.error)
+    res.json(result.profile)
+  },
+)
 
 // Create link
 router.post('/links', writeProfile, async (req, res) => {
@@ -166,12 +198,12 @@ router.delete('/resend-key', manageIntegration, noStore, async (req, res) => {
 })
 
 // Get Bandsintown API key status without returning any credential-derived preview.
-router.get('/bandsintown-key', manageIntegration, noStore, async (req, res) => {
+router.get('/bandsintown-key', manageIntegration, bandPromotion, noStore, async (req, res) => {
   res.json(await getBandsintownKeyStatus(pool, req.tenantId))
 })
 
 // Set or replace Bandsintown API key (tenant admin only)
-router.put('/bandsintown-key', setIntegration, noStore, async (req, res) => {
+router.put('/bandsintown-key', setBandPromotion, noStore, async (req, res) => {
   const result = await setBandsintownKeyValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'integration.bandsintown_key.set')
@@ -179,19 +211,19 @@ router.put('/bandsintown-key', setIntegration, noStore, async (req, res) => {
 })
 
 // Clear Bandsintown API key (tenant admin only)
-router.delete('/bandsintown-key', manageIntegration, noStore, async (req, res) => {
+router.delete('/bandsintown-key', manageIntegration, bandPromotion, noStore, async (req, res) => {
   const status = await clearBandsintownKeyValue(pool, req.tenantId)
   auditLog(req, 'integration.bandsintown_key.clear')
   res.json(status)
 })
 
 // Get the Bandsintown artist ID (non-secret, returned in full)
-router.get('/bandsintown-artist-id', manageIntegration, noStore, async (req, res) => {
+router.get('/bandsintown-artist-id', manageIntegration, bandPromotion, noStore, async (req, res) => {
   res.json(await getBandsintownArtistIdStatus(pool, req.tenantId))
 })
 
 // Set or replace the Bandsintown artist ID (tenant admin only)
-router.put('/bandsintown-artist-id', setIntegration, noStore, async (req, res) => {
+router.put('/bandsintown-artist-id', setBandPromotion, noStore, async (req, res) => {
   const result = await setBandsintownArtistIdValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'integration.bandsintown_artist_id.set')
@@ -199,19 +231,19 @@ router.put('/bandsintown-artist-id', setIntegration, noStore, async (req, res) =
 })
 
 // Clear the Bandsintown artist ID (tenant admin only)
-router.delete('/bandsintown-artist-id', manageIntegration, noStore, async (req, res) => {
+router.delete('/bandsintown-artist-id', manageIntegration, bandPromotion, noStore, async (req, res) => {
   const status = await clearBandsintownArtistIdValue(pool, req.tenantId)
   auditLog(req, 'integration.bandsintown_artist_id.clear')
   res.json(status)
 })
 
 // Get Shopify app Client ID (non-secret, returned in full)
-router.get('/shopify-client-id', manageIntegration, noStore, async (req, res) => {
+router.get('/shopify-client-id', manageIntegration, bandPromotion, noStore, async (req, res) => {
   res.json(await getShopifyClientIdStatus(pool, req.tenantId))
 })
 
 // Set or replace Shopify app Client ID (tenant admin only)
-router.put('/shopify-client-id', setIntegration, noStore, async (req, res) => {
+router.put('/shopify-client-id', setBandPromotion, noStore, async (req, res) => {
   const result = await setShopifyClientIdValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'integration.shopify_client_id.set')
@@ -219,19 +251,19 @@ router.put('/shopify-client-id', setIntegration, noStore, async (req, res) => {
 })
 
 // Clear Shopify app Client ID (tenant admin only)
-router.delete('/shopify-client-id', manageIntegration, noStore, async (req, res) => {
+router.delete('/shopify-client-id', manageIntegration, bandPromotion, noStore, async (req, res) => {
   const status = await clearShopifyClientIdValue(pool, req.tenantId)
   auditLog(req, 'integration.shopify_client_id.clear')
   res.json(status)
 })
 
 // Get Shopify app secret status without returning any credential-derived preview.
-router.get('/shopify-secret', manageIntegration, noStore, async (req, res) => {
+router.get('/shopify-secret', manageIntegration, bandPromotion, noStore, async (req, res) => {
   res.json(await getShopifySecretStatus(pool, req.tenantId))
 })
 
 // Set or replace Shopify app secret (tenant admin only)
-router.put('/shopify-secret', setIntegration, noStore, async (req, res) => {
+router.put('/shopify-secret', setBandPromotion, noStore, async (req, res) => {
   const result = await setShopifySecretValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'integration.shopify_secret.set')
@@ -239,19 +271,19 @@ router.put('/shopify-secret', setIntegration, noStore, async (req, res) => {
 })
 
 // Clear Shopify app secret (tenant admin only)
-router.delete('/shopify-secret', manageIntegration, noStore, async (req, res) => {
+router.delete('/shopify-secret', manageIntegration, bandPromotion, noStore, async (req, res) => {
   const status = await clearShopifySecretValue(pool, req.tenantId)
   auditLog(req, 'integration.shopify_secret.clear')
   res.json(status)
 })
 
 // Get Shopify store domain (non-secret, returned in full)
-router.get('/shopify-domain', manageIntegration, noStore, async (req, res) => {
+router.get('/shopify-domain', manageIntegration, bandPromotion, noStore, async (req, res) => {
   res.json(await getShopifyDomainStatus(pool, req.tenantId))
 })
 
 // Set or replace Shopify store domain (tenant admin only)
-router.put('/shopify-domain', setIntegration, noStore, async (req, res) => {
+router.put('/shopify-domain', setBandPromotion, noStore, async (req, res) => {
   const result = await setShopifyDomainValue(pool, req.tenantId, req.body)
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'integration.shopify_domain.set')
@@ -259,7 +291,7 @@ router.put('/shopify-domain', setIntegration, noStore, async (req, res) => {
 })
 
 // Clear Shopify store domain (tenant admin only)
-router.delete('/shopify-domain', manageIntegration, noStore, async (req, res) => {
+router.delete('/shopify-domain', manageIntegration, bandPromotion, noStore, async (req, res) => {
   const status = await clearShopifyDomainValue(pool, req.tenantId)
   auditLog(req, 'integration.shopify_domain.clear')
   res.json(status)

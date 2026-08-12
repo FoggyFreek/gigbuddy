@@ -19,6 +19,7 @@ import {
   getMembership,
   insertPendingMembership,
 } from '../repositories/inviteRepository.js'
+import { MEMBERSHIP_SOURCES } from '../domain/membership.js'
 import { badRequest, conflict, forbidden, notFound } from './serviceErrors.js'
 
 function generateCode() {
@@ -167,7 +168,7 @@ export async function redeemInvite(user, body) {
       })
     }
 
-    await insertPendingMembership(client, user.id, invite.tenant_id, invite.role)
+    await insertPendingMembership(client, user.id, invite.tenant_id, invite.role, MEMBERSHIP_SOURCES.INVITE)
 
     return {
       result: {

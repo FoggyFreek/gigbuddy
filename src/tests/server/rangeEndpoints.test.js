@@ -48,7 +48,7 @@ describe('windowed range endpoints', () => {
     const res = await asUserA(request(app).get('/api/gigs/range').query(WINDOW)).expect(200)
     expect(res.body.meta).toEqual({ from: WINDOW.from, to: WINDOW.to, returned: 2 })
     expect(res.body.items.map((g) => g.event_description)).toEqual(['First A', 'Last A'])
-    expect(res.body.items[0].members_availability).toMatchObject([{ name: 'Alpha Member', status: 'default' }])
+    expect(res.body.items[0].members_availability).toEqual([])
   })
 
   it('returns rehearsals of any status inside the window with participants attached', async () => {
@@ -85,7 +85,9 @@ describe('windowed range endpoints', () => {
   })
 
   it('rejects malformed or inverted windows with a stable 400 response', async () => {
-    const expectedError = { error: 'from and to must be valid ISO dates (YYYY-MM-DD) with from <= to' }
+    const expectedError = {
+      error: 'from and to must be valid ISO dates (YYYY-MM-DD) with from <= to, at most 366 days apart',
+    }
 
     const missing = await asUserA(request(app).get('/api/gigs/range').query({ from: '2027-07-01' })).expect(400)
     expect(missing.body).toEqual(expectedError)

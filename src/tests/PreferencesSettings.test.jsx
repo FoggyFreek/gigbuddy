@@ -30,6 +30,7 @@ const PREFS = {
     { type: 'invoice-paid', enabled: true },
     { type: 'task-assigned', enabled: true },
     { type: 'invite-redeemed', enabled: true },
+    { type: 'achievement-unlocked', enabled: true },
   ],
   tenants: [
     { tenantId: 1, tenantName: 'Alpha Band', avatarPath: null, enabled: true },
@@ -80,6 +81,24 @@ describe('My preferences — notifications', () => {
     expect(screen.getByText('Notifications blocked in browser')).toBeInTheDocument()
   })
 
+  it('explains why the push toggle is disabled while support is being checked', async () => {
+    pushStatus = 'loading'
+    wrapNotifications()
+    const toggle = await screen.findByRole('switch', { name: 'Browser push notifications' })
+    expect(toggle).toBeDisabled()
+    expect(screen.getByText('Checking browser notification support…')).toBeInTheDocument()
+  })
+
+  it('explains why the push toggle is disabled when the browser never became ready', async () => {
+    pushStatus = 'unavailable'
+    wrapNotifications()
+    const toggle = await screen.findByRole('switch', { name: 'Browser push notifications' })
+    expect(toggle).toBeDisabled()
+    expect(
+      screen.getByText('Could not reach the browser notification service. Reload the page to try again.'),
+    ).toBeInTheDocument()
+  })
+
   it('renders the per-type switches from prefs and saves a toggle', async () => {
     const user = userEvent.setup()
     wrapNotifications()
@@ -95,6 +114,16 @@ describe('My preferences — notifications', () => {
         types: [{ type: 'gig-new', enabled: false }],
       }),
     )
+  })
+
+  it('groups notification types by category', async () => {
+    wrapNotifications()
+
+    expect(await screen.findByRole('group', { name: 'Events' })).toHaveTextContent('New gig options')
+    expect(screen.getByRole('group', { name: 'Tasks' })).toHaveTextContent('Tasks assigned to you')
+    expect(screen.getByRole('group', { name: 'Management' })).toHaveTextContent('New members awaiting approval')
+    expect(screen.getByRole('group', { name: 'Financial' })).toHaveTextContent('Paid invoices')
+    expect(screen.getByRole('group', { name: 'Other' })).toHaveTextContent('Unlocked achievements')
   })
 
   it('renders the per-band switches and saves a toggle', async () => {
@@ -117,10 +146,10 @@ describe('My preferences — notifications', () => {
     const { container } = wrapNotifications()
     await screen.findByRole('switch', { name: 'Beta Band' })
     const srcs = [...container.querySelectorAll('img')].map((img) => img.getAttribute('src'))
-    expect(srcs).toContain('/api/notifications/tenant-avatar/2')
+    expect(srcs).toContain('/api/tenants/2/avatar')
     expect(srcs).toContain('/share/logo.png')
     const profilePicture = [...container.querySelectorAll('img')]
-      .find((img) => img.getAttribute('src') === '/api/notifications/tenant-avatar/2')
+      .find((img) => img.getAttribute('src') === '/api/tenants/2/avatar')
     const avatar = profilePicture.closest('.MuiAvatar-root')
     const style = getComputedStyle(avatar)
     expect(style.width).toBe('32px')

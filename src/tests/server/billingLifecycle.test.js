@@ -5,7 +5,7 @@ import { seedDefaultPlans } from '../../../server/db/defaultPlans.js'
 import { FakeProvider } from './_fakeProvider.js'
 
 let pool, runMigrations, truncateAll, seedTwoTenants
-let billingSvc, ingestion, providerFactory
+let billingSvc, ingestion, providerFactory, entitlementSvc, billing
 let seed, fake
 
 beforeAll(async () => {
@@ -17,6 +17,8 @@ beforeAll(async () => {
   billingSvc = await import('../../../server/services/billingService.js')
   ingestion = await import('../../../server/services/paymentIngestionService.js')
   providerFactory = await import('../../../server/billing/paymentProvider/index.js')
+  entitlementSvc = await import('../../../server/services/entitlementService.js')
+  billing = await import('./_billing.js')
   await runMigrations()
 })
 
@@ -28,8 +30,8 @@ beforeEach(async () => {
   // Give silver + gold real prices so they are subscribable.
   await pool.query("UPDATE subscription_plans SET monthly_price_cents = 999, yearly_price_cents = 9999 WHERE slug = 'silver'")
   await pool.query("UPDATE subscription_plans SET monthly_price_cents = 1999, yearly_price_cents = 19999 WHERE slug = 'gold'")
-  const entMod = await import('../../../server/services/entitlementService.js')
-  entMod.clearEntitlementCaches()
+  await pool.query("UPDATE subscription_plans SET monthly_price_cents = 1499, yearly_price_cents = 14999 WHERE slug = 'artist_gold'")
+  entitlementSvc.clearEntitlementCaches()
   fake = new FakeProvider()
   providerFactory.setPaymentProviderForTests(fake)
 })
@@ -107,6 +109,52 @@ describe('subscribe', () => {
     expect(res.error.body.code).toBe('already_subscribed')
   })
 
+  // Band and artist are separate products, so owning a band is no obstacle to
+  // buying an artist plan. The artist plan's `bands: 0` is vestigial — the band
+  // cap reads the BAND subscription — and its blockers only ever look at the
+  // personal workspace.
+  it('allows an artist subscription while the user owns an active band', async () => {
+    await pool.query('UPDATE tenants SET owner_user_id = $1 WHERE id = $2', [seed.userA.id, seed.tenantA.id])
+
+    const res = await billingSvc.subscribe(pool, userA(), {
+      planId: await planId('artist_gold'), interval: 'month',
+    })
+    expect(res.error).toBeUndefined()
+    expect(res.checkoutUrl).toMatch(/^https:\/\/pay\.test\//)
+  })
+
+  it('an artist checkout never binds the band cap', async () => {
+    await pool.query('UPDATE tenants SET owner_user_id = $1 WHERE id = $2', [seed.userA.id, seed.tenantA.id])
+    const res = await billingSvc.subscribe(pool, userA(), {
+      planId: await planId('artist_gold'), interval: 'month',
+    })
+    expect(res.error).toBeUndefined()
+    // The pending checkout's limits snapshot binds on the ARTIST ladder only;
+    // the band ladder still reads its own fallback.
+    expect(await entitlementSvc.resolveUserLimits(pool, seed.userA.id))
+      .toMatchObject({ bands: 1 })
+  })
+
+  it('a band subscription and an artist subscription coexist', async () => {
+    await billingSvc.subscribe(pool, userA(), { planId: await planId('silver'), interval: 'month' })
+    const artist = await billingSvc.subscribe(pool, userA(), {
+      planId: await planId('artist_gold'), interval: 'month',
+    })
+    expect(artist.error).toBeUndefined()
+    const { rows } = await pool.query(
+      `SELECT audience FROM subscriptions WHERE user_id = $1 AND status <> 'canceled' ORDER BY audience`,
+      [seed.userA.id],
+    )
+    expect(rows.map((r) => r.audience)).toEqual(['artist', 'band'])
+  })
+
+  it('already_subscribed applies per ladder, not per user', async () => {
+    await billingSvc.subscribe(pool, userA(), { planId: await planId('silver'), interval: 'month' })
+    const res = await billingSvc.subscribe(pool, userA(), { planId: await planId('gold'), interval: 'month' })
+    expect(res.error.status).toBe(409)
+    expect(res.error.body.code).toBe('already_subscribed')
+  })
+
   it('resumes an interrupted signup: re-subscribing the same plan recovers the checkout', async () => {
     const first = await billingSvc.subscribe(pool, userA(), { planId: await planId('silver'), interval: 'month' })
     const mandateId = await paymentIdOf(first.subscriptionId, 'mandate_verification')
@@ -131,14 +179,26 @@ describe('subscribe', () => {
 
   it('defaults the checkout return URL to the settings billing page', async () => {
     await billingSvc.subscribe(pool, userA(), { planId: await planId('silver'), interval: 'month' })
-    expect(fake.lastMandatePaymentArgs.redirectUrl).toMatch(/\/settings\/billing\?checkout=return$/)
+    expect(fake.lastMandatePaymentArgs.redirectUrl)
+      .toMatch(/\/settings\/billing\?checkout=return&audience=band$/)
   })
 
   it("redirect: 'onboarding' returns the checkout to /onboarding", async () => {
     await billingSvc.subscribe(pool, userA(), {
       planId: await planId('silver'), interval: 'month', redirect: 'onboarding',
     })
-    expect(fake.lastMandatePaymentArgs.redirectUrl).toMatch(/\/onboarding\?checkout=return$/)
+    expect(fake.lastMandatePaymentArgs.redirectUrl)
+      .toMatch(/\/onboarding\?checkout=return&audience=band$/)
+  })
+
+  // The return page polls only the ladder it names, so a settled subscription
+  // on the other one can never be mistaken for this purchase.
+  it('carries the artist audience on an artist checkout', async () => {
+    await billingSvc.subscribe(pool, userA(), {
+      planId: await planId('artist_gold'), interval: 'month', redirect: 'onboarding',
+    })
+    expect(fake.lastMandatePaymentArgs.redirectUrl)
+      .toMatch(/\/onboarding\?checkout=return&audience=artist$/)
   })
 
   it('rejects an unknown redirect target', async () => {
@@ -210,7 +270,7 @@ describe('cancel / resume', () => {
   it('cancels an active paid subscription at period end and stops the provider schedule', async () => {
     const subId = await subscribeAndActivate()
     const providerSubId = (await sub(subId)).mollie_subscription_id
-    const res = await billingSvc.cancelSubscription(pool, seed.userA.id)
+    const res = await billingSvc.cancelSubscription(pool, seed.userA.id, { audience: 'band' })
     expect(res.atPeriodEnd).toBe(true)
     expect((await sub(subId)).cancel_at_period_end).toBe(true)
     expect(fake.subscriptions.get(providerSubId).status).toBe('canceled')
@@ -218,8 +278,8 @@ describe('cancel / resume', () => {
 
   it('resume clears the cancel flag and recreates the schedule', async () => {
     const subId = await subscribeAndActivate()
-    await billingSvc.cancelSubscription(pool, seed.userA.id)
-    const res = await billingSvc.resumeSubscription(pool, seed.userA.id)
+    await billingSvc.cancelSubscription(pool, seed.userA.id, { audience: 'band' })
+    const res = await billingSvc.resumeSubscription(pool, seed.userA.id, { audience: 'band' })
     expect(res.resumed).toBe(true)
     const row = await sub(subId)
     expect(row.cancel_at_period_end).toBe(false)
@@ -231,7 +291,7 @@ describe('cancel / resume', () => {
     const subId = await subscribeAndActivate()
     await billingSvc.changePlan(pool, userA(), { planId: await planId('gold'), interval: 'month' })
     // pending plan-change charge is still open (nonterminal).
-    const res = await billingSvc.cancelSubscription(pool, seed.userA.id)
+    const res = await billingSvc.cancelSubscription(pool, seed.userA.id, { audience: 'band' })
     expect(res.error.status).toBe(409)
     expect(res.error.body.code).toBe('plan_change_in_progress')
     expect((await sub(subId)).id).toBe(subId)
@@ -276,17 +336,31 @@ describe('plan change (upgrade)', () => {
 })
 
 describe('getBillingState', () => {
-  it('reports ownedTenantCount = 0 for a participant-only user (seed tenants are ownerless)', async () => {
+  it('reports both ladders empty for a participant-only user (seed tenants are ownerless)', async () => {
     const state = await billingSvc.getBillingState(pool, seed.userA.id)
-    expect(state.subscription).toBeNull()
-    expect(state.ownedTenantCount).toBe(0)
+    expect(state.subscriptions).toEqual({ band: null, artist: null })
+    expect(state.ownedBandCount).toBe(0)
+    expect(state.hasPersonalWorkspace).toBe(false)
   })
 
-  it('counts active owned tenants and ignores archived ones', async () => {
+  it('counts active owned bands and ignores archived ones', async () => {
     await pool.query('UPDATE tenants SET owner_user_id = $1 WHERE id = $2', [seed.userA.id, seed.tenantA.id])
     await pool.query('UPDATE tenants SET owner_user_id = $1, archived_at = NOW() WHERE id = $2', [seed.userA.id, seed.tenantB.id])
     const state = await billingSvc.getBillingState(pool, seed.userA.id)
-    expect(state.ownedTenantCount).toBe(1)
+    expect(state.ownedBandCount).toBe(1)
+  })
+
+  it('reports each ladder separately when both are live', async () => {
+    await billing.createSubscription({ userId: seed.userA.id, planSlug: 'gold' })
+    await billing.createSubscription({ userId: seed.userA.id, planSlug: 'artist_gold' })
+    await billing.createPersonalTenant(seed.userA.id)
+
+    const state = await billingSvc.getBillingState(pool, seed.userA.id)
+    expect(state.subscriptions.band.planSlug).toBe('gold')
+    expect(state.subscriptions.band.audience).toBe('band')
+    expect(state.subscriptions.artist.planSlug).toBe('artist_gold')
+    expect(state.subscriptions.artist.audience).toBe('artist')
+    expect(state.hasPersonalWorkspace).toBe(true)
   })
 })
 

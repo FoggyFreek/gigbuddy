@@ -1,4 +1,6 @@
-import { parsePositiveId } from './common.js'
+import { parsePositiveId, parseSearchLimit } from './common.js'
+
+export { parseSearchLimit }
 
 export const MAX_TASK_LIST_LIMIT = 500
 

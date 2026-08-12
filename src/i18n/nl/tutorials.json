@@ -11,5 +11,18 @@
     },
     "getStarted": "Aan de slag",
     "maybeLater": "Misschien later"
+  },
+  "personalWorkspaceWelcome": {
+    "title": "Welkom in je eigen werkruimte",
+    "intro": "Dit ben jij, als muzikant — los van elke band waarin je speelt. Je eigen agenda, je eigen contacten, je eigen boekhouding.",
+    "points": {
+      "agenda": "Houd je eigen agenda bij: optredens, repetities en alles waarvoor je geboekt bent.",
+      "network": "Je eigen contacten en locaties, buiten het adresboek van welke band dan ook.",
+      "books": "Je eigen boekhouding.",
+      "booksDetail": "Factureer locaties, organisatoren — en de bands waarin je speelt — met je eigen nummering, btw-regels en rapportages.",
+      "bands": "Sluit je hiervandaan met een uitnodigingslink bij bands aan. Elke band houdt zijn eigen aparte boekhouding."
+    },
+    "getStarted": "Mijn profiel instellen",
+    "maybeLater": "Misschien later"
   }
 }

@@ -10,13 +10,17 @@ const LOG_LEVELS = ['debug', 'info', 'warn', 'error']
 const CONTEXT_KEYS = new Set([
   'tenantId', 'invoiceId', 'purchaseId', 'userId', 'gigId', 'taskId', 'rehearsalId',
   'operation', 'status', 'method', 'path', 'durationMs', 'endpointHost',
+  'operationId', 'revision', 'attemptCount', 'errorCode',
   'mode', 'migrated', 'reEncrypted', 'port',
   'filename', 'aborted',
   'tenants', 'encrypted', 'corrupt',
   'migrationNeeded', 'reEncryptionNeeded', 'rateMissing', 'ratesFilled',
   'subscriptionId', 'planId', 'planSlug', 'paymentKind', 'mollieStatus',
+  'audience', 'pendingPlanSlug', 'pendingAudience', 'crossAudiencePending',
   'jobName', 'feature', 'ownerUserId', 'opType', 'revokedTokens',
   'achievementKey', 'shopifyResponseJson',
+  // Server-computed counters for the abandoned-band-profile sweep.
+  'bandProfileId', 'sweptProfiles',
   // VAT scheme / issued-document snapshot audit counters. All server-computed
   // integers, never anything off a request.
   'missingInvoiceSnapshots', 'missingPurchaseSnapshots', 'overlappingEnrolments',

@@ -13,6 +13,16 @@ export interface FiscalYearStart {
 
 export const CALENDAR_FISCAL_YEAR_START: FiscalYearStart = { month: 1, day: 1 }
 
+// Stable string identity for a period. Two periods with the same key select the
+// same rows, so list pages use it as the request key their fetched data is
+// tagged with — which makes "still loading" a derived fact rather than a flag an
+// effect has to set.
+export function periodKey(period: Period): string {
+  return [period.mode, period.year, period.month, period.quarter, period.from, period.to]
+    .map((part) => part ?? '')
+    .join('|')
+}
+
 // Returns true when the invoice's issue_date falls inside the given period.
 // Invoices without an issue_date are always excluded.
 export function invoiceInPeriod(

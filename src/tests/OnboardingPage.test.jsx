@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import theme from '../theme.ts'
 import { TERMS_VERSION } from '../../shared/termsVersion.js'
@@ -21,9 +21,12 @@ vi.mock('../api/billing.ts', async (importOriginal) => ({
 vi.mock('../api/tenants.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   createOwnedTenant: vi.fn(),
+  createPersonalTenant: vi.fn(),
   getTenantOnboardingStatus: vi.fn(),
   listOwnedTenants: vi.fn(),
 }))
+vi.mock('../api/bandProfiles.ts', () => ({ searchBandProfiles: vi.fn() }))
+vi.mock('../api/bandProfileClaims.ts', () => ({ requestClaim: vi.fn() }))
 vi.mock('../api/profile.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   uploadLogo: vi.fn(),
@@ -31,25 +34,49 @@ vi.mock('../api/profile.ts', async (importOriginal) => ({
 vi.mock('../contexts/authContext.ts', () => ({
   useAuth: vi.fn(),
 }))
+vi.mock('../utils/checkoutNavigation.ts', () => ({
+  redirectToCheckout: vi.fn(),
+}))
 
 import { acceptTerms, onboardingComplete } from '../api/auth.ts'
+import { searchBandProfiles } from '../api/bandProfiles.ts'
+import { requestClaim } from '../api/bandProfileClaims.ts'
 import { getBillingState, subscribe, syncSubscription } from '../api/billing.ts'
-import { createOwnedTenant, getTenantOnboardingStatus, listOwnedTenants } from '../api/tenants.ts'
+import {
+  createOwnedTenant,
+  createPersonalTenant,
+  getTenantOnboardingStatus,
+  listOwnedTenants,
+} from '../api/tenants.ts'
 import { uploadLogo } from '../api/profile.ts'
 import { useAuth } from '../contexts/authContext.ts'
+import { redirectToCheckout } from '../utils/checkoutNavigation.ts'
 
 const PLANS = [
   {
-    id: 1, slug: 'bronze', name: 'Bronze',
+    id: 1, slug: 'bronze', name: 'Bronze', audience: 'band',
     monthly_price_cents: 0, yearly_price_cents: 0,
     entitlements: { features: {}, limits: { storage_mb: 50, members: 5, bands: 1 } },
-    is_active: true, is_fallback: true, sort_order: 0,
+    is_active: true, is_fallback: true, sort_order: 1,
   },
   {
-    id: 2, slug: 'silver', name: 'Silver',
+    id: 2, slug: 'silver', name: 'Silver', audience: 'band',
     monthly_price_cents: 999, yearly_price_cents: 9999,
     entitlements: { features: { integrations: true }, limits: { storage_mb: 150, members: 10, bands: 3 } },
-    is_active: true, is_fallback: false, sort_order: 1,
+    is_active: true, is_fallback: false, sort_order: 2,
+  },
+  // The artist ladder, offered when the personal workspace kind is chosen.
+  {
+    id: 3, slug: 'artist_bronze', name: 'Artist Bronze', audience: 'artist',
+    monthly_price_cents: 0, yearly_price_cents: 0,
+    entitlements: { features: {}, limits: { storage_mb: 50, members: 1, bands: 0 } },
+    is_active: true, is_fallback: true, sort_order: 1,
+  },
+  {
+    id: 4, slug: 'artist_gold', name: 'Artist Gold', audience: 'artist',
+    monthly_price_cents: 1499, yearly_price_cents: 14999,
+    entitlements: { features: { chordpro: true }, limits: { storage_mb: 250, members: 1, bands: 0 } },
+    is_active: true, is_fallback: false, sort_order: 2,
   },
 ]
 
@@ -91,7 +118,12 @@ function wrap(initialEntry = '/onboarding') {
 }
 
 // Walks step 1: select a plan by name, tick the terms box, click the CTA.
-async function completeWelcomeStep(user, planName = 'Bronze') {
+// The workspace kind lives on the welcome step because it decides WHICH plan
+// ladder is shown, so it must be chosen before a plan.
+async function completeWelcomeStep(user, planName = 'Bronze', { kind = null } = {}) {
+  if (kind) {
+    await user.click(await screen.findByRole('radio', { name: kind }))
+  }
   await screen.findByText(planName)
   await user.click(screen.getByText(planName))
   await user.click(screen.getByRole('checkbox'))
@@ -101,7 +133,7 @@ async function completeWelcomeStep(user, planName = 'Bronze') {
 beforeEach(() => {
   vi.clearAllMocks()
   mockAuth()
-  getBillingState.mockResolvedValue({ subscription: null, ownedTenantCount: 0, plans: PLANS })
+  getBillingState.mockResolvedValue({ subscriptions: { band: null, artist: null }, ownedBandCount: 0, hasPersonalWorkspace: false, plans: PLANS })
   getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: true })
   listOwnedTenants.mockResolvedValue([])
   acceptTerms.mockResolvedValue({ termsAcceptedAt: 'now', termsVersion: TERMS_VERSION })
@@ -155,14 +187,11 @@ describe('OnboardingPage — welcome step', () => {
     )
   })
 
-  it('shows an invite-only message when new tenant onboarding is disabled', async () => {
+  it('redirects to invite redemption when new tenant onboarding is disabled', async () => {
     getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: false })
     wrap()
 
-    expect(await screen.findByText(/new tenant onboarding is currently disabled/i)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /redeem your invite code/i })).toHaveAttribute(
-      'href', '/redeem-invite',
-    )
+    expect(await screen.findByText('redeem page')).toBeInTheDocument()
     expect(screen.queryByText('Silver')).not.toBeInTheDocument()
   })
 })
@@ -210,6 +239,7 @@ describe('OnboardingPage — confirm (paid path)', () => {
     await user.click(await screen.findByRole('button', { name: 'Continue to payment' }))
 
     await waitFor(() => expect(subscribe).toHaveBeenCalledWith(2, 'month', 'onboarding'))
+    expect(redirectToCheckout).toHaveBeenCalledWith('https://pay.test/tr_1')
     // Order: create → switch → subscribe.
     expect(createOwnedTenant.mock.invocationCallOrder[0])
       .toBeLessThan(auth.switchTenant.mock.invocationCallOrder[0])
@@ -218,6 +248,85 @@ describe('OnboardingPage — confirm (paid path)', () => {
     // No purchase completed yet — the pointer must survive the Mollie hop.
     expect(onboardingComplete).not.toHaveBeenCalled()
     expect(uploadLogo).not.toHaveBeenCalled()
+  })
+})
+
+describe('OnboardingPage — what are you setting up?', () => {
+  it('offers both kinds on the welcome step, before the plans', async () => {
+    const user = userEvent.setup()
+    wrap()
+
+    const choices = await screen.findAllByRole('radio')
+    expect(choices.map((c) => c.textContent)).toEqual([
+      expect.stringContaining('A band'),
+      expect.stringContaining('My own artist workspace'),
+    ])
+    // A band by default, so the existing path is unchanged.
+    expect(screen.getByText('Bronze')).toBeInTheDocument()
+    expect(screen.queryByText('Artist Bronze')).not.toBeInTheDocument()
+
+    await completeWelcomeStep(user)
+    expect(await screen.findByLabelText('Band name')).toBeInTheDocument()
+  })
+
+  // Band and artist are separate products, so the grid must swap with the kind.
+  it('swaps the plan ladder when the artist workspace kind is chosen', async () => {
+    const user = userEvent.setup()
+    wrap()
+
+    await user.click(await screen.findByRole('radio', { name: /my own artist workspace/i }))
+
+    expect(await screen.findByText('Artist Bronze')).toBeInTheDocument()
+    expect(screen.getByText('Artist Gold')).toBeInTheDocument()
+    expect(screen.queryByText('Silver')).not.toBeInTheDocument()
+  })
+
+  it('redirects before offering workspace kinds when onboarding is disabled', async () => {
+    getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: false })
+    wrap()
+
+    expect(await screen.findByText('redeem page')).toBeInTheDocument()
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+  })
+
+  it('creates a personal workspace when that kind is chosen', async () => {
+    createPersonalTenant.mockResolvedValue({
+      id: 7, slug: 'alpha-user', kind: 'personal', display_name: 'Alpha User',
+    })
+    const user = userEvent.setup()
+    wrap()
+
+    await completeWelcomeStep(user, 'Artist Bronze', { kind: /my own artist workspace/i })
+    await user.type(await screen.findByLabelText('Artist name'), 'Alpha User')
+    await user.click(await screen.findByLabelText('Accounting country'))
+    await user.click(await screen.findByRole('option', { name: 'Netherlands (NL)' }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(await screen.findByRole('button', { name: 'Create my workspace' }))
+
+    await waitFor(() => expect(createPersonalTenant).toHaveBeenCalledWith({
+      display_name: 'Alpha User', country_code: 'nl', onboarding: true,
+    }))
+    expect(createOwnedTenant).not.toHaveBeenCalled()
+    await waitFor(() => expect(auth.switchTenant).toHaveBeenCalledWith(7))
+  })
+
+  it('a resumed personal onboarding does not offer the band path again', async () => {
+    mockAuth({ onboardingTenantId: 7, termsVersion: TERMS_VERSION })
+    listOwnedTenants.mockResolvedValue([{
+      id: 7, slug: 'alpha-user', kind: 'personal', display_name: 'Alpha User',
+      accounting_country: 'nl', archived_at: null,
+    }])
+    const user = userEvent.setup()
+    wrap()
+
+    // The kind came from the resumed tenant — no choice offered, and the artist
+    // ladder is the only one shown.
+    await completeWelcomeStep(user, 'Artist Bronze')
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+    const nameField = await screen.findByLabelText('Artist name')
+    expect(nameField).toHaveValue('Alpha User')
+    expect(nameField).toBeDisabled()
+    expect(screen.queryByLabelText('Band name')).not.toBeInTheDocument()
   })
 })
 
@@ -242,6 +351,7 @@ describe('OnboardingPage — resume via onboarding pointer', () => {
     await user.click(await screen.findByRole('button', { name: 'Continue to payment' }))
 
     await waitFor(() => expect(subscribe).toHaveBeenCalledWith(2, 'month', 'onboarding'))
+    expect(redirectToCheckout).toHaveBeenCalledWith('https://pay.test/tr_2')
     expect(createOwnedTenant).not.toHaveBeenCalled()
     expect(auth.switchTenant).toHaveBeenCalledWith(42)
   })
@@ -313,8 +423,8 @@ describe('OnboardingPage — checkout return', () => {
   it('settles on the sync result (re-ingested state), completes onboarding, offers the app', async () => {
     // Settlement comes from syncSubscription's returned status, not a passive
     // getBillingState read — the poll re-ingests each attempt.
-    syncSubscription.mockResolvedValue({ subscription: { status: 'trialing' } })
-    wrap('/onboarding?checkout=return')
+    syncSubscription.mockResolvedValue({ subscriptions: { band: { status: 'trialing' }, artist: null } })
+    wrap('/onboarding?checkout=return&audience=band')
 
     expect(await screen.findByText(/your subscription is active/i)).toBeInTheDocument()
     expect(syncSubscription).toHaveBeenCalled()
@@ -328,9 +438,9 @@ describe('OnboardingPage — checkout return', () => {
       // Pending on the first sync, settled on the next — proves the loop
       // re-ingests rather than syncing once up front.
       syncSubscription
-        .mockResolvedValueOnce({ subscription: { status: 'pending_mandate' } })
-        .mockResolvedValue({ subscription: { status: 'trialing' } })
-      wrap('/onboarding?checkout=return')
+        .mockResolvedValueOnce({ subscriptions: { band: { status: 'pending_mandate' }, artist: null } })
+        .mockResolvedValue({ subscriptions: { band: { status: 'trialing' }, artist: null } })
+      wrap('/onboarding?checkout=return&audience=band')
 
       await act(async () => { await vi.runAllTimersAsync() })
 
@@ -340,5 +450,60 @@ describe('OnboardingPage — checkout return', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('OnboardingPage — claiming a band profile', () => {
+  beforeEach(() => {
+    searchBandProfiles.mockResolvedValue({
+      items: [{
+        id: 5001, name: 'Off Platform', countryCode: 'nl', spotifyUrl: null,
+        websiteUrl: 'https://offplatform.example', contactEmail: null,
+        status: 'claimable', claimed: false, claimedTenant: null,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }],
+      meta: { limit: 10, returned: 1 },
+    })
+  })
+
+  // The regression guard for the reason this is NOT a payload field on tenant
+  // creation: a resumed onboarding short-circuits ensureOnboardingTenant, so a
+  // claim carried in that call would be skipped for exactly the people most
+  // likely to have been interrupted.
+  it('submits the claim on a RESUMED onboarding too', async () => {
+    mockAuth({ onboardingTenantId: 42, termsVersion: TERMS_VERSION })
+    listOwnedTenants.mockResolvedValue([
+      { id: 42, slug: 'the-band', band_name: 'The Band', accounting_country: 'nl', archived_at: null },
+    ])
+    requestClaim.mockResolvedValue({ id: 1, status: 'pending' })
+    const user = userEvent.setup()
+    wrap()
+
+    await completeWelcomeStep(user, 'Bronze')
+    await user.type(await screen.findByLabelText('Search for your band'), 'Off Platform')
+    await user.click(await screen.findByRole('button', { name: /Off Platform/ }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(await screen.findByRole('button', { name: /create|finish|start/i }))
+
+    await waitFor(() => expect(requestClaim).toHaveBeenCalledWith(5001))
+    expect(createOwnedTenant).not.toHaveBeenCalled()
+  })
+
+  it('never blocks workspace creation when the claim fails', async () => {
+    mockAuth({ onboardingTenantId: 42, termsVersion: TERMS_VERSION })
+    listOwnedTenants.mockResolvedValue([
+      { id: 42, slug: 'the-band', band_name: 'The Band', accounting_country: 'nl', archived_at: null },
+    ])
+    requestClaim.mockRejectedValue(new Error('claim_pending_elsewhere'))
+    const user = userEvent.setup()
+    wrap()
+
+    await completeWelcomeStep(user, 'Bronze')
+    await user.type(await screen.findByLabelText('Search for your band'), 'Off Platform')
+    await user.click(await screen.findByRole('button', { name: /Off Platform/ }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(await screen.findByRole('button', { name: /create|finish|start/i }))
+
+    await waitFor(() => expect(onboardingComplete).toHaveBeenCalled())
   })
 })

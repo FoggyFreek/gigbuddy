@@ -18,6 +18,7 @@ import VoidSaleDialog from './VoidSaleDialog.tsx'
 import ListPagination from '../shared/ListPagination.tsx'
 import MoneyCells, { MoneyHeaderCells } from '../shared/MoneyCells.tsx'
 import { listMerchSales, voidMerchSale } from '../../api/merch.ts'
+import { periodKey } from '../../utils/invoicePeriod.ts'
 import type { MerchSale, Period, Id } from '../../types/entities.ts'
 
 const PAGE_SIZE = 25
@@ -38,28 +39,43 @@ interface MerchandiseDetailsProps {
 
 export default function MerchandiseDetails({ productId, period, onReload }: Readonly<MerchandiseDetailsProps>) {
   const { t } = useTranslation('merch')
-  const [sales, setSales] = useState<MerchSale[] | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [voidTarget, setVoidTarget] = useState<MerchSale | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('date')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE)
 
-  const load = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      setSales(await listMerchSales(period, productId))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [period, productId])
+  // Sales are tagged with the request they answered (product + period + reload),
+  // so `loading` and `error` are derived from whether the newest request has
+  // landed instead of being flipped synchronously when it starts.
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const reload = useCallback(() => setReloadNonce((n) => n + 1), [])
+  const salesKey = productId ? `${productId}|${period ? periodKey(period) : ''}|${reloadNonce}` : null
+  const [salesState, setSalesState] = useState<{ key: string; sales: MerchSale[] | null; error: string | null } | null>(null)
+  const sales = salesState?.sales ?? null
+  const loading = salesKey == null || salesState?.key !== salesKey
+  const loadError = salesKey != null && salesState?.key === salesKey ? salesState.error : null
+  const [actionError, setActionError] = useState<string | null>(null)
+  const error = actionError ?? loadError
 
-  useEffect(() => { if (productId) load() }, [load, productId])
+  useEffect(() => {
+    if (salesKey == null) return
+    let cancelled = false
+    listMerchSales(period, productId)
+      .then((rows) => {
+        if (!cancelled) setSalesState({ key: salesKey, sales: rows, error: null })
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setSalesState((prev) => ({
+            key: salesKey,
+            sales: prev?.sales ?? null,
+            error: e instanceof Error ? e.message : String(e),
+          }))
+        }
+      })
+    return () => { cancelled = true }
+  }, [salesKey, period, productId])
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {
@@ -98,12 +114,12 @@ export default function MerchandiseDetails({ productId, period, onReload }: Read
     setVoidTarget(null)
     if (!sale) return
     try {
-      setError(null)
+      setActionError(null)
       await voidMerchSale(sale.id!)
-      await load()
+      reload()
       onReload?.()
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setActionError(e instanceof Error ? e.message : String(e))
     }
   }
 

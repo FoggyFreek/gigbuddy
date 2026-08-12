@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink } from 'react-router-dom'
+import { Link as RouterLink } from 'react-router'
 import Box from '@mui/material/Box'
 import Checkbox from '@mui/material/Checkbox'
 import Chip from '@mui/material/Chip'
@@ -50,7 +50,6 @@ export default function LedgerEntrySearchPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [selectedCodes, setSelectedCodes] = useState<Set<string>>(() => new Set(saved?.selectedCodes ?? []))
   const [entries, setEntries] = useState<LedgerEntryLineRow[]>([])
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState<string>(typeof saved?.searchQuery === 'string' ? saved.searchQuery : '')
   const [showVoided, setShowVoided] = useState<boolean>(typeof saved?.showVoided === 'boolean' ? saved.showVoided : false)
@@ -91,24 +90,27 @@ export default function LedgerEntrySearchPage() {
   // A stable, order-independent key for the selected codes, so the fetch effect
   // re-runs on a real selection change (not on every Set identity change).
   const codesKey = [...selectedCodes].sort().join(',')
-
-  const load = useCallback(async () => {
-    const codes = codesKey ? codesKey.split(',') : []
-    if (!codes.length) return // nothing selected — the prompt renders; stale rows stay hidden
-    try {
-      setLoading(true)
-      setError(null)
-      setEntries(await listLedgerEntries(period, codes))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }, [period, codesKey])
+  const requestKey = JSON.stringify([period, codesKey])
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null)
+  const loading = Boolean(codesKey) && (!periodsLoaded || loadedRequestKey !== requestKey)
 
   useEffect(() => {
-    if (periodsLoaded) load()
-  }, [load, periodsLoaded])
+    const codes = codesKey ? codesKey.split(',') : []
+    if (!periodsLoaded) return
+    if (!codes.length) return // nothing selected — the prompt renders; stale rows stay hidden
+    let cancelled = false
+    listLedgerEntries(period, codes)
+      .then((rows) => {
+        if (cancelled) return
+        setEntries(rows)
+        setError(null)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => { if (!cancelled) setLoadedRequestKey(requestKey) })
+    return () => { cancelled = true }
+  }, [period, codesKey, periodsLoaded, requestKey])
 
   const visibleEntries = useMemo(() => {
     let list = entries

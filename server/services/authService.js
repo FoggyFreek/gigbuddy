@@ -19,7 +19,9 @@ import {
   clearOnboardingTenant,
 } from '../repositories/authRepository.js'
 import { permissionsForRole } from '../auth/permissions.js'
-import { resolveTenantEntitlements } from './entitlementService.js'
+import { resolveTenantEntitlements, resolveUserLimits } from './entitlementService.js'
+import { countActiveOwnedTenants } from '../repositories/limitRepository.js'
+import { LIMITS } from '../auth/entitlements.js'
 import { TERMS_VERSION } from '../../shared/termsVersion.js'
 
 // Builds the /me payload for a user, resolving the active tenant. The session's
@@ -32,6 +34,10 @@ export async function buildMePayload(db, userId, sessionActiveTenantId) {
 
   const memberships = await listMembershipsForMe(db, user.id)
   const dismissedTutorials = await listDismissedTutorials(db, user.id)
+  const [bandLimits, ownedBandCount] = await Promise.all([
+    resolveUserLimits(db, user.id),
+    countActiveOwnedTenants(db, user.id),
+  ])
 
   const approved = memberships.filter((m) => m.status === 'approved')
   let activeTenantId = sessionActiveTenantId ?? null
@@ -74,6 +80,7 @@ export async function buildMePayload(db, userId, sessionActiveTenantId) {
       isSuperAdmin: !!user.is_super_admin,
       activeTenantId,
       activeTenantRole: activeMembership?.role ?? null,
+      activeTenantKind: activeMembership?.tenant_kind ?? null,
       permissions: activeMembership
         ? permissionsForRole(activeMembership.role, { isSuperAdmin: !!user.is_super_admin })
         : [],
@@ -87,12 +94,23 @@ export async function buildMePayload(db, userId, sessionActiveTenantId) {
       termsVersion: user.terms_version ?? null,
       onboardingTenantId: user.onboarding_tenant_id ?? null,
       dismissedTutorials,
+      bandCapacity: {
+        used: ownedBandCount,
+        limit: bandLimits[LIMITS.BANDS],
+      },
       memberships: memberships.map((m) => ({
         tenantId: m.tenant_id,
+        // `tenantName` is the pre-rename key: emitted alongside `displayName`
+        // until every reader has moved over (see the kind-neutral vocabulary
+        // rule — band_name → display_name).
         tenantName: m.tenant_name,
+        displayName: m.display_name,
         tenantSlug: m.tenant_slug,
+        tenantAvatarPath: m.avatar_path,
+        kind: m.tenant_kind,
         role: m.role,
         status: m.status,
+        accountingCountryCode: m.accounting_country_code ?? null,
       })),
     },
     activeTenantId,

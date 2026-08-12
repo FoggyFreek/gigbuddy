@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom'
+import { Link as RouterLink, useNavigate, useParams } from 'react-router'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -67,22 +67,29 @@ export default function LedgerEntryDetailPage() {
   const { id } = useParams()
   const { canManageFinance } = usePermissions()
   const isCompact = useCompactLayout()
-  const [entry, setEntry] = useState<LedgerEntry | null>(null)
+  // Both the entry and any action error are tagged with the id they belong to,
+  // so navigating to another entry drops them by derivation instead of needing
+  // the fetch effect to blank them first.
+  const [entryState, setEntryState] = useState<{ id: string | undefined; entry: LedgerEntry } | null>(null)
+  const entry = entryState != null && entryState.id === id ? entryState.entry : null
   const [error, setError] = useState<string | null>(null)
   const [voidOpen, setVoidOpen] = useState(false)
   const [reverseOpen, setReverseOpen] = useState(false)
   const [reclassifyOpen, setReclassifyOpen] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionErrorState, setActionErrorState] = useState<{ id: string | undefined; message: string } | null>(null)
+  const actionError = actionErrorState != null && actionErrorState.id === id ? actionErrorState.message : null
+  const setActionError = useCallback(
+    (message: string | null) => setActionErrorState(message == null ? null : { id, message }),
+    [id],
+  )
   const [protectedAccountCodes, setProtectedAccountCodes] = useState<Set<string>>(() => new Set())
   const [settingsLoaded, setSettingsLoaded] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    setEntry(null)
-    setActionError(null)
     getLedgerEntry(Number(id))
-      .then((data) => { if (!cancelled) setEntry(data as LedgerEntry) })
+      .then((data) => { if (!cancelled) setEntryState({ id, entry: data as LedgerEntry }) })
       .catch((e: unknown) => { if (!cancelled) setError(e instanceof Error ? e.message : String(e)) })
     return () => { cancelled = true }
   }, [id])
@@ -99,7 +106,7 @@ export default function LedgerEntryDetailPage() {
         if (!cancelled) setActionError(e instanceof Error ? e.message : String(e))
       })
     return () => { cancelled = true }
-  }, [])
+  }, [setActionError])
 
   async function confirmVoid() {
     if (!entry?.id) return
@@ -347,11 +354,14 @@ export default function LedgerEntryDetailPage() {
               noteUpdatedAt={entry.note_updated_at ?? null}
               noteUpdatedByName={entry.note_updated_by_name ?? null}
               canEdit={canManageFinance}
-              onSaved={(u) => setEntry((prev) => (prev ? {
+              onSaved={(u) => setEntryState((prev) => (prev ? {
                 ...prev,
-                note: u.note,
-                note_updated_at: u.note_updated_at,
-                note_updated_by_name: u.note_updated_by_name,
+                entry: {
+                  ...prev.entry,
+                  note: u.note,
+                  note_updated_at: u.note_updated_at,
+                  note_updated_by_name: u.note_updated_by_name,
+                },
               } : prev))}
             />
           )}

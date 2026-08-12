@@ -1,5 +1,5 @@
 ﻿import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom'
+import { useNavigate, useOutletContext, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -19,7 +19,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { toDateInput, toTimeInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
-import { addParticipant, addSong, deleteRehearsal, getRehearsal, removeParticipant, removeSong, setVote, updateRehearsal } from '../api/rehearsals.ts'
+import { addParticipant, addSong, deleteRehearsal, removeParticipant, removeSong, setVote, updateRehearsal } from '../api/rehearsals.ts'
 import { listMembers } from '../api/bandMembers.ts'
 import RehearsalFields from '../components/RehearsalFields.tsx'
 import PastEventAlert from '../components/PastEventAlert.tsx'
@@ -28,17 +28,27 @@ import RehearsalSongsSection from '../components/RehearsalSongsSection.tsx'
 import SaveStatusLabel from '../components/SaveStatusLabel.tsx'
 import PlanningReadOnlyAlert from '../components/PlanningReadOnlyAlert.tsx'
 import { useAuth } from '../contexts/authContext.ts'
-import { usePermissions } from '../hooks/usePermissions.ts'
+import { useCrossTenantRow } from '../hooks/useCrossTenantRow.ts'
 import type { Rehearsal, Member, Song, Id } from '../types/entities.ts'
+import type { MaybeCrossTenant } from '../types/api.ts'
+import { setMyRehearsalVote } from '../api/me.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { usePlanningSource } from '../hooks/usePlanningSource.ts'
+import { SourceTenantSwitch } from '../components/SourceTenantIdentity.tsx'
+import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 
 interface RehearsalDetailOutletContext {
   insideSplitView?: boolean
   onClose?: () => void
   onRehearsalUpdate?: (id: Id, patch: Partial<Rehearsal>) => void
   onRehearsalDelete?: (id: Id) => void
-  onRehearsalDetailLoaded?: (rehearsal: Rehearsal) => void
+  onRehearsalDetailLoaded?: (rehearsal: RehearsalDetail) => void
   onRehearsalDetailLoadError?: () => void
 }
+
+// Read through `/api/me/rehearsals/:id` when opened on another band's rehearsal,
+// so the band label fields may be present.
+type RehearsalDetail = MaybeCrossTenant<Rehearsal>
 
 interface RehearsalForm {
   proposed_date: string
@@ -56,7 +66,8 @@ export default function RehearsalDetailPage() {
   const rehearsalId = Number(id)
   const navigate = useNavigate()
   const { user } = useAuth()
-  const { canWritePlanning } = usePermissions()
+  const tenantKind = useTenantKind()
+  const source = usePlanningSource('rehearsals')
   const outletCtx = (useOutletContext<RehearsalDetailOutletContext>() || {}) as RehearsalDetailOutletContext
   const insideSplitView = !!outletCtx.insideSplitView
   const onRehearsalDetailLoaded = outletCtx.onRehearsalDetailLoaded
@@ -65,9 +76,9 @@ export default function RehearsalDetailPage() {
   const [form, setForm] = useState<RehearsalForm>({ proposed_date: '', start_time: '', end_time: '', location: '', notes: '' })
   const [loading, setLoading] = useState(true)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [rehearsal, setRehearsal] = useState<Rehearsal | null>(null)
+  const [rehearsal, setRehearsal] = useState<RehearsalDetail | null>(null)
   const [members, setMembers] = useState<Member[]>([])
-  const [addMemberId, setAddMemberId] = useState('')
+  const { isCrossBand, canWrite: detailCanWrite } = useCrossTenantRow(rehearsal)
 
   const saveFn = useCallback(
     async (patch: Partial<RehearsalForm>) => { await updateRehearsal(rehearsalId, patch) },
@@ -80,25 +91,24 @@ export default function RehearsalDetailPage() {
   )
 
   useEffect(() => {
-    listMembers().then(setMembers).catch(() => {})
-  }, [])
+    if (source.canLoadRoster) listMembers().then(setMembers).catch(() => {})
+  }, [source])
 
   const refresh = useCallback(async () => {
-    const r = await getRehearsal(rehearsalId)
-    setRehearsal(r as Rehearsal)
+    const r = await source.api.detail(rehearsalId)
+    setRehearsal(r)
     setForm({
-      proposed_date: toDateInput((r as Rehearsal).proposed_date),
-      start_time: toTimeInput((r as Rehearsal).start_time),
-      end_time: toTimeInput((r as Rehearsal).end_time),
-      location: (r as Rehearsal).location || '',
-      notes: (r as Rehearsal).notes || '',
+      proposed_date: toDateInput(r.proposed_date),
+      start_time: toTimeInput(r.start_time),
+      end_time: toTimeInput(r.end_time),
+      location: r.location || '',
+      notes: r.notes || '',
     })
-  }, [rehearsalId])
+  }, [rehearsalId, source])
 
   useEffect(() => {
-    getRehearsal(rehearsalId)
-      .then((r) => {
-        const rehearsalData = r as Rehearsal
+    source.api.detail(rehearsalId)
+      .then((rehearsalData) => {
         setRehearsal(rehearsalData)
         onRehearsalDetailLoaded?.(rehearsalData)
         setForm({
@@ -111,10 +121,10 @@ export default function RehearsalDetailPage() {
       })
       .catch(() => onRehearsalDetailLoadError?.())
       .finally(() => setLoading(false))
-  }, [rehearsalId, onRehearsalDetailLoaded, onRehearsalDetailLoadError])
+  }, [rehearsalId, onRehearsalDetailLoaded, onRehearsalDetailLoadError, source])
 
   function handleChange(field: string, value: string | null) {
-    if (!canWritePlanning) return
+    if (!detailCanWrite) return
     setForm((prev) => ({ ...prev, [field]: value ?? '' }))
     if (hasRequiredErrors({ ...form, [field]: value } as Record<string, unknown>, REQUIRED_FIELDS)) return
     schedule({ [field]: value || null } as Partial<RehearsalForm>)
@@ -122,7 +132,8 @@ export default function RehearsalDetailPage() {
 
   async function handleVote(memberId: Id | undefined, vote: string | null) {
     if (memberId === undefined || vote === null) return
-    await setVote(rehearsalId, memberId, vote)
+    if (isCrossBand) await setMyRehearsalVote(rehearsalId, vote)
+    else await setVote(rehearsalId, memberId, vote)
     await refresh()
   }
 
@@ -132,10 +143,8 @@ export default function RehearsalDetailPage() {
     await refresh()
   }
 
-  async function handleAddParticipant() {
-    if (!addMemberId) return
-    await addParticipant(rehearsalId, Number(addMemberId))
-    setAddMemberId('')
+  async function handleAddParticipant(memberId: Id) {
+    await addParticipant(rehearsalId, Number(memberId))
     await refresh()
   }
 
@@ -192,8 +201,16 @@ export default function RehearsalDetailPage() {
         )}
       </Box>
 
+      {isCrossBand && rehearsal && (
+        <SourceTenantSwitch
+          tenantId={rehearsal.tenantId}
+          tenantName={rehearsal.tenantName}
+          tenantAvatarPath={rehearsal.tenantAvatarPath}
+        />
+      )}
+
       {!loading && <PastEventAlert date={rehearsal?.proposed_date} />}
-      <PlanningReadOnlyAlert canWrite={canWritePlanning} />
+      <PlanningReadOnlyAlert canWrite={detailCanWrite} />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
@@ -205,28 +222,29 @@ export default function RehearsalDetailPage() {
             form={form}
             onChange={handleChange}
             errors={getRequiredErrors(form as unknown as Record<string, unknown>, REQUIRED_FIELDS)}
-            readOnly={!canWritePlanning}
+            readOnly={!detailCanWrite}
+            dateTimeFirst
           />
           {rehearsal && (
             <>
               <RehearsalParticipantsSection
                 rehearsal={rehearsal}
                 members={members}
-                addMemberId={addMemberId as Id | ''}
-                onAddMemberIdChange={(id) => setAddMemberId(String(id))}
                 onVote={handleVote}
                 onRemoveParticipant={handleRemoveParticipant}
                 onAddParticipant={handleAddParticipant}
                 onPromote={handlePromote}
                 onDemote={handleDemote}
-                canWrite={canWritePlanning}
-                currentMemberId={user?.bandMemberId ?? null}
+                canWrite={detailCanWrite}
+                currentMemberId={rehearsal.viewerBandMemberId ?? user?.bandMemberId ?? null}
+                showAvailability={!isCrossBand && tenantKind.supports(TENANT_CAPABILITIES.BAND_AVAILABILITY)}
               />
               <RehearsalSongsSection
                 songs={rehearsal.songs ?? []}
                 onAddSong={handleAddSong}
                 onRemoveSong={handleRemoveSong}
-                canWrite={canWritePlanning}
+                canWrite={detailCanWrite}
+                plainText={isCrossBand}
               />
               <Grid size={12}>
                 <Divider sx={{ my: 1 }} />
@@ -237,7 +255,7 @@ export default function RehearsalDetailPage() {
                   minRows={3}
                   value={form.notes}
                   onChange={(e) => handleChange('notes', e.target.value)}
-                  slotProps={{ htmlInput: { readOnly: !canWritePlanning } }}
+                  slotProps={{ htmlInput: { readOnly: !detailCanWrite } }}
                 />
               </Grid>
             </>
@@ -245,13 +263,13 @@ export default function RehearsalDetailPage() {
         </Grid>
       )}
 
-      {canWritePlanning && (
+      {detailCanWrite && (
         <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
           <SaveStatusLabel status={saveStatus} />
         </Box>
       )}
 
-      {canWritePlanning && (
+      {detailCanWrite && (
         <Box sx={{ mt: 4 }}>
           <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
             {t($ => $.actions.delete, { ns: 'common' })}

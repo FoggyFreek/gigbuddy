@@ -14,6 +14,7 @@ import { logger } from './utils/logger.js'
 import { requestContext, requestLogger } from './middleware/requestContext.js'
 import { metricsMiddleware, metricsHandler } from './metrics.js'
 import { startBillingReconciliation } from './jobs/billingReconciliation.js'
+import { startLinkpageSlugReconciliation } from './jobs/linkpageSlugReconciliation.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -95,5 +96,6 @@ app.listen(PORT, () => {
 })
 
 startBillingReconciliation()
+startLinkpageSlugReconciliation()
 
 export default app

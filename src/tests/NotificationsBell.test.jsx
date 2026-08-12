@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter, useLocation } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import theme from '../theme.ts'
 
@@ -120,7 +120,7 @@ describe('NotificationsBell', () => {
 
     const imgs = screen.getAllByRole('img')
     const srcs = imgs.map((img) => img.getAttribute('src'))
-    expect(srcs).toContain('/api/notifications/tenant-avatar/2')
+    expect(srcs).toContain('/api/tenants/2/avatar')
     expect(srcs).toContain('/share/logo.png')
   })
 

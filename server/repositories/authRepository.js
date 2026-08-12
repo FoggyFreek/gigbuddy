@@ -10,9 +10,12 @@ export async function fetchUserById(executor, userId) {
 // Pending + approved memberships in non-archived tenants, for the /me payload.
 export async function listMembershipsForMe(executor, userId) {
   const { rows } = await executor.query(
-    `SELECT m.tenant_id, m.role, m.status, t.slug AS tenant_slug, t.band_name AS tenant_name
+    `SELECT m.tenant_id, m.role, m.status, t.slug AS tenant_slug, t.kind AS tenant_kind,
+            t.band_name AS tenant_name, t.display_name, t.avatar_path,
+            tap.country_code AS accounting_country_code
      FROM memberships m
      JOIN tenants t ON t.id = m.tenant_id
+     LEFT JOIN tenant_accounting_profiles tap ON tap.tenant_id = t.id
      WHERE m.user_id = $1
        AND m.status IN ('pending', 'approved')
        AND t.archived_at IS NULL
@@ -24,7 +27,7 @@ export async function listMembershipsForMe(executor, userId) {
 
 export async function getBandMemberId(executor, userId, tenantId) {
   const { rows } = await executor.query(
-    'SELECT id FROM band_members WHERE user_id = $1 AND tenant_id = $2',
+    'SELECT id FROM band_members WHERE user_id = $1 AND tenant_id = $2 AND deleted_at IS NULL',
     [userId, tenantId],
   )
   return rows[0]?.id ?? null
@@ -116,8 +119,8 @@ export async function clearProviderSub(executor, userId, provider) {
 // tenant (id 1), preserving an existing approved_at.
 export async function upsertSeedAdminMembership(executor, userId) {
   await executor.query(
-    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at)
-     VALUES ($1, 1, 'tenant_admin', 'approved', NOW())
+    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+     VALUES ($1, 1, 'tenant_admin', 'approved', NOW(), 'owner')
      ON CONFLICT (user_id, tenant_id) DO UPDATE SET
        role = 'tenant_admin',
        status = 'approved',

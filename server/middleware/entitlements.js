@@ -9,10 +9,16 @@ import pool from '../db/index.js'
 import { resolveTenantEntitlements } from '../services/entitlementService.js'
 
 // Resolves (and memoizes per request) the active tenant's entitlements.
+//
+// The kind must travel with the owner: it selects which of the owner's two
+// subscriptions governs this tenant (band → band plan, personal → artist plan).
+// Both are set by resolveTenantId; passing only the owner would make the
+// resolver re-read the row rather than guess.
 export function loadEntitlements(req) {
   if (req._entitlementsPromise === undefined) {
     req._entitlementsPromise = resolveTenantEntitlements(pool, req.tenantId, {
       ownerUserId: req.tenantOwnerUserId ?? null,
+      tenantKind: req.tenantKind ?? null,
     })
   }
   return req._entitlementsPromise

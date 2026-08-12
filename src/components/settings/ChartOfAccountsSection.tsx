@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+﻿import { useCallback, useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -151,8 +151,6 @@ function AccountRow({ account, depth, onAddChild, onToggleActive, onToggleCapita
 export default function ChartOfAccountsSection() {
   const { t } = useTranslation(['settings', 'common'])
   const compact = useCompactLayout()
-  const [accounts, setAccounts] = useState<Account[]>([])
-  const [loading, setLoading] = useState(true)
   const [errorId, setErrorId] = useState<Id | null>(null)
 
   const [addParent, setAddParent] = useState<AccountNode | null>(null)
@@ -164,23 +162,28 @@ export default function ChartOfAccountsSection() {
   const [deleteTarget, setDeleteTarget] = useState<AccountNode | null>(null)
   const [deleteConfirming, setDeleteConfirming] = useState(false)
 
-  const reload = useCallback(async () => {
-    try {
-      setAccounts(await listAccounts())
-    } catch {
-      // leave previous state
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  // `loading` is the derived fact that the first fetch hasn't landed yet; a
+  // reload leaves the current rows on screen (and keeps them on failure).
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const reload = useCallback(() => setReloadNonce((n) => n + 1), [])
+  const [accountsState, setAccountsState] = useState<Account[] | null>(null)
+  const accounts = accountsState ?? []
+  const loading = accountsState == null
 
-  useEffect(() => { reload() }, [reload])
+  useEffect(() => {
+    let cancelled = false
+    listAccounts()
+      .then((rows) => { if (!cancelled) setAccountsState(rows) })
+      // Leave the previous rows in place; just stop showing the spinner.
+      .catch(() => { if (!cancelled) setAccountsState((prev) => prev ?? []) })
+    return () => { cancelled = true }
+  }, [reloadNonce])
 
   async function handleToggleActive(account: AccountNode) {
     setErrorId(null)
     try {
       await updateAccount(account.id, { is_active: !account.is_active })
-      await reload()
+      reload()
     } catch (err) {
       if ((err as { status?: number }).status === 409) setErrorId(account.id!)
     }
@@ -190,7 +193,7 @@ export default function ChartOfAccountsSection() {
     setErrorId(null)
     try {
       await updateAccount(account.id, { is_capitalizable: !account.is_capitalizable })
-      await reload()
+      reload()
     } catch {
       // leave previous state
     }
@@ -210,7 +213,7 @@ export default function ChartOfAccountsSection() {
     try {
       await createAccount({ code: addCode, name: addName, type: addParent.type, parent_code: addParent.code })
       setAddParent(null)
-      await reload()
+      reload()
     } catch (err) {
       setAddError((err as Error).message || t($ => $.chartOfAccounts.addDialog.createFailed))
     } finally {
@@ -230,7 +233,7 @@ export default function ChartOfAccountsSection() {
     try {
       await deleteAccount(deleteTarget.id)
       setDeleteTarget(null)
-      await reload()
+      reload()
     } catch (err) {
       if ((err as { status?: number }).status === 409) setErrorId(deleteTarget.id!)
       setDeleteTarget(null)

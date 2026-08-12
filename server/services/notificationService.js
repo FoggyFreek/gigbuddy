@@ -31,7 +31,6 @@ import {
   listApprovedTenants,
   upsertTypePref,
   upsertTenantPref,
-  getTenantAvatarPath,
 } from '../repositories/notificationRepository.js'
 
 const NOT_FOUND = notFound('Not found')
@@ -194,12 +193,4 @@ export async function updatePreferences(db, userId, body) {
   }
 
   return { prefs: await getPreferences(db, userId) }
-}
-
-// ---------- tenant profile picture ----------
-
-export async function getTenantAvatar(db, userId, tenantId) {
-  const avatarPath = await getTenantAvatarPath(db, userId, tenantId)
-  if (!avatarPath) return NOT_FOUND
-  return { avatarPath }
 }

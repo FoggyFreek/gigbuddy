@@ -40,7 +40,12 @@
     "title": "Played here",
     "viewMap": "View map",
     "empty": "No past gigs yet",
-    "openAria": "Open the gig world map"
+    "openAria": "Open the gig world map",
+    "loadError": "Couldn't load the gig map.",
+    "gigCount_one": "{{count}} gig",
+    "gigCount_other": "{{count}} gigs",
+    "summary_one": "{{gigCount}} across {{count}} city",
+    "summary_other": "{{gigCount}} across {{count}} cities"
   },
   "memory": {
     "title": "Memory",

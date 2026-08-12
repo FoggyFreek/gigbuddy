@@ -109,6 +109,31 @@ describe('GET /api/contacts - category filters', () => {
   })
 })
 
+describe('invalid contact categories', () => {
+  it('rejects an invalid category on PATCH', async () => {
+    const { rows: [contact] } = await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category)
+       VALUES ($1, 'Side Project', 'network') RETURNING id`,
+      [seed.tenantA.id],
+    )
+
+    const res = await asUserA(request(app).patch(`/api/contacts/${contact.id}`)
+      .send({ category: 'invalid' })).expect(400)
+    expect(res.body.error).toBe('Invalid category value')
+
+    const { rows: [stored] } = await pool.query(
+      'SELECT category FROM contacts WHERE id = $1', [contact.id],
+    )
+    expect(stored.category).toBe('network')
+  })
+
+  it('falls back to press on POST', async () => {
+    const res = await asUserA(request(app).post('/api/contacts')
+      .send({ name: 'Side Project', category: 'invalid' })).expect(201)
+    expect(res.body.category).toBe('press')
+  })
+})
+
 describe('GET /api/contacts/search — category filter', () => {
   beforeEach(async () => {
     await pool.query(

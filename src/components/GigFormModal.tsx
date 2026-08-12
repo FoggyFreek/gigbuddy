@@ -15,10 +15,11 @@ import { TimePicker } from '@mui/x-date-pickers/TimePicker'
 import dayjs from 'dayjs'
 import customParseFormat from 'dayjs/plugin/customParseFormat'
 import DateEntryField from './DateEntryField.tsx'
-import GigAvailabilityPanel, { type AvailabilityData } from './GigAvailabilityPanel.tsx'
-import GigDetailContent, { type GigDetailHandle } from './GigDetailContent.tsx'
+import BandAvailabilityPanel, { type AvailabilityData } from './BandAvailabilityPanel.tsx'
+import GigDetailContent, { type GigDetailHandle } from './gigdetails/GigDetailContent.tsx'
 import _SaveStatusLabelRaw from './SaveStatusLabel.tsx'
 const SaveStatusLabel = _SaveStatusLabelRaw as React.ComponentType<{ status: string; sx?: unknown }>
+import MyBandSelect from './myBands/MyBandSelect.tsx'
 import _VenuePickerRaw from './VenuePicker.tsx'
 interface _VenuePickerProps {
   categoryFilter?: string
@@ -33,6 +34,8 @@ const VenuePicker = _VenuePickerRaw as React.ComponentType<_VenuePickerProps>
 import { createGig } from '../api/gigs.ts'
 import { dayjsToTimeString, timeStringToDayjs } from '../utils/eventFormUtils.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 import type { Id, Venue, Gig } from '../types/entities.ts'
 
 dayjs.extend(customParseFormat)
@@ -48,9 +51,8 @@ interface GigFormShape {
   end_time: string
   status: string
   notes: string
-  has_pa_system: boolean
-  has_drumkit: boolean
-  has_stage_lights: boolean
+  /** Which of the artist's bands; personal workspaces only. */
+  my_band_id: Id | null
 }
 
 const EMPTY_FORM: GigFormShape = {
@@ -62,9 +64,7 @@ const EMPTY_FORM: GigFormShape = {
   end_time: '',
   status: 'option',
   notes: '',
-  has_pa_system: false,
-  has_drumkit: false,
-  has_stage_lights: false,
+  my_band_id: null,
 }
 
 interface GigFormModalProps {
@@ -78,6 +78,10 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
   const { t } = useTranslation(['gigs', 'common'])
   const contentRef = useRef<GigDetailHandle | null>(null)
   const { canWritePlanning: canWrite } = usePermissions()
+  // A personal workspace has no roster, and /api/availability is gated on the
+  // band_availability capability — asking there would 403.
+  const showAvailability = useTenantKind().supports(TENANT_CAPABILITIES.BAND_AVAILABILITY)
+  const supportsMyBand = useTenantKind().supports(TENANT_CAPABILITIES.MY_BANDS)
 
   // ── Create mode state ──────────────────────────────────────────────────────
   const [form, setForm] = useState<GigFormShape>(() =>
@@ -108,6 +112,9 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
   const unavailableLeads = (availabilityData?.members ?? []).filter(
     (m) => m.position === 'lead' && m.status === 'unavailable'
   )
+  const marginLeads = (availabilityData?.members ?? []).filter(
+    (m) => m.position === 'lead' && m.status === 'travel_margin'
+  )
 
   async function doCreate() {
     await createGig({
@@ -118,8 +125,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
       start_time: form.start_time || null,
       end_time: form.end_time || null,
       status: form.status,
-      // Extra fields not in base Gig type — server accepts them
-      ...({ has_pa_system: form.has_pa_system, has_drumkit: form.has_drumkit, has_stage_lights: form.has_stage_lights } as Partial<Gig>),
+      ...(supportsMyBand ? ({ my_band_id: form.my_band_id || null } as Partial<Gig>) : {}),
     })
     onClose()
   }
@@ -130,7 +136,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
     if (!form.event_description.trim()) errs.event_description = t($ => $.form.required)
     if (Object.keys(errs).length) { setErrors(errs); return }
 
-    if (unavailableLeads.length > 0) {
+    if (unavailableLeads.length > 0 || marginLeads.length > 0) {
       setConfirmCreate(true)
       return
     }
@@ -169,6 +175,12 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
                 onChange={(e) => handleChange('event_description', e.target.value)}
                 error={!!errors.event_description}
                 helperText={errors.event_description}
+              />
+            </Grid>
+            <Grid size={12}>
+              <MyBandSelect
+                value={form.my_band_id}
+                onChange={(id) => handleChange('my_band_id', id)}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
@@ -223,16 +235,21 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
               </TextField>
             </Grid>
 
-            <Grid size={12}>
-              <Divider sx={{ my: 1 }} />
-              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                {t($ => $.form.memberAvailability)}
-              </Typography>
-              <GigAvailabilityPanel
-                eventDate={form.event_date}
-                onDataLoad={setAvailabilityData}
-              />
-            </Grid>
+            {showAvailability && (
+              <Grid size={12}>
+                <Divider sx={{ my: 1 }} />
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                  {t($ => $.form.memberAvailability)}
+                </Typography>
+                <BandAvailabilityPanel
+                  eventDate={form.event_date}
+                  eventType="gig"
+                  startTime={form.start_time}
+                  endTime={form.end_time}
+                  onDataLoad={setAvailabilityData}
+                />
+              </Grid>
+            )}
           </Grid>
         )}
       </DialogContent>
@@ -253,14 +270,17 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
       </DialogActions>
 
       <Dialog open={confirmCreate} onClose={() => setConfirmCreate(false)}>
-        <DialogTitle>{t($ => $.form.unavailableTitle)}</DialogTitle>
+        <DialogTitle>{t($ => unavailableLeads.length > 0 ? $.form.unavailableTitle : $.form.travelMarginTitle)}</DialogTitle>
         <DialogContent>
-          <Typography>
+          {unavailableLeads.length > 0 && <Typography>
             {t($ => $.form.unavailableBody, {
               names: unavailableLeads.map((m) => m.name).join(', '),
               count: unavailableLeads.length,
             })}
-          </Typography>
+          </Typography>}
+          {marginLeads.length > 0 && <Typography sx={{ mt: unavailableLeads.length > 0 ? 1 : 0 }}>
+            {t($ => $.form.travelMarginBody, { names: marginLeads.map((m) => m.name).join(', ') })}
+          </Typography>}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmCreate(false)}>{t($ => $.form.goBack)}</Button>

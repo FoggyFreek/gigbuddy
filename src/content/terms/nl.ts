@@ -32,7 +32,8 @@ export const termsNl: TermsDocument = {
       heading: '3. Abonnementen, proefperiode en betaling',
       paragraphs: [
         'GigBuddy heeft een gratis abonnement en betaalde abonnementen. Prijzen, limieten en functies per abonnement zie je voordat je afsluit. De betaling verloopt via onze betaalprovider (Mollie); wij zien of bewaren je volledige betaalgegevens nooit.',
-        'Nieuwe abonnees krijgen eenmalig een gratis proefperiode. Om die te starten doen we een verificatiebetaling van € 0,01 waarmee je betaalmachtiging wordt vastgelegd. Zeg je op tijdens de proefperiode, dan betaal je niets meer dan die verificatiebetaling.',
+        'Bandabonnementen en artiestenabonnementen zijn aparte producten, elk met een eigen gratis en betaalde niveaus. Een band valt onder het bandabonnement van de eigenaar; je eigen artiestenwerkruimte valt onder je artiestenabonnement. Je kunt er van beide één tegelijk hebben, en een abonnement kan niet van het ene naar het andere worden overgezet.',
+        'Je krijgt per product eenmalig een gratis proefperiode. Om die te starten doen we een verificatiebetaling van € 0,01 waarmee je betaalmachtiging wordt vastgelegd. Zeg je op tijdens de proefperiode, dan betaal je niets meer dan die verificatiebetaling.',
         'Abonnementen verlengen automatisch per maand of per jaar, afhankelijk van je keuze, totdat je opzegt. Opzeggen kan op elk moment; een betaalde periode loopt tot de einddatum en wordt niet naar rato terugbetaald, tenzij de wet dat vereist.',
         'Ga je naar een lager abonnement, dan vervallen functies die buiten het nieuwe abonnement vallen. Gegevens worden alleen verwijderd na jouw uitdrukkelijke, geïnformeerde bevestiging van een downgrade — nooit enkel omdat een betaling is mislukt. Verloopt je abonnement, dan valt je omgeving terug op het gratis abonnement en blijven je gegevens bewaard.',
       ],

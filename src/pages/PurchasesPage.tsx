@@ -1,13 +1,15 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
+import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
 import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import SearchIcon from '@mui/icons-material/Search'
@@ -63,15 +65,18 @@ export default function PurchasesPage() {
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
   const [purchases, setPurchases] = useState<Purchase[]>([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [newDialog, setNewDialog] = useState(false)
+  const requestedNewPurchase = Boolean((location.state as { openNewPurchase?: boolean } | null)?.openNewPurchase)
+  const [newDialog, setNewDialog] = useState(requestedNewPurchase)
   const [importDialog, setImportDialog] = useState(false)
   const [summaryFilter, setSummaryFilter] = useState<SummaryKey>('unpaid')
   const [searchQuery, setSearchQuery] = useState('')
   const [period, setPeriod] = useState<Period>(() => defaultPeriodForDates([], fiscalYearStart))
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [periodsLoaded, setPeriodsLoaded] = useState(false)
+  const requestKey = JSON.stringify(period)
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null)
+  const loading = !periodsLoaded || loadedRequestKey !== requestKey
 
   const refreshPeriods = useCallback(async ({ signalLoaded = false } = {}) => {
     try {
@@ -91,18 +96,33 @@ export default function PurchasesPage() {
   }, [fiscalYearStart])
 
   useEffect(() => {
-    refreshPeriods({ signalLoaded: true })
-  }, [refreshPeriods])
+    let cancelled = false
+    listPurchasePeriods()
+      .then((dates) => {
+        if (cancelled) return
+        setAvailableDates(dates.filter(Boolean))
+        setPeriod((prev) => {
+          const fallback = defaultPeriodForDates(dates, fiscalYearStart)
+          const currentYear = defaultPeriodForDates([], fiscalYearStart).year
+          if (prev.mode !== 'fiscal_year' || prev.year !== currentYear) return prev
+          return fallback
+        })
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => { if (!cancelled) setPeriodsLoaded(true) })
+    return () => { cancelled = true }
+  }, [fiscalYearStart])
 
   // Other pages (e.g. Reimbursements) can deep-link here asking to create a
   // purchase straight away; open the dialog, then clear the flag so a refresh
   // or back-navigation doesn't re-open it.
   useEffect(() => {
-    if ((location.state as { openNewPurchase?: boolean } | null)?.openNewPurchase) {
-      setNewDialog(true)
+    if (requestedNewPurchase) {
       navigate(location.pathname, { replace: true, state: null })
     }
-  }, [location.state, location.pathname, navigate])
+  }, [requestedNewPurchase, location.pathname, navigate])
 
   const summaryStats = useMemo(() => {
     const stats: Record<SummaryKey, { count: number; total: number }> = {
@@ -147,20 +167,32 @@ export default function PurchasesPage() {
 
   const load = useCallback(async () => {
     try {
-      setLoading(true)
+      setLoadedRequestKey(null)
       setError(null)
       const data = await listPurchases(period)
       setPurchases(data as Purchase[])
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setLoading(false)
+      setLoadedRequestKey(requestKey)
     }
-  }, [period])
+  }, [period, requestKey])
 
   useEffect(() => {
-    if (periodsLoaded) load()
-  }, [load, periodsLoaded])
+    if (!periodsLoaded) return
+    let cancelled = false
+    listPurchases(period)
+      .then((data) => {
+        if (cancelled) return
+        setPurchases(data as Purchase[])
+        setError(null)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => { if (!cancelled) setLoadedRequestKey(requestKey) })
+    return () => { cancelled = true }
+  }, [period, periodsLoaded, requestKey])
 
   // The dialog creates the draft on the server, then we open it in the split-view
   // detail editor and refresh the list so the new draft row appears.
@@ -183,9 +215,14 @@ export default function PurchasesPage() {
         <Typography variant="h5" sx={{ fontWeight: 600,  flexGrow: 1  }}>
           {t($ => $.title)}
         </Typography>
-        <Button variant="outlined" startIcon={<UploadFileIcon />} onClick={() => setImportDialog(true)}>
-          {t($ => $.importDialog.title)}
-        </Button>
+        <Tooltip title={t($ => $.importDialog.title)}>
+          <IconButton
+            onClick={() => setImportDialog(true)}
+            aria-label={t($ => $.importDialog.title)}
+          >
+            <UploadFileIcon />
+          </IconButton>
+        </Tooltip>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setNewDialog(true)}>
           {t($ => $.createPurchase)}
         </Button>

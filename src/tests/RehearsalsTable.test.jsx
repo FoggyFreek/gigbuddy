@@ -52,6 +52,16 @@ describe('RehearsalsTable', () => {
     expect(screen.queryByText('Status')).not.toBeInTheDocument()
   })
 
+  it('adds source Band identity only for personal aggregate rows', () => {
+    wrap(<RehearsalsTable
+      rehearsals={[{ ...REHEARSALS[0], tenantId: 9, tenantName: 'Other Band', tenantAvatarPath: null }]}
+      showBand
+      onRowClick={() => {}}
+    />)
+    expect(screen.getByText('Band')).toBeInTheDocument()
+    expect(screen.getByText('Other Band')).toBeInTheDocument()
+  })
+
   it('shows tab-specific empty states', () => {
     wrap(<RehearsalsTable rehearsals={[]} onRowClick={() => {}} />)
     expect(screen.getByText(/No upcoming rehearsals/i)).toBeInTheDocument()

@@ -90,7 +90,6 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
     getInvoice(invoiceId)
       .then((data) => {
         if (cancelled) return

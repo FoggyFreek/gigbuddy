@@ -18,6 +18,9 @@ export const listTasks = ({ limit, assignee, done }: TaskListFilters = {}) => {
   if (done !== undefined) params.set('done', String(done))
   return api<LimitedCollectionWithTotalResponse<Task>>(`/?${params}`)
 }
+export const searchTasks = (q: string) =>
+  api<Task[]>(`/search?${new URLSearchParams({ q: q ?? '' })}`)
+
 export const createTask = (body: Partial<Task>) =>
   api<Task>('/', { method: 'POST', body: JSON.stringify(body) })
 export const updateTask = (id: Id, body: Partial<Task>) =>

@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet } from 'react-router'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import type { Permission } from '../auth/permissions.ts'
 

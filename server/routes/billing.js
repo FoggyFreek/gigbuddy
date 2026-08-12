@@ -8,6 +8,7 @@ import { auditLog } from '../utils/auditLog.js'
 import { requireCurrentTerms } from '../middleware/auth.js'
 import { sendError } from './routeHelpers.js'
 import { listPlans } from '../services/planService.js'
+import { parseAudience } from '../validators/billingValidators.js'
 import {
   getBillingState,
   subscribe,
@@ -58,23 +59,29 @@ router.post('/downgrade', requireCurrentTerms, async (req, res) => {
   res.json(result)
 })
 
+// Cancel and resume name the product explicitly — the body's `audience` is
+// required, since a user may hold a live band and a live artist subscription.
 router.post('/cancel', requireCurrentTerms, async (req, res) => {
-  const result = await cancelSubscription(pool, req.user.id)
+  const result = await cancelSubscription(pool, req.user.id, req.body ?? {})
   if (result.error) return sendError(res, result.error)
-  auditLog(req, 'billing.cancel', {})
+  auditLog(req, 'billing.cancel', { audience: req.body?.audience })
   res.json(result)
 })
 
 router.post('/resume', requireCurrentTerms, async (req, res) => {
-  const result = await resumeSubscription(pool, req.user.id)
+  const result = await resumeSubscription(pool, req.user.id, req.body ?? {})
   if (result.error) return sendError(res, result.error)
-  auditLog(req, 'billing.resume', {})
+  auditLog(req, 'billing.resume', { audience: req.body?.audience })
   res.json(result)
 })
 
-// Manual reconcile (dev, when webhooks are disabled).
+// Manual reconcile (dev, when webhooks are disabled). An `audience` narrows it
+// to one ladder — a checkout return must not read the other product's settled
+// subscription as its own. Omitted, it syncs both.
 router.post('/sync', requireCurrentTerms, async (req, res) => {
-  res.json(await syncOwnSubscription(pool, req.user.id))
+  const parsed = req.body?.audience === undefined ? { audience: null } : parseAudience(req.body)
+  if (parsed.error) return sendError(res, { status: 400, body: { error: parsed.error } })
+  res.json(await syncOwnSubscription(pool, req.user.id, parsed.audience))
 })
 
 export default router

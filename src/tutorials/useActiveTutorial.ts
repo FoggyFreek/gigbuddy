@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router'
 import { useAuth } from '../contexts/authContext.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { useEntitlements } from '../hooks/useEntitlements.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
 import { dismissTutorial as dismissTutorialApi } from '../api/tutorials.ts'
 import { TUTORIALS } from './registry.tsx'
 import type { TutorialContext, TutorialDef } from './types.ts'
@@ -19,6 +20,7 @@ export function useActiveTutorial(): ActiveTutorial {
   const { user, refreshUser } = useAuth()
   const { can, isSuperAdmin } = usePermissions()
   const { has, financeReadOnly } = useEntitlements()
+  const { allowsKind } = useTenantKind()
   const { pathname } = useLocation()
 
   // Locally-dismissed keys so the overlay closes before /auth/me refreshes.
@@ -38,8 +40,10 @@ export function useActiveTutorial(): ActiveTutorial {
 
   // Ordered, synchronously-eligible, not-yet-dismissed tutorials.
   const candidates = useMemo(
-    () => TUTORIALS.filter((t) => !dismissedSet.has(t.key) && (t.eligible?.(ctx) ?? true)),
-    [dismissedSet, ctx],
+    () => TUTORIALS.filter(
+      (t) => !dismissedSet.has(t.key) && allowsKind(t.kinds) && (t.eligible?.(ctx) ?? true),
+    ),
+    [dismissedSet, allowsKind, ctx],
   )
 
   // Resolve the first candidate whose async condition passes. Re-runs when the

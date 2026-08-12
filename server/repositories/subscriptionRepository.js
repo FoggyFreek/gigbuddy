@@ -2,30 +2,33 @@
 // (platform-level), not tenant-scoped; tenant access derives from
 // tenants.owner_user_id via the entitlement resolver.
 
-// The one live (non-canceled) subscription for a user, with its plan's slug
-// and entitlements joined in. The partial unique index guarantees at most one.
-export async function fetchLiveSubscriptionForUser(executor, userId) {
+// The user's one live (non-canceled) subscription in ONE audience, with its
+// plan's slug and entitlements joined in. Band and artist are separate products
+// and a user may hold one of each, so every caller must say which it means —
+// the partial unique index is on (user_id, audience).
+export async function fetchLiveSubscriptionForUser(executor, userId, audience) {
   const { rows } = await executor.query(
     `SELECT s.*, p.slug AS plan_slug, p.entitlements AS plan_entitlements
      FROM subscriptions s
      JOIN subscription_plans p ON p.id = s.plan_id
-     WHERE s.user_id = $1 AND s.status <> 'canceled'`,
-    [userId],
+     WHERE s.user_id = $1 AND s.audience = $2 AND s.status <> 'canceled'`,
+    [userId, audience],
   )
   return rows[0] ?? null
 }
 
-// The one live subscription for a user, locked FOR UPDATE — the saga entry
-// point (subscribe/cancel/resume/change/ingest) serializes on this row so
-// concurrent webhook + user actions can't interleave.
-export async function fetchLiveSubscriptionForUpdate(executor, userId) {
+// The user's live subscription in one audience, locked FOR UPDATE — the saga
+// entry point (subscribe/cancel/resume/change/ingest) serializes on this row so
+// concurrent webhook + user actions can't interleave. The lock is per-audience,
+// which is correct: the two products have no shared state to protect.
+export async function fetchLiveSubscriptionForUpdate(executor, userId, audience) {
   const { rows } = await executor.query(
     `SELECT s.*, p.slug AS plan_slug, p.entitlements AS plan_entitlements
      FROM subscriptions s
      JOIN subscription_plans p ON p.id = s.plan_id
-     WHERE s.user_id = $1 AND s.status <> 'canceled'
+     WHERE s.user_id = $1 AND s.audience = $2 AND s.status <> 'canceled'
      FOR UPDATE OF s`,
-    [userId],
+    [userId, audience],
   )
   return rows[0] ?? null
 }
@@ -115,12 +118,15 @@ export async function markSubscriptionPastDue(executor, id, since) {
   return rows[0] ?? null
 }
 
-// Trial is once per user: any subscription (even canceled) that ever carried a
-// trial_ends_at counts as a used trial.
-export async function hasUsedTrial(executor, userId) {
+// Trial is once per PRODUCT: any subscription in this audience (even canceled)
+// that ever carried a trial_ends_at counts as that ladder's trial used. Band and
+// artist are separate purchases, so sampling one must not spend the other's
+// trial — otherwise the artist product is untrialable for every band customer.
+export async function hasUsedTrial(executor, userId, audience) {
   const { rowCount } = await executor.query(
-    'SELECT 1 FROM subscriptions WHERE user_id = $1 AND trial_ends_at IS NOT NULL LIMIT 1',
-    [userId],
+    `SELECT 1 FROM subscriptions
+      WHERE user_id = $1 AND audience = $2 AND trial_ends_at IS NOT NULL LIMIT 1`,
+    [userId, audience],
   )
   return rowCount > 0
 }

@@ -10,6 +10,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import FileUploadOutlinedIcon from '@mui/icons-material/FileUploadOutlined'
 import CloudSyncOutlinedIcon from '@mui/icons-material/CloudSyncOutlined'
+import DiamondOutlined from '@mui/icons-material/DiamondOutlined'
 import { normalizeIsoDate, toIsoDate } from '../utils/availabilityUtils.ts'
 import {
   getDayHeaders,
@@ -17,10 +18,11 @@ import {
   buildCalendarCellViewModel,
   indexByDate,
   indexByDateRange,
+  summarizeCalendarSlots,
 } from './calendar/calendarGrid.ts'
 import MonthMenu from './calendar/MonthMenu.tsx'
 import CalendarCell from './calendar/CalendarCell.tsx'
-import type { Gig, Member, BandEvent, Slot, Rehearsal } from '../types/entities.ts'
+import type { Gig, Member, BandEvent, Slot, Rehearsal, UnassignedSlotLane } from '../types/entities.ts'
 
 interface AvailabilityCalendarProps {
   year: number
@@ -30,6 +32,10 @@ interface AvailabilityCalendarProps {
   rehearsals?: Rehearsal[]
   bandEvents?: BandEvent[]
   members: Member[]
+  /** Overrides how slots without a `band_member_id` render; defaults to band-wide. */
+  unassignedLane?: UnassignedSlotLane
+  /** Personal calendars keep their own slots directly editable. */
+  summarizeAvailability?: boolean
   selectionStart?: string
   selectedDay?: string
   mobile?: boolean
@@ -43,6 +49,8 @@ interface AvailabilityCalendarProps {
   onMonthJump: (year: number, month: number) => void
   onExport?: () => void
   onSubscribe?: () => void
+  /** Plan lacks calendar sync: the affordance stays visible as a diamond upsell. */
+  subscribeLocked?: boolean
 }
 
 export default function AvailabilityCalendar({
@@ -53,6 +61,8 @@ export default function AvailabilityCalendar({
   rehearsals = [],
   bandEvents = [],
   members,
+  unassignedLane,
+  summarizeAvailability = true,
   selectionStart,
   selectedDay,
   mobile = false,
@@ -66,6 +76,7 @@ export default function AvailabilityCalendar({
   onMonthJump,
   onExport,
   onSubscribe,
+  subscribeLocked = false,
 }: Readonly<AvailabilityCalendarProps>) {
   const { t, i18n } = useTranslation('availability')
   const dayHeaders = useMemo(() => getDayHeaders(i18n.resolvedLanguage ?? 'en'), [i18n.resolvedLanguage])
@@ -131,8 +142,15 @@ export default function AvailabilityCalendar({
     [bandEvents, cells],
   )
   const slotsByDate = useMemo(
-    () => indexByDateRange(slots, (s) => s.start_date, (s) => s.end_date, cells),
-    [slots, cells],
+    () => summarizeAvailability
+      ? summarizeCalendarSlots(slots, cells.map((cell) => cell.iso))
+      : indexByDateRange(
+          slots,
+          (slot) => normalizeIsoDate(slot.start_date),
+          (slot) => normalizeIsoDate(slot.end_date) || normalizeIsoDate(slot.start_date),
+          cells,
+        ),
+    [slots, cells, summarizeAvailability],
   )
 
   const cellViewModels = useMemo(() => {
@@ -140,8 +158,10 @@ export default function AvailabilityCalendar({
     return cells.map((cell, idx) => buildCalendarCellViewModel(cell, idx, cellCtx))
   }, [cells, slotsByDate, gigsByDate, rehearsalsByDate, bandEventsByDate, selectionStart, selectedDay, mobile, today])
 
+  // width:100% keeps the auto margins from shrinking this to fit-content when
+  // the parent is a flex column.
   return (
-    <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
+    <Box sx={{ width: '100%', maxWidth: 1280, mx: 'auto' }}>
       <Stack direction="row" sx={{ mb: 1, width: '100%', alignItems: 'center' }}>
         <IconButton size="small" onClick={onPrev} aria-label={t($ => $.nav.prevMonth)}>
           <ChevronLeftIcon />
@@ -154,9 +174,11 @@ export default function AvailabilityCalendar({
         </Box>
 
         {onSubscribe && (
-          <Tooltip title={t($ => $.subscribe.tooltip)}>
+          <Tooltip title={subscribeLocked ? t($ => $.subscribe.locked) : t($ => $.subscribe.tooltip)}>
             <IconButton size="small" onClick={onSubscribe} aria-label={t($ => $.subscribe.aria)}>
-              <CloudSyncOutlinedIcon fontSize="small" />
+              {subscribeLocked
+                ? <DiamondOutlined fontSize="small" color="secondary" />
+                : <CloudSyncOutlinedIcon fontSize="small" />}
             </IconButton>
           </Tooltip>
         )}
@@ -191,6 +213,7 @@ export default function AvailabilityCalendar({
               cell={cell}
               members={members}
               mobile={mobile}
+              unassignedLane={unassignedLane}
               onDayClick={onDayClick}
               onSlotClick={onSlotClick}
               onGigClick={onGigClick}
@@ -231,6 +254,7 @@ export default function AvailabilityCalendar({
                 cell={cell}
                 members={members}
                 mobile={mobile}
+                unassignedLane={unassignedLane}
                 onDayClick={onDayClick}
                 onSlotClick={onSlotClick}
                 onGigClick={onGigClick}

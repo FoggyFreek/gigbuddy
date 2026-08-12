@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import theme from '../theme.ts'
 import AppShell from '../components/AppShell.tsx'
@@ -23,8 +23,26 @@ vi.mock('../hooks/usePushNotifications.ts', () => ({
     unsubscribe: vi.fn(),
   }),
 }))
+vi.mock('../api/tenants.ts', () => ({
+  createOwnedTenant: vi.fn(),
+  createPersonalTenant: vi.fn(),
+}))
+vi.mock('../api/bandProfiles.ts', () => ({
+  searchBandProfiles: vi.fn().mockResolvedValue({ items: [], meta: { limit: 20 } }),
+}))
+vi.mock('../api/bandDirectory.ts', () => ({
+  searchBands: vi.fn().mockResolvedValue({ items: [], meta: { limit: 20 } }),
+  requestToJoinBand: vi.fn(),
+}))
+vi.mock('../api/myBands.ts', () => ({
+  addMyBand: vi.fn(),
+}))
+vi.mock('../api/invites.ts', () => ({
+  redeemInvite: vi.fn(),
+}))
 
 import { useAuth } from '../contexts/authContext.ts'
+import { createOwnedTenant } from '../api/tenants.ts'
 
 function wrap(ui) {
   return render(
@@ -42,6 +60,7 @@ const TWO_TENANT_USER = {
   isSuperAdmin: false,
   activeTenantId: 1,
   activeTenantRole: 'contributor',
+  bandCapacity: { used: 1, limit: null },
   memberships: [
     { tenantId: 1, tenantSlug: 'a', tenantName: 'Band A', role: 'contributor', status: 'approved' },
     { tenantId: 2, tenantSlug: 'b', tenantName: 'Band B', role: 'tenant_admin', status: 'approved' },
@@ -135,6 +154,82 @@ describe('AppShell tenant switcher', () => {
     wrap(<AppShell />)
     await user.click(screen.getByLabelText('open user menu'))
     expect(screen.queryByText('Switch band')).not.toBeInTheDocument()
+  })
+
+  it('searches for an existing band before creating and switching to a new one', async () => {
+    createOwnedTenant.mockResolvedValue({ id: 3, band_name: 'Band C' })
+    const switchTenant = vi.fn().mockResolvedValue({})
+    useAuth.mockReturnValue({
+      user: {
+        ...TWO_TENANT_USER,
+        memberships: [TWO_TENANT_USER.memberships[0]],
+        bandCapacity: { used: 1, limit: 3 },
+      },
+      logout: vi.fn(),
+      switchTenant,
+    })
+    const user = userEvent.setup()
+    wrap(<AppShell />)
+
+    await user.click(screen.getByLabelText('open user menu'))
+    await user.click(screen.getByRole('menuitem', { name: 'Add band' }))
+
+    const searchDialog = screen.getByRole('dialog', { name: 'Add a band' })
+    const createBand = within(searchDialog).getByRole('button', { name: 'Create band' })
+    expect(createBand).toBeDisabled()
+    await user.type(within(searchDialog).getByRole('textbox', { name: 'Band name' }), 'Band C')
+    await waitFor(() => expect(createBand).toBeEnabled())
+    await user.click(createBand)
+
+    expect(screen.getByRole('dialog', { name: 'Set up your band' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Band name')).toHaveValue('Band C')
+    await user.click(screen.getByLabelText('Accounting country'))
+    await user.click(screen.getByRole('option', { name: /Netherlands \(NL\)/ }))
+    await user.click(screen.getByRole('button', { name: 'Create my band' }))
+
+    await waitFor(() => expect(createOwnedTenant).toHaveBeenCalledWith({
+      band_name: 'Band C', country_code: 'nl',
+    }))
+    await waitFor(() => expect(switchTenant).toHaveBeenCalledWith(3))
+  })
+
+  it('greys out add band and shows a diamond when the subscription cap blocks it', async () => {
+    useAuth.mockReturnValue({
+      user: {
+        ...TWO_TENANT_USER,
+        memberships: [TWO_TENANT_USER.memberships[0]],
+        bandCapacity: { used: 1, limit: 1 },
+      },
+      logout: vi.fn(),
+      switchTenant: vi.fn(),
+    })
+    const user = userEvent.setup()
+    wrap(<AppShell />)
+
+    await user.click(screen.getByLabelText('open user menu'))
+    const addBand = screen.getByRole('menuitem', { name: 'Add band' })
+    expect(addBand).toHaveAttribute('aria-disabled', 'true')
+    expect(within(addBand).getByTestId('DiamondOutlinedIcon')).toBeInTheDocument()
+  })
+
+  it('shows a plus and keeps add band enabled while the subscription has capacity', async () => {
+    useAuth.mockReturnValue({
+      user: {
+        ...TWO_TENANT_USER,
+        memberships: [],
+        bandCapacity: { used: 0, limit: 1 },
+      },
+      logout: vi.fn(),
+      switchTenant: vi.fn(),
+    })
+    const user = userEvent.setup()
+    wrap(<AppShell />)
+
+    await user.click(screen.getByLabelText('open user menu'))
+    const addBand = screen.getByRole('menuitem', { name: 'Add band' })
+    expect(addBand).not.toHaveAttribute('aria-disabled', 'true')
+    expect(within(addBand).getByTestId('AddIcon')).toBeInTheDocument()
+    expect(within(addBand).queryByTestId('DiamondOutlinedIcon')).not.toBeInTheDocument()
   })
 
   it('shows super-admin nav links in the settings menu only to super admins', async () => {

@@ -1,11 +1,13 @@
 {
   "title": "Taken",
   "myTasks": "Aan mij toegewezen",
-  "showFinished": "Voltooid",
   "filters": "Filters",
-  "taskLimit": "Getoonde taken",
-  "maxTaskLimit": "Max. getoonde taken",
-  "newTask": "Nieuwe taak",
+  "allStatuses": "Alle statussen",
+  "status": {
+    "open": "Open",
+    "finished": "Voltooid"
+  },
+  "newTask": "Toevoegen",
   "empty": "Nog geen taken.",
   "unassigned": "Niet toegewezen",
   "openGig": "Optreden openen",

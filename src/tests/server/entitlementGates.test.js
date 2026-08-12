@@ -121,7 +121,7 @@ describe('integrations gates', () => {
 
   it('blocks minting feed tokens but keeps describe and revoke open', async () => {
     await lockTenantA()
-    expectEntitlementDenied(await asUserA(request(app).post('/api/calendar-feed/regenerate')), 'integrations')
+    expectEntitlementDenied(await asUserA(request(app).post('/api/calendar-feed/regenerate')), 'calendar_sync')
     await asUserA(request(app).get('/api/calendar-feed')).expect(200)
     await asUserA(request(app).delete('/api/calendar-feed')).expect(204)
   })

@@ -1,5 +1,5 @@
 import type { Rehearsal, Member, Id } from '../types/entities.ts'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -12,7 +12,6 @@ import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
 import Stack from '@mui/material/Stack'
-import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import {
   addParticipant,
@@ -22,12 +21,14 @@ import {
   setVote,
   updateRehearsal,
 } from '../api/rehearsals.ts'
-import { getAvailabilityOn } from '../api/availability.ts'
-import type { AvailabilityData } from './GigAvailabilityPanel.tsx'
+import BandAvailabilityPanel, { type AvailabilityData } from './BandAvailabilityPanel.tsx'
 import { listMembers } from '../api/bandMembers.ts'
 import useDebouncedSave from '../hooks/useDebouncedSave.ts'
 import { toDateInput, toTimeInput } from '../utils/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../utils/requiredFields.ts'
+import { useTenantKind } from '../hooks/useTenantKind.ts'
+import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
+import MyBandSelect from './myBands/MyBandSelect.tsx'
 import RehearsalFields from './RehearsalFields.tsx'
 import RehearsalParticipantsSection from './RehearsalParticipantsSection.tsx'
 import SaveStatusLabel from './SaveStatusLabel.tsx'
@@ -40,6 +41,8 @@ interface RehearsalForm {
   end_time: string
   location: string
   notes: string
+  /** Which of the artist's bands; personal workspaces only. */
+  my_band_id: Id | null
 }
 
 const EMPTY_FORM: RehearsalForm = {
@@ -48,6 +51,7 @@ const EMPTY_FORM: RehearsalForm = {
   end_time: '',
   location: '',
   notes: '',
+  my_band_id: null,
 }
 
 interface RehearsalFormModalProps {
@@ -59,6 +63,10 @@ interface RehearsalFormModalProps {
 
 export default function RehearsalFormModal({ mode, rehearsalId, onClose, initialDate }: Readonly<RehearsalFormModalProps>) {
   const { t } = useTranslation(['rehearsals', 'common'])
+  const supportsMyBand = useTenantKind().supports(TENANT_CAPABILITIES.MY_BANDS)
+  // A personal workspace has no roster, and /api/availability is gated on the
+  // band_availability capability — asking there would 403.
+  const showAvailability = useTenantKind().supports(TENANT_CAPABILITIES.BAND_AVAILABILITY)
   const [form, setForm] = useState<RehearsalForm>(() =>
     mode === 'create' && initialDate ? { ...EMPTY_FORM, proposed_date: initialDate } : EMPTY_FORM,
   )
@@ -67,10 +75,8 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
   const [rehearsal, setRehearsal] = useState<Rehearsal | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const [extraMemberIds, setExtraMemberIds] = useState<Id[]>([])
-  const [addMemberId, setAddMemberId] = useState<Id | ''>('')
   const [availabilityData, setAvailabilityData] = useState<AvailabilityData | null>(null)
   const [confirmCreate, setConfirmCreate] = useState(false)
-  const availTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const saveFn = useCallback(
     async (patch: Record<string, unknown>) => { await updateRehearsal(rehearsalId!, patch) },
@@ -82,22 +88,6 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
     listMembers().then(setMembers).catch(() => {})
   }, [])
 
-  // Fetch member availability on the proposed date (create mode only), debounced.
-  // The render and create-guard both gate on form.proposed_date, so stale data
-  // when the date is cleared is harmless (matches GigAvailabilityPanel).
-  useEffect(() => {
-    if (mode !== 'create' || !form.proposed_date) return
-    clearTimeout(availTimerRef.current ?? undefined)
-    availTimerRef.current = setTimeout(() => {
-      getAvailabilityOn(form.proposed_date)
-        .then((d) => setAvailabilityData(d as unknown as AvailabilityData))
-        .catch(() => setAvailabilityData(null))
-    }, 300)
-    return () => {
-      if (availTimerRef.current) clearTimeout(availTimerRef.current)
-    }
-  }, [mode, form.proposed_date])
-
   const refresh = useCallback(async () => {
     if (mode !== 'edit') return
     const r = await getRehearsal(rehearsalId!)
@@ -108,6 +98,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
       end_time: toTimeInput((r as Record<string, unknown>).end_time as string),
       location: r.location || '',
       notes: (r as Record<string, unknown>).notes as string || '',
+      my_band_id: r.my_band?.id ?? null,
     })
   }, [mode, rehearsalId])
 
@@ -122,6 +113,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
           end_time: toTimeInput((r as Record<string, unknown>).end_time as string),
           location: r.location || '',
           notes: (r as Record<string, unknown>).notes as string || '',
+          my_band_id: r.my_band?.id ?? null,
         })
       })
       .finally(() => setLoading(false))
@@ -143,6 +135,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
       end_time: form.end_time || null,
       location: form.location || null,
       notes: form.notes || null,
+      ...(supportsMyBand ? { my_band_id: form.my_band_id || null } : {}),
       extra_member_ids: extraMemberIds,
     })
     onClose()
@@ -153,7 +146,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
     if (!form.proposed_date) errs.proposed_date = t($ => $.form.required)
     if (Object.keys(errs).length) { setErrors(errs); return }
 
-    if (unavailableSelected.length > 0) {
+    if (unavailableSelected.length > 0 || marginSelected.length > 0) {
       setConfirmCreate(true)
       return
     }
@@ -175,10 +168,8 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
     await refresh()
   }
 
-  async function handleAddParticipant() {
-    if (!addMemberId) return
-    await addParticipant(rehearsalId!, Number(addMemberId))
-    setAddMemberId('')
+  async function handleAddParticipant(memberId: Id) {
+    await addParticipant(rehearsalId!, Number(memberId))
     await refresh()
   }
 
@@ -209,6 +200,9 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
   const unavailableSelected = (availabilityData?.members ?? []).filter(
     (m) => m.status === 'unavailable' && m.member_id !== undefined && selectedMemberIds.has(m.member_id),
   )
+  const marginSelected = (availabilityData?.members ?? []).filter(
+    (m) => m.status === 'travel_margin' && m.member_id !== undefined && selectedMemberIds.has(m.member_id),
+  )
 
   return (
     <Dialog open fullWidth maxWidth="md" onClose={mode === 'edit' ? handleClose : undefined}>
@@ -228,6 +222,13 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
               onChange={handleChange}
               errors={mode === 'edit' ? { ...getRequiredErrors(form as unknown as Record<string, unknown>, REQUIRED_FIELDS), ...errors } : errors}
             />
+
+            <Grid size={12}>
+              <MyBandSelect
+                value={form.my_band_id}
+                onChange={(id) => handleChange('my_band_id', id === null ? null : String(id))}
+              />
+            </Grid>
 
             {mode === 'create' && createExtras.length > 0 && (
               <Grid size={12}>
@@ -256,27 +257,20 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
               </Grid>
             )}
 
-            {mode === 'create' && form.proposed_date && unavailableSelected.length > 0 && (
+            {showAvailability && mode === 'create' && (
               <Grid size={12}>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                   {t($ => $.form.memberAvailability)}
                 </Typography>
-                <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', minWidth: 0 }}>
-                  {unavailableSelected.map((m) => {
-                    const label = m.reason ? `${m.name} — ${m.reason}` : m.name
-                    return (
-                      <Tooltip key={String(m.member_id)} title={label ?? ''}>
-                        <Chip
-                          label={label}
-                          color="error"
-                          size="small"
-                          sx={{ maxWidth: { xs: '100%', sm: 200 } }}
-                        />
-                      </Tooltip>
-                    )
-                  })}
-                </Stack>
+                <BandAvailabilityPanel
+                  eventDate={form.proposed_date}
+                  eventType="rehearsal"
+                  startTime={form.start_time}
+                  endTime={form.end_time}
+                  participantIds={[...selectedMemberIds]}
+                  onDataLoad={setAvailabilityData}
+                />
               </Grid>
             )}
 
@@ -284,13 +278,12 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
               <RehearsalParticipantsSection
                 rehearsal={rehearsal}
                 members={members}
-                addMemberId={addMemberId}
-                onAddMemberIdChange={setAddMemberId}
                 onVote={handleVote}
                 onRemoveParticipant={handleRemoveParticipant}
                 onAddParticipant={handleAddParticipant}
                 onPromote={handlePromote}
                 onDemote={handleDemote}
+                showAvailability={showAvailability}
               />
             )}
           </Grid>
@@ -313,14 +306,17 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
       </DialogActions>
 
       <Dialog open={confirmCreate} onClose={() => setConfirmCreate(false)}>
-        <DialogTitle>{t($ => $.form.unavailableTitle)}</DialogTitle>
+        <DialogTitle>{t($ => unavailableSelected.length > 0 ? $.form.unavailableTitle : $.form.travelMarginTitle)}</DialogTitle>
         <DialogContent>
-          <Typography>
+          {unavailableSelected.length > 0 && <Typography>
             {t($ => $.form.unavailableBody, {
               count: unavailableSelected.length,
               names: unavailableSelected.map((m) => m.name).join(', '),
             })}
-          </Typography>
+          </Typography>}
+          {marginSelected.length > 0 && <Typography sx={{ mt: unavailableSelected.length > 0 ? 1 : 0 }}>
+            {t($ => $.form.travelMarginBody, { names: marginSelected.map((m) => m.name).join(', ') })}
+          </Typography>}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmCreate(false)}>{t($ => $.form.goBack)}</Button>

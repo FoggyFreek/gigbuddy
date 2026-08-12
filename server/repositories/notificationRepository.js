@@ -119,7 +119,8 @@ export async function resolveAudience(executor, tenantId, type, { userId = null,
 
 export async function getUserIdForBandMember(executor, bandMemberId, tenantId) {
   const { rows } = await executor.query(
-    'SELECT user_id FROM band_members WHERE id = $1 AND tenant_id = $2 AND user_id IS NOT NULL',
+    `SELECT user_id FROM band_members
+      WHERE id = $1 AND tenant_id = $2 AND user_id IS NOT NULL AND deleted_at IS NULL`,
     [bandMemberId, tenantId],
   )
   return rows[0]?.user_id ?? null
@@ -169,20 +170,4 @@ export async function upsertTenantPref(executor, userId, tenantId, enabled) {
      ON CONFLICT (user_id, tenant_id) DO UPDATE SET enabled = EXCLUDED.enabled`,
     [userId, tenantId, enabled],
   )
-}
-
-// Profile-picture lookup gated by the caller's approved membership in that tenant — the
-// generic /api/files route only authorizes against the *active* tenant, which
-// would 404 cross-tenant avatars in the bell. Returns null when the caller is
-// not an approved member (indistinguishable from "no profile picture": both 404).
-export async function getTenantAvatarPath(executor, userId, tenantId) {
-  const { rows } = await executor.query(
-    `SELECT t.avatar_path
-     FROM tenants t
-     JOIN memberships m ON m.tenant_id = t.id AND m.user_id = $1 AND m.status = 'approved'
-     WHERE t.id = $2`,
-    [userId, tenantId],
-  )
-  if (!rows[0]) return null
-  return rows[0].avatar_path ?? null
 }

@@ -13,6 +13,12 @@ export const REHEARSAL_STATUS_COLORS: Record<string, string> = {
 
 export const BAND_EVENT_COLOR = 'warning.main'
 
+export const AVAILABILITY_STATUS_COLORS: Record<string, string> = {
+  available: 'success.main',
+  travel_margin: 'warning.main',
+  unavailable: 'error.main',
+}
+
 export function toIsoDate(date: Date): string {
   const y = date.getFullYear()
   const m = String(date.getMonth() + 1).padStart(2, '0')
@@ -30,8 +36,20 @@ export function normalizeIsoDate(val: string | Date | null | undefined): string 
   return toIsoDate(new Date(val))
 }
 
-export function getMemberColor(slot: Slot, members: Member[]): string {
-  if (slot.band_member_id === null) return '#9e9e9e'
-  const m = members.find((m) => m.id === slot.band_member_id)
-  return m?.color || '#9e9e9e'
+export const UNASSIGNED_SLOT_COLOR = '#9e9e9e'
+
+export function getMemberColor(
+  slot: Slot,
+  members: Member[],
+  unassignedColor: string = UNASSIGNED_SLOT_COLOR,
+): string {
+  if (slot.band_member_id == null) return unassignedColor
+  const m = members.find((member) => String(member.id) === String(slot.band_member_id))
+  return m?.color || UNASSIGNED_SLOT_COLOR
+}
+
+export function canManageAvailabilityForMember(member: Member | null | undefined): boolean {
+  return member != null && (
+    member.user_id == null || member.availability_managed_by_band === true
+  )
 }

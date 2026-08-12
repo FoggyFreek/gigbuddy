@@ -47,6 +47,20 @@ function asUserA(req) {
     .set('x-test-tenant-id', String(seed.tenantA.id))
 }
 
+async function createPersonalWorkspace(userId, slug = 'solo') {
+  const { rows: [tenant] } = await pool.query(
+    `INSERT INTO tenants (slug, band_name, display_name, kind, created_by_user_id, owner_user_id)
+     VALUES ($1, 'Solo Artist', 'Solo Artist', 'personal', $2, $2) RETURNING *`,
+    [slug, userId],
+  )
+  await pool.query(
+    `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+     VALUES ($1, $2, 'tenant_admin', 'approved', NOW(), 'owner')`,
+    [userId, tenant.id],
+  )
+  return tenant
+}
+
 async function seedLinkpageContent() {
   const a = seed.tenantA.id
   const b = seed.tenantB.id
@@ -124,6 +138,14 @@ describe('public linkpage export', () => {
   it('404s for unknown slugs', async () => {
     const res = await request(app)
       .get('/api/public/linkpage/export/does-not-exist')
+      .set('Authorization', `Bearer ${SECRET}`)
+    expect(res.status).toBe(404)
+  })
+
+  it('404s for a personal workspace slug — link pages are a band surface', async () => {
+    await createPersonalWorkspace(seed.userA.id)
+    const res = await request(app)
+      .get('/api/public/linkpage/export/solo')
       .set('Authorization', `Bearer ${SECRET}`)
     expect(res.status).toBe(404)
   })
@@ -235,13 +257,27 @@ describe('linkpage handoff', () => {
       `INSERT INTO users (google_sub, email, name, status) VALUES ('sub-c', 'c@test.local', 'Contrib', 'approved') RETURNING id`,
     )
     await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at) VALUES ($1, $2, 'contributor', 'approved', NOW())`,
+      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source) VALUES ($1, $2, 'contributor', 'approved', NOW(), 'admin')`,
       [contributor.id, seed.tenantA.id],
     )
     const asContributor = (req) =>
       req.set('x-test-user-id', String(contributor.id)).set('x-test-tenant-id', String(seed.tenantA.id))
     expect((await asContributor(request(app).post('/api/linkpage/handoff'))).status).toBe(403)
     expect((await asContributor(request(app).get('/api/linkpage/status'))).status).toBe(403)
+  })
+
+  it('is refused in a personal workspace — the owner is admin, the kind gate denies', async () => {
+    const workspace = await createPersonalWorkspace(seed.userA.id)
+    const asOwner = (req) =>
+      req.set('x-test-user-id', String(seed.userA.id)).set('x-test-tenant-id', String(workspace.id))
+
+    const handoff = await asOwner(request(app).post('/api/linkpage/handoff'))
+    expect(handoff.status).toBe(403)
+    expect(handoff.body.code).toBe('tenant_kind_not_supported')
+
+    const status = await asOwner(request(app).get('/api/linkpage/status'))
+    expect(status.status).toBe(403)
+    expect(status.body.code).toBe('tenant_kind_not_supported')
   })
 
   it('is gated on the linkpage entitlement (bronze fallback is denied)', async () => {
@@ -260,13 +296,32 @@ describe('linkpage handoff', () => {
 
     const token = decodeURIComponent(res.body.url.split('#gbtoken=')[1])
     const payload = verifyPayload(token)
-    expect(payload).toMatchObject({ t: 'handoff', slug: 'alpha', tenantId: seed.tenantA.id })
+    expect(payload).toMatchObject({
+      t: 'handoff', slug: 'alpha', slugRevision: 0, tenantId: seed.tenantA.id,
+    })
     expect(payload.exp * 1000).toBeGreaterThan(Date.now())
   })
 
   it('reports status with the public page URL', async () => {
     const res = await asUserA(request(app).get('/api/linkpage/status'))
     expect(res.status).toBe(200)
-    expect(res.body).toEqual({ configured: true, publicUrl: 'https://link.test.local/alpha' })
+    expect(res.body).toEqual({
+      configured: true,
+      publicUrl: 'https://link.test.local/alpha',
+      linkpageSync: 'synced',
+    })
+  })
+
+  it('reports a pending namespace migration until the outbox operation completes', async () => {
+    await pool.query(
+      `INSERT INTO linkpage_slug_sync_operations
+         (tenant_id, old_slug, new_slug, slug_revision)
+       VALUES ($1, 'alpha-old', 'alpha', 1)`,
+      [seed.tenantA.id],
+    )
+
+    const res = await asUserA(request(app).get('/api/linkpage/status'))
+    expect(res.status).toBe(200)
+    expect(res.body.linkpageSync).toBe('pending')
   })
 })

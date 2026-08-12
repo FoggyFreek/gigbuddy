@@ -11,7 +11,8 @@
     "over_target_limit": "Current usage exceeds the limits of the chosen plan. Reduce usage first.",
     "confirmation_mismatch": "The confirmation phrase did not match.",
     "not_a_downgrade": "The chosen plan is not a downgrade.",
-    "generic": "Something went wrong."
+    "generic": "Something went wrong.",
+    "cross_audience_change": "Band and artist plans are separate products — you cannot move a subscription between them."
   },
   "status": {
     "pending_mandate": "Awaiting payment confirmation",
@@ -28,7 +29,9 @@
     "chordpro": "Chord charts",
     "customization": "Custom branding",
     "public_promotion": "Public promotion",
-    "linkpage": "Link & release pages"
+    "linkpage": "Link & release pages",
+    "custom_slug": "Custom web address",
+    "calendar_sync": "Calendar sync"
   },
   "limits": {
     "storage_mb": "Storage (MB)",
@@ -53,7 +56,8 @@
     "repairNeeded": "We are finishing setting up your billing schedule. No action is needed.",
     "resume": "Resume subscription",
     "cancel": "Cancel subscription",
-    "sync": "Refresh from provider"
+    "sync": "Refresh from provider",
+    "noPersonalWorkspace": "You do not have your own artist workspace yet. Create one from Settings, then choose an artist plan."
   },
   "plans": {
     "title": "Plans",
@@ -68,7 +72,9 @@
     "upgrade": "Upgrade",
     "downgrade": "Downgrade",
     "switchToYearly": "Switch to yearly",
-    "switchToMonthly": "Switch to monthly"
+    "switchToMonthly": "Switch to monthly",
+    "bandLadderTitle": "Your band plan",
+    "artistLadderTitle": "Your artist plan"
   },
   "toasts": {
     "paymentStarted": "Payment started — your plan updates once it is confirmed.",

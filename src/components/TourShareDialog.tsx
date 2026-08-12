@@ -1,5 +1,5 @@
 import type { Gig, Id } from '../types/entities.ts'
-import { useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -114,31 +114,29 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: Readonly<T
     }
   }
 
-  useEffect(() => {
-    if (open) {
-      setFormat('square')
-      setAccentId(SHARE_VINTAGE_COLORS[0].id)
-      setPhotoOpacity(35)
-      setZoom(100)
-      setPan(0)
-      setShowBanners(false)
-      setSelectedYear(CURRENT_YEAR)
-      setMonthsAhead('all')
-      setIncludePast(false)
-      setUseDarkLogo(false)
-      setBusy(false)
-      loadPhotos()
-      getProfile().then((p) => {
-        setSocials({
-          instagram: (p as Record<string, unknown>)?.instagram_handle as string || '',
-          facebook: (p as Record<string, unknown>)?.facebook_handle as string || '',
-          tiktok: (p as Record<string, unknown>)?.tiktok_handle as string || '',
-        })
-        setLogoSrc((p as Record<string, unknown>)?.logo_path ? `/api/files/${(p as Record<string, unknown>).logo_path}` : '/share/logo.png')
-        setLogoDarkSrc((p as Record<string, unknown>)?.logo_dark_path ? `/api/files/${(p as Record<string, unknown>).logo_dark_path}` : null)
-      }).catch(() => {})
-    }
-  }, [open])  
+  function handleEnter() {
+    setFormat('square')
+    setAccentId(SHARE_VINTAGE_COLORS[0].id)
+    setPhotoOpacity(35)
+    setZoom(100)
+    setPan(0)
+    setShowBanners(false)
+    setSelectedYear(CURRENT_YEAR)
+    setMonthsAhead('all')
+    setIncludePast(false)
+    setUseDarkLogo(false)
+    setBusy(false)
+    void loadPhotos()
+    getProfile().then((p) => {
+      setSocials({
+        instagram: (p as Record<string, unknown>)?.instagram_handle as string || '',
+        facebook: (p as Record<string, unknown>)?.facebook_handle as string || '',
+        tiktok: (p as Record<string, unknown>)?.tiktok_handle as string || '',
+      })
+      setLogoSrc((p as Record<string, unknown>)?.logo_path ? `/api/files/${(p as Record<string, unknown>).logo_path}` : '/share/logo.png')
+      setLogoDarkSrc((p as Record<string, unknown>)?.logo_dark_path ? `/api/files/${(p as Record<string, unknown>).logo_dark_path}` : null)
+    }).catch(() => {})
+  }
 
   function handleYearChange(_: React.MouseEvent, v: number | null) {
     if (!v) return
@@ -248,6 +246,7 @@ export default function TourShareDialog({ open, onClose, gigs = [] }: Readonly<T
         open={open}
         onClose={busy ? undefined : onClose}
         maxWidth="md"
+        slotProps={{ transition: { onEnter: handleEnter } }}
         onClick={(e) => e.stopPropagation()}
       >
         <DialogTitle>{t($ => $.tourShare.title)}</DialogTitle>

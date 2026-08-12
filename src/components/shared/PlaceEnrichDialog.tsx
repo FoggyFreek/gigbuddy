@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -54,47 +54,64 @@ export default function PlaceEnrichDialog({
   query, current, fields, onApply, onClose, title, country = null, city = null,
 }: Readonly<PlaceEnrichDialogProps>) {
   const { t } = useTranslation(['places', 'common'])
-  const [candidates, setCandidates] = useState<PlaceSuggestion[]>([])
   const [selectedIndex, setSelectedIndex] = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [failed, setFailed] = useState(false)
   const [applying, setApplying] = useState(false)
-  const [resolving, setResolving] = useState(false)
-  const sessionId = useRef(crypto.randomUUID()).current
+  const [sessionId] = useState(() => crypto.randomUUID())
+  const searchKey = JSON.stringify([query, country, city, sessionId])
+  const [searchState, setSearchState] = useState<{
+    key: string
+    candidates: PlaceSuggestion[]
+    failed: boolean
+  } | null>(null)
+  const currentSearch = searchState?.key === searchKey ? searchState : null
+  const candidates = currentSearch?.candidates ?? []
+  const loading = currentSearch === null
+  const failed = currentSearch?.failed ?? false
 
   useEffect(() => {
     let active = true
-    setLoading(true)
-    setFailed(false)
-    setCandidates([])
     searchPlaces(query, { country, city, sessionId })
       .then((items) => {
         if (!active) return
-        setCandidates(items)
+        setSearchState({ key: searchKey, candidates: items, failed: false })
         setSelectedIndex(0)
       })
-      .catch(() => { if (active) setFailed(true) })
-      .finally(() => { if (active) setLoading(false) })
+      .catch(() => {
+        if (active) setSearchState({ key: searchKey, candidates: [], failed: true })
+      })
     return () => { active = false }
-  }, [query, country, city, sessionId])
+  }, [query, country, city, sessionId, searchKey])
 
   const selected = candidates[selectedIndex] ?? null
+  const detailsKey = selected?.details
+    ? JSON.stringify([searchKey, selectedIndex, selected.details.id, selected.details.session_id])
+    : null
+  const [resolvedDetailsKey, setResolvedDetailsKey] = useState<string | null>(null)
+  const resolving = detailsKey !== null && resolvedDetailsKey !== detailsKey
 
   useEffect(() => {
-    if (!selected?.details) return
+    if (!selected?.details || detailsKey === null || resolvedDetailsKey === detailsKey) return
     let active = true
-    setResolving(true)
     getPlaceDetails(selected)
       .then((details) => {
         if (!active) return
-        setCandidates((current) => current.map((candidate, index) => (
-          index === selectedIndex ? details : candidate
-        )))
+        setSearchState((state) => state?.key === searchKey
+          ? {
+              ...state,
+              candidates: state.candidates.map((candidate, index) => (
+                index === selectedIndex ? details : candidate
+              )),
+            }
+          : state)
       })
-      .catch(() => { if (active) setFailed(true) })
-      .finally(() => { if (active) setResolving(false) })
+      .catch(() => {
+        if (active) {
+          setSearchState((state) => state?.key === searchKey ? { ...state, failed: true } : state)
+        }
+      })
+      .finally(() => { if (active) setResolvedDetailsKey(detailsKey) })
     return () => { active = false }
-  }, [selected, selectedIndex])
+  }, [detailsKey, resolvedDetailsKey, searchKey, selected, selectedIndex])
 
   const fieldKeys = useMemo(() => fields.map((f) => f.key), [fields])
   const updates = useMemo(

@@ -18,6 +18,13 @@ export const FEATURES = Object.freeze({
   CHORDPRO: 'chordpro',
   PUBLIC_PROMOTION: 'public_promotion',
   LINKPAGE: 'linkpage',
+  // Changing the public tenant slug. Existing slugs survive a downgrade; this
+  // flag gates only subsequent changes, so there is no purge behavior.
+  CUSTOM_SLUG: 'custom_slug',
+  // Subscribing an external calendar to the ICS feed. Split out of
+  // `integrations` so "planning, but no calendar sync" is expressible — the
+  // shape a free artist workspace takes.
+  CALENDAR_SYNC: 'calendar_sync',
 })
 
 export const LIMITS = Object.freeze({
@@ -43,7 +50,8 @@ export const ENTITLEMENT_KEYS = Object.freeze({
 // purged (read-only mode instead); `public_promotion` is flag-only (no data);
 // `linkpage` data lives in the decoupled linkpage app, which disables the
 // pages itself when a content sync reports the feature off — nothing to purge
-// on this side.
+// on this side; `calendar_sync` likewise stores nothing of its own — the gate
+// on the feed endpoint is what stops serving, an existing token may remain.
 export const PURGEABLE_FEATURES = Object.freeze([
   FEATURES.INTEGRATIONS,
   FEATURES.CUSTOMIZATION,

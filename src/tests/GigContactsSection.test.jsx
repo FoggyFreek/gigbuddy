@@ -1,9 +1,9 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import GigContactsSection from '../components/GigContactsSection.tsx'
+import GigContactsSection from '../components/gigdetails/GigContactsSection.tsx'
 import theme from '../theme.ts'
 
 vi.mock('../api/gigs.ts', () => ({

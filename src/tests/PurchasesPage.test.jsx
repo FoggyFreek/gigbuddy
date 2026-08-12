@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // pdf.js can't run in jsdom (no DOMMatrix/worker); stub the react-pdf surface.
@@ -248,6 +248,18 @@ describe('PurchasesPage', () => {
     await user.click(screen.getByRole('button', { name: /create purchase/i }))
     await waitFor(() => expect(screen.getByText('New purchase')).toBeInTheDocument())
     expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument()
+  })
+
+  it('shows the e-invoice import action as an icon button with a localized tooltip', async () => {
+    const user = userEvent.setup()
+    wrap(<PurchasesPage />)
+    await screen.findByText('mi5 Studios')
+
+    const importButton = screen.getByRole('button', { name: resources.en.purchases.importDialog.title })
+    expect(importButton).toHaveClass('MuiIconButton-root')
+
+    await user.hover(importButton)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(resources.en.purchases.importDialog.title)
   })
 
   it('creates a purchase and opens it in the nested detail view', async () => {

@@ -1,13 +1,19 @@
 import { createContext, useContext } from 'react'
 import type { Id } from '../types/entities.ts'
+import type { TenantKind } from '../auth/tenantKinds.ts'
 import type { UserEntitlements } from '../auth/entitlements.ts'
 
 export interface UserMembership {
   tenantId?: Id
+  /** Pre-rename alias of `displayName`; both are emitted until every reader moves. */
   tenantName?: string
+  displayName?: string
   tenantSlug?: string
+  tenantAvatarPath?: string | null
+  kind?: TenantKind
   role?: string
   status?: string
+  accountingCountryCode?: string | null
 }
 
 /** The authenticated user shape returned by /api/auth/me (camelCase, from buildMePayload). */
@@ -20,6 +26,7 @@ export interface User {
   isSuperAdmin?: boolean
   activeTenantId?: Id | null
   activeTenantRole?: string | null
+  activeTenantKind?: TenantKind | null
   /** Permission keys for the active tenant, sent by /auth/me (see src/auth/permissions.ts). */
   permissions?: string[]
   bandMemberId?: Id | null
@@ -34,6 +41,8 @@ export interface User {
   onboardingTenantId?: Id | null
   /** Tutorial keys this user has dismissed (per-user, global). See src/tutorials. */
   dismissedTutorials?: string[]
+  /** Active owned bands against the effective cap from the user's band subscription. */
+  bandCapacity?: { used: number; limit: number | null }
   memberships?: UserMembership[]
 }
 

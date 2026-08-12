@@ -1,6 +1,7 @@
 // Input parsing and validation for profile routes. No DB access here.
 import { parsePositiveId as parseId } from './common.js'
 import { normalizeOptionalUrl, PROFILE_LINK_PROTOCOLS } from '../utils/urls.js'
+import { EMAIL_RE } from '../utils/email.js'
 import { DEFAULT_VAT_COUNTRY, isValidVatId, normalizeVatNumber } from '../../shared/vatRates.js'
 import { isValidRegistrationNumber, normalizeRegistrationNumber } from '../../shared/businessRegistry.js'
 import { parseArtistId } from './bandsintownValidators.js'
@@ -158,10 +159,8 @@ const TEXT_MAX_LENGTHS = {
 
 const IBAN_RE = /^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/
 
-// Business contact address (EN 16931 BT-43). Structural plausibility only — no
-// attempt to prove deliverability. Matches the shape the invoice mailer already
-// enforces on outgoing headers, so a value accepted here cannot be rejected there.
-const EMAIL_RE = /^[^\s@<>]+@[^.\s@<>]+(?:\.[^.\s@<>]+)+$/
+// Business contact address (EN 16931 BT-43). Shared with the invoice mailer's
+// header check, so a value accepted here cannot be rejected there.
 
 // Telephone (BT-42). Digits with the punctuation people actually type; kept
 // permissive because international formats vary far more than validators assume.

@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import theme from '../theme.ts'
 import MembersSection from '../components/settings/MembersSection.tsx'
@@ -181,5 +181,65 @@ describe('MembersSection', () => {
     await user.click(allCombos[2])
     await user.click(screen.getByRole('option', { name: 'tenant_admin' }))
     expect(updateMembership).toHaveBeenCalledWith(2, { role: 'tenant_admin' })
+  })
+
+  // A tenant must always keep one approved admin. The backend 409s on removing
+  // or demoting the last one, super admins included, so the UI must not offer it.
+  describe('last tenant admin', () => {
+    // Both the desktop table and the mobile cards render, so each role select
+    // showing tenant_admin appears twice.
+    const adminRoleSelects = () =>
+      screen.getAllByRole('combobox').filter((c) => c.textContent === 'tenant_admin')
+
+    const SECOND_ADMIN = {
+      user_id: 100,
+      name: 'Second Admin',
+      email: 'second@example.com',
+      status: 'approved',
+      role: 'tenant_admin',
+      picture_url: null,
+      band_member_id: null,
+      is_super_admin: false,
+    }
+
+    // A super admin who is NOT the row being acted on: `isSelf` already hides
+    // and disables these controls, so keeping the caller distinct is what makes
+    // these assertions about the last-admin rule rather than about self-action.
+    const OTHER_SUPER_ADMIN = { ...SUPER_ADMIN_USER, id: 1000 }
+
+    beforeEach(() => {
+      useAuth.mockReturnValue({ user: OTHER_SUPER_ADMIN, logout: vi.fn() })
+    })
+
+    it('disables the sole admin\'s role select, even for a super admin', async () => {
+      wrap(<MembersSection />)
+      await waitFor(() => expect(screen.getAllByText('Admin').length).toBeGreaterThan(0))
+
+      const selects = adminRoleSelects()
+      expect(selects).toHaveLength(2)
+      selects.forEach((c) => expect(c).toHaveAttribute('aria-disabled', 'true'))
+    })
+
+    it('enables it again once a second admin exists', async () => {
+      listMemberships.mockResolvedValue([...ROWS, SECOND_ADMIN])
+      wrap(<MembersSection />)
+      await waitFor(() => expect(screen.getAllByText('Second Admin').length).toBeGreaterThan(0))
+
+      const selects = adminRoleSelects()
+      expect(selects).toHaveLength(4)
+      selects.forEach((c) => expect(c).not.toHaveAttribute('aria-disabled', 'true'))
+    })
+
+    it('hides reject and disables remove for the sole admin', async () => {
+      // Only the sole admin is listed, so any Reject button on screen would
+      // have to be theirs.
+      listMemberships.mockResolvedValue([ROWS[2]])
+      wrap(<MembersSection />)
+      await waitFor(() => expect(screen.getAllByText('Admin').length).toBeGreaterThan(0))
+
+      expect(screen.queryAllByText('Reject')).toHaveLength(0)
+      screen.getAllByRole('button', { name: /remove member/i })
+        .forEach((b) => expect(b).toBeDisabled())
+    })
   })
 })

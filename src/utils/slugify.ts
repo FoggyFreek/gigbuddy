@@ -3,6 +3,11 @@
 // onboarding. The server remains authoritative and may append a -2/-3…
 // dedupe suffix, so previews carry a "may get a suffix" caveat.
 const SLUG_BASE_MAX = 56
+const TENANT_SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/
+
+export function validTenantSlug(slug: string): boolean {
+  return TENANT_SLUG_RE.test(slug)
+}
 
 export function slugFromBandName(name: string): string {
   const base = name

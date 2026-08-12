@@ -256,7 +256,7 @@ describe('link / unlink provider identities', () => {
   })
 })
 
-describe('/me payload providers', () => {
+describe('/me payload', () => {
   it('reports which providers are linked', async () => {
     await authService.linkProviderIdentity(pool, seed.userA.id, 'microsoft', microsoftClaims({ sub: 'ms-link' }))
 
@@ -265,5 +265,19 @@ describe('/me payload providers', () => {
 
     const googleOnly = await authService.buildMePayload(pool, seed.userB.id, seed.tenantB.id)
     expect(googleOnly.payload.providers).toEqual({ google: true, microsoft: false })
+  })
+
+  it('includes each tenant avatar path in the membership projection', async () => {
+    const avatarPath = `tenants/${seed.tenantA.id}/avatar/profile.png`
+    await pool.query('UPDATE tenants SET avatar_path = $1 WHERE id = $2', [avatarPath, seed.tenantA.id])
+
+    const result = await authService.buildMePayload(pool, seed.userA.id, seed.tenantA.id)
+
+    expect(result.payload.memberships).toContainEqual(
+      expect.objectContaining({
+        tenantId: seed.tenantA.id,
+        tenantAvatarPath: avatarPath,
+      }),
+    )
   })
 })

@@ -156,12 +156,11 @@ describe('GET /api/files/:objectKey range requests', () => {
     expect(res.body.toString()).toBe('uvwxyz')
   })
 
-  // range-parser drops unparseable and inverted specs, then reports the whole
-  // header as unsatisfiable — so these 416 rather than being ignored, matching
-  // what Express's own serve-static does with the same parser.
+  // range-parser reports a syntactically valid but unsatisfiable spec as -1, so
+  // these 416 rather than being ignored, matching what Express's own
+  // serve-static does with the same parser.
   it.each([
     ['out of bounds', 'bytes=500-600'],
-    ['non-numeric', 'bytes=abc-def'],
     ['inverted', 'bytes=20-10'],
   ])('416s a %s range and reports the true size', async (_label, header) => {
     const key = await addRecording(seed.tenantA.id)
@@ -173,10 +172,13 @@ describe('GET /api/files/:objectKey range requests', () => {
     expect(getPartialObject).not.toHaveBeenCalled()
   })
 
+  // A malformed spec is not an unsatisfiable range: RFC 9110 has the server
+  // ignore the header and serve the whole representation.
   it.each([
     ['unit-less', 'nonsense'],
     ['non-bytes unit', 'items=0-5'],
     ['multi-range', 'bytes=0-4,10-14'],
+    ['non-numeric', 'bytes=abc-def'],
   ])('falls back to a full 200 body for a %s header', async (_label, header) => {
     const key = await addRecording(seed.tenantA.id)
     const res = await asUserA(request(app).get(`/api/files/${key}`))

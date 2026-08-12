@@ -4,28 +4,19 @@ import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
-import MenuItem from '@mui/material/MenuItem'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import { VAT_COUNTRY_CODES } from '../../utils/vatRates.ts'
 import { slugFromBandName } from '../../utils/slugify.ts'
 import { useImageCrop, JPEG_PNG_WEBP } from '../../hooks/useImageCrop.ts'
 import { compressLogo } from '../../utils/compressImage.ts'
 import ImageCropDialog from '../ImageCropDialog.tsx'
-
-// Localized country name from the 2-letter code, so the accounting-country
-// dropdown reads naturally without hand-maintained i18n keys.
-function countryLabel(code: string, locale: string): string {
-  try {
-    const name = new Intl.DisplayNames([locale], { type: 'region' }).of(code.toUpperCase())
-    return name ? `${name} (${code.toUpperCase()})` : code.toUpperCase()
-  } catch {
-    return code.toUpperCase()
-  }
-}
+import AccountingCountrySelect from '../shared/AccountingCountrySelect.tsx'
+import type { TenantKind } from '../../auth/tenantKinds.ts'
 
 interface BandStepProps {
+  /** Which sort of tenant this flow is creating — selects the copy. */
+  kind: TenantKind
   bandName: string
   onBandNameChange: (name: string) => void
   /** The band's accounting country. Required, and fixed once the band exists. */
@@ -40,6 +31,7 @@ interface BandStepProps {
 }
 
 export default function BandStep({
+  kind,
   bandName,
   onBandNameChange,
   countryCode,
@@ -49,7 +41,7 @@ export default function BandStep({
   logoPreviewUrl,
   onLogoFileChange,
 }: Readonly<BandStepProps>) {
-  const { t, i18n } = useTranslation(['onboarding', 'profile'])
+  const { t } = useTranslation(['onboarding', 'profile'])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const slug = resumedSlug ?? slugFromBandName(bandName)
   const [logoError, setLogoError] = useState<string | null>(null)
@@ -66,10 +58,10 @@ export default function BandStep({
 
   return (
     <Stack spacing={3}>
-      <Typography variant="h6">{t($ => $.band.title)}</Typography>
+      <Typography variant="h6">{t($ => $.workspace[kind].title)}</Typography>
 
       <TextField
-        label={t($ => $.band.nameLabel)}
+        label={t($ => $.workspace[kind].nameLabel)}
         value={bandName}
         onChange={(e) => onBandNameChange(e.target.value)}
         disabled={resumedSlug !== null}
@@ -78,37 +70,29 @@ export default function BandStep({
         slotProps={{ htmlInput: { maxLength: 120 } }}
       />
 
-      {/* Asked once, at creation, and never defaulted: it decides the band's
-          bookkeeping jurisdiction and cannot be changed afterwards. */}
-      <TextField
-        select
-        label={t($ => $.band.countryLabel)}
+      <AccountingCountrySelect
         value={countryCode}
-        onChange={(e) => onCountryCodeChange(e.target.value)}
+        onChange={onCountryCodeChange}
         disabled={resumedSlug !== null}
-        fullWidth
-        helperText={t($ => $.band.countryHelper)}
-      >
-        {VAT_COUNTRY_CODES.map((code) => (
-          <MenuItem key={code} value={code}>{countryLabel(code, i18n.language)}</MenuItem>
-        ))}
-      </TextField>
+        label={t($ => $.workspace[kind].countryLabel)}
+        helperText={t($ => $.workspace[kind].countryHelper)}
+      />
 
       {bandName.trim() !== '' && (
         <Stack spacing={0.5}>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            {t($ => $.band.slugPreview, { slug })}
+            {t($ => $.workspace[kind].slugPreview, { slug })}
           </Typography>
           {resumedSlug === null && (
             <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              {t($ => $.band.slugCaveat, { slug })}
+              {t($ => $.workspace[kind].slugCaveat, { slug })}
             </Typography>
           )}
         </Stack>
       )}
 
       <Stack spacing={1}>
-        <Typography variant="body2">{t($ => $.band.logoLabel)}</Typography>
+        <Typography variant="body2">{t($ => $.workspace[kind].logoLabel)}</Typography>
         {logoError && <Alert severity="error" onClose={() => setLogoError(null)}>{logoError}</Alert>}
         <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
           {logoFile && logoPreviewUrl && (
@@ -140,10 +124,10 @@ export default function BandStep({
             onChange={crop.handleFileChange}
           />
           <Button variant="outlined" onClick={() => fileInputRef.current?.click()}>
-            {t($ => $.band.uploadLogo)}
+            {t($ => $.workspace[kind].uploadLogo)}
           </Button>
           {logoFile && (
-            <Button onClick={() => onLogoFileChange(null)}>{t($ => $.band.removeLogo)}</Button>
+            <Button onClick={() => onLogoFileChange(null)}>{t($ => $.workspace[kind].removeLogo)}</Button>
           )}
         </Stack>
       </Stack>

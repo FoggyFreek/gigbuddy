@@ -44,6 +44,7 @@ describe('usePushNotifications', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     delete globalThis.PushManager
     delete globalThis.Notification
   })
@@ -76,6 +77,40 @@ describe('usePushNotifications', () => {
     setupNavigator({ existingSub: { endpoint: 'https://push.example/old' } })
     const { result } = renderHook(() => usePushNotifications())
     await waitFor(() => expect(result.current.status).toBe('subscribed'))
+  })
+
+  it('settles to unavailable when serviceWorker.ready never resolves', async () => {
+    setupNavigator()
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { serviceWorker: { ready: new Promise(() => {}) } },
+      configurable: true,
+    })
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.useFakeTimers()
+
+    const { result } = renderHook(() => usePushNotifications())
+    expect(result.current.status).toBe('loading')
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000) })
+
+    expect(result.current.status).toBe('unavailable')
+    expect(errSpy).toHaveBeenCalled()
+    errSpy.mockRestore()
+  })
+
+  it('settles to unavailable when the readiness check rejects', async () => {
+    setupNavigator()
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { serviceWorker: { ready: Promise.reject(new Error('no registration')) } },
+      configurable: true,
+    })
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const { result } = renderHook(() => usePushNotifications())
+    await waitFor(() => expect(result.current.status).toBe('unavailable'))
+
+    expect(errSpy).toHaveBeenCalled()
+    errSpy.mockRestore()
   })
 
   it('subscribe() creates a subscription and posts it to the server', async () => {

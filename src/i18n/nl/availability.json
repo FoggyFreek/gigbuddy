@@ -7,6 +7,7 @@
   },
   "subscribe": {
     "tooltip": "Abonneren op agenda",
+    "locked": "Agenda-synchronisatie hoort bij een hoger abonnement",
     "aria": "abonneren op agenda"
   },
   "export": {
@@ -18,16 +19,20 @@
     "availability": "Beschikbaarheid",
     "gig": "Optreden",
     "rehearsal": "Repetitie",
-    "bandEvent": "Bandevenement"
+    "bandEvent": "Bandevenement",
+    "artistEvent": "Persoonlijke afspraak"
   },
   "status": {
     "available": "Beschikbaar",
+    "travel_margin": "Reistijdmarge",
     "unavailable": "Niet beschikbaar"
   },
   "events": {
     "noEvents": "Geen evenementen.",
     "band": "Band",
     "bandWide": "Hele band",
+    "me": "Ik",
+    "myAvailability": "Mijn beschikbaarheid",
     "gigFallback": "Optreden",
     "rehearsalTooltip": "Repetitie — {{status}}",
     "rehearsalAbbrev": "Rep {{yes}}/{{total}}",
@@ -41,5 +46,40 @@
     "bandEvents": "Bandevenementen",
     "note": "Alleen bevestigde en aangekondigde optredens en geplande repetities worden geëxporteerd. Opties worden uitgesloten.",
     "export": "Exporteren"
+  },
+  "mine": {
+    "title": "Mijn beschikbaarheid",
+    "help": "Je agenda is van jou, niet van een band. Elke band waarin je speelt ziet alleen wat je hier toestaat.",
+    "travelMargin": "Tijd-/reismarge (uren)",
+    "travelMarginHelp": "Vereiste totale ruimte tussen opeenvolgende evenementen. Beschikbaarheid binnen deze marge wordt oranje weergegeven.",
+    "detailVisible": "Laat mijn bands zien waarom ik niet kan",
+    "detailVisibleHelp": "Uit: bands zien dat je bezet bent, niet de reden.",
+    "crossBandVisible": "Laat mijn bands zien waarvoor ik elders geboekt ben",
+    "crossBandVisibleHelp": "Uit: optredens van andere bands zijn alleen 'bezet', zonder de band of het optreden te noemen.",
+    "delegationTitle": "Wie mijn agenda mag bijhouden",
+    "delegationHelp": "Zet dit aan voor een band waarvan je de planner vertrouwt om je beschikbaarheid in te vullen. Je kunt altijd aanpassen of verwijderen wat zij invoerden.",
+    "delegationNone": "Je zit nog niet in een band.",
+    "delegationLabel": "{{band}} mag mijn beschikbaarheid beheren",
+    "saveFailed": "Je beschikbaarheidsinstellingen konden niet worden opgeslagen.",
+    "loadFailed": "Je beschikbaarheidsinstellingen konden niet worden geladen."
+  },
+  "slotDialog": {
+    "createTitle": "Beschikbaarheid toevoegen",
+    "editTitle": "Beschikbaarheid bewerken",
+    "member": "Lid",
+    "wholeBand": "Hele band",
+    "startDate": "Startdatum",
+    "endDate": "Einddatum",
+    "statusLabel": "Status",
+    "reason": "Reden (optioneel)",
+    "required": "Verplicht",
+    "endBeforeStart": "Moet op of na de startdatum liggen",
+    "create": "Aanmaken"
+  },
+  "projection": {
+    "hidden": "Details verborgen",
+    "hiddenHelp": "Dit lid houdt de reden privé.",
+    "setBy": "Ingevuld door {{name}}",
+    "setByBand": "Ingevuld door {{name}} ({{band}})"
   }
 }

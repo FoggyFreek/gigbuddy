@@ -310,7 +310,8 @@ export async function validateBandMemberForTenant(executor, rawBandMemberId, ten
   const n = Number(rawBandMemberId)
   if (!Number.isInteger(n) || n <= 0) return null
   const { rows } = await executor.query(
-    'SELECT id, user_id FROM band_members WHERE id = $1 AND tenant_id = $2',
+    `SELECT id, user_id FROM band_members
+      WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL`,
     [n, tenantId],
   )
   return rows[0] || null

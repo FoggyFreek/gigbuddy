@@ -1,7 +1,7 @@
 import type { Venue, Id } from '../types/entities.ts'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
@@ -45,9 +45,11 @@ interface VenuePickerProps {
   disabled?: boolean
   label?: string
   categoryFilter?: 'venue' | 'festival'
+  // Drops the open-in-new shortcut for venues for artist scoped tenants.
+  hideOpenAction?: boolean
 }
 
-export default function VenuePicker({ value, onChange, onSelect, excludeIds = [], disabled, label, categoryFilter }: Readonly<VenuePickerProps>) {
+export default function VenuePicker({ value, onChange, onSelect, excludeIds = [], disabled, label, categoryFilter, hideOpenAction = false }: Readonly<VenuePickerProps>) {
   const { t } = useTranslation('common')
   const navigate = useNavigate()
   const [createPrefill, setCreatePrefill] = useState<{ name: string; category: string } | null>(null)
@@ -170,7 +172,7 @@ export default function VenuePicker({ value, onChange, onSelect, excludeIds = []
           )
         }}
         renderInput={(params) => {
-          const extra = effectiveValue?.id ? (
+          const extra = effectiveValue?.id && !hideOpenAction ? (
             <InputAdornment position="end" sx={{ m: 0, mr: -1 }}>
               <Tooltip title={t($ => $.venuePicker.openVenue)}>
                 <IconButton

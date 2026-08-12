@@ -32,7 +32,8 @@ export const termsEn: TermsDocument = {
       heading: '3. Subscriptions, trial and payment',
       paragraphs: [
         'GigBuddy has a free plan and paid plans. Prices, limits and features per plan are shown before you subscribe. Payment is handled by our payment provider (Mollie); we never see or store your full payment details.',
-        'New subscribers get a one-time free trial period. To start it we place a €0.01 verification charge that establishes your payment mandate. If you cancel during the trial, you pay nothing beyond that verification charge.',
+        'Band plans and artist plans are separate products, each with their own free and paid tiers. A band is billed on its owner’s band plan; your own artist workspace is billed on your artist plan. You can hold one of each at the same time, and a subscription cannot be moved from one to the other.',
+        'You get a one-time free trial period per product. To start it we place a €0.01 verification charge that establishes your payment mandate. If you cancel during the trial, you pay nothing beyond that verification charge.',
         'Subscriptions renew automatically per month or per year, depending on your choice, until you cancel. You can cancel at any time; a paid period runs to its end date and is not refunded pro rata unless the law requires it.',
         'When you move to a lower plan, features outside the new plan become unavailable. Data is deleted only after your explicit, informed confirmation of a downgrade — never merely because a payment failed. If your subscription lapses, your workspace falls back to the free plan and your data stays stored.',
       ],
