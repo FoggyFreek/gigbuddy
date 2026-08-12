@@ -64,7 +64,7 @@ async function filingFrequency(tenantId = seed.tenantA.id) {
 // Resolves the domestic scheme through the repository, i.e. the same predicate
 // every server read uses.
 async function homeSchemeOn(isoDate, tenantId = seed.tenantA.id, country = 'nl') {
-  const repo = await import('../../../server/repositories/taxSchemeEnrolmentRepository.js')
+  const repo = await import('../../../server/finance/vat/taxSchemeEnrolmentRepository.js')
   return repo.fetchHomeSchemeEnrolmentOn(pool, tenantId, country, isoDate)
 }
 
@@ -277,7 +277,7 @@ describe('tax scheme enrolments — scheduled boundaries', () => {
   })
 
   it('the reconciler catches the projection up, and a second run is a no-op', async () => {
-    const { reconcileSchemeProjections } = await import('../../../server/jobs/taxSchemeReconciliation.js')
+    const { reconcileSchemeProjections } = await import('../../../server/finance/vat/jobs/taxSchemeReconciliation.js')
 
     // An enrolment that ended yesterday, written straight to the table so no
     // service call has already synced the projection.
@@ -298,7 +298,7 @@ describe('tax scheme enrolments — scheduled boundaries', () => {
   })
 
   it('the reconciler turns the projection ON when an enrolment has started', async () => {
-    const { reconcileSchemeProjections } = await import('../../../server/jobs/taxSchemeReconciliation.js')
+    const { reconcileSchemeProjections } = await import('../../../server/finance/vat/jobs/taxSchemeReconciliation.js')
     await pool.query(
       `INSERT INTO tax_scheme_enrolments
          (tenant_id, country_code, scheme_code, scheme_scope, valid_from, valid_to, status)

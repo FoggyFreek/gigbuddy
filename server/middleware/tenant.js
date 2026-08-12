@@ -1,8 +1,8 @@
 import pool from '../db/index.js'
 import { loadUser } from './auth.js'
 import { setContextField } from '../utils/requestContextStore.js'
-import { tenantKindNotSupported } from '../services/serviceErrors.js'
-import { listApprovedMemberTenants } from '../repositories/tenantRepository.js'
+import { tenantKindNotSupported } from '../platform/http/serviceErrors.js'
+import { listApprovedMemberTenants } from '../people/workspaces/tenantRepository.js'
 import { memberTenantScope } from '../domain/memberTenants.js'
 import { tenantKindSupports } from '../../shared/tenantCapabilities.js'
 
@@ -122,7 +122,7 @@ export function requireTenantMember(req, res, next) {
 
 // Tenant-admin authorization is expressed through the permission matrix
 // (members.manage / tenant.manage) and enforced with requirePermission — see
-// middleware/permissions.js and routes/index.js. There is intentionally no
+// middleware/permissions.js and app/apiRouter.js. There is intentionally no
 // role-based requireTenantAdmin gate so the matrix stays the single source of
 // truth for capabilities.
 

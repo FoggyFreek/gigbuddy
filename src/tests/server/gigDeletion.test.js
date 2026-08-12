@@ -5,7 +5,7 @@ import request from 'supertest'
 
 // safeRemove is fire-and-forget against the object store; spying on it is the
 // only way to observe which keys a delete actually reclaims.
-vi.mock('../../../server/services/storageService.js', async (importOriginal) => ({
+vi.mock('../../../server/platform/files/storageService.js', async (importOriginal) => ({
   ...(await importOriginal()),
   safeRemove: vi.fn(() => undefined),
 }))
@@ -16,7 +16,7 @@ let seed
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
   const appMod = await import('./_app.js')
-  const storageMod = await import('../../../server/services/storageService.js')
+  const storageMod = await import('../../../server/platform/files/storageService.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll

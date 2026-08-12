@@ -1,6 +1,6 @@
 ---
 name: chordpro
-description: ChordPro (.pro/.cho/.chordpro) lead-sheet format — its syntax and concepts, plus a map of how this app already parses, edits, and renders it. Use as a reference when working on the ChordPro charts feature (src/utils/chordpro.ts, ChordProView, ChordDiagram, the songs charts routes). Authoritative format details live at chordpro.org; see reference.md for the full directive tables and link index.
+description: ChordPro (.pro/.cho/.chordpro) lead-sheet format — its syntax and concepts, plus a map of how this app already parses, edits, and renders it. Use as a reference when working on the ChordPro charts feature (src/music/songs/chordpro.ts, ChordProView, ChordDiagram, the songs charts routes). Authoritative format details live at chordpro.org; see reference.md for the full directive tables and link index.
 user-invocable: false
 ---
 
@@ -16,18 +16,18 @@ ChordPro **charts** are editable text lead-sheets attached to a song (one song �
 
 | Concern | File |
 | :--- | :--- |
-| Parsing + rendering helpers (the core) | `src/utils/chordpro.ts` |
-| Built-in guitar chord shapes (stand-in for ChordPro's instrument config) | `src/utils/guitarChords.ts` |
-| On-screen renderer (chords-over-lyrics, grid, tab, ABC, diagrams) | `src/components/ChordProView.tsx` |
-| Single chord-diagram SVG | `src/components/ChordDiagram.tsx` |
+| Parsing + rendering helpers (the core) | `src/music/songs/chordpro.ts` |
+| Built-in guitar chord shapes (stand-in for ChordPro's instrument config) | `src/music/songs/guitarChords.ts` |
+| On-screen renderer (chords-over-lyrics, grid, tab, ABC, diagrams) | `src/music/songs/components/chordpro/ChordProView.tsx` |
+| Single chord-diagram SVG | `src/music/songs/components/chordpro/ChordDiagram.tsx` |
 | Embedded ABC notation block | `src/components/AbcBlock.tsx` |
-| Fullscreen viewer + source editor + print/PDF | `src/components/ChordProViewerDialog.tsx` |
-| Chart list on a song (add/delete) | `src/components/ChordProChartsSection.tsx` |
-| Import a `.pro` file as a new song | `src/components/SongImportMenu.tsx` |
-| API wrapper | `src/api/songs.ts` (`createSongChart`/`uploadSongChart`/`updateSongChart`/`deleteSongChart`) |
-| Backend route/service/repo | `server/routes/songs.js` (`/:id/charts*`), `songService.js`, `songRepository.js` |
+| Fullscreen viewer + source editor + print/PDF | `src/music/songs/components/chordpro/ChordProViewerDialog.tsx` |
+| Chart list on a song (add/delete) | `src/music/songs/components/chordpro/ChordProChartsSection.tsx` |
+| Import a `.pro` file as a new song | `src/music/songs/components/SongImportMenu.tsx` |
+| API wrapper | `src/music/songs/songs.ts` (`createSongChart`/`uploadSongChart`/`updateSongChart`/`deleteSongChart`) |
+| Backend route/service/repo | `server/music/songs/songs.js` (`/:id/charts*`), `songService.js`, `songRepository.js` |
 | Storage | migration `093_song_chordpro_charts.sql` — `song_chordpro_charts(source TEXT, …)`, text inline (not object storage) |
-| Tests | `src/tests/chordpro.test.js`, `ChordProView.test.jsx`, `ChordProViewerDialog.test.jsx`, `ChordProChartsSection.test.jsx`, `server/songs.test.js` |
+| Tests | `src/music/songs/__tests__/chordpro.test.js`, `ChordProView.test.jsx`, `ChordProViewerDialog.test.jsx`, `ChordProChartsSection.test.jsx`, `src/tests/server/songs.test.js` |
 
 **Two security/correctness landmines already handled — don't regress them:**
 - **ChordSheetJS does not escape lyric/chord text**, so its HTML output is run through **DOMPurify** (`renderChordProHtml`). A malicious uploaded chart could otherwise inject script (stored XSS, even intra-tenant). Keep sanitization on any path that turns chart source into DOM.
@@ -93,7 +93,7 @@ In this app `parseChordDefinition` (in `chordpro.ts`) turns a `{define}`/`{chord
 
 **`{diagrams}`** controls the auto-generated grid of all chords used: `on`/`off`/`top`/`bottom`. In `analyzeChords`, placement resolves to `top|bottom|off`; `ChordProView` shows a collapsible diagram grid on screen and a print version.
 
-**Built-in library**: common chords (G, Em, Am, D7, …) have shapes in `src/utils/guitarChords.ts` (`lookupGuitarChord`), the app's stand-in for ChordPro's instrument config files — a song needs no `{define}` for them. A song's own `{define}`/`{chord}` **overrides** the built-in. A chord with no resolvable shape renders as just its name (matching ChordPro, which still prints the name of an undefined chord).
+**Built-in library**: common chords (G, Em, Am, D7, …) have shapes in `src/music/songs/guitarChords.ts` (`lookupGuitarChord`), the app's stand-in for ChordPro's instrument config files — a song needs no `{define}` for them. A song's own `{define}`/`{chord}` **overrides** the built-in. A chord with no resolvable shape renders as just its name (matching ChordPro, which still prints the name of an undefined chord).
 
 ## Sections / environments
 
@@ -143,7 +143,7 @@ Keep stanzas/empty lines as boundaries so round-tripping back to source preserve
 
 - **Edit the source text as the source of truth.** The viewer/editor (`ChordProViewerDialog`) edits raw ChordPro with a live preview; auto-save is debounced (`useDebouncedSave`, `flush()` on close). Don't introduce a second editable representation that can drift.
 - **Round-trip safely**: preserve comments, blank lines, and unknown directives — be lenient, never fatal on malformed input.
-- **Test-first** (this repo's workflow): adjust/add a test in `src/tests/chordpro.test.js` (pure parsing) or the component tests, watch it fail, then implement. Frontend tests run via `infisical run -- npm test -- --run src/tests/<file>`.
+- **Test-first** (this repo's workflow): adjust/add a test in `src/music/songs/__tests__/chordpro.test.js` (pure parsing) or the component tests, watch it fail, then implement. Frontend tests run via `infisical run -- npm test -- --run src/music/songs/__tests__/<file>`.
 - **Print/PDF parity**: the on-screen `sx` colors track the theme; the print window uses the standalone `CHORDPRO_PRINT_CSS` and clones the live DOM (so inline abcjs SVGs come along). When you change a rendered structure, update both the `sx` and the `cp-*` print CSS.
 - For format edge cases, **ChordSheetJS** (the JS parser) and the official Perl `chordpro` CLI are the references — see reference.md.
 

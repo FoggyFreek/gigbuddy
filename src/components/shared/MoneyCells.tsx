@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import TableCell from '@mui/material/TableCell'
-import { formatCurrencyParts } from '../../utils/invoiceTotals.ts'
+import { formatCurrencyParts } from '../../finance/invoices/invoiceTotals.ts'
 import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts'
 
 interface MoneyCellsProps {

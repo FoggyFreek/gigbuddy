@@ -7,7 +7,7 @@ import { Readable } from 'node:stream'
 
 // Storage is mocked so the successful image path runs without RustFS/MinIO;
 // this test is about the response headers on a served image, not storage.
-vi.mock('../../../server/services/storageService.js', () => ({
+vi.mock('../../../server/platform/files/storageService.js', () => ({
   statObject: async () => ({ size: 3, metaData: { 'content-type': 'image/webp' } }),
   getObject: async () => Readable.from(Buffer.from('abc')),
 }))
@@ -17,8 +17,8 @@ let signPayload
 
 beforeAll(async () => {
   process.env.LINKPAGE_SECRET = 'image-header-test-secret'
-  const routerMod = await import('../../../server/routes/publicLinkpage.js')
-  ;({ signPayload } = await import('../../../server/security/linkpageTokens.js'))
+  const routerMod = await import('../../../server/promotion/linkpage/publicLinkpage.js')
+  ;({ signPayload } = await import('../../../server/promotion/linkpage/linkpageTokens.js'))
   app = express()
   app.use('/api/public/linkpage', routerMod.default)
 })

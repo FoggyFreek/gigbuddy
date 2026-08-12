@@ -1,18 +1,18 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest'
-import { fetchTenant } from '../../../server/repositories/tenantRepository.js'
-import { songExistsInTenant } from '../../../server/repositories/songRepository.js'
+import { fetchTenant } from '../../../server/people/workspaces/tenantRepository.js'
+import { songExistsInTenant } from '../../../server/music/songs/songRepository.js'
 import {
   bandMemberExistsInTenant,
   getBandMemberIdForUser,
-} from '../../../server/repositories/bandMemberRepository.js'
-import * as gigRepository from '../../../server/repositories/gigRepository.js'
-import * as rehearsalRepository from '../../../server/repositories/rehearsalRepository.js'
-import { insertLedgerEntries } from '../../../server/repositories/ledgerRepository.js'
+} from '../../../server/people/roster/bandMemberRepository.js'
+import * as gigRepository from '../../../server/planning/gigs/gigRepository.js'
+import * as rehearsalRepository from '../../../server/planning/rehearsals/rehearsalRepository.js'
+import { insertLedgerEntries } from '../../../server/finance/ledger/ledgerRepository.js'
 import {
   limitedCollectionWithCursor,
   limitedCollectionWithTimestampCursor,
-} from '../../../server/services/limitedCollectionService.js'
+} from '../../../server/platform/collections/limitedCollectionService.js'
 import { parseTimestampCursor } from '../../../server/validators/common.js'
 import { memberTenantScope } from '../../../server/domain/memberTenants.js'
 import { normalizeIban } from '../../../server/utils/normalizeIban.js'

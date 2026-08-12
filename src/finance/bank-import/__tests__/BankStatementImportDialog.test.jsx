@@ -1,0 +1,890 @@
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { ThemeProvider } from '@mui/material/styles'
+import { MemoryRouter } from 'react-router'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import BankStatementImportDialog from '../../ledger/components/BankStatementImportDialog.tsx'
+import { parseBankStatement, commitBankImport, cancelBankImport, setOpeningBalanceFromImport } from '../bankImport.ts'
+import { listAccounts, getAccountingSettings } from '../../accounts/accounts.ts'
+import { getAccountingProfile } from '../../accounting-profile/accountingProfile.ts'
+import theme from '../../../theme.ts'
+import { ProfileContext } from '../../../contexts/profileContext.ts'
+
+vi.mock('../bankImport.ts', () => ({
+  parseBankStatement: vi.fn(),
+  commitBankImport: vi.fn(),
+  cancelBankImport: vi.fn(),
+  setOpeningBalanceFromImport: vi.fn(),
+}))
+
+vi.mock('../../accounts/accounts.ts', () => ({
+  listAccounts: vi.fn(),
+  getAccountingSettings: vi.fn(),
+}))
+
+vi.mock('../../accounting-profile/accountingProfile.ts', () => ({
+  getAccountingProfile: vi.fn(),
+}))
+
+function wrap(ui, { shopify = true } = {}) {
+  return render(
+    <MemoryRouter>
+      <ThemeProvider theme={theme}>
+        <ProfileContext.Provider value={{
+          bandName: '', setBandName: vi.fn(), accentColor: null, setAccentColor: vi.fn(),
+          integrations: { shopify, bandsintown: true, mollie: true, resend: true },
+          isIntegrationConfigured: (integration) => integration !== 'shopify' || shopify,
+          setIntegrationConfigured: vi.fn(),
+        }}>
+          {ui}
+        </ProfileContext.Provider>
+      </ThemeProvider>
+    </MemoryRouter>,
+  )
+}
+
+const ACCOUNTS = [
+  { code: '62100', name: 'Equipment', type: 'expense', is_active: true },
+  { code: '62200', name: 'Travel', type: 'expense', is_active: true },
+  { code: '41000', name: 'Performance revenue', type: 'revenue', is_active: true },
+  { code: '41100', name: 'Merch revenue', type: 'revenue', is_active: true },
+]
+
+const emptySuggestion = {
+  possibleDuplicate: false, supplierMatches: [], invoiceMatches: [], purchaseMatches: [], paidPurchaseMatches: [],
+  recordedShopifyPayoutMatches: [], recordedPaypalPayoutMatches: [],
+}
+
+// The dialog reads the scheme in force TODAY off the accounting profile — the
+// server resolves it date-aware from the enrolment, so the dialog never has to
+// look at a projection that a scheduled enrolment leaves stale.
+function accountingProfile(country, schemeExempt, defaultVatRate = 9) {
+  return {
+    country_code: country,
+    default_vat_rate: defaultVatRate,
+    current_sales_treatment: {
+      accounting_country: country,
+      vat_scheme_code: schemeExempt ? 'nl_kor' : null,
+      vat_treatment: schemeExempt ? 'small_business_exempt' : 'standard',
+      scheme_exempt: schemeExempt,
+      input_vat_recoverable: !schemeExempt,
+    },
+  }
+}
+
+const PARSE_RESULT = {
+  import: { id: 99, filename: 's.xml', format: 'camt053', currency: 'EUR', statement_ref: null, account_iban: null, status: 'staged' },
+  lines: [
+    {
+      id: 1, line_index: 0, booking_date: '2026-02-03', value_date: null, amount_cents: 3000,
+      direction: 'debit', currency: 'EUR', counterparty_name: 'String Supply Co',
+      counterparty_iban: 'NL00TEST0000000001', remittance_info: 'Strings', is_reversal: false,
+      status: 'pending', suggestion: emptySuggestion,
+    },
+    {
+      id: 2, line_index: 1, booking_date: '2026-02-04', value_date: null, amount_cents: 60000,
+      direction: 'credit', currency: 'EUR', counterparty_name: 'Cafe De Kroon',
+      counterparty_iban: null, remittance_info: 'Gig payment', is_reversal: false,
+      status: 'pending', suggestion: emptySuggestion,
+    },
+  ],
+}
+
+async function uploadFile() {
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('button', { name: 'Choose file' }))
+  const input = document.querySelector('input[type="file"]')
+  await user.upload(input, new File(['<xml/>'], 'statement.xml', { type: 'application/xml' }))
+}
+
+/** The grid cell for a line id + column field. */
+function cell(lineId, field) {
+  return document.querySelector(`[data-id="${lineId}"] [data-field="${field}"]`)
+}
+
+// Editable columns are singleSelects: one click puts the cell in edit mode and
+// opens its dropdown.
+async function openEditor(user, lineId, field) {
+  await user.click(cell(lineId, field))
+  const listbox = screen.queryByRole('listbox')
+  if (listbox) return
+  await user.click(within(cell(lineId, field)).getByRole('combobox'))
+}
+
+async function pick(user, lineId, field, optionName) {
+  await openEditor(user, lineId, field)
+  await user.click(await screen.findByRole('option', { name: optionName }))
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  listAccounts.mockResolvedValue(ACCOUNTS)
+  getAccountingSettings.mockResolvedValue({
+    default_revenue_account_code: '41000',
+    default_expense_account_code: '62100',
+    primary_checking_account_code: '11000',
+  })
+  // NL band, 9% on its own turnover, not on the small-business scheme.
+  getAccountingProfile.mockResolvedValue(accountingProfile('nl', false))
+})
+
+describe('BankStatementImportDialog', () => {
+  it('defaults a manually recorded Shopify payout deposit to skip and explains why', async () => {
+    parseBankStatement.mockResolvedValue({
+      import: PARSE_RESULT.import,
+      lines: [{
+        ...PARSE_RESULT.lines[1],
+        suggestion: {
+          ...emptySuggestion,
+          recordedShopifyPayoutMatches: [{
+            id: 44,
+            shopify_payout_id: 'Legacy January payout',
+            settlement_entry_date: '2026-02-04',
+            transaction_type: 'DEPOSIT',
+            currency: 'EUR',
+            net_cents: 60000,
+          }],
+        },
+      }],
+    })
+    wrap(<BankStatementImportDialog onClose={() => {}} />)
+    await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+    await uploadFile()
+
+    expect(await screen.findByText('Payout already recorded')).toBeInTheDocument()
+    expect(within(cell(2, 'skip')).getByRole('checkbox')).toBeChecked()
+  })
+
+  it('defaults a manually recorded PayPal payout deposit to skip and explains why', async () => {
+    parseBankStatement.mockResolvedValue({
+      import: PARSE_RESULT.import,
+      lines: [{
+        ...PARSE_RESULT.lines[1],
+        suggestion: {
+          ...emptySuggestion,
+          recordedPaypalPayoutMatches: [{
+            id: 45,
+            reference: 'PayPal June payout',
+            settlement_entry_date: '2026-02-04',
+            currency: 'EUR',
+            deposit_cents: 60000,
+          }],
+        },
+      }],
+    })
+    wrap(<BankStatementImportDialog onClose={() => {}} />)
+    await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+    await uploadFile()
+
+    expect(await screen.findByText('Payout already recorded')).toBeInTheDocument()
+    expect(within(cell(2, 'skip')).getByRole('checkbox')).toBeChecked()
+  })
+
+  it('hides Shopify payout actions and text when Shopify is not configured', async () => {
+    parseBankStatement.mockResolvedValue({
+      import: PARSE_RESULT.import,
+      lines: [{
+        ...PARSE_RESULT.lines[1],
+        suggestion: {
+          ...emptySuggestion,
+          recordedShopifyPayoutMatches: [{ id: 44, shopify_payout_id: 'Legacy payout' }],
+          shopifyPayoutMatches: [{ id: 44, shopify_payout_id: 'Legacy payout', ready: true }],
+        },
+      }],
+    })
+    wrap(<BankStatementImportDialog onClose={() => {}} />, { shopify: false })
+    await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+    await uploadFile()
+
+    expect(screen.queryByText('Payout already recorded')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Refresh Shopify payouts/i })).not.toBeInTheDocument()
+    expect(within(cell(2, 'skip')).getByRole('checkbox')).not.toBeChecked()
+  })
+
+  it('deletes the staged import before closing on cancel', async () => {
+    parseBankStatement.mockResolvedValue(PARSE_RESULT)
+    cancelBankImport.mockResolvedValue(undefined)
+    const onClose = vi.fn()
+    wrap(<BankStatementImportDialog onClose={onClose} />)
+    await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+    await uploadFile()
+
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() => expect(cancelBankImport).toHaveBeenCalledWith(99))
+    expect(onClose).toHaveBeenCalledWith(false)
+  })
+
+  it('closes on cancel when the re-uploaded file was already imported', async () => {
+    // Re-uploading a file resolves to the existing import (same file hash), with
+    // every line already terminal — so there is nothing left to book or discard.
+    parseBankStatement.mockResolvedValue({
+      import: { ...PARSE_RESULT.import, status: 'committed' },
+      lines: [
+        { ...PARSE_RESULT.lines[0], status: 'imported' },
+        { ...PARSE_RESULT.lines[1], status: 'reconciled_invoice' },
+      ],
+      openingBalanceSuggested: false,
+    })
+    // The server refuses to delete an import that has committed lines.
+    cancelBankImport.mockRejectedValue(Object.assign(new Error('Import has already committed lines'), {
+      status: 409,
+      body: { error: 'Import has already committed lines', code: 'bank_import_has_committed_lines' },
+    }))
+    const onClose = vi.fn()
+    wrap(<BankStatementImportDialog onClose={onClose} />)
+    await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+    await uploadFile()
+
+    // A terminal line shows its status in place of the Skip box.
+    expect(await screen.findByText('Booked')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Finish' })).toBeDisabled()
+
+    const cancel = screen.getByRole('button', { name: 'Cancel' })
+    expect(cancel).toBeEnabled()
+    await userEvent.setup().click(cancel)
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledWith(false))
+  })
+
+  it('defaults a new outgoing counterparty to create-supplier and commits per-line decisions', async () => {
+    parseBankStatement.mockResolvedValue(PARSE_RESULT)
+    commitBankImport.mockResolvedValue({
+      imported: 2, skipped: 0,
+      results: [{ line_id: 1, status: 'imported' }, { line_id: 2, status: 'imported' }],
+    })
+    wrap(<BankStatementImportDialog onClose={() => {}} />)
+    await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+
+    await uploadFile()
+
+    // Review grid: the new outgoing counterparty defaults to "create supplier".
+    expect(await screen.findByText('Create "String Supply Co"')).toBeInTheDocument()
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Import 2 selected' }))
+
+    await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+    const [importId, decisions] = commitBankImport.mock.calls[0]
+    expect(importId).toBe(99)
+    expect(decisions).toEqual([
+      {
+        line_id: 1, action: 'journal_paid', contra_account_code: '62100', vat_rate: 21,
+        tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl',
+        create_supplier: { name: 'String Supply Co', iban: 'NL00TEST0000000001' },
+      },
+      {
+        line_id: 2, action: 'journal_received', contra_account_code: '41000', vat_rate: 9,
+        tax_category_code: 'domestic_reduced', tax_jurisdiction_code: 'nl',
+      },
+    ])
+
+    expect(await screen.findByText('Booked 2, skipped 0.')).toBeInTheDocument()
+  })
+
+  it('renders the read-only facts of each line', async () => {
+    parseBankStatement.mockResolvedValue(PARSE_RESULT)
+    wrap(<BankStatementImportDialog onClose={() => {}} />)
+    await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+    await uploadFile()
+
+    await screen.findByText('Create "String Supply Co"')
+    expect(cell(1, 'from')).toHaveTextContent('String Supply Co')
+    expect(cell(1, 'description')).toHaveTextContent('Strings')
+    // Money paid out reads as a negative amount, money received as a positive one.
+    expect(cell(1, 'amount')).toHaveTextContent('-')
+    expect(cell(2, 'amount')).toHaveTextContent('600,00')
+    // The net/VAT split is no longer part of the review grid.
+    expect(screen.queryByText(/net € /)).not.toBeInTheDocument()
+  })
+
+  it('shows a possible duplicate as a warning without preselecting skip', async () => {
+    parseBankStatement.mockResolvedValue({
+      import: PARSE_RESULT.import,
+      lines: [{
+        ...PARSE_RESULT.lines[0], id: 7,
+        suggestion: { ...emptySuggestion, possibleDuplicate: true },
+      }],
+    })
+    commitBankImport.mockResolvedValue({ imported: 1, skipped: 0, results: [{ line_id: 7, status: 'imported' }] })
+    wrap(<BankStatementImportDialog onClose={() => {}} />)
+    await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+    await uploadFile()
+
+    expect(await screen.findByText('Bank reference appeared in an earlier import')).toBeInTheDocument()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Import 1 selected' }))
+
+    await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+    expect(commitBankImport.mock.calls[0][1]).toEqual([{
+      line_id: 7, action: 'journal_paid', contra_account_code: '62100', vat_rate: 21,
+      tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl',
+      create_supplier: { name: 'String Supply Co', iban: 'NL00TEST0000000001' },
+    }])
+  })
+
+  describe('applying an expense account to a whole supplier', () => {
+    // Same creditor, two spellings of the name — grouped by the counterparty IBAN.
+    const sameSupplier = {
+      import: PARSE_RESULT.import,
+      lines: [
+        { ...PARSE_RESULT.lines[0], id: 21, counterparty_name: 'ACME 0012' },
+        { ...PARSE_RESULT.lines[0], id: 22, counterparty_name: 'ACME AMSTERDAM', amount_cents: 4500 },
+      ],
+    }
+
+    async function pickTravelOnFirstLine() {
+      const user = userEvent.setup()
+      await screen.findByText('Create "ACME 0012"')
+      await pick(user, 21, 'account', '62200 — Travel')
+      return user
+    }
+
+    it('offers the other lines of that supplier and applies the account to all', async () => {
+      parseBankStatement.mockResolvedValue(sameSupplier)
+      commitBankImport.mockResolvedValue({
+        imported: 2, skipped: 0,
+        results: [{ line_id: 21, status: 'imported' }, { line_id: 22, status: 'imported' }],
+      })
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+      await uploadFile()
+
+      const user = await pickTravelOnFirstLine()
+      expect(await screen.findByText('Apply to all payments to ACME 0012?')).toBeInTheDocument()
+      expect(screen.getByText(/1 other payment to ACME 0012/)).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Apply to all' }))
+
+      await user.click(screen.getByRole('button', { name: 'Import 2 selected' }))
+      await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+      expect(commitBankImport.mock.calls[0][1]).toEqual([
+        {
+          line_id: 21, action: 'journal_paid', contra_account_code: '62200', vat_rate: 21,
+          tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl',
+          create_supplier: { name: 'ACME 0012', iban: 'NL00TEST0000000001' },
+        },
+        {
+          line_id: 22, action: 'journal_paid', contra_account_code: '62200', vat_rate: 21,
+          tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl',
+          create_supplier: { name: 'ACME AMSTERDAM', iban: 'NL00TEST0000000001' },
+        },
+      ])
+    })
+
+    it('leaves the other lines untouched when only this line is kept', async () => {
+      parseBankStatement.mockResolvedValue(sameSupplier)
+      commitBankImport.mockResolvedValue({
+        imported: 2, skipped: 0,
+        results: [{ line_id: 21, status: 'imported' }, { line_id: 22, status: 'imported' }],
+      })
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+      await uploadFile()
+
+      const user = await pickTravelOnFirstLine()
+      await user.click(await screen.findByRole('button', { name: 'Only this line' }))
+
+      await user.click(screen.getByRole('button', { name: 'Import 2 selected' }))
+      await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+      const [, decisions] = commitBankImport.mock.calls[0]
+      expect(decisions.map((d) => d.contra_account_code)).toEqual(['62200', '62100'])
+    })
+
+    it('groups lines of a known supplier by the linked contact, not the bank name', async () => {
+      // Both lines auto-link to contact 7; nothing else about them matches —
+      // different counterparty names, only one carries an IBAN.
+      const match = { id: 7, name: 'Jansen PA Rental', category: 'supplier', iban: 'NL91ABNA0417164300' }
+      parseBankStatement.mockResolvedValue({
+        import: PARSE_RESULT.import,
+        lines: [
+          {
+            ...PARSE_RESULT.lines[0], id: 41, counterparty_name: 'JANSEN PA RENTAL',
+            counterparty_iban: 'NL91ABNA0417164300',
+            suggestion: { ...emptySuggestion, supplierMatches: [match] },
+          },
+          {
+            ...PARSE_RESULT.lines[0], id: 42, counterparty_name: 'Jansen PA Rental A\'dam',
+            counterparty_iban: null, amount_cents: 8000,
+            suggestion: { ...emptySuggestion, supplierMatches: [match] },
+          },
+        ],
+      })
+      commitBankImport.mockResolvedValue({
+        imported: 2, skipped: 0,
+        results: [{ line_id: 41, status: 'imported' }, { line_id: 42, status: 'imported' }],
+      })
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+      await uploadFile()
+
+      const user = userEvent.setup()
+      await waitFor(() => expect(cell(41, 'account')).toHaveTextContent('62100'))
+      await pick(user, 41, 'account', '62200 — Travel')
+      // Named after the linked contact, not the counterparty string on the line.
+      expect(await screen.findByText('Apply to all payments to Jansen PA Rental?')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Apply to all' }))
+
+      await user.click(screen.getByRole('button', { name: 'Import 2 selected' }))
+      await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+      expect(commitBankImport.mock.calls[0][1]).toEqual([
+        {
+          line_id: 41, action: 'journal_paid', contra_account_code: '62200', vat_rate: 21,
+          tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl', supplier_contact_id: 7,
+        },
+        {
+          line_id: 42, action: 'journal_paid', contra_account_code: '62200', vat_rate: 21,
+          tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl', supplier_contact_id: 7,
+        },
+      ])
+    })
+
+    it('offers the other lines of that supplier and applies the VAT treatment to all', async () => {
+      parseBankStatement.mockResolvedValue(sameSupplier)
+      commitBankImport.mockResolvedValue({
+        imported: 2, skipped: 0,
+        results: [{ line_id: 21, status: 'imported' }, { line_id: 22, status: 'imported' }],
+      })
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+      await uploadFile()
+
+      const user = userEvent.setup()
+      await screen.findByText('Create "ACME 0012"')
+      await pick(user, 21, 'vat', 'No VAT')
+
+      expect(await screen.findByText('Apply to all payments to ACME 0012?')).toBeInTheDocument()
+      expect(screen.getByText(/1 other payment to ACME 0012 in this statement has a different VAT treatment/))
+        .toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Apply to all' }))
+
+      await user.click(screen.getByRole('button', { name: 'Import 2 selected' }))
+      await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+      const [, decisions] = commitBankImport.mock.calls[0]
+      expect(decisions.map((d) => d.vat_rate)).toEqual([null, null])
+      expect(decisions.map((d) => d.tax_category_code)).toEqual([null, null])
+      // The account each line was already on is untouched.
+      expect(decisions.map((d) => d.contra_account_code)).toEqual(['62100', '62100'])
+    })
+
+    it('leaves the other lines on their own VAT treatment when only this line is kept', async () => {
+      parseBankStatement.mockResolvedValue(sameSupplier)
+      commitBankImport.mockResolvedValue({
+        imported: 2, skipped: 0,
+        results: [{ line_id: 21, status: 'imported' }, { line_id: 22, status: 'imported' }],
+      })
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+      await uploadFile()
+
+      const user = userEvent.setup()
+      await screen.findByText('Create "ACME 0012"')
+      await pick(user, 21, 'vat', 'No VAT')
+      await user.click(await screen.findByRole('button', { name: 'Only this line' }))
+
+      await user.click(screen.getByRole('button', { name: 'Import 2 selected' }))
+      await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+      const [, decisions] = commitBankImport.mock.calls[0]
+      expect(decisions.map((d) => d.vat_rate)).toEqual([null, 21])
+    })
+
+    it('remembers "only this line" per field, so the VAT edit still asks', async () => {
+      parseBankStatement.mockResolvedValue(sameSupplier)
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+      await uploadFile()
+
+      const user = await pickTravelOnFirstLine()
+      await user.click(await screen.findByRole('button', { name: 'Only this line' }))
+
+      await pick(user, 21, 'vat', 'No VAT')
+      expect(await screen.findByRole('button', { name: 'Apply to all' })).toBeInTheDocument()
+    })
+
+    it('does not ask when the other line is a different counterparty', async () => {
+      parseBankStatement.mockResolvedValue({
+        import: PARSE_RESULT.import,
+        lines: [
+          { ...PARSE_RESULT.lines[0], id: 31 },
+          {
+            ...PARSE_RESULT.lines[0], id: 32, counterparty_name: 'Drum Heads BV',
+            counterparty_iban: 'NL00TEST0000000009',
+          },
+        ],
+      })
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+      await uploadFile()
+
+      const user = userEvent.setup()
+      await waitFor(() => expect(cell(31, 'account')).toHaveTextContent('62100'))
+      await pick(user, 31, 'account', '62200 — Travel')
+      expect(screen.queryByRole('button', { name: 'Apply to all' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('applying an income account to a whole relation', () => {
+    async function pickMerchOnFirstLine(lineId) {
+      const user = userEvent.setup()
+      await waitFor(() => expect(cell(lineId, 'account')).toHaveTextContent('41000'))
+      await pick(user, lineId, 'account', '41100 — Merch revenue')
+      return user
+    }
+
+    it('offers the other incoming lines of that relation and applies the account to all', async () => {
+      parseBankStatement.mockResolvedValue({
+        import: PARSE_RESULT.import,
+        lines: [
+          { ...PARSE_RESULT.lines[1], id: 51, counterparty_iban: 'NL39RABO0300065264' },
+          {
+            ...PARSE_RESULT.lines[1], id: 52, amount_cents: 12500,
+            // Same payer, a different name on this line — grouped by IBAN.
+            counterparty_name: 'CAFE DE KROON BV', counterparty_iban: 'NL39RABO0300065264',
+          },
+        ],
+      })
+      commitBankImport.mockResolvedValue({
+        imported: 2, skipped: 0,
+        results: [{ line_id: 51, status: 'imported' }, { line_id: 52, status: 'imported' }],
+      })
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+      await uploadFile()
+
+      const user = await pickMerchOnFirstLine(51)
+      expect(await screen.findByText('Apply to all receipts from Cafe De Kroon?')).toBeInTheDocument()
+      expect(screen.getByText(/1 other receipt from Cafe De Kroon/)).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Apply to all' }))
+
+      await user.click(screen.getByRole('button', { name: 'Import 2 selected' }))
+      await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+      expect(commitBankImport.mock.calls[0][1]).toEqual([
+        {
+          line_id: 51, action: 'journal_received', contra_account_code: '41100', vat_rate: 9,
+          tax_category_code: 'domestic_reduced', tax_jurisdiction_code: 'nl',
+        },
+        {
+          line_id: 52, action: 'journal_received', contra_account_code: '41100', vat_rate: 9,
+          tax_category_code: 'domestic_reduced', tax_jurisdiction_code: 'nl',
+        },
+      ])
+    })
+
+    it('leaves the other incoming lines untouched when only this line is kept', async () => {
+      parseBankStatement.mockResolvedValue({
+        import: PARSE_RESULT.import,
+        lines: [
+          { ...PARSE_RESULT.lines[1], id: 53 },
+          { ...PARSE_RESULT.lines[1], id: 54, amount_cents: 12500 },
+        ],
+      })
+      commitBankImport.mockResolvedValue({
+        imported: 2, skipped: 0,
+        results: [{ line_id: 53, status: 'imported' }, { line_id: 54, status: 'imported' }],
+      })
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+      await uploadFile()
+
+      const user = await pickMerchOnFirstLine(53)
+      await user.click(await screen.findByRole('button', { name: 'Only this line' }))
+
+      await user.click(screen.getByRole('button', { name: 'Import 2 selected' }))
+      await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+      const [, decisions] = commitBankImport.mock.calls[0]
+      expect(decisions.map((d) => d.contra_account_code)).toEqual(['41100', '41000'])
+    })
+
+    it('never groups the incoming and outgoing lines of one relation', async () => {
+      parseBankStatement.mockResolvedValue({
+        import: PARSE_RESULT.import,
+        lines: [
+          { ...PARSE_RESULT.lines[0], id: 61 },
+          {
+            ...PARSE_RESULT.lines[1], id: 62, counterparty_name: 'String Supply Co',
+            counterparty_iban: 'NL00TEST0000000001',
+          },
+        ],
+      })
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+      await uploadFile()
+
+      // An expense account is no answer for the receipt from the same party.
+      const user = userEvent.setup()
+      await waitFor(() => expect(cell(61, 'account')).toHaveTextContent('62100'))
+      await pick(user, 61, 'account', '62200 — Travel')
+      expect(screen.queryByRole('button', { name: 'Apply to all' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('already-paid bill guard', () => {
+    const paidBill = {
+      id: 31, receipt_number: 7001, supplier_name: 'String Supply Co',
+      total_cents: 3000, paid_at: '2026-02-03',
+    }
+    const withPaidBill = {
+      import: PARSE_RESULT.import,
+      lines: [
+        {
+          ...PARSE_RESULT.lines[0],
+          suggestion: { ...emptySuggestion, paidPurchaseMatches: [paidBill] },
+        },
+        PARSE_RESULT.lines[1],
+      ],
+    }
+
+    it('warns and preselects skip so the payment is not booked twice', async () => {
+      parseBankStatement.mockResolvedValue(withPaidBill)
+      commitBankImport.mockResolvedValue({
+        imported: 1, skipped: 1,
+        results: [{ line_id: 1, status: 'skipped' }, { line_id: 2, status: 'imported' }],
+      })
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
+      await uploadFile()
+
+      expect(await screen.findByText(/Bill #7001 was already paid on/)).toBeInTheDocument()
+      expect(within(cell(1, 'skip')).getByRole('checkbox')).toBeChecked()
+      // Only the incoming line is counted as something to book.
+      const user = userEvent.setup()
+      await user.click(await screen.findByRole('button', { name: 'Import 1 selected' }))
+
+      await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+      expect(commitBankImport.mock.calls[0][1]).toEqual([
+        { line_id: 1, action: 'skip' },
+        {
+          line_id: 2, action: 'journal_received', contra_account_code: '41000', vat_rate: 9,
+          tax_category_code: 'domestic_reduced', tax_jurisdiction_code: 'nl',
+        },
+      ])
+    })
+
+    it('still lets the reviewer book the line explicitly', async () => {
+      parseBankStatement.mockResolvedValue(withPaidBill)
+      commitBankImport.mockResolvedValue({
+        imported: 2, skipped: 0,
+        results: [{ line_id: 1, status: 'imported' }, { line_id: 2, status: 'imported' }],
+      })
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
+      await uploadFile()
+
+      // The skip default must not lock the line: clearing the box hands back the
+      // ordinary booking decision.
+      const user = userEvent.setup()
+      await screen.findByText(/Bill #7001 was already paid on/)
+      await user.click(within(cell(1, 'skip')).getByRole('checkbox'))
+      await user.click(screen.getByRole('button', { name: 'Import 2 selected' }))
+
+      await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+      expect(commitBankImport.mock.calls[0][1][0]).toEqual({
+        line_id: 1, action: 'journal_paid', contra_account_code: '62100', vat_rate: 21,
+        tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl',
+        create_supplier: { name: 'String Supply Co', iban: 'NL00TEST0000000001' },
+      })
+    })
+  })
+
+  describe('per-line VAT', () => {
+    it('defaults outgoing lines to the standard rate and incoming to the band rate', async () => {
+      parseBankStatement.mockResolvedValue(PARSE_RESULT)
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
+      await uploadFile()
+
+      await screen.findByText('Create "String Supply Co"')
+      expect(cell(1, 'vat')).toHaveTextContent('21%')
+      expect(cell(2, 'vat')).toHaveTextContent('9%')
+    })
+
+    it('sends no rate for a line switched to "No VAT"', async () => {
+      parseBankStatement.mockResolvedValue(PARSE_RESULT)
+      commitBankImport.mockResolvedValue({
+        imported: 2, skipped: 0,
+        results: [{ line_id: 1, status: 'imported' }, { line_id: 2, status: 'imported' }],
+      })
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
+      await uploadFile()
+
+      const user = userEvent.setup()
+      await screen.findByText('Create "String Supply Co"')
+      await pick(user, 1, 'vat', 'No VAT')
+
+      await user.click(screen.getByRole('button', { name: 'Import 2 selected' }))
+      await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+      const [, decisions] = commitBankImport.mock.calls[0]
+      expect(decisions[0].vat_rate).toBeNull()
+      expect(decisions[0].tax_category_code).toBeNull()
+      expect(decisions[1].vat_rate).toBe(9)
+    })
+
+    it('offers a non-rate treatment as one complete selection', async () => {
+      parseBankStatement.mockResolvedValue(PARSE_RESULT)
+      commitBankImport.mockResolvedValue({
+        imported: 2, skipped: 0,
+        results: [{ line_id: 1, status: 'imported' }, { line_id: 2, status: 'imported' }],
+      })
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
+      await uploadFile()
+
+      const user = userEvent.setup()
+      await screen.findByText('Create "String Supply Co"')
+      // A purchase-side treatment that a rate alone cannot express: it carries
+      // both the category and the rate the buyer self-assesses.
+      await pick(user, 1, 'vat', 'Intra-EU acquisition of goods · 21% – standard VAT rate')
+
+      await user.click(screen.getByRole('button', { name: 'Import 2 selected' }))
+      await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+      const [, decisions] = commitBankImport.mock.calls[0]
+      expect(decisions[0].vat_rate).toBe(21)
+      expect(decisions[0].tax_category_code).toBe('intra_eu_acquisition_goods')
+      expect(decisions[0].tax_jurisdiction_code).toBe('nl')
+    })
+
+    it('offers every rate of the tenant VAT country, not a fixed pair', async () => {
+      // A Belgian band: 21 / 12 / 6, and 0.
+      getAccountingProfile.mockResolvedValue(accountingProfile('be', false, 6))
+      parseBankStatement.mockResolvedValue(PARSE_RESULT)
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
+      await uploadFile()
+
+      const user = userEvent.setup()
+      await screen.findByText('Create "String Supply Co"')
+      await openEditor(user, 1, 'vat')
+      const options = (await screen.findAllByRole('option')).map((o) => o.textContent)
+      expect(options.slice(0, 5)).toEqual(['No VAT', '21%', '12%', '6%', '0%'])
+    })
+
+    it('offers no VAT column at all for a band on the KOR', async () => {
+      getAccountingProfile.mockResolvedValue(accountingProfile('nl', true))
+      parseBankStatement.mockResolvedValue(PARSE_RESULT)
+      commitBankImport.mockResolvedValue({
+        imported: 2, skipped: 0,
+        results: [{ line_id: 1, status: 'imported' }, { line_id: 2, status: 'imported' }],
+      })
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
+      await uploadFile()
+
+      await screen.findByText('Create "String Supply Co"')
+      expect(cell(1, 'account')).toBeInTheDocument()
+      expect(cell(1, 'vat')).toBeNull()
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Import 2 selected' }))
+      await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+      const [, decisions] = commitBankImport.mock.calls[0]
+      expect(decisions.map((d) => d.vat_rate)).toEqual([null, null])
+    })
+
+    it('books no VAT when the profile cannot be read', async () => {
+      getAccountingProfile.mockRejectedValue(new Error('offline'))
+      parseBankStatement.mockResolvedValue(PARSE_RESULT)
+      wrap(<BankStatementImportDialog onClose={() => {}} />)
+      await waitFor(() => expect(getAccountingProfile).toHaveBeenCalled())
+      await uploadFile()
+
+      // Fails closed on VAT, but the account column still loads.
+      await screen.findByText('Create "String Supply Co"')
+      expect(cell(1, 'account')).toHaveTextContent('62100')
+      expect(cell(1, 'vat')).toBeNull()
+    })
+  })
+
+  it('shows a foreign-currency line as skipped and excludes it from the count', async () => {
+    parseBankStatement.mockResolvedValue({
+      import: PARSE_RESULT.import,
+      lines: [{
+        ...PARSE_RESULT.lines[0], id: 5, status: 'skipped_currency', currency: 'USD',
+      }],
+    })
+    wrap(<BankStatementImportDialog onClose={() => {}} />)
+    await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+    await uploadFile()
+
+    expect(await screen.findByText('Foreign currency — skipped')).toBeInTheDocument()
+    // No pending lines → the commit button is disabled (shows "Finish").
+    expect(screen.getByRole('button', { name: 'Finish' })).toBeDisabled()
+  })
+
+  it('allows a supplier name to be entered for an unstructured MT940 line', async () => {
+    parseBankStatement.mockResolvedValue({
+      import: { ...PARSE_RESULT.import, format: 'mt940' },
+      lines: [{
+        ...PARSE_RESULT.lines[0], id: 8, counterparty_name: null,
+        counterparty_iban: null, remittance_info: 'WITHDRAWAL 12345',
+      }],
+    })
+    commitBankImport.mockResolvedValue({ imported: 1, skipped: 0, results: [{ line_id: 8, status: 'imported' }] })
+    wrap(<BankStatementImportDialog onClose={() => {}} />)
+    await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+    await uploadFile()
+
+    const user = userEvent.setup()
+    await waitFor(() => expect(cell(8, 'account')).toHaveTextContent('62100'))
+    await pick(user, 8, 'supplier', 'Create new supplier…')
+    await user.type(await screen.findByLabelText('Supplier name'), 'Manual Supplier')
+    await user.click(screen.getByRole('button', { name: 'Use this name' }))
+    await user.click(screen.getByRole('button', { name: 'Import 1 selected' }))
+
+    await waitFor(() => expect(commitBankImport).toHaveBeenCalled())
+    expect(commitBankImport.mock.calls[0][1]).toEqual([{
+      line_id: 8, action: 'journal_paid', contra_account_code: '62100', vat_rate: 21,
+      tax_category_code: 'domestic_standard', tax_jurisdiction_code: 'nl',
+      create_supplier: { name: 'Manual Supplier', iban: null },
+    }])
+  })
+
+  it('labels a linked invoice match as deactivating its Mollie link', async () => {
+    parseBankStatement.mockResolvedValue({
+      import: PARSE_RESULT.import,
+      lines: [{
+        ...PARSE_RESULT.lines[1],
+        suggestion: {
+          ...emptySuggestion,
+          invoiceMatches: [{
+            id: 12, invoice_number: 'INV-12', customer_name: 'Cafe De Kroon',
+            total_cents: 60000, mollie_payment_link_id: 'pl_12',
+          }],
+        },
+      }],
+    })
+    wrap(<BankStatementImportDialog onClose={() => {}} />)
+    await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+    await uploadFile()
+
+    expect(await screen.findByText('Match invoice INV-12 and deactivate Mollie link')).toBeInTheDocument()
+  })
+
+  it('offers to set the opening balance from the statement and calls the API', async () => {
+    parseBankStatement.mockResolvedValue({
+      ...PARSE_RESULT,
+      import: { ...PARSE_RESULT.import, opening_balance_cents: 100000, opening_balance_date: '2026-01-31' },
+      openingBalanceSuggested: true,
+    })
+    setOpeningBalanceFromImport.mockResolvedValue({ posted: true, transactionId: 5 })
+    wrap(<BankStatementImportDialog onClose={() => {}} />)
+    await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+    await uploadFile()
+
+    const user = userEvent.setup()
+    const setButton = await screen.findByRole('button', { name: 'Set opening balance' })
+    await user.click(setButton)
+
+    await waitFor(() => expect(setOpeningBalanceFromImport).toHaveBeenCalledWith(99))
+    expect(await screen.findByText('Opening balance set from this statement.')).toBeInTheDocument()
+  })
+
+  it('hides the opening-balance nudge when the tenant already has one', async () => {
+    parseBankStatement.mockResolvedValue({ ...PARSE_RESULT, openingBalanceSuggested: false })
+    wrap(<BankStatementImportDialog onClose={() => {}} />)
+    await waitFor(() => expect(getAccountingSettings).toHaveBeenCalled())
+    await uploadFile()
+
+    await screen.findByText('Create "String Supply Co"')
+    expect(screen.queryByRole('button', { name: 'Set opening balance' })).not.toBeInTheDocument()
+  })
+})

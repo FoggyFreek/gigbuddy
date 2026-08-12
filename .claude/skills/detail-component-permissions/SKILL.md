@@ -40,8 +40,8 @@ and sub-control as editable.
 
 3. **Thread the prop into every sub-component** that owns a write affordance —
    don't stop at the outermost component. The gig stack passes `canWrite` into
-   `GigParticipantsSection`, `GigContactsSection`, `GigAttachments`, and
-   `GigTasks`.
+   `GigAvailability`, `GigContactsSection`, `GigAttachments`, and
+   `GigTasksSection`.
 
 ## Disable vs. hide vs. keep
 
@@ -64,7 +64,7 @@ on a **separate, specific prop**, not on `canWrite`, and keep *only* that one
 control live. Match the server's self-action permission exactly.
 
 Example — a reader may tick *their own* assigned gig task done
-(`task.complete.self` on the server), but nothing else. `GigTasks` takes a
+(`task.complete.self` on the server), but nothing else. `GigTasksSection` takes a
 `currentBandMemberId` and keeps just that checkbox enabled:
 ```tsx
 const canToggleDone = canWrite || (task.assigned_to != null && task.assigned_to === currentBandMemberId)
@@ -103,20 +103,20 @@ reader-mode tests** (`canWrite={false}`) asserting:
 `userEvent` refuses to click an element with `pointer-events: none` (a disabled
 control), which itself proves the control is inert; to assert "no save fired"
 drive the click with `userEvent.setup({ pointerEventsCheck: 0 })` and assert the
-API mock was not called. See `src/tests/GigTasks.test.jsx` and
-`src/tests/GigDetailContent.test.jsx` for the reader-mode patterns.
+API mock was not called. See `src/planning/gigs/__tests__/GigTasks.test.jsx` and
+`src/planning/gigs/__tests__/GigDetailContent.test.jsx` for the reader-mode patterns.
 
 ## Canonical example
 
 Copy the gig detail stack:
 
-- `src/pages/GigDetailPage.tsx` — reads `usePermissions().canWritePlanning`,
+- `src/planning/gigs/GigDetailPage.tsx` — reads `usePermissions().canWritePlanning`,
   passes `canWrite` down, and also hides its own Delete button.
-- `src/components/GigDetailContent.tsx` — disables all form fields, hides the
+- `src/planning/gigs/components/gigdetails/GigDetailContent.tsx` — disables all form fields, hides the
   banner controls, threads `canWrite` (and `currentBandMemberId`) into children.
-- `src/components/GigParticipantsSection.tsx` — disabled `VoteToggle`, hidden
+- `src/planning/gigs/components/gigdetails/GigAvailability.tsx` — disabled `VoteToggle`, hidden
   add row / remove buttons.
-- `src/components/GigContactsSection.tsx` — hidden primary/remove/add, kept
+- `src/planning/gigs/components/gigdetails/GigContactsSection.tsx` — hidden primary/remove/add, kept
   open + copy.
-- `src/components/GigAttachments.tsx` — hidden add + delete.
-- `src/components/GigTasks.tsx` — self-action checkbox preserved, rest gated.
+- `src/planning/gigs/components/gigdetails/GigAttachments.tsx` — hidden add + delete.
+- `src/planning/gigs/components/gigdetails/GigTasksSection.tsx` — self-action checkbox preserved, rest gated.

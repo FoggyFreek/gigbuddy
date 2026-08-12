@@ -13,8 +13,8 @@ let seed
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
   const appMod = await import('./_app.js')
-  const svcMod = await import('../../../server/services/achievementService.js')
-  const defMod = await import('../../../server/achievements/definitions.js')
+  const svcMod = await import('../../../server/user/achievements/achievementService.js')
+  const defMod = await import('../../../server/user/achievements/definitions.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll

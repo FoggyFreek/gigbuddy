@@ -10,7 +10,7 @@ import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import AccountingCountrySelect from '../shared/AccountingCountrySelect.tsx'
-import { createPersonalTenant } from '../../api/tenants.ts'
+import { createPersonalTenant } from '../../people/workspaces/tenants.ts'
 import type { Id } from '../../types/entities.ts'
 
 interface CreatePersonalWorkspaceDialogProps {

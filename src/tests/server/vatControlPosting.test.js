@@ -7,7 +7,7 @@ let seed
 
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
-  const ledgerMod = await import('../../../server/services/ledgerService.js')
+  const ledgerMod = await import('../../../server/finance/ledger/ledgerService.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll

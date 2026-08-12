@@ -105,8 +105,8 @@ flowchart LR
   NOTIFY --> IMPORTAPI
 
   subgraph frontendapi["Typed frontend API wrappers"]
-    FPROFILE["src/api/profile.ts<br/>get/set/clearBandsintownKey<br/>get/set/clearBandsintownArtistId<br/>getProfile and updateProfile"]
-    FBANDS["src/api/bandsintown.ts<br/>getBandsintownArtist<br/>getBandsintownEvents<br/>importBandsintownEvents"]
+    FPROFILE["src/people/profiles/profile.ts<br/>get/set/clearBandsintownKey<br/>get/set/clearBandsintownArtistId<br/>getProfile and updateProfile"]
+    FBANDS["src/promotion/bandsintown/bandsintown.ts<br/>getBandsintownArtist<br/>getBandsintownEvents<br/>importBandsintownEvents"]
     FCONTEXT["ProfileProvider + integrations utility<br/>isIntegrationConfigured('bandsintown')"]
   end
   PROFILEAPI --> FPROFILE

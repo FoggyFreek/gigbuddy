@@ -31,7 +31,7 @@ beforeAll(async () => {
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
-  svc = await import('../../../server/services/statisticsService.js')
+  svc = await import('../../../server/people/workspaces/statisticsService.js')
   storage = await import('../../../server/utils/storage.js')
   await runMigrations()
 })

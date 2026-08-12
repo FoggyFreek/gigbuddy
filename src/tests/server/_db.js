@@ -3,7 +3,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import pool from '../../../server/db/index.js'
 import { seedTenantAccounting } from '../../../server/db/defaultChartOfAccounts.js'
-import { createAccountingProfileForTenant } from '../../../server/services/accountingProfileService.js'
+import { createAccountingProfileForTenant } from '../../../server/finance/accounting-profile/accountingProfileService.js'
 import { TERMS_VERSION } from '../../../shared/termsVersion.js'
 import { assertTestDatabase } from './_databaseGuard.js'
 

@@ -1,0 +1,233 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import Box from '@mui/material/Box'
+import CircularProgress from '@mui/material/CircularProgress'
+import IconButton from '@mui/material/IconButton'
+import Paper from '@mui/material/Paper'
+import Table from '@mui/material/Table'
+import TableBody from '@mui/material/TableBody'
+import TableCell from '@mui/material/TableCell'
+import TableContainer from '@mui/material/TableContainer'
+import TableHead from '@mui/material/TableHead'
+import TableRow from '@mui/material/TableRow'
+import TableSortLabel from '@mui/material/TableSortLabel'
+import Tooltip from '@mui/material/Tooltip'
+import Typography from '@mui/material/Typography'
+import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined'
+import VoidSaleDialog from './VoidSaleDialog.tsx'
+import ListPagination from '../../../components/shared/ListPagination.tsx'
+import MoneyCells, { MoneyHeaderCells } from '../../../components/shared/MoneyCells.tsx'
+import { listMerchSales, voidMerchSale } from '../merch.ts'
+import { periodKey } from '../../../finance/invoices/invoicePeriod.ts'
+import type { MerchSale, Period, Id } from '../../../types/entities.ts'
+
+const PAGE_SIZE = 25
+
+type SortKey = 'date' | 'qty' | 'amount'
+type SortDir = 'asc' | 'desc'
+
+function saleAmount(s: MerchSale): number {
+  // Imported sales carry the exact gross; manual sales use quantity × unit price.
+  return s.gross_incl_cents ?? (s.quantity ?? 0) * (s.unit_price_incl_cents ?? 0)
+}
+
+interface MerchandiseDetailsProps {
+  productId: Id
+  period?: Period | null
+  onReload?: () => void
+}
+
+export default function MerchandiseDetails({ productId, period, onReload }: Readonly<MerchandiseDetailsProps>) {
+  const { t } = useTranslation('merch')
+  const [voidTarget, setVoidTarget] = useState<MerchSale | null>(null)
+  const [sortKey, setSortKey] = useState<SortKey>('date')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [page, setPage] = useState(0)
+  const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE)
+
+  // Sales are tagged with the request they answered (product + period + reload),
+  // so `loading` and `error` are derived from whether the newest request has
+  // landed instead of being flipped synchronously when it starts.
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const reload = useCallback(() => setReloadNonce((n) => n + 1), [])
+  const salesKey = productId ? `${productId}|${period ? periodKey(period) : ''}|${reloadNonce}` : null
+  const [salesState, setSalesState] = useState<{ key: string; sales: MerchSale[] | null; error: string | null } | null>(null)
+  const sales = salesState?.sales ?? null
+  const loading = salesKey == null || salesState?.key !== salesKey
+  const loadError = salesKey != null && salesState?.key === salesKey ? salesState.error : null
+  const [actionError, setActionError] = useState<string | null>(null)
+  const error = actionError ?? loadError
+
+  useEffect(() => {
+    if (salesKey == null) return
+    let cancelled = false
+    listMerchSales(period, productId)
+      .then((rows) => {
+        if (!cancelled) setSalesState({ key: salesKey, sales: rows, error: null })
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setSalesState((prev) => ({
+            key: salesKey,
+            sales: prev?.sales ?? null,
+            error: e instanceof Error ? e.message : String(e),
+          }))
+        }
+      })
+    return () => { cancelled = true }
+  }, [salesKey, period, productId])
+
+  function handleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      setSortDir('desc')
+    }
+  }
+
+  const sorted = useMemo(() => {
+    if (!sales) return []
+    const dir = sortDir === 'asc' ? 1 : -1
+    const value = (s: MerchSale) => {
+      if (sortKey === 'date') return s.sale_date ?? ''
+      if (sortKey === 'qty') return s.quantity ?? 0
+      return saleAmount(s)
+    }
+    return sales.filter((s) => s.status !== 'voided').sort((a, b) => {
+      const av = value(a)
+      const bv = value(b)
+      if (av < bv) return -1 * dir
+      if (av > bv) return 1 * dir
+      return 0
+    })
+  }, [sales, sortKey, sortDir])
+
+  // Clamp so a shrinking list (e.g. after a void) can't strand the user on an
+  // empty page.
+  const pageCount = Math.max(0, Math.ceil(sorted.length / rowsPerPage) - 1)
+  const safePage = Math.min(page, pageCount)
+  const paged = sorted.slice(safePage * rowsPerPage, (safePage + 1) * rowsPerPage)
+
+  async function handleVoid() {
+    const sale = voidTarget
+    setVoidTarget(null)
+    if (!sale) return
+    try {
+      setActionError(null)
+      await voidMerchSale(sale.id!)
+      reload()
+      onReload?.()
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  if (loading && sales === null) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
+    )
+  }
+
+  if (sales === null) return null
+
+  const productName = sales[0]?.product_name
+
+  return (
+    <Box>
+      {productName && (
+        <Typography variant="h6" sx={{ mb: 1.5 }}>{productName}</Typography>
+      )}
+      {error && <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>}
+
+      {!sorted.length ? (
+        <Paper variant="outlined">
+          <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+            {t($ => $.details.empty)}
+          </Typography>
+        </Paper>
+      ) : (
+        <Paper variant="outlined">
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sortDirection={sortKey === 'date' ? sortDir : false}>
+                    <TableSortLabel
+                      active={sortKey === 'date'}
+                      direction={sortKey === 'date' ? sortDir : 'desc'}
+                      onClick={() => handleSort('date')}
+                    >
+                      {t($ => $.details.table.date)}
+                    </TableSortLabel>
+                  </TableCell>
+                  <TableCell align="right" sortDirection={sortKey === 'qty' ? sortDir : false}>
+                    <TableSortLabel
+                      active={sortKey === 'qty'}
+                      direction={sortKey === 'qty' ? sortDir : 'desc'}
+                      onClick={() => handleSort('qty')}
+                    >
+                      {t($ => $.details.table.qty)}
+                    </TableSortLabel>
+                  </TableCell>
+                  <MoneyHeaderCells label={t($ => $.details.table.unitPrice)} />
+                  <MoneyHeaderCells
+                    label={
+                      <TableSortLabel
+                        active={sortKey === 'amount'}
+                        direction={sortKey === 'amount' ? sortDir : 'desc'}
+                        onClick={() => handleSort('amount')}
+                      >
+                        {t($ => $.details.table.total)}
+                      </TableSortLabel>
+                    }
+                  />
+                  <TableCell>{t($ => $.details.table.paidInto)}</TableCell>
+                  <TableCell align="right">{t($ => $.details.table.actions)}</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {paged.map((s) => (
+                  <TableRow key={String(s.id)}>
+                    <TableCell>{s.sale_date}</TableCell>
+                    <TableCell align="right">{s.quantity}</TableCell>
+                    <MoneyCells cents={s.unit_price_incl_cents} />
+                    <MoneyCells cents={saleAmount(s)} />
+                    <TableCell>{s.payment_method === 'cash' ? t($ => $.payment.cash) : t($ => $.payment.bank)}</TableCell>
+                    <TableCell align="right">
+                      {s.status === 'recorded' && (
+                        <Tooltip title={t($ => $.details.voidSale)}>
+                          <IconButton size="small" onClick={() => setVoidTarget(s)}>
+                            <BlockOutlinedIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          {sorted.length > rowsPerPage && (
+            <ListPagination
+              count={sorted.length}
+              page={safePage}
+              rowsPerPage={rowsPerPage}
+              rowsPerPageOptions={[25, 50, 100]}
+              onPageChange={(_, p) => setPage(p)}
+              onRowsPerPageChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(0) }}
+            />
+          )}
+        </Paper>
+      )}
+
+      {voidTarget && (
+        <VoidSaleDialog
+          sale={voidTarget}
+          onConfirm={handleVoid}
+          onClose={() => setVoidTarget(null)}
+        />
+      )}
+    </Box>
+  )
+}

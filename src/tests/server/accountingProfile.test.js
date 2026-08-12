@@ -187,7 +187,7 @@ describe('accounting profile — audit script', () => {
   let auditAccountingProfiles, parseArgs
 
   beforeAll(async () => {
-    const mod = await import('../../../server/scripts/backfillAccountingProfiles.js')
+    const mod = await import('../../../server/finance/accounting-profile/scripts/backfillAccountingProfiles.js')
     auditAccountingProfiles = mod.auditAccountingProfiles
     parseArgs = mod.parseArgs
   })

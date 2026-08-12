@@ -7,7 +7,7 @@ import {
   parseBankStatement,
   amountToCents,
   BankStatementParseError,
-} from '../../../server/services/bankStatement/index.js'
+} from '../../../server/finance/bank-import/parsers/index.js'
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'bankStatements')
 const load = (name) => readFileSync(join(FIXTURES, name))

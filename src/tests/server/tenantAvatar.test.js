@@ -25,7 +25,7 @@ beforeAll(async () => {
     metaData: { 'content-type': 'image/png' },
   })
   mockGetObject = vi.fn().mockImplementation(async () => Readable.from([avatar]))
-  vi.doMock('../../../server/services/storageService.js', async (importOriginal) => ({
+  vi.doMock('../../../server/platform/files/storageService.js', async (importOriginal) => ({
     ...(await importOriginal()),
     statObject: (...args) => mockStatObject(...args),
     getObject: (...args) => mockGetObject(...args),

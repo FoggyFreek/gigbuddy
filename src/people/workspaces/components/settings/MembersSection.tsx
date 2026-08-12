@@ -1,0 +1,483 @@
+import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import Avatar from '@mui/material/Avatar'
+import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import Card from '@mui/material/Card'
+import CardActions from '@mui/material/CardActions'
+import CardContent from '@mui/material/CardContent'
+import Chip from '@mui/material/Chip'
+import CircularProgress from '@mui/material/CircularProgress'
+import Divider from '@mui/material/Divider'
+import FormControl from '@mui/material/FormControl'
+import IconButton from '@mui/material/IconButton'
+import MenuItem from '@mui/material/MenuItem'
+import Paper from '@mui/material/Paper'
+import Select from '@mui/material/Select'
+import Stack from '@mui/material/Stack'
+import Table from '@mui/material/Table'
+import TableBody from '@mui/material/TableBody'
+import TableCell from '@mui/material/TableCell'
+import TableHead from '@mui/material/TableHead'
+import TableRow from '@mui/material/TableRow'
+import Tooltip from '@mui/material/Tooltip'
+import Typography from '@mui/material/Typography'
+import DeleteIcon from '@mui/icons-material/Delete'
+import {
+  listMemberships,
+  updateMembership,
+  updateMembershipBandMember,
+  removeMembership,
+} from '../../../memberships/users.ts'
+import { listMembers } from '../../../memberships/bandMembers.ts'
+import { useAuth } from '../../../../contexts/authContext.ts'
+import { ASSIGNABLE_ROLES } from '../../../../auth/permissions.ts'
+import type { Member, Id } from '../../../../types/entities.ts'
+import type { MembershipSource } from '../../../memberships/membership.ts'
+
+const STATUS_COLOR: Record<string, 'warning' | 'success' | 'error'> = {
+  pending: 'warning',
+  approved: 'success',
+  rejected: 'error',
+}
+
+type MembershipStatus = 'pending' | 'approved' | 'rejected'
+
+interface MembershipRow {
+  user_id?: Id
+  name?: string
+  email?: string
+  picture_url?: string
+  status?: MembershipStatus
+  role?: string
+  is_super_admin?: boolean
+  band_member_id?: Id | null
+  /** How this membership came to exist — 'legacy' predates the column. */
+  source?: MembershipSource
+  /**
+   * The requester's note, served only while the row is pending. Free text from
+   * a stranger the band hasn't accepted: rendered as PLAIN TEXT, never markup.
+   */
+  request_message?: string | null
+}
+
+// One line saying where a membership came from, so admins aren't left guessing
+// whether someone redeemed an invite or asked out of the blue. 'legacy' rows
+// (pre-column) say nothing rather than something invented.
+function ProvenanceLine({ r }: Readonly<{ r: MembershipRow }>) {
+  const { t } = useTranslation('settings')
+  if (!r.source || r.source === 'legacy') return null
+  return (
+    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+      {t($ => $.members.source[r.source!])}
+    </Typography>
+  )
+}
+
+// Shown on a PENDING row only (the server stops serving it once approved).
+function RequestMessage({ r }: Readonly<{ r: MembershipRow }>) {
+  const { t } = useTranslation('settings')
+  if (!r.request_message) return null
+  return (
+    <Box sx={{ mt: 0.5 }}>
+      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+        {t($ => $.members.requestMessage)}
+      </Typography>
+      {/* Plain text on purpose: never HTML, never markdown. */}
+      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+        {r.request_message}
+      </Typography>
+    </Box>
+  )
+}
+
+interface MemberRowActionsProps {
+  r: MembershipRow
+  callerIsSuperAdmin: boolean
+  isSelf: boolean
+  isLastAdmin: boolean
+  cannotDelete: boolean
+  onStatus: (userId: Id, status: string) => void
+  onDelete: (userId: Id) => void
+}
+
+function MemberRowActions({ r, callerIsSuperAdmin, isSelf, isLastAdmin, cannotDelete, onStatus, onDelete }: Readonly<MemberRowActionsProps>) {
+  const { t } = useTranslation('settings')
+  let removeTooltip: string
+  if (isLastAdmin) {
+    removeTooltip = t($ => $.members.tooltips.lastTenantAdmin)
+  } else if (isSelf) {
+    removeTooltip = t($ => $.members.tooltips.cannotRemoveSelf)
+  } else if (r.is_super_admin) {
+    removeTooltip = t($ => $.members.tooltips.cannotRemoveSuperAdmin)
+  } else if (r.role === 'tenant_admin' && !callerIsSuperAdmin) {
+    removeTooltip = t($ => $.members.tooltips.onlySuperAdminRemoveTenantAdmin)
+  } else {
+    removeTooltip = t($ => $.members.tooltips.removeFromTenant)
+  }
+  return (
+    <>
+      {r.status !== 'approved' && !(r.role === 'tenant_admin' && !callerIsSuperAdmin) && (
+        <Button size="small" variant="contained" color="success" onClick={() => r.user_id != null && onStatus(r.user_id, 'approved')}>
+          {t($ => $.members.approve)}
+        </Button>
+      )}
+      {r.status !== 'approved' && r.role === 'tenant_admin' && !callerIsSuperAdmin && (
+        <Tooltip title={t($ => $.members.tooltips.onlySuperAdminApproveTenantAdmin)}>
+          <span>
+            <Button size="small" variant="contained" color="success" disabled>{t($ => $.members.approve)}</Button>
+          </span>
+        </Tooltip>
+      )}
+      {/* Rejecting the last admin revokes the tenant's only approved admin,
+          which the backend refuses for the same reason as a demotion. */}
+      {r.status !== 'rejected' && !isSelf && !r.is_super_admin && !isLastAdmin && (
+        <Button size="small" variant="outlined" color="error" onClick={() => r.user_id != null && onStatus(r.user_id, 'rejected')}>
+          {t($ => $.members.reject)}
+        </Button>
+      )}
+      <Tooltip
+        title={removeTooltip}
+      >
+        <span>
+          <IconButton size="small" color="error" disabled={cannotDelete} aria-label={t($ => $.members.aria.removeMember)} onClick={() => r.user_id != null && onDelete(r.user_id)}>
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
+    </>
+  )
+}
+
+// Roles a tenant admin may assign. `tenant_admin` is added separately and stays
+// super-admin-only. Mirrors ASSIGNABLE_ROLES in src/auth/permissions.ts.
+const ASSIGNABLE_ROLE_OPTIONS = [...ASSIGNABLE_ROLES]
+
+// A tenant must always keep one approved admin, so the backend refuses to
+// remove or demote the last one — super admins included. Mirrored here so the
+// UI never offers an action that is going to 409.
+function isLastApprovedAdmin(r: MembershipRow, approvedAdminCount: number) {
+  return r.role === 'tenant_admin' && r.status === 'approved' && approvedAdminCount === 1
+}
+
+const countApprovedAdmins = (rows: MembershipRow[]) =>
+  rows.filter((r) => r.role === 'tenant_admin' && r.status === 'approved').length
+
+interface RoleSelectProps {
+  r: MembershipRow
+  callerIsSuperAdmin: boolean
+  isSelf: boolean
+  isLastAdmin: boolean
+  onRole: (userId: Id, role: string) => void
+}
+
+function RoleSelect({ r, callerIsSuperAdmin, isSelf, isLastAdmin, onRole }: Readonly<RoleSelectProps>) {
+  const { t } = useTranslation('settings')
+  // Non-super callers cannot touch a tenant_admin's role, nor grant tenant_admin.
+  const cannotDemoteAdmin = r.role === 'tenant_admin' && !callerIsSuperAdmin && !isSelf
+  const cannotPromote = !callerIsSuperAdmin
+  // The only role the last admin may hold is the one they already have.
+  const disabled = cannotDemoteAdmin || isLastAdmin
+  const select = (
+    <FormControl size="small" fullWidth>
+      <Select
+        value={r.role ?? ''}
+        disabled={disabled}
+        onChange={(e) => r.user_id != null && onRole(r.user_id, e.target.value)}
+      >
+        {ASSIGNABLE_ROLE_OPTIONS.map((role) => (
+          <MenuItem key={role} value={role}>{role}</MenuItem>
+        ))}
+        <MenuItem value="tenant_admin" disabled={cannotPromote && r.role !== 'tenant_admin'}>
+          tenant_admin
+        </MenuItem>
+      </Select>
+    </FormControl>
+  )
+  if (!isLastAdmin) return select
+  return (
+    <Tooltip title={t($ => $.members.tooltips.lastTenantAdmin)}>
+      <span>{select}</span>
+    </Tooltip>
+  )
+}
+
+interface MembersTableProps {
+  rows: MembershipRow[]
+  bandMembers: Member[]
+  currentUser: { id?: Id } | null | undefined
+  callerIsSuperAdmin: boolean
+  onStatus: (userId: Id, status: string) => void
+  onRole: (userId: Id, role: string) => void
+  onBandMember: (userId: Id, band_member_id: Id | null) => void
+  onDelete: (userId: Id) => void
+}
+
+function MembersTable({ rows, bandMembers, currentUser, callerIsSuperAdmin, onStatus, onRole, onBandMember, onDelete }: Readonly<MembersTableProps>) {
+  const { t } = useTranslation('settings')
+  const approvedAdminCount = countApprovedAdmins(rows)
+  return (
+    <>
+      {/* Desktop table — hidden below 600 px */}
+      <Paper variant="outlined" sx={{ display: { xs: 'none', sm: 'block' } }}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell />
+              <TableCell>{t($ => $.members.columns.name)}</TableCell>
+              <TableCell>{t($ => $.members.columns.email)}</TableCell>
+              <TableCell>{t($ => $.members.columns.status)}</TableCell>
+              <TableCell>{t($ => $.members.columns.role)}</TableCell>
+              <TableCell>{t($ => $.members.columns.bandMember)}</TableCell>
+              <TableCell align="right">{t($ => $.members.columns.actions)}</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map((r) => {
+              const isSelf = r.user_id === currentUser?.id
+              const linked = r.band_member_id
+              const availableMembers = bandMembers.filter(
+                (bm) => !(bm as MemberWithUser).user_id || (bm as MemberWithUser).user_id === r.user_id,
+              )
+              const isLastAdmin = isLastApprovedAdmin(r, approvedAdminCount)
+              const cannotDelete =
+                isSelf ||
+                r.is_super_admin ||
+                isLastAdmin ||
+                (r.role === 'tenant_admin' && !callerIsSuperAdmin)
+              const status = r.status
+              return (
+                <TableRow key={String(r.user_id)}>
+                  <TableCell sx={{ width: 48 }}>
+                    <Avatar src={r.picture_url} sx={{ width: 32, height: 32 }}>
+                      {r.name?.[0]}
+                    </Avatar>
+                  </TableCell>
+                  <TableCell>
+                    {r.name}
+                    {r.is_super_admin && (
+                      <Chip size="small" label={t($ => $.members.superChip)} color="primary" sx={{ ml: 1 }} />
+                    )}
+                    <ProvenanceLine r={r} />
+                    <RequestMessage r={r} />
+                  </TableCell>
+                  <TableCell>{r.email}</TableCell>
+                  <TableCell>
+                    <Chip label={status ? t($ => $.members.status[status]) : ''} color={STATUS_COLOR[r.status ?? ''] || 'default'} size="small" />
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 140 }}>
+                    <RoleSelect r={r} callerIsSuperAdmin={callerIsSuperAdmin} isSelf={isSelf} isLastAdmin={isLastAdmin} onRole={onRole} />
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 160 }}>
+                    <FormControl size="small" fullWidth>
+                      <Select
+                        value={linked ?? ''}
+                        displayEmpty
+                        onChange={(e) => r.user_id != null && onBandMember(r.user_id, (e.target.value as Id) || null)}
+                      >
+                        <MenuItem value="">{t($ => $.members.noneOption)}</MenuItem>
+                        {availableMembers.map((bm) => (
+                          <MenuItem key={String(bm.id)} value={bm.id as unknown as string}>{bm.name}</MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      sx={{ justifyContent: 'flex-end' }}
+                    >
+                      <MemberRowActions
+                        r={r}
+                        callerIsSuperAdmin={callerIsSuperAdmin}
+                        isSelf={isSelf}
+                        isLastAdmin={isLastAdmin}
+                        cannotDelete={cannotDelete}
+                        onStatus={onStatus}
+                        onDelete={onDelete}
+                      />
+                    </Stack>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </Paper>
+
+      {/* Mobile cards — visible below 600 px */}
+      <Stack spacing={1.5} sx={{ display: { xs: 'flex', sm: 'none' } }}>
+        {rows.map((r) => {
+          const isSelf = r.user_id === currentUser?.id
+          const linked = r.band_member_id
+          const availableMembers = bandMembers.filter(
+            (bm) => !(bm as MemberWithUser).user_id || (bm as MemberWithUser).user_id === r.user_id,
+          )
+          const isLastAdmin = isLastApprovedAdmin(r, approvedAdminCount)
+          const cannotDelete = isSelf || r.is_super_admin || isLastAdmin || (r.role === 'tenant_admin' && !callerIsSuperAdmin)
+          const status = r.status
+          return (
+            <Card key={String(r.user_id)} variant="outlined">
+              <CardContent sx={{ pb: 1 }}>
+                <Stack
+                  direction="row"
+                  spacing={1.5}
+                  sx={{ alignItems: 'center', mb: 1.5 }}
+                >
+                  <Avatar src={r.picture_url} sx={{ width: 36, height: 36 }}>
+                    {r.name?.[0]}
+                  </Avatar>
+                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                    <Stack
+                      direction="row"
+                      spacing={0.5}
+                      sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+                    >
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{r.name}</Typography>
+                      {r.is_super_admin && <Chip size="small" label={t($ => $.members.superChip)} color="primary" />}
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {r.email}
+                    </Typography>
+                    <ProvenanceLine r={r} />
+                    <RequestMessage r={r} />
+                  </Box>
+                  <Chip label={status ? t($ => $.members.status[status]) : ''} color={STATUS_COLOR[r.status ?? ''] || 'default'} size="small" />
+                </Stack>
+                <Stack spacing={1}>
+                  <RoleSelect r={r} callerIsSuperAdmin={callerIsSuperAdmin} isSelf={isSelf} isLastAdmin={isLastAdmin} onRole={onRole} />
+                  <FormControl size="small" fullWidth>
+                    <Select
+                      value={linked ?? ''}
+                      displayEmpty
+                      onChange={(e) => r.user_id != null && onBandMember(r.user_id, (e.target.value as Id) || null)}
+                    >
+                      <MenuItem value="">{t($ => $.members.noneOption)}</MenuItem>
+                      {availableMembers.map((bm) => (
+                        <MenuItem key={String(bm.id)} value={bm.id as unknown as string}>{bm.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Stack>
+              </CardContent>
+              <Divider />
+              <CardActions sx={{ justifyContent: 'flex-end', px: 1, py: 0.5, gap: 0.5 }}>
+                <MemberRowActions
+                  r={r}
+                  callerIsSuperAdmin={callerIsSuperAdmin}
+                  isSelf={isSelf}
+                  isLastAdmin={isLastAdmin}
+                  cannotDelete={cannotDelete}
+                  onStatus={onStatus}
+                  onDelete={onDelete}
+                />
+              </CardActions>
+            </Card>
+          )
+        })}
+      </Stack>
+    </>
+  )
+}
+
+// Band members from the API may carry a user_id field linking them to users.
+interface MemberWithUser extends Member {
+  user_id?: Id
+}
+
+export default function MembersSection() {
+  const { t } = useTranslation('settings')
+  const { user: currentUser } = useAuth()
+  const [rows, setRows] = useState<MembershipRow[]>([])
+  const [bandMembers, setBandMembers] = useState<MemberWithUser[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    Promise.all([listMemberships(), listMembers()]).then(([m, bm]) => {
+      setRows(m as MembershipRow[])
+      setBandMembers(bm as MemberWithUser[])
+      setLoading(false)
+    })
+  }, [])
+
+  const replaceRow = (updated: MembershipRow) => {
+    setRows((prev) => prev.map((r) => (r.user_id === updated.user_id ? updated : r)))
+  }
+
+  const handleStatus = async (userId: Id, status: string) => {
+    setError('')
+    try {
+      const updated = await updateMembership(userId, { status })
+      replaceRow(updated as MembershipRow)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t($ => $.members.errors.updateFailed))
+    }
+  }
+
+  const handleRole = async (userId: Id, role: string) => {
+    setError('')
+    try {
+      const updated = await updateMembership(userId, { role })
+      replaceRow(updated as MembershipRow)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t($ => $.members.errors.updateFailed))
+    }
+  }
+
+  const handleBandMember = async (userId: Id, band_member_id: Id | null) => {
+    setError('')
+    try {
+      const updated = await updateMembershipBandMember(userId, band_member_id as Id)
+      replaceRow(updated as MembershipRow)
+      const refreshed = await listMembers()
+      setBandMembers(refreshed as MemberWithUser[])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t($ => $.members.errors.updateFailed))
+    }
+  }
+
+  const handleDelete = async (userId: Id) => {
+    setError('')
+    try {
+      await removeMembership(userId)
+      setRows((prev) => prev.filter((r) => r.user_id !== userId))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t($ => $.members.errors.deleteFailed))
+    }
+  }
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 8 }}>
+        <CircularProgress />
+      </Box>
+    )
+  }
+
+  const callerIsSuperAdmin = !!currentUser?.isSuperAdmin
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+        {t($ => $.members.title)}
+      </Typography>
+      {error && (
+        <Typography color="error" variant="body2">
+          {error}
+        </Typography>
+      )}
+      <MembersTable
+        rows={rows}
+        bandMembers={bandMembers}
+        currentUser={currentUser}
+        callerIsSuperAdmin={callerIsSuperAdmin}
+        onStatus={handleStatus}
+        onRole={handleRole}
+        onBandMember={handleBandMember}
+        onDelete={handleDelete}
+      />
+    </Box>
+  )
+}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { ProfileContext } from './profileContext.ts'
-import { getProfile } from '../api/profile.ts'
+import { getProfile } from '../people/profiles/profile.ts'
 import { useAuth } from './authContext.ts'
 import {
   EMPTY_INTEGRATION_CONFIGURATION,

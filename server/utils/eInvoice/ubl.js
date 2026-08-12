@@ -4,7 +4,7 @@
 // one direction knows about cannot exist.
 //
 // Pure: no DB, no IO. Mapping the result onto a purchase is the service's job
-// (server/services/purchaseImportService.js).
+// (server/finance/purchases/purchaseImportService.js).
 //
 // TOLERANT BY DESIGN, WITHIN LIMITS. Incoming invoices come from whatever the
 // supplier runs — Peppol BIS Billing 3.0, the older SI-UBL 1.2 still common in

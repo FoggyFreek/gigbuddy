@@ -5,7 +5,7 @@ import Button from '@mui/material/Button'
 import MenuItem from '@mui/material/MenuItem'
 import TextField from '@mui/material/TextField'
 import { commonVatSelection, listTaxCategories } from '../../../shared/taxCategories.js'
-import { VAT_COUNTRY_CODES } from '../../utils/vatRates'
+import { VAT_COUNTRY_CODES } from '../../finance/vat/vatRates.ts'
 
 interface Props {
   direction: 'sale' | 'purchase' | 'adjustment'

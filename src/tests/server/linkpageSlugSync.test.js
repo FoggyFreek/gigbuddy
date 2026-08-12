@@ -1,9 +1,9 @@
 import './_envSetup.js'
 // @vitest-environment node
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { insertSlugSyncOperation } from '../../../server/repositories/linkpageSlugSyncRepository.js'
-import { reconcileLinkpageSlugSync } from '../../../server/services/linkpageSlugSyncService.js'
-import { runLinkpageSlugReconciliationTick } from '../../../server/jobs/linkpageSlugReconciliation.js'
+import { insertSlugSyncOperation } from '../../../server/promotion/linkpage/linkpageSlugSyncRepository.js'
+import { reconcileLinkpageSlugSync } from '../../../server/promotion/linkpage/linkpageSlugSyncService.js'
+import { runLinkpageSlugReconciliationTick } from '../../../server/promotion/linkpage/jobs/linkpageSlugReconciliation.js'
 
 let pool, runMigrations, truncateAll, seedTwoTenants
 let seed

@@ -16,10 +16,10 @@ beforeAll(async () => {
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
-  const entMod = await import('../../../server/services/entitlementService.js')
+  const entMod = await import('../../../server/commerce/billing/entitlementService.js')
   resolveTenantEntitlements = entMod.resolveTenantEntitlements
   clearEntitlementCaches = entMod.clearEntitlementCaches
-  const planMod = await import('../../../server/services/planService.js')
+  const planMod = await import('../../../server/commerce/plans/planService.js')
   updatePlan = planMod.updatePlan
   billing = await import('./_billing.js')
   await runMigrations()

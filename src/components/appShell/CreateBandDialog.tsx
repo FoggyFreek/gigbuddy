@@ -9,7 +9,7 @@ import DialogTitle from '@mui/material/DialogTitle'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import { createOwnedTenant } from '../../api/tenants.ts'
+import { createOwnedTenant } from '../../people/workspaces/tenants.ts'
 import type { Id } from '../../types/entities.ts'
 import AccountingCountrySelect from '../shared/AccountingCountrySelect.tsx'
 

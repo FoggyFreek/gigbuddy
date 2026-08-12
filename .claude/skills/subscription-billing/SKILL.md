@@ -1,18 +1,28 @@
 ---
 name: subscription-billing
-description: Subscription, entitlement, and Mollie platform-billing architecture. Use when touching plans, entitlements/feature gates, limits (storage/members/bands), tenant ownership, the billing lifecycle (subscribe/upgrade/downgrade+purge/cancel/webhooks/saga/scheduler), or the frontend gating UI (diamond nav lock, tier logos, /billing pages, DowngradeDialog).
+description: Subscription, entitlement, and Mollie platform-billing architecture, including the two independent plan products (band ladder vs artist ladder, plan audiences). Use when touching plans or plan audiences, entitlements/feature gates, limits (storage/members/bands), tenant ownership, the billing lifecycle (subscribe/upgrade/downgrade+purge/cancel/webhooks/saga/scheduler), or the frontend gating UI (diamond nav lock, tier logos, /billing pages, plan ladder, DowngradeDialog).
 user-invocable: false
 ---
 
 # Subscriptions, entitlements & platform billing
 
-Paid tiers (bronze/silver/gold) gate features and limits per tenant; billing runs on Mollie behind a provider port. Migrations `100`–`105`. The full rev-5 design lives in the plan file referenced by project memory; this skill is the code-level map and the invariants you must not break.
+Paid tiers gate features and limits per tenant; billing runs on Mollie behind a provider port. Migrations `100`–`105`. The full rev-5 design lives in the plan file referenced by project memory; this skill is the code-level map and the invariants you must not break.
+
+## Two independent PRODUCTS, not one ladder
+
+`subscription_plans.audience` is `band` (`bronze` fallback, `silver`, `gold`) or `artist` (`artist_bronze` fallback, `artist_gold`), registered in `shared/planAudiences.js`. They are separate products, not tiers of one ladder.
+
+- **One live subscription per audience per user**, and **a subscription is bound to its audience for life**: no upgrade or downgrade crosses the boundary, DB triggers refuse it, and every entry point routes by the *target plan's* audience, so naming a plan on the other ladder is an ordinary 404.
+- **Tenant kind selects the ladder** (band tenant → owner's band subscription, personal → artist), entirely inside `resolveOwnerEntitlements`/`resolveTenantEntitlements`. Callers using the `{ ownerUserId, tenantKind }` fast path must supply **both** — `audienceForTenantKind` throws rather than defaulting. (Tenant kinds themselves: the **tenant-model** skill.)
+- Anything band-scoped reads the **band** ladder: `enforceBandCap` ignores an artist plan's vestigial `bands: 0`, and downgrade blockers and the purge are scoped to `tenantKindsForAudience(…)` so an artist downgrade never touches a band.
+- Ranking, the free fallback and trials are per-product. Frontend `src/commerce/billing/planLadder.ts` + `PlanLadderSection` render one ladder each; `SubscriptionSummaryCard` and the AppShell logo follow the *active tenant's* ladder.
+- A sideman on a cheap artist plan still plays in someone else's gold band — a band's entitlements come from its *owner's* subscription.
 
 ## Plans & entitlements
 
-- **`shared/entitlements.js` is the single source of truth** (server re-export: `server/auth/entitlements.js`; frontend mirror types in `src/auth/entitlements.ts`). Features: `finance`, `integrations`, `customization`, `song_files`, `chordpro`, `public_promotion`. Limits: `storage_mb`, `members`, `bands` — **`null` = unlimited**. Plans store *complete* entitlement objects (every key present, `validateEntitlements`); `mergeEntitlements` overlays per-subscription `entitlement_overrides` and silently ignores malformed keys.
+- **`shared/entitlements.js` is the single source of truth** (server re-export: `server/auth/entitlements.js`; frontend mirror types in `src/auth/entitlements.ts`). Features: `finance`, `integrations`, `customization`, `song_files`, `chordpro`, `public_promotion`, `linkpage`, `custom_slug`, `calendar_sync` (`FEATURES.CALENDAR_SYNC` gates the ICS feed **independently of `integrations`**, so "planning, but no calendar sync" is expressible — the shape a free artist workspace takes). Limits: `storage_mb`, `members`, `bands` — **`null` = unlimited**. Plans store *complete* entitlement objects (every key present, `validateEntitlements`); `mergeEntitlements` overlays per-subscription `entitlement_overrides` and silently ignores malformed keys.
 - Plan catalog: `subscription_plans` (migration `100`), default tiers seeded from `server/db/defaultPlans.js` **and** the migration SQL — keep both in sync. Bronze is `is_fallback` (free, always active, 0-priced, undeletable/unrenamable). Price semantics: `NULL` = interval unavailable, `0` = free-fallback only, `>0` = paid. Super-admin CRUD at `/admin/plans`; a subscription snapshots `price_cents` at subscribe/change time, so plan price edits never affect running subscriptions.
-- Tier logos `public/icons/gb_{bronze,silver,gold}.png` are keyed **by plan slug** via `src/utils/planLogo.ts` — custom slugs return `null` and callers fall back to the standard app logo. The AppShell header logo swaps to the tier logo only when not locked/unenforced.
+- Tier logos `public/icons/gb_{bronze,silver,gold}.png` are keyed **by plan slug** via `src/commerce/billing/planLogo.ts` — custom slugs return `null` and callers fall back to the standard app logo. The AppShell header logo swaps to the tier logo only when not locked/unenforced.
 
 ## Ownership: subscriptions are user-level, tenants inherit
 
@@ -28,7 +38,7 @@ Paid tiers (bronze/silver/gold) gate features and limits per tenant; billing run
 
 ## Billing flows (Mollie behind a port)
 
-- **Provider port**: `server/billing/paymentProvider/` — code imports `getPaymentProvider()` (selected by `BILLING_PROVIDER`, key `PLATFORM_MOLLIE_API_KEY`), never a concrete adapter, and speaks **canonical statuses only** (`statuses.js`); Mollie types stay inside `mollieProvider.js`. Tests inject a fake via `setPaymentProviderForTests` (fake class in `src/tests/server/_fakeProvider.js`; subscription-row helpers in `_billing.js`).
+- **Provider port**: `server/commerce/billing/paymentProvider/` — code imports `getPaymentProvider()` (selected by `BILLING_PROVIDER`, key `PLATFORM_MOLLIE_API_KEY`), never a concrete adapter, and speaks **canonical statuses only** (`statuses.js`); Mollie types stay inside `mollieProvider.js`. Tests inject a fake via `setPaymentProviderForTests` (fake class in `src/tests/server/_fakeProvider.js`; subscription-row helpers in `_billing.js`).
 - **Local state first, remote second, never a remote call inside a DB transaction.** Subscribe commits a `pending_mandate` row, then creates a €0.01 mandate-establishing checkout; an abandoned signup is just a stale row the scheduler cancels after 24h. 7-day trial, once per user (`trialing` after the mandate pays; otherwise `pending_activation` — **no access until an authoritatively-paid charge**).
 - **Saga/outbox**: every remote mutation goes through `billingSaga.js` — claim a `billing_operations` row (deterministic idempotency key, `billingShared.idemKeys`) *before* the provider call, mark `succeeded`/`failed_retryable`/`failed_terminal` after. A resumed saga finds the succeeded row and skips the call. The provider schedule is created/replaced by `repairSchedule`, keyed off `mollie_schedule_stale`; terminal repair failures flag `billing_repair_needed` (visible in `/admin/subscriptions`).
 - **Ingestion is one funnel**: webhook (`/api/public/billing/mollie/webhook` — always 200, posted id is a routing hint only, status re-fetched from the provider, payment's customer verified against the owner) and the reconcile poll both call `ingestProviderPayment` → `applyPaymentOutcome` (single txn under the subscription row lock). The status-transition predicate lives **in SQL** (`billing_payment_transition_allowed`, migration `104`) inside the upsert's `ON CONFLICT ... WHERE`, so concurrent webhook/reconcile replays are race-free and inert transitions never re-fire effects. Billing notifications are user-level (`tenant_id` nullable, migration `103`) and inserted in the same transaction with a `dedupe_key`.
@@ -51,4 +61,4 @@ Downgrades are the one flow that deletes data, so every branch runs on **informe
 
 ## Reference tests
 
-`src/tests/server/`: `entitlements.test.js` (resolver bounds), `entitlementGates.test.js` (route gates), `billingLifecycle.test.js` (subscribe/change/cancel sagas, webhook replay, activate-first), `billingScheduler.test.js` (reconciliation tasks), `downgradePurge.test.js` (downgrade lifecycle, purge scope, saga/cancel/pre-repoint races), `storageQuota.test.js`, `memberBandCaps.test.js`, `tenantSelfCreate.test.js`, `adminBilling.test.js` (plan catalog). Fake provider: `_fakeProvider.js`. Frontend: `src/tests/DowngradeDialog.test.jsx`.
+`src/tests/server/`: `entitlements.test.js` (resolver bounds), `entitlementGates.test.js` (route gates), `billingLifecycle.test.js` (subscribe/change/cancel sagas, webhook replay, activate-first), `billingScheduler.test.js` (reconciliation tasks), `downgradePurge.test.js` (downgrade lifecycle, purge scope, saga/cancel/pre-repoint races), `storageQuota.test.js`, `memberBandCaps.test.js`, `tenantSelfCreate.test.js`, `adminBilling.test.js` (plan catalog). Fake provider: `_fakeProvider.js`. Frontend: `src/app/__tests__/DowngradeDialog.test.jsx`.

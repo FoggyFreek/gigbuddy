@@ -47,7 +47,7 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   oidc = await import('../../../server/oidc.js')
-  authService = await import('../../../server/services/authService.js')
+  authService = await import('../../../server/user/identity/authService.js')
   await runMigrations()
 })
 

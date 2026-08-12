@@ -9,43 +9,88 @@ export default defineConfig({
     chunkSizeWarningLimit: 800,
     rollupOptions: {
       output: {
-        manualChunks(id) {
-          if (!id.includes('node_modules')) return
-          // React core — almost everything depends on this; keep it small and stable
-          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('react-router')) {
-            return 'vendor-react'
-          }
-          // MUI icons ship thousands of SVG components; isolate so it only loads once
-          if (id.includes('@mui/icons-material')) return 'vendor-mui-icons'
-          // The data grid is its own ~400 kB runtime and only the bank-import
-          // review uses it — keep it out of the charts/pickers chunk.
-          if (id.includes('@mui/x-data-grid')) return 'vendor-mui-datagrid'
-          // MUI X packages pull in D3 / heavier chart/picker logic
-          if (id.includes('@mui/x-')) return 'vendor-mui-x'
-          // MUI core + Emotion styling runtime
-          if (id.includes('@mui/') || id.includes('@emotion/')) return 'vendor-mui'
-          // Tiptap rich-text editor
-          if (id.includes('@tiptap/') || id.includes('prosemirror')) return 'vendor-editor'
-          // ABC music notation renderer (large standalone library)
-          if (id.includes('abcjs')) return 'vendor-abcjs'
-          // ChordPro parser
-          if (id.includes('chordsheetjs')) return 'vendor-chordpro'
-          // Map libraries
-          if (id.includes('leaflet') || id.includes('react-leaflet')) return 'vendor-maps'
-          // PDF viewer runtime (pdfjs-dist alone is ~800 kB minified)
-          if (id.includes('react-pdf') || id.includes('pdfjs-dist')) return 'vendor-pdfjs'
-          // Client-side PDF/image generation (separate from the viewer)
-          if (id.includes('jspdf') || id.includes('html-to-image')) return 'vendor-pdf-gen'
-          // File-processing utilities (Excel, CSV, image compression)
-          if (
-            id.includes('exceljs') ||
-            id.includes('papaparse') ||
-            id.includes('browser-image-compression')
-          ) return 'vendor-files'
-          // i18n runtime
-          if (id.includes('i18next') || id.includes('react-i18next')) return 'vendor-i18n'
-          // Drag-and-drop
-          if (id.includes('@dnd-kit/')) return 'vendor-dnd'
+        // Use rolldown's `codeSplitting.groups`, never the `manualChunks` function.
+        // Under rolldown a named chunk also absorbs *unmatched* shared modules, so a
+        // single stray helper in the entry graph turns the whole chunk into an eager
+        // static import — that is how jsPDF, TipTap and the data grid used to land in
+        // the initial load. Regexes match forward-slash ids (Vite normalizes them).
+        //
+        // Rule of thumb: every lazy-only library needs its own group, and any runtime
+        // shared between an eager and a lazy consumer needs a *higher-priority* group
+        // of its own, or the lazy consumer gets dragged along.
+        codeSplitting: {
+          groups: [
+            // React core — almost everything depends on this; keep it small and stable
+            {
+              name: 'vendor-react',
+              test: /node_modules\/(react|react-dom|scheduler|react-router|use-sync-external-store)\//,
+              priority: 100,
+            },
+            // MUI icons ship thousands of SVG components; isolate so it only loads once
+            { name: 'vendor-mui-icons', test: /node_modules\/@mui\/icons-material\//, priority: 95 },
+            // MUI core + Emotion styling runtime
+            {
+              name: 'vendor-mui',
+              test: /node_modules\/(@mui\/(material|system|utils|styled-engine|private-theming)|@emotion)\//,
+              priority: 90,
+            },
+            // i18n runtime
+            {
+              name: 'vendor-i18n',
+              test: /node_modules\/(i18next|react-i18next|i18next-browser-languagedetector)\//,
+              priority: 88,
+            },
+            // Shared MUI X runtime, used by BOTH the eager date pickers and the lazy
+            // grid/charts. Without its own higher-priority group the ~390 kB data grid
+            // rides into the initial load behind the pickers.
+            {
+              name: 'vendor-mui-x-core',
+              test: /node_modules\/(@mui\/x-internals|@mui\/x-internal-gestures|@base-ui|@babel\/runtime|clsx|prop-types|react-transition-group|dom-helpers)\//,
+              priority: 86,
+            },
+            // Date pickers are eager: main.tsx wraps the app in LocalizationProvider.
+            { name: 'vendor-mui-pickers', test: /node_modules\/@mui\/x-date-pickers\//, priority: 80 },
+            // The data grid is its own ~400 kB runtime and only the bank-import
+            // review uses it — keep it out of the charts/pickers chunks.
+            { name: 'vendor-mui-datagrid', test: /node_modules\/@mui\/x-data-grid\//, priority: 80 },
+            // Charts pull in all of D3 and are only used by the financial dashboard.
+            {
+              name: 'vendor-charts',
+              test: /node_modules\/(@mui\/x-charts|d3-|internmap|delaunator|robust-predicates|bezier-easing|flatqueue)/,
+              priority: 80,
+            },
+            // Tiptap rich-text editor
+            {
+              name: 'vendor-editor',
+              test: /node_modules\/(@tiptap|prosemirror-|orderedmap|w3c-keyname|rope-sequence|linkifyjs)/,
+              priority: 80,
+            },
+            // PDF viewer runtime (pdfjs-dist alone is ~800 kB minified)
+            { name: 'vendor-pdfjs', test: /node_modules\/(react-pdf|pdfjs-dist)\//, priority: 80 },
+            // Client-side PDF/image generation (separate from the viewer)
+            {
+              name: 'vendor-pdf-gen',
+              test: /node_modules\/(jspdf|html-to-image|fast-png|iobuffer|pako|fflate)\//,
+              priority: 80,
+            },
+            // ABC music notation renderer (large standalone library)
+            { name: 'vendor-abcjs', test: /node_modules\/abcjs\//, priority: 80 },
+            // ChordPro parser
+            { name: 'vendor-chordpro', test: /node_modules\/chordsheetjs\//, priority: 80 },
+            // Map libraries
+            { name: 'vendor-maps', test: /node_modules\/(leaflet|react-leaflet|@react-leaflet)\//, priority: 80 },
+            // Drag-and-drop
+            { name: 'vendor-dnd', test: /node_modules\/@dnd-kit\//, priority: 80 },
+            // File-processing utilities (Excel, CSV, image compression)
+            {
+              name: 'vendor-files',
+              test: /node_modules\/(exceljs|papaparse|browser-image-compression)\//,
+              priority: 80,
+            },
+            // No catch-all `/node_modules/` group on purpose: anything unmatched must
+            // stay in rolldown's automatic per-dynamic-import chunks so it loads with
+            // the lazy route that needs it.
+          ],
         },
       },
     },
@@ -101,6 +146,7 @@ export default defineConfig({
       reportsDirectory: './coverage/frontend',
       include: ['src/**'],
       exclude: [
+        '**/__tests__/**',
         'src/tests/**',
         'src/main.tsx',
         'public/**',

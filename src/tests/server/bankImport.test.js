@@ -5,12 +5,12 @@ import request from 'supertest'
 import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { settleInvoice } from '../../../server/services/invoiceService.js'
-import { settlePurchase } from '../../../server/services/purchaseService.js'
-import { markInvoicePaid } from '../../../server/repositories/invoiceRepository.js'
-import { markPurchasePaid } from '../../../server/repositories/purchaseRepository.js'
-import { postShopifyPayoutSettlement } from '../../../server/services/ledgerService.js'
-import { setIntegrationCredential } from '../../../server/services/integrationCredentialService.js'
+import { settleInvoice } from '../../../server/finance/invoices/invoiceService.js'
+import { settlePurchase } from '../../../server/finance/purchases/purchaseService.js'
+import { markInvoicePaid } from '../../../server/finance/invoices/invoiceRepository.js'
+import { markPurchasePaid } from '../../../server/finance/purchases/purchaseRepository.js'
+import { postShopifyPayoutSettlement } from '../../../server/finance/ledger/ledgerService.js'
+import { setIntegrationCredential } from '../../../server/platform/integrations/integrationCredentialService.js'
 
 // Stub MinIO (invoice PDF path is a no-op; we assert DB/ledger state).
 vi.mock('../../../server/utils/storage.js', () => ({

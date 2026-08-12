@@ -2,7 +2,7 @@ import './_envSetup.js'
 // @vitest-environment node
 import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
 import request from 'supertest'
-import { verifyPayload } from '../../../server/security/linkpageTokens.js'
+import { verifyPayload } from '../../../server/promotion/linkpage/linkpageTokens.js'
 import { seedDefaultPlans } from '../../../server/db/defaultPlans.js'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
@@ -23,7 +23,7 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   app = appMod.createTestApp()
-  const entMod = await import('../../../server/services/entitlementService.js')
+  const entMod = await import('../../../server/commerce/billing/entitlementService.js')
   clearEntitlementCaches = entMod.clearEntitlementCaches
   billing = await import('./_billing.js')
   await runMigrations()
@@ -231,14 +231,14 @@ describe('public linkpage image', () => {
     expect(tampered.status).toBe(404)
 
     // Signed but expired token.
-    const { signPayload } = await import('../../../server/security/linkpageTokens.js')
+    const { signPayload } = await import('../../../server/promotion/linkpage/linkpageTokens.js')
     const expired = signPayload({ t: 'img', k: `tenants/${seed.tenantA.id}/logo/x.webp`, exp: 1 })
     const res = await request(app).get(`/api/public/linkpage/image?t=${encodeURIComponent(expired)}`)
     expect(res.status).toBe(404)
   })
 
   it('404s on valid signatures over non-tenant object keys', async () => {
-    const { signPayload } = await import('../../../server/security/linkpageTokens.js')
+    const { signPayload } = await import('../../../server/promotion/linkpage/linkpageTokens.js')
     const exp = Math.floor(Date.now() / 1000) + 60
     const sneaky = signPayload({ t: 'img', k: 'internal/backup.sql', exp })
     const res = await request(app).get(`/api/public/linkpage/image?t=${encodeURIComponent(sneaky)}`)

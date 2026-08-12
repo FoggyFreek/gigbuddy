@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import MenuItem from '@mui/material/MenuItem'
 import TextField from '@mui/material/TextField'
-import { VAT_COUNTRY_CODES } from '../../utils/vatRates.ts'
+import { VAT_COUNTRY_CODES } from '../../finance/vat/vatRates.ts'
 
 // Localized country name from the 2-letter code, so the accounting-country
 // dropdown reads naturally without hand-maintained i18n keys.

@@ -32,7 +32,7 @@ beforeAll(async () => {
   const appMod = await import('./_app.js')
   app = appMod.createTestApp()
 
-  const svc = await import('../../../server/services/notificationService.js')
+  const svc = await import('../../../server/user/notifications/notificationService.js')
   dispatchNotification = svc.dispatchNotification
 }, 60000)
 

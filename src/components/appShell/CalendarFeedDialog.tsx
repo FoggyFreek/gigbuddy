@@ -18,7 +18,7 @@ import {
   regenerateCalendarFeed,
   deleteCalendarFeed,
   type CalendarFeed,
-} from '../../api/calendarFeed.ts'
+} from '../../promotion/calendar-feed/calendarFeed.ts'
 
 interface CalendarFeedDialogProps {
   open: boolean

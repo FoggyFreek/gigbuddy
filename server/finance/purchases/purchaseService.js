@@ -1,0 +1,799 @@
+// Purchase domain logic. Route handlers stay thin and delegate here.
+//
+// Functions return a discriminated result so the HTTP layer can map outcomes
+// to status codes without knowing the rules:
+//   { error: { status, body } }   — caller should respond with that status/body
+//   anything else                 — success payload (see each function)
+import {
+  computePurchaseLineAccountingAmounts,
+  computePurchaseTotals,
+} from '../../../shared/purchaseTotals.js'
+import {
+  fetchPurchase,
+  fetchPurchaseLines,
+  nextPurchaseNumber,
+  insertPurchaseLines,
+  replacePurchaseLines,
+  validateContactIdForTenant,
+  fetchValidPurchaseLineCodes,
+  fetchValidProductIds,
+  validateBandMemberForTenant,
+  listPurchases as listPurchaseRows,
+  searchPurchases as searchPurchaseRows,
+  listPurchasePeriods,
+  fetchPurchaseAttachments,
+  getPurchaseStatus,
+  deletePurchase as deletePurchaseRow,
+  deleteAttachmentReturningKey,
+  fetchAttachmentKind,
+  listImportedPaymentCandidates,
+  lockImportedPaymentCandidate,
+  lockPurchase,
+  markPurchasePaid,
+  fetchPurchaseOwner,
+  insertPurchaseAttachment,
+  lockProductStock,
+  setProductStock,
+  insertPurchase,
+  updatePurchase,
+} from './purchaseRepository.js'
+import { markLineResult } from '../bank-import/bankImportRepository.js'
+import { getTransactionBySource } from '../ledger/ledgerRepository.js'
+import { buildPeriodWhere } from '../../utils/periodQuery.js'
+import { loadAccountingBehavior } from '../accounting-profile/accountingProfileService.js'
+import { acquireAccountingSettingsLock } from '../accounts/accountRepository.js'
+import { isVatControlAccount } from '../../../shared/vatControlAccounts.js'
+import {
+  CONTENT_FIELDS_SET,
+  FINALIZED_LOCKED_FIELDS_SET,
+  SIMPLE_PATCH_FIELDS,
+  STATUS_VALUES,
+  normalizeLines,
+  parseId,
+  parseReceiptNumber,
+  parseSearchLimit,
+  validatePurchaseLineTaxFields,
+} from './purchaseValidators.js'
+import {
+  ledgerErrorResult,
+  loadAccountingSettings,
+  postBillAccrued,
+  postBillPaid,
+  correctLedgerTransaction,
+} from '../ledger/ledgerService.js'
+import {
+  resolveLiveTreatment,
+  resolvePurchaseVatTreatment,
+  purchaseSnapshotColumns,
+} from '../vat/vatTreatmentService.js'
+import { withTransaction, abortTransaction } from '../../db/withTransaction.js'
+import { createHash, randomUUID } from 'node:crypto'
+import { purchaseAttachmentKey, uploadObjectWithQuota, removeObject, safeRemove } from '../../platform/files/storageService.js'
+import { verifyDocumentContent } from '../../utils/verifyFileContent.js'
+import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../../utils/imageProcess.js'
+
+const ATTACHMENT_IMAGE_TYPES = new Set(['image/jpeg', 'image/png'])
+
+// Extensions for a stored source document. Only the importer reaches this path;
+// the manual upload route keeps its narrower allowlist.
+const SOURCE_EXTENSIONS = {
+  'application/pdf': '.pdf',
+  'application/xml': '.xml',
+  'text/xml': '.xml',
+}
+
+// Receipt/attachment upload. Allowed at any purchase status. Images take the
+// share-photo security path (magic bytes + sharp re-encode, which strips
+// EXIF/metadata); PDFs are magic-byte verified and stored as-is.
+export async function createPurchaseAttachment({ db, tenantId, purchaseId, file, requireCreatedByUserId = null, kind = 'receipt' }) {
+  const purchase = await fetchPurchaseOwner(db, tenantId, purchaseId)
+  if (!purchase) return { error: { status: 404, body: { error: 'Not found' } } }
+  // Self-scoped callers may only attach to their own purchase (hide as 404).
+  if (requireCreatedByUserId != null && purchase.created_by_user_id !== requireCreatedByUserId) {
+    return { error: { status: 404, body: { error: 'Not found' } } }
+  }
+
+  let buffer = file.buffer
+  let size = file.size
+  let ext
+  if (kind === 'source_e_invoice') {
+    // Stored byte-for-byte. Re-encoding, re-compressing or normalizing it would
+    // destroy the very thing it is kept for — this file IS the invoice, and for
+    // a hybrid document it is the authoritative half.
+    ext = SOURCE_EXTENSIONS[file.mimetype] ?? '.bin'
+  } else if (ATTACHMENT_IMAGE_TYPES.has(file.mimetype)) {
+    let image
+    try {
+      image = await validateAndReencodeImage(file.buffer, file.mimetype, IMAGE_PROCESSING_PRESETS.purchaseReceipt)
+    } catch (err) {
+      if (err.status === 400) return { error: { status: 400, body: { error: err.message } } }
+      throw err
+    }
+    buffer = image.buffer
+    size = image.size
+    ext = extensionForImageMime(image.mimetype)
+  } else {
+    if (!verifyDocumentContent(file.buffer, file.mimetype)) {
+      return { error: { status: 400, body: { error: 'File content does not match declared type' } } }
+    }
+    ext = '.pdf'
+  }
+
+  const objectKey = purchaseAttachmentKey(tenantId, randomUUID(), ext)
+  await uploadObjectWithQuota(objectKey, buffer, size, file.mimetype)
+
+  try {
+    const attachment = await insertPurchaseAttachment(db, tenantId, purchaseId, {
+      objectKey,
+      originalFilename: file.originalname,
+      contentType: file.mimetype,
+      fileSize: size,
+      kind,
+      contentSha256: createHash('sha256').update(buffer).digest('hex'),
+    })
+    return { attachment }
+  } catch (err) {
+    removeObject(objectKey).catch(() => {})
+    throw err
+  }
+}
+
+// Validates any explicit per-line account codes against the tenant chart: each
+// must exist, be active, and be an expense/COGS account or a capitalizable asset
+// account. Lines without a code fall back to the tenant default expense account
+// at posting time.
+async function validateLineAccounts(executor, tenantId, lines) {
+  const codes = lines.map((l) => l.account_code).filter(Boolean)
+  if (!codes.length) return null
+  const settings = await loadAccountingSettings(executor, tenantId)
+  const protectedCode = codes.find((code) => isVatControlAccount(settings, code))
+  if (protectedCode) {
+    return {
+      error: {
+        status: 400,
+        body: {
+          error: 'VAT control accounts are posted automatically from the VAT treatment',
+          code: 'vat_control_account_protected',
+          account_code: protectedCode,
+          field: 'account_code',
+        },
+      },
+    }
+  }
+  const valid = await fetchValidPurchaseLineCodes(executor, tenantId, codes)
+  const invalid = codes.find((c) => !valid.has(c))
+  if (invalid) {
+    return { error: { status: 400, body: { error: 'Invalid account_code', code: 'invalid_account_code', account_code: invalid } } }
+  }
+  return null
+}
+
+// Validates per-line product references: each must be an existing, non-archived
+// product of the tenant, and carry a positive quantity (normalizeLines already
+// nulls quantity when product_id is absent).
+async function validateLineProducts(executor, tenantId, lines) {
+  const productLines = lines.filter((l) => l.product_id)
+  if (!productLines.length) return null
+  const missingQty = productLines.find((l) => !l.quantity)
+  if (missingQty) {
+    return { error: { status: 400, body: { error: 'quantity is required on product lines', code: 'product_quantity_required' } } }
+  }
+  const valid = await fetchValidProductIds(executor, tenantId, productLines.map((l) => l.product_id))
+  const invalid = productLines.find((l) => !valid.has(l.product_id))
+  if (invalid) {
+    return { error: { status: 400, body: { error: 'Invalid product_id', code: 'invalid_product_id', product_id: invalid.product_id } } }
+  }
+  return null
+}
+
+// Adds each product line's quantity to stock and re-averages the product's
+// unit cost (moving average: existing stock value + this purchase's book cost,
+// divided by the new quantity). Runs in the same transaction as the accrual
+// journal so stock, cost and ledger can never diverge; the row lock serializes
+// against concurrent sales of the same product.
+async function applyPurchaseStockIn(client, tenantId, purchase, lines) {
+  const inputVatRecoverable = purchase.input_vat_recoverable_snapshot !== false
+  for (const line of lines) {
+    if (!line.product_id) continue
+    const { costCents } = computePurchaseLineAccountingAmounts(line, inputVatRecoverable)
+    const product = await lockProductStock(client, tenantId, line.product_id)
+    if (!product) continue // validated up front; the composite FK is the backstop
+    const newQty = product.quantity_on_hand + line.quantity
+    const newCost = Math.round(
+      (product.quantity_on_hand * product.unit_cost_cents + costCents) / newQty,
+    )
+    await setProductStock(client, tenantId, line.product_id, newQty, newCost)
+  }
+}
+
+// Blank is "not stated", not an empty string: the unique index only constrains
+// rows that state a number, and '' would make every unnumbered bill collide.
+export function normalizeSupplierInvoiceNumber(value) {
+  const text = String(value ?? '').trim()
+  return text === '' ? null : text
+}
+
+const FINALIZED_ERROR ={ status: 409, body: { error: 'Purchase is finalized', code: 'purchase_finalized' } }
+const RECEIPT_TAKEN_ERROR = { status: 409, body: { error: 'Receipt number already in use', code: 'receipt_number_taken' } }
+const SUPPLIER_INVOICE_TAKEN_ERROR = {
+  status: 409,
+  body: {
+    error: 'This supplier invoice number is already recorded',
+    code: 'supplier_invoice_number_taken',
+  },
+}
+
+const SUPPLIER_INVOICE_INDEX = 'purchases_tenant_supplier_invoice_number_key'
+
+// Turns the unique index into the answer the API contract expects. This is what
+// makes double entry impossible rather than merely warned about: the check and
+// the insert are the same operation, so two concurrent imports of one bill
+// cannot both pass.
+export function supplierInvoiceConflict(err) {
+  return isUniqueViolation(err) && err.constraint === SUPPLIER_INVOICE_INDEX
+    ? { error: SUPPLIER_INVOICE_TAKEN_ERROR }
+    : null
+}
+const USE_PAYMENT_ENDPOINT_ERROR = { status: 409, body: { error: 'Use the payment endpoint to mark a purchase paid', code: 'use_payment_endpoint' } }
+
+function isUniqueViolation(err) {
+  return err?.code === '23505'
+}
+
+function isValidIsoDate(value) {
+  if (typeof value !== 'string') return false
+  const ts = Date.parse(value)
+  return !Number.isNaN(ts)
+}
+
+function buildApprovalLineValidationError(lines, { requireAccount = false } = {}) {
+  const fields = []
+  for (const [idx, line] of lines.entries()) {
+    if (!String(line.description || '').trim()) {
+      fields.push({ line: idx, field: 'description', message: 'Enter a description' })
+    }
+    if (requireAccount && !line.account_code) {
+      fields.push({ line: idx, field: 'account_code', message: 'Choose an expense account' })
+    }
+    if (Number(line.amount_incl_cents) <= 0) {
+      fields.push({ line: idx, field: 'amount_incl_cents', message: 'Enter an amount greater than zero' })
+    }
+  }
+  if (!fields.length) return null
+  return {
+    error: {
+      status: 400,
+      body: {
+        error: 'Complete the highlighted purchase line fields before approving.',
+        code: 'purchase_line_validation',
+        fields,
+      },
+    },
+  }
+}
+
+async function validateApprovalLines(executor, tenantId, lines) {
+  const settings = await loadAccountingSettings(executor, tenantId)
+  return buildApprovalLineValidationError(lines, {
+    requireAccount: !settings?.default_expense_account_code,
+  })
+}
+
+// ---------- create ----------
+
+export async function createPurchase(
+  pool,
+  tenantId,
+  body,
+  actorUserId = null,
+  { canManageFinance = false, supplierImportData = null } = {},
+) {
+  const supplierName = String(body.supplier_name ?? '').trim()
+  if (!supplierName) return { error: { status: 400, body: { error: 'supplier_name is required' } } }
+
+  let supplierContactId = null
+  if (body.supplier_contact_id != null) {
+    supplierContactId = await validateContactIdForTenant(pool, body.supplier_contact_id, tenantId)
+    if (supplierContactId === null) return { error: { status: 400, body: { error: 'Invalid supplier_contact_id' } } }
+  }
+
+  const initialBehavior = await loadAccountingBehavior(pool, tenantId)
+  const taxError = validatePurchaseLineTaxFields(body.lines)
+  if (taxError) return { error: { status: 400, body: taxError } }
+  let lines = normalizeLines(body.lines, initialBehavior.accountingCountry)
+  if (!lines.length) return { error: { status: 400, body: { error: 'At least one line is required' } } }
+
+  const accountErr = await validateLineAccounts(pool, tenantId, lines)
+  if (accountErr) return accountErr
+
+  const productErr = await validateLineProducts(pool, tenantId, lines)
+  if (productErr) return productErr
+
+  const receiptDate =body.receipt_date || new Date().toISOString().slice(0, 10)
+  const dueDate = body.due_date || null
+  const requestedCurrency = body.currency == null
+    ? initialBehavior.currency
+    : String(body.currency).trim().toUpperCase()
+  if (requestedCurrency !== initialBehavior.currency) {
+    return { error: { status: 400, body: { error: 'currency_must_match_base_currency' } } }
+  }
+
+  const statusResult = resolveCreateStatus(body, { canManageFinance })
+  if (statusResult.error) return statusResult
+  const { status } = statusResult
+
+  let totals = computePurchaseTotals({ lines })
+
+  if (status === 'approved') {
+    const approvalErr = await validateApprovalLines(pool, tenantId, lines)
+    if (approvalErr) return approvalErr
+  }
+
+  return withTransaction(async (client) => {
+    await acquireAccountingSettingsLock(client, tenantId)
+    const behavior = await loadAccountingBehavior(client, tenantId)
+    if (body.currency != null && requestedCurrency !== behavior.currency) {
+      abortTransaction({ error: { status: 400, body: { error: 'currency_must_match_base_currency' } } })
+    }
+    if (behavior.accountingCountry !== initialBehavior.accountingCountry) {
+      lines = normalizeLines(body.lines, behavior.accountingCountry)
+      totals = computePurchaseTotals({ lines })
+    }
+    const receiptNumber = await nextPurchaseNumber(client, tenantId)
+    // Approval is the posting event and the moment the VAT treatment stops being
+    // re-derivable, so a create-as-approved freezes it here. A draft gets none.
+    const snapshot = status === 'approved'
+      ? purchaseSnapshotColumns(await resolveLiveTreatment(client, tenantId, receiptDate))
+      : null
+    const purchaseId = await insertPurchase(client, tenantId, buildCreatePurchaseData({
+      status, tenantId, receiptNumber, supplierName, supplierContactId,
+      receiptDate, dueDate, currency: behavior.currency, memo: body.memo || null, totals, actorUserId,
+      supplierInvoiceNumber: normalizeSupplierInvoiceNumber(body.supplier_invoice_number),
+      supplierImportData,
+    }), snapshot)
+    await insertPurchaseLines(client, purchaseId, tenantId, lines)
+
+    // Approving a bill accrues the expense + payable. Draft bills post nothing.
+    if (status === 'approved') {
+      const purchaseRow = await fetchPurchase(client, tenantId, purchaseId)
+      await postBillAccrued(client, tenantId, purchaseRow, lines, { actorUserId })
+      await applyPurchaseStockIn(client, tenantId, purchaseRow, lines)
+    }
+
+    return { purchaseId }
+  }, { db: pool, mapError: (err) => supplierInvoiceConflict(err) ?? ledgerErrorResult(err) })
+}
+
+function resolveCreateStatus(body, { canManageFinance = false } = {}) {
+  // Only draft/approved may be set on create; paying goes through the payment endpoint.
+  let status = 'draft'
+  if (body.status !== undefined) {
+    if (body.status !== 'draft' && body.status !== 'approved') {
+      return { error: { status: 400, body: { error: 'Invalid status' } } }
+    }
+    status = body.status
+  }
+  // Creating an already-approved purchase posts the accrual journal + stock-in —
+  // a finance.manage action. Contributors hold purchase.create (to submit drafts
+  // for reimbursement) but must not bypass approval; the approval path is
+  // PATCH /:id, which is finance.manage-gated.
+  if (status === 'approved' && !canManageFinance) {
+    return { error: { status: 403, body: { error: 'Forbidden', code: 'approval_requires_finance_manage' } } }
+  }
+  return { status }
+}
+
+function buildCreatePurchaseData({
+  status, tenantId, receiptNumber, supplierName, supplierContactId,
+  receiptDate, dueDate, currency, memo, totals, actorUserId, supplierInvoiceNumber,
+  supplierImportData,
+}) {
+  return {
+    tenantId,
+    receiptNumber,
+    supplierName,
+    supplierContactId,
+    receiptDate,
+    dueDate,
+    currency,
+    memo,
+    supplierInvoiceNumber,
+    supplierImportData,
+    subtotalCents: totals.subtotalCents,
+    taxCents: totals.taxCents,
+    totalCents: totals.totalCents,
+    status,
+    actorUserId,
+  }
+}
+
+// ---------- patch ----------
+
+function buildSimpleSet(body, supplierContactIdOverride) {
+  const fields = {}
+  for (const key of SIMPLE_PATCH_FIELDS) {
+    if (!(key in body)) continue
+    let value = body[key]
+    if (key === 'supplier_contact_id') value = supplierContactIdOverride
+    else if (key === 'supplier_name') value = String(value ?? '').trim()
+    else if (key === 'supplier_invoice_number') value = normalizeSupplierInvoiceNumber(value)
+    fields[key] = value
+  }
+  // memo is editable even after finalization, so it is not in CONTENT_FIELDS;
+  // patch it through explicitly when present.
+  if ('memo' in body) fields.memo = body.memo || null
+  return fields
+}
+
+export async function applyPurchasePatch(pool, tenantId, id, body, actorUserId = null) {
+  const existing = await fetchPurchase(pool, tenantId, id)
+  if (!existing) return { error: { status: 404, body: { error: 'Not found' } } }
+
+  const { accountingCountry: vatCountry } = await loadAccountingBehavior(pool, tenantId)
+  const preflightErr = await runPatchPreflightValidations(pool, tenantId, id, existing, body, vatCountry)
+  if (preflightErr) return preflightErr
+
+  const supplierResult = await resolvePatchSupplierContactId(pool, tenantId, body)
+  if (supplierResult.error) return supplierResult
+  const { supplierContactId } = supplierResult
+
+  const contentChanged = Object.keys(body).some((k) => CONTENT_FIELDS_SET.has(k))
+
+  return withTransaction(async (client) => {
+    if ('lines' in body) {
+      const lines = normalizeLines(body.lines, vatCountry)
+      if (!lines.length) {
+        abortTransaction({ error: { status: 400, body: { error: 'At least one line is required' } } })
+      }
+      await replacePurchaseLines(client, id, tenantId, lines)
+    }
+
+    const fields = buildSimpleSet(body, supplierContactId)
+    let totals = null
+
+    if (contentChanged) {
+      totals = await computePatchedTotals(client, id, tenantId)
+    }
+
+    if (!Object.keys(fields).length && !totals && body.status === undefined) {
+      abortTransaction({ error: { status: 400, body: { error: 'No valid fields to update' } } })
+    }
+
+    const approving = body.status === 'approved' && existing.status !== 'approved'
+    const purchaseForTreatment = approving
+      ? { ...existing, receipt_date: fields.receipt_date ?? existing.receipt_date }
+      : null
+    await updatePurchase(client, tenantId, id, {
+      fields,
+      totals,
+      status: body.status,
+      finalize: body.status !== undefined && body.status !== 'draft' && existing.finalized_at === null,
+      setApprovedBy: approving,
+      approvedByUserId: actorUserId,
+      // Frozen in the same statement as finalized_at, before postBillAccrued.
+      snapshot: approving
+        ? purchaseSnapshotColumns(await resolvePurchaseVatTreatment(client, tenantId, purchaseForTreatment))
+        : null,
+    })
+
+    // Transitioning a draft to approved accrues the expense + payable.
+    if (body.status === 'approved' && existing.status !== 'approved') {
+      const purchaseRow = await fetchPurchase(client, tenantId, id)
+      const currentLines = await fetchPurchaseLines(client, id, tenantId)
+      await postBillAccrued(client, tenantId, purchaseRow, currentLines, { actorUserId })
+      await applyPurchaseStockIn(client, tenantId, purchaseRow, currentLines)
+    }
+
+    return {}
+  }, { db: pool, mapError: mapPatchError })
+}
+
+function validateStatusTransition(existing, body) {
+  if (body.status === undefined) return null
+  if (!STATUS_VALUES.has(body.status)) return { error: { status: 400, body: { error: 'Invalid status' } } }
+  if (body.status === 'paid') return { error: USE_PAYMENT_ENDPOINT_ERROR }
+  // Forward-only: once approved the accrual journal is posted and may never be
+  // left dangling by a regression to draft; paid never changes via PATCH.
+  if (body.status !== existing.status
+      && !(existing.status === 'draft' && body.status === 'approved')) {
+    return {
+      error: {
+        status: 409,
+        body: {
+          error: `Cannot change purchase status from ${existing.status} to ${body.status}`,
+          code: 'invalid_status_transition',
+          from: existing.status,
+          to: body.status,
+        },
+      },
+    }
+  }
+  return null
+}
+
+async function resolvePatchSupplierContactId(pool, tenantId, body) {
+  if (!('supplier_contact_id' in body)) return { supplierContactId: undefined }
+  if (body.supplier_contact_id == null) return { supplierContactId: null }
+  const supplierContactId = await validateContactIdForTenant(pool, body.supplier_contact_id, tenantId)
+  if (supplierContactId === null) return { error: { status: 400, body: { error: 'Invalid supplier_contact_id' } } }
+  return { supplierContactId }
+}
+
+// Validates the line accounts and products when `lines` is being patched.
+// Returns an error result or null.
+async function validatePatchedLines(pool, tenantId, body, vatCountry) {
+  if (!('lines' in body)) return null
+  const taxError = validatePurchaseLineTaxFields(body.lines)
+  if (taxError) return { error: { status: 400, body: taxError } }
+  const normalized = normalizeLines(body.lines, vatCountry)
+  const accountErr = await validateLineAccounts(pool, tenantId, normalized)
+  if (accountErr) return accountErr
+  return validateLineProducts(pool, tenantId, normalized)
+}
+
+async function runPatchPreflightValidations(pool, tenantId, id, existing, body, vatCountry) {
+  const statusErr = validateStatusTransition(existing, body)
+  if (statusErr) return statusErr
+
+  const requestedLockedFields = Object.keys(body).filter((k) => FINALIZED_LOCKED_FIELDS_SET.has(k))
+  if (existing.finalized_at !== null && requestedLockedFields.length > 0) {
+    return { error: FINALIZED_ERROR }
+  }
+
+  if ('receipt_number' in body && parseReceiptNumber(body.receipt_number) === null) {
+    return { error: { status: 400, body: { error: 'Invalid receipt_number' } } }
+  }
+
+  const lineErr = await validatePatchedLines(pool, tenantId, body, vatCountry)
+  if (lineErr) return lineErr
+
+  if (body.status === 'approved' && existing.status !== 'approved') {
+    const approvalLines = 'lines' in body ? normalizeLines(body.lines, vatCountry) : await fetchPurchaseLines(pool, id, tenantId)
+    const approvalErr = await validateApprovalLines(pool, tenantId, approvalLines)
+    if (approvalErr) return approvalErr
+  }
+
+  return null
+}
+
+async function computePatchedTotals(client, id, tenantId) {
+  const currentLines = await fetchPurchaseLines(client, id, tenantId)
+  return computePurchaseTotals({ lines: currentLines })
+}
+
+function mapPatchError(err) {
+  // Checked before the generic unique violation: both constraints live on
+  // purchases, and reporting a clashing supplier number as a receipt-number
+  // clash would send the user to edit the wrong field.
+  const supplierConflict = supplierInvoiceConflict(err)
+  if (supplierConflict) return supplierConflict
+  if (isUniqueViolation(err)) return { error: RECEIPT_TAKEN_ERROR }
+  const mapped = ledgerErrorResult(err)
+  if (mapped) return mapped
+  throw err
+}
+
+// ---------- register payment ----------
+
+export async function listPaymentCandidates(pool, tenantId, id) {
+  const purchase = await fetchPurchase(pool, tenantId, id)
+  if (!purchase) return { error: { status: 404, body: { error: 'Not found' } } }
+  const preconditionErr = validatePaymentPreconditions(purchase)
+  if (preconditionErr) return preconditionErr
+  return { candidates: await listImportedPaymentCandidates(pool, tenantId, purchase) }
+}
+
+// Domain operation owning the purchase paid transition: flip the bill to paid and
+// post the bill-paid journal together, so the manual payment endpoint and the
+// bank-statement importer share one path (attribution, accounting fields, period
+// handling). Executor-aware — the caller owns the transaction. The tenant-scoped
+// `markPurchasePaid` (UPDATE … RETURNING) is the safety confirmation: a zero-row
+// update (foreign/stale id) returns 404 and posts nothing, and the journal is
+// posted from the returned row, never a caller-supplied object.
+export async function settlePurchase(executor, tenantId, purchaseId, { paidOn, method, paidByBandMemberId = null, registeredByUserId = null, clampToOpenPeriod = false }) {
+  const updated = await markPurchasePaid(executor, tenantId, purchaseId, {
+    paidOn, method, paidByBandMemberId, registeredByUserId,
+  })
+  if (!updated) return { error: { status: 404, body: { error: 'Not found' } } }
+  const posted = await postBillPaid(executor, tenantId, updated, { actorUserId: registeredByUserId, clampToOpenPeriod })
+  return { posted }
+}
+
+export async function registerPayment(pool, tenantId, id, body, actorUserId = null) {
+  const existing = await fetchPurchase(pool, tenantId, id)
+  if (!existing) return { error: { status: 404, body: { error: 'Not found' } } }
+
+  const preconditionErr = validatePaymentPreconditions(existing)
+  if (preconditionErr) return preconditionErr
+
+  const paidOn = body.paid_on ?? new Date().toISOString().slice(0, 10)
+  if (!isValidIsoDate(paidOn)) return { error: { status: 400, body: { error: 'Invalid paid_on' } } }
+
+  const methodResult = await resolvePaymentMethod(pool, tenantId, body)
+  if (methodResult.error) return methodResult
+  const { method, paidByBandMemberId } = methodResult
+
+  const bankLineId = body.bank_statement_line_id == null ? null : parseId(body.bank_statement_line_id)
+  if (body.bank_statement_line_id != null && bankLineId === null) {
+    return { error: { status: 400, body: { error: 'Invalid bank_statement_line_id' } } }
+  }
+  if (bankLineId != null && method !== 'bank') {
+    return { error: { status: 400, body: { error: 'Imported payments require bank method', code: 'invalid_payment_method' } } }
+  }
+
+  return withTransaction(async (client) => {
+    const lockedPurchase = await lockPurchase(client, tenantId, id)
+    if (!lockedPurchase) abortTransaction({ error: { status: 404, body: { error: 'Not found' } } })
+    const lockedPreconditionErr = validatePaymentPreconditions(lockedPurchase)
+    if (lockedPreconditionErr) abortTransaction(lockedPreconditionErr)
+    let effectivePaidOn = paidOn
+    let candidate = null
+    if (bankLineId != null) {
+      candidate = await lockImportedPaymentCandidate(client, tenantId, bankLineId)
+      const invalid = !candidate
+        || candidate.direction !== 'debit'
+        || candidate.status !== 'imported'
+        || candidate.amount_cents !== lockedPurchase.total_cents
+        || candidate.source_type !== 'bank_statement_line'
+        || candidate.source_id !== candidate.id
+        || candidate.source_event !== 'paid'
+        || candidate.voided_at != null
+        || candidate.reversed_by_transaction_id != null
+      if (invalid) {
+        abortTransaction({ error: { status: 409, body: { error: 'Imported payment is no longer eligible', code: 'bank_payment_not_eligible' } } })
+      }
+      effectivePaidOn = candidate.booking_date.toISOString?.().slice(0, 10) ?? String(candidate.booking_date).slice(0, 10)
+      const corrected = await correctLedgerTransaction(client, tenantId, candidate.ledger_transaction_id, actorUserId)
+      if (corrected.error) abortTransaction(corrected)
+    }
+    const result = await settlePurchase(client, tenantId, id, {
+      paidOn: effectivePaidOn,
+      method,
+      paidByBandMemberId,
+      registeredByUserId: actorUserId,
+      clampToOpenPeriod: bankLineId != null,
+    })
+    if (result.error) abortTransaction(result)
+    if (candidate) {
+      const paymentTxn = await getTransactionBySource(client, tenantId, 'purchase', id, 'paid')
+      await markLineResult(client, tenantId, candidate.id, {
+        status: 'reconciled_purchase',
+        ledgerTransactionId: paymentTxn.id,
+        matchedSourceType: 'purchase',
+        matchedSourceId: id,
+      })
+    }
+    return {}
+  }, { db: pool, mapError: ledgerErrorResult })
+}
+
+function validatePaymentPreconditions(existing) {
+  if (existing.status === 'draft') {
+    return { error: { status: 409, body: { error: 'Approve the purchase before registering payment', code: 'not_approved' } } }
+  }
+  // Already paid: re-registering would change payment_method/payee while the
+  // original `paid` journal stays put (postJournal is idempotent on the source
+  // key), desyncing the ledger — e.g. flipping bank→member would fabricate member
+  // debt no liability journal ever created. A reimbursed purchase is doubly locked.
+  if (existing.status === 'paid') {
+    const code = existing.reimbursement_id == null ? 'already_paid' : 'purchase_reimbursed'
+    return { error: { status: 409, body: { error: 'Purchase is already paid', code } } }
+  }
+  return null
+}
+
+// ---------- reads / composition ----------
+
+// Resolves the optional ?supplier_contact_id filter. Distinguishes "absent"
+// (no filter) from "present but malformed": a bad value must 400, not silently
+// drop the filter and leak the whole register. Returns { supplierContactId } on
+// success (null = no filter) or { error } on an invalid value.
+function resolveSupplierContactId(query) {
+  const raw = query?.supplier_contact_id
+  if (raw === undefined) return { supplierContactId: null }
+  const id = parseId(raw)
+  if (id === null) return { error: { status: 400, body: { error: 'Invalid supplier_contact_id' } } }
+  return { supplierContactId: id }
+}
+
+export async function listPurchases(db, tenantId, query, { createdByUserId = null } = {}) {
+  const behavior = await loadAccountingBehavior(db, tenantId)
+  const period = buildPeriodWhere(query, 'p.receipt_date', 2, behavior?.fiscalYearStart)
+  if (period.error) return { error: { status: 400, body: { error: period.error } } }
+  const supplier = resolveSupplierContactId(query)
+  if (supplier.error) return { error: supplier.error }
+  return { purchases: await listPurchaseRows(db, tenantId, period.sql, period.values, createdByUserId, supplier.supplierContactId) }
+}
+
+export async function listPeriods(db, tenantId, query = {}) {
+  const supplier = resolveSupplierContactId(query)
+  if (supplier.error) return { error: supplier.error }
+  return { periods: await listPurchasePeriods(db, tenantId, supplier.supplierContactId) }
+}
+
+// Global-search read: matches purchases by supplier, memo, or receipt number.
+// Short queries (<3 chars) return nothing so we don't run a wildcard scan on
+// every keystroke (mirrors searchInvoices).
+export async function searchPurchases(db, tenantId, query) {
+  const q = String(query.q ?? '').trim()
+  if (q.length < 3) return []
+  return searchPurchaseRows(db, tenantId, `%${q}%`, parseSearchLimit(query.limit))
+}
+
+// Composes a purchase with its lines (and optionally attachments). Used both for
+// GET /:id and to shape the response after create/patch/payment.
+export async function getPurchaseDetail(db, tenantId, id, { withAttachments = false, requireCreatedByUserId = null } = {}) {
+  const purchase = await fetchPurchase(db, tenantId, id)
+  if (!purchase) return { error: { status: 404, body: { error: 'Not found' } } }
+  // Self-scoped callers (contributors without finance.view) may only see their
+  // own purchases — hide others as 404 rather than leaking existence.
+  if (requireCreatedByUserId != null && purchase.created_by_user_id !== requireCreatedByUserId) {
+    return { error: { status: 404, body: { error: 'Not found' } } }
+  }
+  const lines = await fetchPurchaseLines(db, id, tenantId)
+  if (!withAttachments) return { purchase: { ...purchase, lines } }
+  const attachments = await fetchPurchaseAttachments(db, id, tenantId)
+  return { purchase: { ...purchase, lines, attachments } }
+}
+
+// ---------- delete ----------
+
+export async function deletePurchase(db, tenantId, id) {
+  const status = await getPurchaseStatus(db, id, tenantId)
+  if (status === null) return { error: { status: 404, body: { error: 'Not found' } } }
+  if (status !== 'draft') {
+    return { error: { status: 409, body: { error: 'Only draft purchases can be deleted', code: 'purchase_finalized' } } }
+  }
+  // Collect attachment object keys before the row (and its cascading
+  // purchase_attachments rows, migration 076) is deleted, otherwise the object-store
+  // objects are orphaned with no DB reference left to find them by.
+  const attachments = await fetchPurchaseAttachments(db, id, tenantId)
+  await deletePurchaseRow(db, id, tenantId)
+  for (const { object_key } of attachments) {
+    safeRemove(object_key, 'Failed to delete purchase attachment object:')
+  }
+  return {}
+}
+
+export async function deletePurchaseAttachment(db, tenantId, purchaseId, attachmentId) {
+  const objectKey = await deleteAttachmentReturningKey(db, attachmentId, purchaseId, tenantId)
+  if (objectKey) {
+    safeRemove(objectKey, 'Failed to delete purchase attachment object:')
+    return {}
+  }
+  // The delete is scoped to exclude the imported source document, so nothing
+  // matching means either no such attachment or that one. Only the second is
+  // worth explaining.
+  const kind = await fetchAttachmentKind(db, attachmentId, purchaseId, tenantId)
+  if (kind === 'source_e_invoice') {
+    return {
+      error: {
+        status: 409,
+        body: {
+          error: 'The imported invoice file is the accounting record and cannot be deleted',
+          code: 'source_document_immutable',
+        },
+      },
+    }
+  }
+  return { error: { status: 404, body: { error: 'Not found' } } }
+}
+
+async function resolvePaymentMethod(pool, tenantId, body) {
+  // Bank (default) or band-member payment. Member-paid purchases clear accounts
+  // payable into the configured reimbursement liability account.
+  const method = body.method ?? 'bank'
+  if (method !== 'bank' && method !== 'member') {
+    return { error: { status: 400, body: { error: 'Invalid method', code: 'invalid_method' } } }
+  }
+  let paidByBandMemberId = null
+  if (method === 'member') {
+    if (body.paid_by_band_member_id == null) {
+      return { error: { status: 400, body: { error: 'paid_by_band_member_id is required for member payments', code: 'paid_by_required' } } }
+    }
+    const member = await validateBandMemberForTenant(pool, body.paid_by_band_member_id, tenantId)
+    if (member === null) return { error: { status: 400, body: { error: 'Invalid paid_by_band_member_id' } } }
+    paidByBandMemberId = member.id
+  }
+  return { method, paidByBandMemberId }
+}

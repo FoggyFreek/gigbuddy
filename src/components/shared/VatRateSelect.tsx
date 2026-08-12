@@ -5,7 +5,7 @@ import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import type { SxProps, Theme } from '@mui/material/styles'
 import { useTranslation } from 'react-i18next'
-import { getVatRates } from '../../utils/vatRates.ts'
+import { getVatRates } from '../../finance/vat/vatRates.ts'
 import { commonVatSelection } from '../../../shared/taxCategories.js'
 
 export interface VatSelectionPatch {

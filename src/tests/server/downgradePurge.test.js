@@ -8,7 +8,7 @@ import { FakeProvider } from './_fakeProvider.js'
 // real Mollie API with the tenant's key. Fake just that function: an unpaid
 // link is removed (columns cleared), a paid link 409s and stays — the exact
 // contract the purge's retain-vs-delete decision depends on.
-vi.mock('../../../server/services/molliePaymentLinkService.js', async (importOriginal) => {
+vi.mock('../../../server/finance/invoices/molliePaymentLinkService.js', async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,
@@ -36,17 +36,17 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   billingHelpers = await import('./_billing.js')
-  billingSvc = await import('../../../server/services/billingService.js')
-  ingestion = await import('../../../server/services/paymentIngestionService.js')
-  tasks = await import('../../../server/jobs/billingTasks.js')
-  saga = await import('../../../server/services/billingSaga.js')
-  entSvc = await import('../../../server/services/entitlementService.js')
-  songSvc = await import('../../../server/services/songService.js')
-  guards = await import('../../../server/services/featureGuards.js')
-  stats = await import('../../../server/services/statisticsService.js')
-  credSvc = await import('../../../server/services/integrationCredentialService.js')
-  profileSvc = await import('../../../server/services/profileService.js')
-  providerFactory = await import('../../../server/billing/paymentProvider/index.js')
+  billingSvc = await import('../../../server/commerce/billing/billingService.js')
+  ingestion = await import('../../../server/commerce/billing/paymentIngestionService.js')
+  tasks = await import('../../../server/commerce/billing/jobs/billingTasks.js')
+  saga = await import('../../../server/commerce/billing/billingSaga.js')
+  entSvc = await import('../../../server/commerce/billing/entitlementService.js')
+  songSvc = await import('../../../server/music/songs/songService.js')
+  guards = await import('../../../server/commerce/billing/featureGuards.js')
+  stats = await import('../../../server/people/workspaces/statisticsService.js')
+  credSvc = await import('../../../server/platform/integrations/integrationCredentialService.js')
+  profileSvc = await import('../../../server/people/profiles/profileService.js')
+  providerFactory = await import('../../../server/commerce/billing/paymentProvider/index.js')
   await runMigrations()
 })
 

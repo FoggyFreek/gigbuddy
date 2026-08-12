@@ -7,7 +7,7 @@ import InputAdornment from '@mui/material/InputAdornment'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import SearchIcon from '@mui/icons-material/Search'
-import { getPlaceDetails, searchPlaces } from '../../api/places.ts'
+import { getPlaceDetails, searchPlaces } from '../../people/venues/places.ts'
 import useRemoteSearch from '../../hooks/useRemoteSearch.ts'
 import type { PlaceSuggestion } from '../../types/api.ts'
 

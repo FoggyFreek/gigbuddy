@@ -19,8 +19,8 @@ import TableCell from '@mui/material/TableCell'
 import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Typography from '@mui/material/Typography'
-import { getPlaceDetails, searchPlaces } from '../../api/places.ts'
-import { pickFillableUpdates } from '../../utils/placeFill.ts'
+import { getPlaceDetails, searchPlaces } from '../../people/venues/places.ts'
+import { pickFillableUpdates } from '../../people/venues/placeFill.ts'
 import type { PlaceSuggestion } from '../../types/api.ts'
 
 export interface PlaceEnrichField {

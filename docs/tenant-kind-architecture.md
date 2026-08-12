@@ -29,7 +29,7 @@ A personal workspace is a tenant with these additional invariants:
 - It does not count toward the owner's active-band limit.
 
 `tenants.display_name` is the kind-neutral tenant name. `band_name` contains the
-same value, and `server/repositories/tenantRepository.js` is the single writer
+same value, and `server/people/workspaces/tenantRepository.js` is the single writer
 that keeps both columns synchronized. New internal vocabulary should use
 tenant, workspace, and display name unless the concept is specifically a band.
 
@@ -221,7 +221,7 @@ Band availability is a band capability. `/api/availability` and planning-form
 availability matrices apply only to band tenants. A band reads a redacted
 projection of each linked user's availability; unlinked band members continue
 to use tenant-owned availability slots. Redaction happens in
-`server/services/availabilityProjection.js` before serialization.
+`server/planning/availability/availabilityProjection.js` before serialization.
 
 The personal availability page uses the artist calendar and cross-tenant event
 feeds. It does not expose a one-member band availability grid.

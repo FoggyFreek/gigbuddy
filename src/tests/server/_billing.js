@@ -2,7 +2,7 @@
 // direct subscription rows (billing flows arrive in a later phase; tests
 // craft subscription state directly).
 import { pool } from './_db.js'
-import { createAccountingProfileForTenant } from '../../../server/services/accountingProfileService.js'
+import { createAccountingProfileForTenant } from '../../../server/finance/accounting-profile/accountingProfileService.js'
 
 export function daysFromNow(days) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000)

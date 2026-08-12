@@ -35,15 +35,35 @@ This skill provides the authoritative rules for writing correct, idiomatic React
 - Never pass a Hook as a prop or variable — always call it inline
 - Never write higher-order Hooks that wrap other Hooks dynamically
 
-### MUI styling conventions
+### MUI styling conventions (**MUI v9**, Material 3)
 - **Never use the `color` prop directly on MUI `Typography` or `Box`.** Always put color inside `sx`: `sx={{ color: 'text.secondary' }}`, not `color="text.secondary"`.
-- All other MUI system props (`justifyContent`, `alignItems`, `gap`, etc.) also belong in `sx`, never as bare props.
+- All other MUI system props (`justifyContent`, `alignItems`, `gap`, etc.) also belong in `sx`, never as bare props. `TextField`'s `inputProps` is replaced by `slotProps.htmlInput`.
+- Theme-mode branching uses `useThemeMode()` (`src/contexts/themeModeContext.ts`), **not** `useTheme().palette.mode`.
+- Money in tables uses `<MoneyCells>` + `<MoneyHeaderCells>` — each emits **two** `<TableCell>`s, so account for that in `colSpan`; compact cards use `formatEur`.
+- MUI icons are typed `SvgIconComponent`.
+
+### Types
+- Reuse `src/types/entities.ts` / `src/types/api.ts` rather than redeclaring shapes.
+- Fields that carry `null` in payloads are `T | null`, **not** `T?` — switching a call site to `undefined` changes the JSON.
+- Response-shape concerns stay in `api.ts`. The cross-tenant band label is `CrossTenantRef` / `MaybeCrossTenant<T>`, so entities carry no tenant-label fields.
+- Components declare a local `Props` interface — **no `prop-types`** anywhere in this repo.
+- Imports use explicit extensions, and `vi.mock` paths must match the `.ts`/`.tsx` source.
+
+### Cross-feature hooks
+`usePermissions`, `useEntitlements`, `useTenantKind`, `useAccountingProfile`, `useTenantQuerySync`, plus:
+
+- `useDebouncedSave` — 600 ms; call `flush()` when a modal closes. Tests use `vi.useFakeTimers()` + `vi.runAllTimersAsync()`.
+- `useCompactLayout()` — compact-vs-desktop **structure** (table→card, stacked controls). It honors `CompactLayoutContext`, which `SplitView` forces. No new direct `useMediaQuery(breakpoints.down('sm'))` checks; name the boolean `isCompact`.
+
+### Tutorials
+Frontend-driven, no backend or schema change needed: registry `src/tutorials/registry.tsx` (array order = priority), `useActiveTutorial.ts`, `TutorialHost.tsx`. Dismissals are per-user, cross-tenant, and ride on `/auth/me`. **Never rename a shipped tutorial key** — it is persisted.
 
 ## Key file locations in this project
-- `src/pages/` — page-level components
-- `src/components/` — shared and feature components
-- `src/hooks/` — custom hooks (`useDebouncedSave`, `useCompactLayout`, `useGigMapData`, `usePushNotifications`, `useTenantQuerySync`)
+- `src/<domain>/<feature>/` — feature pages, API wrappers, feature components, hooks, helpers, i18n, and tests
+- `src/app/` — app composition and route tree
+- `src/components/` — reusable shared UI only
+- `src/hooks/` — genuinely cross-feature hooks (`useDebouncedSave`, `useCompactLayout`, `useTenantQuerySync`)
 - `src/contexts/` — global React context providers (`AuthContext`, `ProfileContext`, `ThemeContext`, `ToastContext`, …)
-- `src/utils/` — pure utility functions (no hooks, no JSX)
+- `src/utils/` — genuinely cross-feature pure utility functions (no hooks, no JSX)
 - `src/types/` — shared entity types (`entities.ts`) and api shapes (`api.ts`)
-- `src/api/` — thin `request<T>()` wrappers, one per resource (the only place that knows the `/api/*` path)
+- `src/api/_client.ts` — the sole HTTP client; each feature keeps its thin `request<T>()` wrapper in its own slice

@@ -695,7 +695,7 @@ describe('invoices — discount', () => {
 
 describe('invoices — PATCH field taxonomy', () => {
   it('SIMPLE_PATCH_FIELDS is exactly CONTENT_FIELDS minus the derived/replaced columns', async () => {
-    const v = await import('../../../server/validators/invoiceValidators.js')
+    const v = await import('../../../server/finance/invoices/invoiceValidators.js')
     // discount_cents and lines are part of the content model...
     expect(v.CONTENT_FIELDS).toContain('discount_cents')
     expect(v.CONTENT_FIELDS).toContain('lines')

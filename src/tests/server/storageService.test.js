@@ -25,7 +25,7 @@ vi.mock('../../../server/utils/sendPush.js', () => ({
 
 // statisticsService pulls in the pg pool; mock it so these stay unit tests and
 // so we can assert the mutation → refresh wiring.
-vi.mock('../../../server/services/statisticsService.js', () => ({
+vi.mock('../../../server/people/workspaces/statisticsService.js', () => ({
   refreshTenantStorageForKey: vi.fn(() => Promise.resolve()),
   reserveStorageUsage: vi.fn(async () => true),
   releaseStorageUsage: vi.fn(async () => undefined),
@@ -38,7 +38,7 @@ vi.mock('../../../server/services/statisticsService.js', () => ({
 
 // Quota resolution is covered by storageQuota.test.js against the real DB;
 // here it stays out of the way (null = ownerless, unlimited).
-vi.mock('../../../server/services/entitlementService.js', () => ({
+vi.mock('../../../server/commerce/billing/entitlementService.js', () => ({
   resolveTenantEntitlements: vi.fn(async () => null),
 }))
 
@@ -51,7 +51,7 @@ vi.mock('../../../server/utils/verifyFileContent.js', () => ({
 
 describe('key builders', () => {
   let s
-  beforeEach(async () => { s = await import('../../../server/services/storageService.js') })
+  beforeEach(async () => { s = await import('../../../server/platform/files/storageService.js') })
 
   it('gigBannerKey', () => {
     expect(s.gigBannerKey('5', 'abc', '.jpg')).toBe('tenants/5/gig-banners/abc.jpg')
@@ -83,7 +83,7 @@ describe('key builders', () => {
 describe('removeObject', () => {
   it('delegates to storageClient with BUCKET', async () => {
     const { storageClient } = await import('../../../server/utils/storage.js')
-    const { removeObject } = await import('../../../server/services/storageService.js')
+    const { removeObject } = await import('../../../server/platform/files/storageService.js')
     storageClient.removeObject.mockResolvedValueOnce(undefined)
     await removeObject('tenants/1/logo/x.png')
     expect(storageClient.removeObject).toHaveBeenCalledWith('test-bucket', 'tenants/1/logo/x.png')
@@ -93,7 +93,7 @@ describe('removeObject', () => {
 describe('deleteTenantObjects', () => {
   it('deletes the complete tenant prefix and deduplicated legacy keys in batches', async () => {
     const { storageClient } = await import('../../../server/utils/storage.js')
-    const { deleteTenantObjects } = await import('../../../server/services/storageService.js')
+    const { deleteTenantObjects } = await import('../../../server/platform/files/storageService.js')
     const keys = Array.from({ length: 1001 }, (_, i) => ({ name: `tenants/7/files/${i}` }))
     storageClient.listObjectsV2
       .mockReturnValueOnce(Readable.from(keys))
@@ -111,7 +111,7 @@ describe('deleteTenantObjects', () => {
 
   it('rejects per-object removal failures and a non-empty verification listing', async () => {
     const { storageClient } = await import('../../../server/utils/storage.js')
-    const { deleteTenantObjects } = await import('../../../server/services/storageService.js')
+    const { deleteTenantObjects } = await import('../../../server/platform/files/storageService.js')
     storageClient.listObjectsV2.mockReturnValueOnce(Readable.from([{ name: 'tenants/8/a' }]))
     storageClient.removeObjects.mockResolvedValueOnce([{ name: 'tenants/8/a', code: 'AccessDenied' }])
     await expect(deleteTenantObjects(8)).rejects.toThrow('object deletion failed')
@@ -125,7 +125,7 @@ describe('deleteTenantObjects', () => {
 
   it('purges every version of exact legacy keys', async () => {
     const { storageClient } = await import('../../../server/utils/storage.js')
-    const { deleteTenantObjects } = await import('../../../server/services/storageService.js')
+    const { deleteTenantObjects } = await import('../../../server/platform/files/storageService.js')
     let legacyVersionExists = true
     storageClient.listObjectsV2.mockImplementation(() => Readable.from([]))
     storageClient.listObjects.mockImplementation((_bucket, prefix) => Readable.from(
@@ -151,8 +151,8 @@ describe('deleteTenantObjects', () => {
 
 describe('storage mutations trigger a tenant stats refresh', () => {
   it('uploadObjectWithQuota refreshes storage for the key after a successful put', async () => {
-    const { uploadObjectWithQuota: uploadObject } = await import('../../../server/services/storageService.js')
-    const { refreshTenantStorageForKey } = await import('../../../server/services/statisticsService.js')
+    const { uploadObjectWithQuota: uploadObject } = await import('../../../server/platform/files/storageService.js')
+    const { refreshTenantStorageForKey } = await import('../../../server/people/workspaces/statisticsService.js')
     refreshTenantStorageForKey.mockClear()
     const result = await uploadObject('tenants/7/gig-banners/x.jpg', Buffer.from('x'), 1, 'image/jpeg')
     expect(result).toEqual({ etag: 'test' })
@@ -161,8 +161,8 @@ describe('storage mutations trigger a tenant stats refresh', () => {
 
   it('removeObject refreshes storage for the key after a successful delete', async () => {
     const { storageClient } = await import('../../../server/utils/storage.js')
-    const { removeObject } = await import('../../../server/services/storageService.js')
-    const { refreshTenantStorageForKey } = await import('../../../server/services/statisticsService.js')
+    const { removeObject } = await import('../../../server/platform/files/storageService.js')
+    const { refreshTenantStorageForKey } = await import('../../../server/people/workspaces/statisticsService.js')
     storageClient.removeObject.mockResolvedValueOnce(undefined)
     refreshTenantStorageForKey.mockClear()
     await removeObject('tenants/7/gig-banners/x.jpg')
@@ -170,8 +170,8 @@ describe('storage mutations trigger a tenant stats refresh', () => {
   })
 
   it('upload still resolves even though the refresh is fire-and-forget', async () => {
-    const { uploadObjectWithQuota: uploadObject } = await import('../../../server/services/storageService.js')
-    const { refreshTenantStorageForKey } = await import('../../../server/services/statisticsService.js')
+    const { uploadObjectWithQuota: uploadObject } = await import('../../../server/platform/files/storageService.js')
+    const { refreshTenantStorageForKey } = await import('../../../server/people/workspaces/statisticsService.js')
     // Real refreshTenantStorageForKey never rejects; the mutation does not await
     // it regardless, so the upload resolves.
     refreshTenantStorageForKey.mockClear()
@@ -186,7 +186,7 @@ describe('storage mutations trigger a tenant stats refresh', () => {
 describe('safeRemove', () => {
   it('is a no-op when key is falsy', async () => {
     const { storageClient } = await import('../../../server/utils/storage.js')
-    const { safeRemove } = await import('../../../server/services/storageService.js')
+    const { safeRemove } = await import('../../../server/platform/files/storageService.js')
     storageClient.removeObject.mockClear()
     safeRemove(null, 'should not warn')
     expect(storageClient.removeObject).not.toHaveBeenCalled()
@@ -194,7 +194,7 @@ describe('safeRemove', () => {
 
   it('calls removeObject and does not warn on success', async () => {
     const { storageClient } = await import('../../../server/utils/storage.js')
-    const { safeRemove } = await import('../../../server/services/storageService.js')
+    const { safeRemove } = await import('../../../server/platform/files/storageService.js')
     const { logger } = await import('../../../server/utils/logger.js')
     storageClient.removeObject.mockResolvedValueOnce(undefined)
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
@@ -206,7 +206,7 @@ describe('safeRemove', () => {
 
   it('catches remove error and warns without throwing', async () => {
     const { storageClient } = await import('../../../server/utils/storage.js')
-    const { safeRemove } = await import('../../../server/services/storageService.js')
+    const { safeRemove } = await import('../../../server/platform/files/storageService.js')
     const { logger } = await import('../../../server/utils/logger.js')
     storageClient.removeObject.mockRejectedValueOnce(new Error('gone'))
     const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {})
@@ -225,7 +225,7 @@ describe('safeRemove', () => {
 describe('createGigAttachment rollback', () => {
   it('removes uploaded object when DB insert fails', async () => {
     const { storageClient } = await import('../../../server/utils/storage.js')
-    const { createGigAttachment } = await import('../../../server/services/gigService.js')
+    const { createGigAttachment } = await import('../../../server/planning/gigs/gigService.js')
 
     storageClient.putObject.mockClear()
     storageClient.removeObject.mockClear()

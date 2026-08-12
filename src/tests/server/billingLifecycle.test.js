@@ -14,10 +14,10 @@ beforeAll(async () => {
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
-  billingSvc = await import('../../../server/services/billingService.js')
-  ingestion = await import('../../../server/services/paymentIngestionService.js')
-  providerFactory = await import('../../../server/billing/paymentProvider/index.js')
-  entitlementSvc = await import('../../../server/services/entitlementService.js')
+  billingSvc = await import('../../../server/commerce/billing/billingService.js')
+  ingestion = await import('../../../server/commerce/billing/paymentIngestionService.js')
+  providerFactory = await import('../../../server/commerce/billing/paymentProvider/index.js')
+  entitlementSvc = await import('../../../server/commerce/billing/entitlementService.js')
   billing = await import('./_billing.js')
   await runMigrations()
 })

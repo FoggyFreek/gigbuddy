@@ -7,11 +7,11 @@
 // - Fields are optional (`?`) unless the original PropTypes marked `.isRequired`,
 //   so these types match the loose reality of server payloads we already render.
 // - `Id` is a number from Postgres, sometimes a string from the client.
-import type { PurchaseImportWarningCode } from '../utils/purchaseImportWarnings.ts'
-import type { BandMemberRole } from '../utils/bandMemberRoles.ts'
-import type { GigEquipmentItemKey, GigEquipmentProvider } from '../utils/gigEquipment.ts'
+import type { PurchaseImportWarningCode } from '../finance/purchases/purchaseImportWarnings.ts'
+import type { BandMemberRole } from '../people/memberships/bandMemberRoles.ts'
+import type { GigEquipmentItemKey, GigEquipmentProvider } from '../planning/gigs/gigEquipment.ts'
 import type { TenantKind } from '../auth/tenantKinds.ts'
-import type { JoinPolicy } from '../utils/membership.ts'
+import type { JoinPolicy } from '../people/memberships/membership.ts'
 
 export type Id = number | string
 

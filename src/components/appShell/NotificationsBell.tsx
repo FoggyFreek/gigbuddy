@@ -24,7 +24,7 @@ import {
   markRead,
   markAllRead,
   deleteNotification,
-} from '../../api/notifications.ts'
+} from '../../user/notifications/notifications.ts'
 import { formatRelativeTime } from '../../utils/dateFormat.ts'
 import { tenantAvatarUrl } from '../../utils/tenantAvatarUrl.ts'
 import type { AppNotification } from '../../types/entities.ts'

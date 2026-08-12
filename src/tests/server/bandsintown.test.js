@@ -12,9 +12,9 @@ let seed
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
   const appMod = await import('./_app.js')
-  const serviceMod = await import('../../../server/services/bandsintownService.js')
-  const validatorMod = await import('../../../server/validators/bandsintownValidators.js')
-  const credMod = await import('../../../server/services/integrationCredentialService.js')
+  const serviceMod = await import('../../../server/promotion/bandsintown/bandsintownService.js')
+  const validatorMod = await import('../../../server/promotion/bandsintown/bandsintownValidators.js')
+  const credMod = await import('../../../server/platform/integrations/integrationCredentialService.js')
   const secretsMod = await import('../../../server/security/integrationSecrets.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations

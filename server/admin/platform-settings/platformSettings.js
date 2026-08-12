@@ -1,0 +1,18 @@
+import { Router } from 'express'
+import pool from '../../db/index.js'
+import { setTenantOnboardingEnabled } from './platformSettingsService.js'
+import { auditLog } from '../../utils/auditLog.js'
+import { sendError } from '../../platform/http/routeHelpers.js'
+
+const router = Router()
+
+router.patch('/tenant-onboarding', async (req, res) => {
+  const result = await setTenantOnboardingEnabled(pool, req.body, req.user.id)
+  if (result.error) return sendError(res, result.error)
+  if (result.audit) auditLog(req, result.audit.action, result.audit.details)
+  res.json({
+    tenantOnboardingEnabled: result.settings.tenantOnboardingEnabled,
+  })
+})
+
+export default router

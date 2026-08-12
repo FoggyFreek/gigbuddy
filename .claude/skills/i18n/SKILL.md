@@ -8,9 +8,9 @@ user-invocable: false
 
 Translations use **i18next 26.3.2** with **react-i18next v17** (the TypeScript selector API). This file is the entry point and the rules that bite; [i18n_reference.md](./i18n_reference.md) has the full tables and worked examples — read it before any non-trivial change. Treat i18next.com as authoritative over memory; if a directive or option is unclear, fetch the specific docs page rather than guessing.
 
-> Deps: `i18next`/`react-i18next`/`i18next-browser-languagedetector`. `src/i18n/` holds the config (`index.ts`), `en/`+`nl/` resources, and `i18next.d.ts` (selector-type augmentation, `enableSelector: true`). The side-effect `import './i18n/index.ts'` lives in `main.tsx` **and** in `src/tests/setup.js` (which also pins `changeLanguage('en')` so component suites resolve real strings instead of raw keys). Detection persists to localStorage key `gigbuddy_lang`.
+> Deps: `i18next`/`react-i18next`/`i18next-browser-languagedetector`. `src/i18n/` holds the registry (`index.ts`), selector types, and shared namespaces; feature namespaces live in their owning `src/<domain>/<feature>/i18n/` folder. The side-effect import lives in `src/main.tsx` and `src/tests/setup.js`, which pins English for component tests. Detection persists to localStorage key `gigbuddy_lang`.
 >
-> **28 namespaces exist** (derived from the AppShell nav groups/items + the domain views). Cross-cutting: `common`, `navigation` (all shell chrome — nav labels, tooltips, aria, search placeholders), `glossary` (plural domain nouns), `validation`. The per-view namespaces are: `dashboard, financialDashboard, profile, availability, gigs, rehearsals, bandEvents, tasks, songs, setlists, contacts, suppliers, venues, emailTemplates, invoices, purchases, merch, reimbursements, journal, ledger, vatReturns, reports, settings, auth`. **Don't create a new namespace per view — the home already exists; extract that view's strings into it.** Verify against the live tree (Grep for `useTranslation`) before trusting specifics. Consolidate when possible and when context is shared.
+> Namespace ownership follows the feature slice. Keep shared strings in `src/i18n/`; add feature strings beside their feature and register both English and Dutch resources in `src/i18n/index.ts`. Reuse an existing namespace when its context is shared.
 
 ## The selector API
 
@@ -33,9 +33,9 @@ The selector gives full type-checking and autocomplete from the resource JSON, s
 Group strings by concern/feature, not one giant file. Convention from the reference: `common.json` (reused labels — Save/Cancel), `validation.json` (form errors), `glossary.json` (consistent domain words), then one namespace per view/feature.
 
 ```
-src/i18n/
-├── en/  ├── common.json  └── gigs.json
-└── nl/  ├── common.json  └── gigs.json
+src/i18n/{en,nl}/common.json             # shared namespace
+src/planning/gigs/i18n/{en,nl}.json      # feature namespace
+src/people/profiles/i18n/en/profile.json # feature with multiple namespaces
 ```
 
 ```ts
@@ -48,7 +48,7 @@ t($ => $.title, { ns: 'gigs' });   // explicit ns also works
 
 ### Registering a namespace + the Dutch parity guard
 
-`src/i18n/index.ts` imports every `en/*` and `nl/*` file into two maps. **`en` is canonical** — its shape drives the selector types via `i18next.d.ts` (`resources: typeof resources['en']`), so a new namespace only becomes typed once it's in the `en` map. To stop `nl` drifting silently (the augmentation never looks at it), the `nl` map is checked at compile time:
+`src/i18n/index.ts` imports every shared and co-located feature resource into two maps. **`en` is canonical** — its shape drives the selector types via `i18next.d.ts` (`resources: typeof resources['en']`), so a new namespace only becomes typed once it's in the `en` map. To stop `nl` drifting silently (the augmentation never looks at it), the `nl` map is checked at compile time:
 
 ```ts
 type DeepKeyShape<T> = { [K in keyof T]: T[K] extends string ? string : DeepKeyShape<T[K]> }
@@ -70,11 +70,11 @@ Status/enum literals map to a `status` object in the namespace. **The selector A
 **Preferred — no map.** Name the JSON leaf keys to match the literal values, then index the selector directly. The status union *is* the source of truth; there's nothing to keep in sync:
 
 ```jsonc
-// src/i18n/en/journals.json
+// src/finance/journal/i18n/en.json
 { "status": { "draft": "Draft", "approved": "Approved" } }
 ```
 ```ts
-const { t } = useTranslation('journals');
+const { t } = useTranslation('journal');
 // status is 'draft' | 'approved'; every member must exist under $.status or it won't compile
 t($ => $.status[status]);
 ```

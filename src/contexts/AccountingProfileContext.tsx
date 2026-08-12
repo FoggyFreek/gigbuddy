@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { AccountingProfileContext } from './accountingProfileContext.ts'
-import { getAccountingProfile } from '../api/accountingProfile.ts'
+import { getAccountingProfile } from '../finance/accounting-profile/accountingProfile.ts'
 import { useAuth } from './authContext.ts'
 import type { AccountingProfile, Id } from '../types/entities.ts'
 

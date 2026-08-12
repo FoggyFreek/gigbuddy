@@ -160,8 +160,10 @@ rules — still read the actual code.
   Confirm the union really includes the compared value, then dismiss.
 
 **Intentional here → mark `accept`:**
-- "propTypes is deprecated": CLAUDE.md *mandates* propTypes on every
-  component. Removing them violates project convention.
+- "prefer readonly" / structural nits on `Props` interfaces: components declare a
+  local `Props` interface by convention (CLAUDE.md, "Frontend foundations").
+  `prop-types` is **not** used anywhere — if a rule assumes it, the rule is wrong
+  for this repo.
 
 **Verify before auto-applying — the suggested fix can be a bug:**
 - "use Math.min": only valid for numbers. Our date helpers compare

@@ -1,0 +1,234 @@
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  listJournals,
+  createJournal,
+  deleteJournal,
+  approveJournals,
+} from '../../ledger/journal.ts'
+import { listAccounts, getAccountingSettings } from '../../accounts/accounts.ts'
+import type { Journal, Account, AccountingSettings, Id } from '../../../types/entities.ts'
+import type { SaveStatus } from '../../../hooks/useDebouncedSave.ts'
+import { emptyLine } from './journalFormHelpers.ts'
+import type { JournalForm } from './journalFormHelpers.ts'
+import { vatControlAccountCodes } from '../../../../shared/vatControlAccounts.js'
+
+type FlushFn = () => Promise<void>
+
+interface UseJournalListStateResult {
+  journals: Journal[]
+  accounts: Account[]
+  postableAccounts: Account[]
+  accountingSettings: AccountingSettings | null
+  loading: boolean
+  error: string | null
+  approvalErrors: Array<{ id: Id; ok: boolean; message?: string }>
+  clearApprovalErrors: () => void
+  selected: Set<Id>
+  draftIds: Id[]
+  liveForms: Map<Id, JournalForm>
+  registerFlush: (id: Id, fn: FlushFn | null) => void
+  reportForm: (id: Id, form: JournalForm | null) => void
+  reportSaveStatus: (id: Id, status: SaveStatus | null) => void
+  saveStatus: SaveStatus
+  toggleSelect: (id: Id, checked: boolean) => void
+  selectAll: (checked: boolean) => void
+  addEntry: () => Promise<void>
+  approveAll: () => Promise<void>
+  approveSelected: () => Promise<void>
+  deleteSelected: () => Promise<void>
+}
+// Owns the journal list: loads journals + the active chart of accounts, tracks
+// selection, and runs the add / delete / approve lifecycle. Each entry row
+// registers its debounced-save `flush` here so approving can persist pending
+// edits first (useDebouncedSave does not flush on unmount).
+export function useJournalListState(): UseJournalListStateResult {
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [accountingSettings, setAccountingSettings] = useState<AccountingSettings | null>(null)
+  const [accountOptionsLoaded, setAccountOptionsLoaded] = useState(false)
+  const [liveForms, setLiveForms] = useState<Map<Id, JournalForm>>(() => new Map())
+  // Errors raised by user actions (approve, delete) rather than by the list
+  // fetch; they outlive a reload and so are tracked separately.
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [approvalErrors, setApprovalErrors] = useState<Array<{ id: Id; ok: boolean; message?: string }>>([])
+  const [selected, setSelected] = useState<Set<Id>>(() => new Set())
+  const [saveStatuses, setSaveStatuses] = useState<Map<Id, SaveStatus>>(() => new Map())
+  const flushers = useRef<Map<Id, FlushFn>>(new Map())
+
+  const clearApprovalErrors = useCallback(() => setApprovalErrors([]), [])
+
+  const registerFlush = useCallback((id: Id, fn: FlushFn | null) => {
+    if (fn) flushers.current.set(id, fn)
+    else flushers.current.delete(id)
+  }, [])
+
+  // Rows report their live (possibly unsaved) form state here so the page can
+  // preview the ledger effects of the current selection as the user types.
+  const reportForm = useCallback((id: Id, form: JournalForm | null) => {
+    setLiveForms((prev) => {
+      if ((prev.get(id) ?? null) === form) return prev
+      const next = new Map(prev)
+      if (form === null) next.delete(id)
+      else next.set(id, form)
+      return next
+    })
+  }, [])
+
+  // Rows report their useDebouncedSave status here so the page can show one
+  // save indicator in the toolbar instead of per-row text that shifts layout.
+  const reportSaveStatus = useCallback((id: Id, status: SaveStatus | null) => {
+    setSaveStatuses((prev) => {
+      if ((prev.get(id) ?? null) === status) return prev
+      const next = new Map(prev)
+      if (status === null) next.delete(id)
+      else next.set(id, status)
+      return next
+    })
+  }, [])
+
+  const statuses = new Set(saveStatuses.values())
+  let saveStatus: SaveStatus = 'idle'
+  if (statuses.has('saving')) saveStatus = 'saving'
+  else if (statuses.has('error')) saveStatus = 'error'
+
+  const flushIds = useCallback(async (ids: Id[]) => {
+    await Promise.all(ids.map((id) => flushers.current.get(id)?.()).filter(Boolean))
+  }, [])
+
+  // The journal must never be empty: there should always be at least one draft
+  // ready to edit. Creates a fresh blank draft (one empty line) for the tenant.
+  const createBlankDraft = useCallback(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    return createJournal({ entry_date: today, description: undefined, lines: [emptyLine(0)] })
+  }, [])
+
+  // Loads the drafts and, if none exist (first visit, or after approving/deleting
+  // them all), seeds one blank draft and re-fetches once so the editor always has
+  // a row. The single guarded `if` (no loop) keeps a still-empty re-fetch safe.
+  // Drafts are tagged with the reload they answered, so `loading` is derived
+  // from whether the newest reload has landed rather than flipped synchronously
+  // before the request goes out.
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const load = useCallback(async () => { setReloadNonce((n) => n + 1) }, [])
+  const [journalsState, setJournalsState] = useState<{ key: number; journals: Journal[]; error: string | null } | null>(null)
+  const journals = useMemo(() => journalsState?.journals ?? [], [journalsState])
+  const loading = journalsState?.key !== reloadNonce
+  const loadError = journalsState?.key === reloadNonce ? journalsState.error : null
+  const error = actionError ?? loadError
+
+  useEffect(() => {
+    let cancelled = false
+    const run = async () => {
+      let data = await listJournals()
+      if (!data.length) {
+        await createBlankDraft()
+        data = await listJournals()
+      }
+      return data
+    }
+    run()
+      .then((data) => {
+        if (!cancelled) setJournalsState({ key: reloadNonce, journals: data, error: null })
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setJournalsState((prev) => ({
+            key: reloadNonce,
+            journals: prev?.journals ?? [],
+            error: e instanceof Error ? e.message : String(e),
+          }))
+        }
+      })
+    return () => { cancelled = true }
+  }, [reloadNonce, createBlankDraft])
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([listAccounts(), getAccountingSettings()])
+      .then(([all, settings]) => {
+        if (cancelled) return
+        setAccounts((all || []).filter((a) => a.is_active))
+        setAccountingSettings(settings)
+        setAccountOptionsLoaded(true)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setActionError(e instanceof Error ? e.message : String(e))
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  const postableAccounts = useMemo(() => {
+    if (!accountOptionsLoaded || !accountingSettings) return []
+    const protectedCodes = vatControlAccountCodes(accountingSettings)
+    return accounts.filter((account) => !protectedCodes.has(account.code))
+  }, [accountOptionsLoaded, accountingSettings, accounts])
+
+  const draftIds = useMemo(
+    () => journals.filter((j) => j.status === 'draft').map((j) => j.id as Id),
+    [journals],
+  )
+
+  const toggleSelect = useCallback((id: Id, checked: boolean) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(id); else next.delete(id)
+      return next
+    })
+  }, [])
+
+  const selectAll = useCallback((checked: boolean) => {
+    setSelected(checked ? new Set(draftIds) : new Set())
+  }, [draftIds])
+
+  const addEntry = useCallback(async () => {
+    try {
+      await createBlankDraft()
+      await load()
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : String(e))
+    }
+  }, [createBlankDraft, load])
+
+  // Flushes pending edits for the given drafts, posts them in one batch, then
+  // reloads. Per-entry approval failures (invalid/unbalanced lines, missing
+  // accounting config) surface via `approvalErrors` so the page can show a dialog.
+  const approveIds = useCallback(async (ids: Id[]) => {
+    if (!ids.length) return
+    try {
+      setActionError(null)
+      await flushIds(ids)
+      const { results } = await approveJournals(ids)
+      const failed = (results || []).filter((r) => !r.ok)
+      setApprovalErrors(failed)
+      setSelected(new Set())
+      await load()
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : String(e))
+    }
+  }, [flushIds, load])
+
+  const approveAll = useCallback(() => approveIds(draftIds), [approveIds, draftIds])
+  const approveSelected = useCallback(() => approveIds([...selected]), [approveIds, selected])
+
+  const deleteSelected = useCallback(async () => {
+    const ids = [...selected]
+    if (!ids.length) return
+    try {
+      setActionError(null)
+      await Promise.all(ids.map((id) => deleteJournal(id)))
+      setSelected(new Set())
+      await load()
+    } catch (e: unknown) {
+      setActionError(e instanceof Error ? e.message : String(e))
+    }
+  }, [selected, load])
+
+  return {
+    journals, accounts, postableAccounts, accountingSettings, loading, error,
+    approvalErrors, clearApprovalErrors,
+    selected, draftIds, liveForms,
+    registerFlush, reportForm, reportSaveStatus, saveStatus,
+    toggleSelect, selectAll,
+    addEntry, approveAll, approveSelected, deleteSelected,
+  }
+}
+

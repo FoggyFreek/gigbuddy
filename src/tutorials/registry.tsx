@@ -1,7 +1,7 @@
 import type { TutorialDef } from './types.ts'
 import { PERMISSIONS } from '../auth/permissions.ts'
 import { FEATURES } from '../auth/entitlements.ts'
-import { getFinanceOnboardingStatus } from '../api/financeOnboarding.ts'
+import { getFinanceOnboardingStatus } from '../finance/onboarding/financeOnboarding.ts'
 import FinanceWelcomeCard from './cards/FinanceWelcomeCard.tsx'
 import PersonalWorkspaceWelcomeCard from './cards/PersonalWorkspaceWelcomeCard.tsx'
 

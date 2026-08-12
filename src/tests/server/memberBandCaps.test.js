@@ -17,7 +17,7 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   app = appMod.createTestApp()
-  const entMod = await import('../../../server/services/entitlementService.js')
+  const entMod = await import('../../../server/commerce/billing/entitlementService.js')
   clearEntitlementCaches = entMod.clearEntitlementCaches
   billing = await import('./_billing.js')
   await runMigrations()

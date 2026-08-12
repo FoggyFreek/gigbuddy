@@ -20,6 +20,14 @@ function makeApp() {
   return app
 }
 
+function metricLabels(text, metric) {
+  return text
+    .split('\n')
+    .filter((line) => line.startsWith(`${metric}{`))
+    .map((line) => line.slice(metric.length, line.lastIndexOf('}') + 1))
+    .join('\n')
+}
+
 describe('GET /metrics', () => {
   let app
   beforeAll(() => {
@@ -38,13 +46,14 @@ describe('GET /metrics', () => {
   it('labels requests with a bounded, normalized route template (never the raw id)', async () => {
     await request(app).get('/things/12345')
     const res = await request(app).get('/metrics')
+    const requestLabels = metricLabels(res.text, 'http_requests_total')
 
     // Route is the template, not the concrete id.
-    expect(res.text).toMatch(/http_requests_total\{[^}]*route="\/things\/:id"[^}]*\}/)
-    expect(res.text).toMatch(/http_requests_total\{[^}]*method="GET"[^}]*\}/)
-    expect(res.text).toMatch(/http_requests_total\{[^}]*status="200"[^}]*\}/)
+    expect(requestLabels).toMatch(/\{[^}]*route="\/things\/:id"[^}]*\}/)
+    expect(requestLabels).toMatch(/\{[^}]*method="GET"[^}]*\}/)
+    expect(requestLabels).toMatch(/\{[^}]*status="200"[^}]*\}/)
     // The raw id must never leak into a label.
-    expect(res.text).not.toMatch(/12345/)
+    expect(requestLabels).not.toMatch(/12345/)
   })
 
   it('labels an unmatched path as "unmatched"', async () => {

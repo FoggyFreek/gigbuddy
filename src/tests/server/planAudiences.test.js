@@ -22,12 +22,12 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   app = appMod.createTestApp()
-  entitlementSvc = await import('../../../server/services/entitlementService.js')
-  billingSvc = await import('../../../server/services/billingService.js')
-  purgeSvc = await import('../../../server/services/entitlementPurgeService.js')
-  limitSvc = await import('../../../server/services/limitService.js')
-  adminSvc = await import('../../../server/services/adminSubscriptionService.js')
-  providerFactory = await import('../../../server/billing/paymentProvider/index.js')
+  entitlementSvc = await import('../../../server/commerce/billing/entitlementService.js')
+  billingSvc = await import('../../../server/commerce/billing/billingService.js')
+  purgeSvc = await import('../../../server/commerce/billing/entitlementPurgeService.js')
+  limitSvc = await import('../../../server/commerce/billing/limitService.js')
+  adminSvc = await import('../../../server/admin/subscriptions/adminSubscriptionService.js')
+  providerFactory = await import('../../../server/commerce/billing/paymentProvider/index.js')
   billing = await import('./_billing.js')
   await runMigrations()
 })
@@ -275,7 +275,7 @@ describe('trial is once per product', () => {
     await billing.createSubscription({
       userId: seed.userA.id, planSlug: 'gold', status: 'canceled', trial_ends_at: billing.daysFromNow(-30),
     })
-    const repo = await import('../../../server/repositories/subscriptionRepository.js')
+    const repo = await import('../../../server/commerce/billing/subscriptionRepository.js')
 
     expect(await repo.hasUsedTrial(pool, seed.userA.id, 'band')).toBe(true)
     expect(await repo.hasUsedTrial(pool, seed.userA.id, 'artist')).toBe(false)
@@ -345,7 +345,7 @@ describe('tenant isolation', () => {
     // userB owns tenantB, which must be invisible to userA's artist downgrade.
     await billing.setTenantOwner(seed.tenantB.id, seed.userB.id)
 
-    const limitRepo = await import('../../../server/repositories/limitRepository.js')
+    const limitRepo = await import('../../../server/commerce/billing/limitRepository.js')
     const scoped = await limitRepo.listOwnedTenants(pool, userId, ['personal'])
     expect(scoped.map((t) => t.id)).toEqual([personalTenantId])
   })

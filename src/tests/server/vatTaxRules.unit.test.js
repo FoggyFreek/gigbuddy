@@ -7,9 +7,9 @@ import {
   normalizeTaxSelection,
   purchaseTaxFact,
   saleTaxFact,
-} from '../../../server/services/taxFactService.js'
-import { validateTaxCategoryFields } from '../../../server/validators/taxCategoryValidators.js'
-import { validateSubmission } from '../../../server/validators/vatReturnValidators.js'
+} from '../../../server/finance/vat/taxFactService.js'
+import { validateTaxCategoryFields } from '../../../server/finance/vat/taxCategoryValidators.js'
+import { validateSubmission } from '../../../server/finance/vat/vatReturnValidators.js'
 import { computePurchaseTotals } from '../../../shared/purchaseTotals.js'
 
 function fact(overrides = {}) {

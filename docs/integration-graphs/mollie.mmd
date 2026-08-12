@@ -153,9 +153,9 @@ flowchart LR
   PLATFORM --> BILLWEBHOOK
 
   subgraph frontendapi["Frontend API and shared state"]
-    FPROFILE["src/api/profile.ts<br/>get/set/clearMollieKey"]
-    FINVOICE["src/api/invoices.ts<br/>create, delete and sync invoice payment link"]
-    FBILLING["src/api/billing.ts<br/>get state, subscribe/change/downgrade<br/>preview/cancel/resume/sync"]
+    FPROFILE["src/people/profiles/profile.ts<br/>get/set/clearMollieKey"]
+    FINVOICE["src/finance/invoices/invoices.ts<br/>create, delete and sync invoice payment link"]
+    FBILLING["src/commerce/billing/billing.ts<br/>get state, subscribe/change/downgrade<br/>preview/cancel/resume/sync"]
     FCONTEXT["ProfileProvider + integrations utility<br/>isIntegrationConfigured('mollie')"]
   end
   PROFILEAPI --> FPROFILE

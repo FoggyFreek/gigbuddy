@@ -1,7 +1,7 @@
 import './_envSetup.js'
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { deliverLinkpageSlugOperation } from '../../../server/integrations/linkpageSlugClient.js'
+import { deliverLinkpageSlugOperation } from '../../../server/promotion/linkpage/linkpageSlugClient.js'
 
 const operation = {
   tenant_id: 42,

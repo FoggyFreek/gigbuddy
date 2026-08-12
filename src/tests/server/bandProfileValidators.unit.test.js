@@ -8,7 +8,7 @@ import {
   parseBandProfilePatch,
   hasLink,
   parseRemovalMode,
-} from '../../../server/validators/bandProfileValidators.js'
+} from '../../../server/people/band-profiles/bandProfileValidators.js'
 
 const ARTIST_ID = '4Z8W4fKeB5YxbusRsdQVPb'
 

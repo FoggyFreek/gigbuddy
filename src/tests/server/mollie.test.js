@@ -72,7 +72,7 @@ beforeAll(async () => {
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
-  ;({ setIntegrationCredential } = await import('../../../server/services/integrationCredentialService.js'))
+  ;({ setIntegrationCredential } = await import('../../../server/platform/integrations/integrationCredentialService.js'))
   app = appMod.createTestApp()
   await runMigrations()
 })
@@ -1050,7 +1050,7 @@ describe('syncInvoicePaymentStatus tenant scoping (review #5)', () => {
     const { rows } = await pool.query('SELECT * FROM invoices WHERE id = $1', [inv.id])
     const tampered = { ...rows[0], tenant_id: seed.tenantB.id }
 
-    const { syncInvoicePaymentStatus } = await import('../../../server/routes/invoices.js')
+    const { syncInvoicePaymentStatus } = await import('../../../server/finance/invoices/invoices.js')
     const mollieMod = await import('../../../server/utils/mollieClient.js')
     const mollie = mollieMod.createTenantMollieClient('any')
 
@@ -1085,7 +1085,7 @@ describe('Public webhook rate limiter (review #2)', () => {
     const url = await import('url')
     const here = path.dirname(url.fileURLToPath(import.meta.url))
     const src = await fs.readFile(
-      path.resolve(here, '../../../server/routes/index.js'),
+      path.resolve(here, '../../../server/app/apiRouter.js'),
       'utf8',
     )
     expect(src).toMatch(/publicWebhookLimiter[\s\S]*router\.use\('\/public\/mollie',\s*publicWebhookLimiter/)

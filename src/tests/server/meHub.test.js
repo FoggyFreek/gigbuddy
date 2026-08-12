@@ -10,7 +10,7 @@ let seed
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
   const appMod = await import('./_app.js')
-  const meGigMod = await import('../../../server/services/meGigService.js')
+  const meGigMod = await import('../../../server/planning/agenda/meGigService.js')
   const scopeMod = await import('../../../server/domain/memberTenants.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations

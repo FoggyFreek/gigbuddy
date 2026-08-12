@@ -9,14 +9,14 @@ import {
   parseSearchLimit,
   trimOrNull,
 } from '../../../server/validators/common.js'
-import { requireParam, sendError } from '../../../server/routes/routeHelpers.js'
+import { requireParam, sendError } from '../../../server/platform/http/routeHelpers.js'
 import {
   badRequest,
   conflict,
   forbidden,
   notFound,
   serviceError,
-} from '../../../server/services/serviceErrors.js'
+} from '../../../server/platform/http/serviceErrors.js'
 
 function responseDouble() {
   const res = {

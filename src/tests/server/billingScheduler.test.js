@@ -15,9 +15,9 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   billingHelpers = await import('./_billing.js')
-  tasks = await import('../../../server/jobs/billingTasks.js')
-  adminSvc = await import('../../../server/services/adminSubscriptionService.js')
-  providerFactory = await import('../../../server/billing/paymentProvider/index.js')
+  tasks = await import('../../../server/commerce/billing/jobs/billingTasks.js')
+  adminSvc = await import('../../../server/admin/subscriptions/adminSubscriptionService.js')
+  providerFactory = await import('../../../server/commerce/billing/paymentProvider/index.js')
   await runMigrations()
 })
 

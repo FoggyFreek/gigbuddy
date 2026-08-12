@@ -16,8 +16,8 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   app = appMod.createTestApp()
-  ;({ getAccessToken, resetShopifyTokenCacheForTests } = await import('../../../server/services/shopifyTokenService.js'))
-  ;({ setIntegrationCredential } = await import('../../../server/services/integrationCredentialService.js'))
+  ;({ getAccessToken, resetShopifyTokenCacheForTests } = await import('../../../server/commerce/merch/shopifyTokenService.js'))
+  ;({ setIntegrationCredential } = await import('../../../server/platform/integrations/integrationCredentialService.js'))
   await runMigrations()
 })
 
@@ -728,7 +728,7 @@ describe('Resend credential management', () => {
       request(app).put('/api/profile/resend-key').send({ key: validKey }),
     ).expect(200)
 
-    const { getResendClientForTenant } = await import('../../../server/services/resendService.js')
+    const { getResendClientForTenant } = await import('../../../server/platform/integrations/resendService.js')
     const configured = await getResendClientForTenant(pool, seed.tenantA.id)
     expect(configured.resend?.constructor.name).toBe('Resend')
 

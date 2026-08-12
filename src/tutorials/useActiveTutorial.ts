@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/authContext.ts'
 import { usePermissions } from '../hooks/usePermissions.ts'
 import { useEntitlements } from '../hooks/useEntitlements.ts'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
-import { dismissTutorial as dismissTutorialApi } from '../api/tutorials.ts'
+import { dismissTutorial as dismissTutorialApi } from '../user/tutorials/tutorials.ts'
 import { TUTORIALS } from './registry.tsx'
 import type { TutorialContext, TutorialDef } from './types.ts'
 

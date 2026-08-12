@@ -1,6 +1,6 @@
 import express from 'express'
 import session from 'express-session'
-import routes from '../../../server/routes/index.js'
+import routes from '../../../server/app/apiRouter.js'
 
 // Test app: real routes + middleware, but bypassing OIDC, persistent session
 // store, CORS, static SPA, etc. Identity is supplied per-request via

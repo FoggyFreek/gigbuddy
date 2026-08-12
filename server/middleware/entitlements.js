@@ -6,7 +6,7 @@
 // assigned. Denials return 403 { code: 'entitlement_required', feature } so
 // the frontend can show an upgrade prompt instead of a generic error.
 import pool from '../db/index.js'
-import { resolveTenantEntitlements } from '../services/entitlementService.js'
+import { resolveTenantEntitlements } from '../commerce/billing/entitlementService.js'
 
 // Resolves (and memoizes per request) the active tenant's entitlements.
 //

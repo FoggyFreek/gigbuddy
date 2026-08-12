@@ -9,8 +9,8 @@ let seed
 beforeAll(async () => {
   const db = await import('./_db.js')
   ;({ pool, runMigrations, truncateAll, seedTwoTenants } = db)
-  ;({ rotateIntegrationSecrets } = await import('../../../server/scripts/rotateIntegrationSecrets.js'))
-  ;({ loadIntegrationCredential, setIntegrationCredential } = await import('../../../server/services/integrationCredentialService.js'))
+  ;({ rotateIntegrationSecrets } = await import('../../../server/platform/integrations/scripts/rotateIntegrationSecrets.js'))
+  ;({ loadIntegrationCredential, setIntegrationCredential } = await import('../../../server/platform/integrations/integrationCredentialService.js'))
   ;({ CREDENTIAL_TYPES } = await import('../../../server/security/integrationSecrets.js'))
   await runMigrations()
 })

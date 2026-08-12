@@ -6,15 +6,15 @@ import connectPgSimple from 'connect-pg-simple'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import pool from './db/index.js'
-import routes from './routes/index.js'
+import routes from './app/apiRouter.js'
 import { initOidc } from './oidc.js'
 import { securityHeaders } from './middleware/securityHeaders.js'
 import { validateIntegrationSecretsConfig } from './security/integrationSecrets.js'
 import { logger } from './utils/logger.js'
 import { requestContext, requestLogger } from './middleware/requestContext.js'
 import { metricsMiddleware, metricsHandler } from './metrics.js'
-import { startBillingReconciliation } from './jobs/billingReconciliation.js'
-import { startLinkpageSlugReconciliation } from './jobs/linkpageSlugReconciliation.js'
+import { startBillingReconciliation } from './commerce/billing/jobs/billingReconciliation.js'
+import { startLinkpageSlugReconciliation } from './promotion/linkpage/jobs/linkpageSlugReconciliation.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 

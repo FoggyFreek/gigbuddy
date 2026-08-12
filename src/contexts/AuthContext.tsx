@@ -7,8 +7,8 @@ import {
   getCurrentUser,
   logout as apiLogout,
   setActiveTenant as apiSetActiveTenant,
-} from '../api/auth.ts'
-import { clearBannerPathCache } from '../api/profile.ts'
+} from '../user/identity/auth.ts'
+import { clearBannerPathCache } from '../people/profiles/profile.ts'
 import {
   stashRedirectAfterLogin,
   takeRedirectAfterLogin,

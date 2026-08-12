@@ -11,22 +11,24 @@ import {
   expectNoInternalFields,
 } from './_bandProfileHelpers.js'
 
-vi.mock('../../../server/services/storageService.js', async (importOriginal) => ({
+vi.mock('../../../server/platform/files/storageService.js', async (importOriginal) => ({
   ...(await importOriginal()),
+  deleteTenantObjects: vi.fn(async () => undefined),
   safeRemove: vi.fn(() => undefined),
 }))
 
-let app, pool, runMigrations, truncateAll, seedTwoTenants, safeRemove
+let app, pool, runMigrations, truncateAll, seedTwoTenants, deleteTenantObjects, safeRemove
 let seed, personalA, personalB
 
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
   const appMod = await import('./_app.js')
-  const storageMod = await import('../../../server/services/storageService.js')
+  const storageMod = await import('../../../server/platform/files/storageService.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
+  deleteTenantObjects = storageMod.deleteTenantObjects
   safeRemove = storageMod.safeRemove
   app = appMod.createTestApp()
   await runMigrations()
@@ -54,6 +56,7 @@ beforeEach(async () => {
   await isolateProfileIds(pool)
   personalA = await createPersonalTenant('personal-a', seed.userA.id)
   personalB = await createPersonalTenant('personal-b', seed.userB.id)
+  deleteTenantObjects.mockReset().mockResolvedValue(undefined)
   safeRemove.mockClear()
 })
 
@@ -398,6 +401,7 @@ describe('terminal deletion', () => {
       .set('x-test-tenant-id', String(seed.tenantA.id))
       .expect(204)
 
+    expect(deleteTenantObjects).toHaveBeenCalledWith(personalA.id, [])
     expect(await profileCount()).toBe(0)
   })
 
@@ -414,6 +418,7 @@ describe('terminal deletion', () => {
       .set('x-test-tenant-id', String(seed.tenantA.id))
       .expect(204)
 
+    expect(deleteTenantObjects).toHaveBeenCalledWith(personalA.id, [])
     expect(await profileCount()).toBe(1)
   })
 
@@ -429,6 +434,10 @@ describe('terminal deletion', () => {
       .set('x-test-tenant-id', String(seed.tenantA.id))
       .expect(204)
 
+    expect(deleteTenantObjects).toHaveBeenCalledWith(
+      seed.tenantB.id,
+      expect.arrayContaining([`tenants/${seed.tenantB.id}/share/beta.jpg`]),
+    )
     expect(await profileCount()).toBe(0)
   })
 })

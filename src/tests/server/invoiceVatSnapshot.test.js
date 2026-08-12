@@ -1,18 +1,27 @@
 import './_envSetup.js'
 // @vitest-environment node
-import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
+import { describe, it, beforeAll, beforeEach, afterAll, expect, vi } from 'vitest'
 import request from 'supertest'
 
-let app, pool, runMigrations, truncateAll, seedTwoTenants
+vi.mock('../../../server/platform/files/storageService.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  uploadObjectWithQuota: vi.fn(async () => undefined),
+  removeObject: vi.fn(async () => undefined),
+  safeRemove: vi.fn(() => undefined),
+}))
+
+let app, pool, runMigrations, truncateAll, seedTwoTenants, uploadObjectWithQuota
 let seed
 
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
   const appMod = await import('./_app.js')
+  const storageMod = await import('../../../server/platform/files/storageService.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
+  uploadObjectWithQuota = storageMod.uploadObjectWithQuota
   app = appMod.createTestApp()
   await runMigrations()
 })
@@ -27,6 +36,7 @@ beforeEach(async () => {
      WHERE id = $1`,
     [seed.tenantA.id],
   )
+  uploadObjectWithQuota.mockClear()
 })
 
 afterAll(async () => {
@@ -175,7 +185,15 @@ describe('invoice VAT snapshot — immutability', () => {
 
     // POST /:id/render has no finalization guard — before the snapshot it would
     // silently replace the stored PDF with one under today's scheme.
+    const uploadCount = uploadObjectWithQuota.mock.calls.length
     await asUserA(request(app).post(`/api/invoices/${inv.id}/render`)).expect(200)
+    expect(uploadObjectWithQuota).toHaveBeenCalledTimes(uploadCount + 1)
+    expect(uploadObjectWithQuota).toHaveBeenLastCalledWith(
+      expect.stringMatching(new RegExp(`^tenants/${seed.tenantA.id}/invoices/.+\\.pdf$`)),
+      expect.any(Buffer),
+      expect.any(Number),
+      'application/pdf',
+    )
     expect(await snapshotOf(inv.id)).toMatchObject({
       vat_treatment_snapshot: 'standard',
       vat_snapshot_source: 'issued',
@@ -201,7 +219,7 @@ describe('invoice VAT snapshot — immutability', () => {
 
     // Directly re-running the capture path proves the guard is in SQL
     // (COALESCE), not in a read-then-check a race could slip through.
-    const { updateInvoiceFields } = await import('../../../server/repositories/invoiceRepository.js')
+    const { updateInvoiceFields } = await import('../../../server/finance/invoices/invoiceRepository.js')
     await updateInvoiceFields(pool, seed.tenantA.id, inv.id, {
       columns: [],
       finalize: false,

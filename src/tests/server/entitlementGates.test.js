@@ -18,7 +18,7 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   app = appMod.createTestApp()
-  const entMod = await import('../../../server/services/entitlementService.js')
+  const entMod = await import('../../../server/commerce/billing/entitlementService.js')
   clearEntitlementCaches = entMod.clearEntitlementCaches
   billing = await import('./_billing.js')
   await runMigrations()
@@ -191,7 +191,7 @@ describe('integration secrets purge (entitlement durably lost)', () => {
       [seed.tenantA.id],
     )
 
-    const { purgeIntegrationSecrets } = await import('../../../server/services/entitlementPurgeService.js')
+    const { purgeIntegrationSecrets } = await import('../../../server/commerce/billing/entitlementPurgeService.js')
     await purgeIntegrationSecrets(pool, seed.tenantA.id)
 
     const { rows: [tenant] } = await pool.query(
@@ -215,7 +215,7 @@ describe('integration secrets purge (entitlement durably lost)', () => {
         .set('x-test-tenant-id', String(seed.tenantB.id))
     await asUserB(request(app).put('/api/profile/mollie-key').send({ key: `test_${'b'.repeat(25)}` })).expect(200)
 
-    const { purgeIntegrationSecrets } = await import('../../../server/services/entitlementPurgeService.js')
+    const { purgeIntegrationSecrets } = await import('../../../server/commerce/billing/entitlementPurgeService.js')
     await purgeIntegrationSecrets(pool, seed.tenantA.id)
 
     const { rows: [t] } = await pool.query(
