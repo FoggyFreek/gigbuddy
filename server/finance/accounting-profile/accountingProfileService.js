@@ -9,6 +9,8 @@
 // facts from — loadAccountingProfile() is that read primitive.
 import { withTransaction, abortTransaction } from '../../db/withTransaction.js'
 import { acquireAccountingSettingsLock } from '../accounts/accountRepository.js'
+import { redefaultAccountNames } from '../accounts/accountNameDefaults.js'
+import { countryPackVersion } from '../../../shared/countryPack.js'
 import { updateTenantFields } from '../../people/workspaces/tenantRepository.js'
 import {
   fetchAccountingProfile,
@@ -81,6 +83,11 @@ export async function createAccountingProfileForTenant(client, tenantId, country
     legal_form: legalForm,
     profile_source: 'tenant_creation',
     profile_status: 'incomplete',
+    // Records which country-pack revision configured this tenant. Today that is
+    // the chart labels seedTenantAccounting applied in the same transaction; as
+    // the pack grows this is one of the two places to apply the new concern (see
+    // shared/countryPack.js).
+    pack_version: countryPackVersion(countryCode),
   })
   return inserted ?? fetchAccountingProfile(client, tenantId)
 }
@@ -292,6 +299,7 @@ export async function changeAccountingCountry(db, tenantId, body = {}, userId = 
       countryCode,
       baseCurrency,
       defaultVatRate,
+      packVersion: countryPackVersion(countryCode),
     })
     // Only the seller IDENTITY still lives on `tenants`; the regime itself moved
     // to the profile row, which resetProfileCountry has just rewritten.
@@ -302,6 +310,7 @@ export async function changeAccountingCountry(db, tenantId, body = {}, userId = 
     ], [taxId.value, kvk.value, registrationOffice])
     const enrolmentsVoided = await voidCountryDependentEnrolments(client, tenantId, userId)
     const productsReset = await resetProductVatRates(client, tenantId, defaultVatRate)
+    await redefaultAccountNames(client, tenantId, countryCode)
 
     return {
       profile: {

@@ -111,7 +111,7 @@ export async function createOwnedTenant(db, userId, body) {
       abortTransaction({ error: { status: 409, body: { error: 'Slug already in use' } } })
     }
     await ensureTenantStatistics(client, tenant.id)
-    await seedTenantAccounting(client, tenant.id)
+    await seedTenantAccounting(client, tenant.id, country.countryCode)
     // Same transaction as the tenant insert: a band must never exist without the
     // accounting profile that states its jurisdiction.
     await createAccountingProfileForTenant(client, tenant.id, country.countryCode)
@@ -161,7 +161,7 @@ export async function createPersonalTenant(db, user, body) {
       abortTransaction({ error: { status: 409, body: { error: 'Slug already in use' } } })
     }
     await ensureTenantStatistics(client, tenant.id)
-    await seedTenantAccounting(client, tenant.id)
+    await seedTenantAccounting(client, tenant.id, country.countryCode)
     await createAccountingProfileForTenant(client, tenant.id, country.countryCode, {
       legalForm: 'sole_trader',
     })

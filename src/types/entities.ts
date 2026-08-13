@@ -666,6 +666,11 @@ export interface Account {
   id?: Id
   code?: string
   name?: string
+  // The label this account was seeded with for the tenant's accounting country.
+  // Seeded accounts can be reset back to it; tenant-created ones are their own
+  // default, and reset is refused on is_system.
+  default_name?: string
+  name_is_customized?: boolean
   type?: string
   reporting_group?: 'operating_revenue' | 'other_operating_income' | 'cost_of_goods_sold' | 'operating_expense' | null
   parent_code?: string

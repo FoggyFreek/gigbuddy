@@ -73,7 +73,7 @@ export async function createTenant(createdByUserId, body) {
       slug, displayName: band_name, createdByUserId,
     })
     await ensureTenantStatistics(client, tenant.id)
-    await seedTenantAccounting(client, tenant.id)
+    await seedTenantAccounting(client, tenant.id, country.countryCode)
     // Same transaction as the tenant insert: a band must never exist without the
     // accounting profile that states its jurisdiction.
     await createAccountingProfileForTenant(client, tenant.id, country.countryCode)

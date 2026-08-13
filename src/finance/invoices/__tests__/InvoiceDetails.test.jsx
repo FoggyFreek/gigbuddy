@@ -234,7 +234,7 @@ describe('InvoiceDetails', () => {
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
 
     expect(await screen.findByRole('textbox', { name: 'KVK nr.' })).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'BTW nr.' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Btw nr.' })).toBeInTheDocument()
   })
 
   it('shows a friendly error when payment-link creation fails', async () => {

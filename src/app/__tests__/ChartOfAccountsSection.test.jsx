@@ -20,17 +20,31 @@ function wrap(ui) {
   return render(<ThemeProvider theme={theme}>{ui}</ThemeProvider>)
 }
 
+// Row actions live in a MoreVert menu, which MUI renders in a portal — the items
+// are never inside the row element, so they are queried from `screen`.
+async function openRowMenu(user, rowId) {
+  const row = screen.getByTestId(`account-row-${rowId}`)
+  await user.click(within(row).getByRole('button', { name: /account actions/i }))
+  return screen.getByRole('menu')
+}
+
+// `default_name` is the country default the account was seeded with;
+// `name_is_customized` records a deliberate rename. Row 2 is a customized system
+// account (resettable), row 5 a customized tenant-created one (never resettable).
 const ACCOUNTS = [
-  { id: 1,  code: '60000', name: 'Operating Expenses',   type: 'expense', parent_code: null,    is_active: true,  is_system: true,  tenant_id: 1 },
-  { id: 2,  code: '61000', name: 'Band & Performance',   type: 'expense', parent_code: '60000', is_active: true,  is_system: true,  tenant_id: 1 },
-  { id: 3,  code: '61200', name: 'Equipment & Instr.',   type: 'expense', parent_code: '61000', is_active: true,  is_system: true,  tenant_id: 1 },
-  { id: 4,  code: '61999', name: 'Touring Expenses',     type: 'expense', parent_code: '61000', is_active: false, is_system: false, tenant_id: 1 },
+  { id: 1,  code: '60000', name: 'Operating Expenses',   type: 'expense', parent_code: null,    is_active: true,  is_system: true,  tenant_id: 1, default_name: 'Operating Expenses', name_is_customized: false },
+  { id: 2,  code: '61000', name: 'Band & Performance',   type: 'expense', parent_code: '60000', is_active: true,  is_system: true,  tenant_id: 1, default_name: 'Touring',            name_is_customized: true },
+  { id: 3,  code: '61200', name: 'Equipment & Instr.',   type: 'expense', parent_code: '61000', is_active: true,  is_system: true,  tenant_id: 1, default_name: 'Equipment & Instr.', name_is_customized: false },
+  { id: 4,  code: '61999', name: 'Touring Expenses',     type: 'expense', parent_code: '61000', is_active: false, is_system: false, tenant_id: 1, default_name: 'Touring Expenses',   name_is_customized: false },
   // depth-3 custom sub-account under 61999
-  { id: 5,  code: '61998', name: 'Festival Costs',       type: 'expense', parent_code: '61999', is_active: true,  is_system: false, tenant_id: 1 },
-  { id: 10, code: '11000', name: 'Checking Account',     type: 'asset',   parent_code: null,    is_active: true,  is_system: true,  tenant_id: 1 },
+  { id: 5,  code: '61998', name: 'Festival Costs',       type: 'expense', parent_code: '61999', is_active: true,  is_system: false, tenant_id: 1, default_name: 'Festival',           name_is_customized: true },
+  { id: 10, code: '11000', name: 'Checking Account',     type: 'asset',   parent_code: null,    is_active: true,  is_system: true,  tenant_id: 1, default_name: 'Checking Account',   name_is_customized: false },
 ]
 
 beforeEach(() => {
+  // Call history has to be cleared, not just re-stubbed: the rename tests assert
+  // that no request went out at all.
+  vi.clearAllMocks()
   accountsApi.listAccounts.mockResolvedValue([...ACCOUNTS])
   accountsApi.createAccount.mockResolvedValue({ id: 99, code: '61997', name: 'New', type: 'expense', parent_code: '61000', is_active: true, is_system: false, tenant_id: 1 })
   accountsApi.updateAccount.mockResolvedValue({ ...ACCOUNTS[3], is_active: false })
@@ -78,8 +92,8 @@ describe('ChartOfAccountsSection — add child', () => {
     await waitFor(() => screen.getByText('Band & Performance'))
 
     // Click add-child on "Band & Performance" (61000)
-    const row = screen.getByTestId('account-row-2')
-    await user.click(within(row).getByRole('button', { name: /add sub-account/i }))
+    const menu = await openRowMenu(user, 2)
+    await user.click(within(menu).getByRole('menuitem', { name: /add sub-account/i }))
 
     // Dialog opens
     await waitFor(() => screen.getByRole('dialog'))
@@ -111,8 +125,8 @@ describe('ChartOfAccountsSection — deactivate', () => {
     wrap(<ChartOfAccountsSection />)
     await waitFor(() => screen.getByText('Equipment & Instr.'))
 
-    const row = screen.getByTestId('account-row-3')
-    await user.click(within(row).getByRole('button', { name: /deactivate/i }))
+    const menu = await openRowMenu(user, 3)
+    await user.click(within(menu).getByRole('menuitem', { name: /deactivate/i }))
 
     await waitFor(() => {
       expect(accountsApi.updateAccount).toHaveBeenCalledWith(3, { is_active: false })
@@ -127,19 +141,20 @@ describe('ChartOfAccountsSection — capitalizable', () => {
     wrap(<ChartOfAccountsSection />)
     await waitFor(() => screen.getByText('Checking Account'))
 
-    const row = screen.getByTestId('account-row-10')
-    await user.click(within(row).getByRole('button', { name: /set capitalizable/i }))
+    const menu = await openRowMenu(user, 10)
+    await user.click(within(menu).getByRole('menuitem', { name: /allow capitalizing/i }))
 
     await waitFor(() => {
       expect(accountsApi.updateAccount).toHaveBeenCalledWith(10, { is_capitalizable: true })
     })
   })
 
-  it('does not render a capitalizable toggle on expense accounts', async () => {
+  it('does not offer the capitalizable toggle on expense accounts', async () => {
+    const user = userEvent.setup()
     wrap(<ChartOfAccountsSection />)
     await waitFor(() => screen.getByText('Equipment & Instr.'))
-    const row = screen.getByTestId('account-row-3')
-    expect(within(row).queryByRole('button', { name: /capitalizable/i })).toBeNull()
+    const menu = await openRowMenu(user, 3)
+    expect(within(menu).queryByRole('menuitem', { name: /capitaliz/i })).toBeNull()
   })
 
   it('shows a Capitalizable chip for flagged asset accounts', async () => {
@@ -148,6 +163,146 @@ describe('ChartOfAccountsSection — capitalizable', () => {
     )
     wrap(<ChartOfAccountsSection />)
     await waitFor(() => screen.getByText('Capitalizable'))
+  })
+})
+
+describe('ChartOfAccountsSection — rename', () => {
+  it('reveals a field prefilled with the current name and saves it', async () => {
+    accountsApi.updateAccount.mockResolvedValue({ ...ACCOUNTS[2], name: 'Backline' })
+    const user = userEvent.setup()
+    wrap(<ChartOfAccountsSection />)
+    await waitFor(() => screen.getByText('Equipment & Instr.'))
+
+    const menu = await openRowMenu(user, 3)
+    await user.click(within(menu).getByRole('menuitem', { name: /rename account/i }))
+    const row = screen.getByTestId('account-row-3')
+
+    const field = within(row).getByLabelText(/account name/i)
+    expect(field).toHaveValue('Equipment & Instr.')
+
+    await user.clear(field)
+    await user.type(field, 'Backline')
+    await user.click(within(row).getByRole('button', { name: /^save$/i }))
+
+    // Exactly { name } — the account code must never be part of the payload.
+    await waitFor(() => {
+      expect(accountsApi.updateAccount).toHaveBeenCalledWith(3, { name: 'Backline' })
+    })
+  })
+
+  it('saves on Enter', async () => {
+    accountsApi.updateAccount.mockResolvedValue({ ...ACCOUNTS[2], name: 'Backline' })
+    const user = userEvent.setup()
+    wrap(<ChartOfAccountsSection />)
+    await waitFor(() => screen.getByText('Equipment & Instr.'))
+
+    const menu = await openRowMenu(user, 3)
+    await user.click(within(menu).getByRole('menuitem', { name: /rename account/i }))
+    const row = screen.getByTestId('account-row-3')
+    await user.clear(within(row).getByLabelText(/account name/i))
+    await user.type(within(row).getByLabelText(/account name/i), 'Backline{Enter}')
+
+    await waitFor(() => {
+      expect(accountsApi.updateAccount).toHaveBeenCalledWith(3, { name: 'Backline' })
+    })
+  })
+
+  it('cancels on Escape without calling the API', async () => {
+    const user = userEvent.setup()
+    wrap(<ChartOfAccountsSection />)
+    await waitFor(() => screen.getByText('Equipment & Instr.'))
+
+    const menu = await openRowMenu(user, 3)
+    await user.click(within(menu).getByRole('menuitem', { name: /rename account/i }))
+    const row = screen.getByTestId('account-row-3')
+    await user.type(within(row).getByLabelText(/account name/i), 'X{Escape}')
+
+    await waitFor(() => expect(screen.getByText('Equipment & Instr.')).toBeInTheDocument())
+    expect(accountsApi.updateAccount).not.toHaveBeenCalled()
+  })
+
+  it('does not call the API when the name is unchanged', async () => {
+    const user = userEvent.setup()
+    wrap(<ChartOfAccountsSection />)
+    await waitFor(() => screen.getByText('Equipment & Instr.'))
+
+    const menu = await openRowMenu(user, 3)
+    await user.click(within(menu).getByRole('menuitem', { name: /rename account/i }))
+    const row = screen.getByTestId('account-row-3')
+    await user.click(within(row).getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(screen.getByText('Equipment & Instr.')).toBeInTheDocument())
+    expect(accountsApi.updateAccount).not.toHaveBeenCalled()
+  })
+
+  it('keeps the draft in the field when saving fails', async () => {
+    accountsApi.updateAccount.mockRejectedValue(Object.assign(new Error('nope'), { status: 500 }))
+    const user = userEvent.setup()
+    wrap(<ChartOfAccountsSection />)
+    await waitFor(() => screen.getByText('Equipment & Instr.'))
+
+    const menu = await openRowMenu(user, 3)
+    await user.click(within(menu).getByRole('menuitem', { name: /rename account/i }))
+    const row = screen.getByTestId('account-row-3')
+    await user.clear(within(row).getByLabelText(/account name/i))
+    await user.type(within(row).getByLabelText(/account name/i), 'Backline')
+    await user.click(within(row).getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(accountsApi.updateAccount).toHaveBeenCalled())
+    expect(within(row).getByLabelText(/account name/i)).toHaveValue('Backline')
+  })
+
+  it('offers rename on a system account', async () => {
+    const user = userEvent.setup()
+    wrap(<ChartOfAccountsSection />)
+    await waitFor(() => screen.getByText('Operating Expenses'))
+    const menu = await openRowMenu(user, 1)
+    expect(within(menu).getByRole('menuitem', { name: /rename account/i })).toBeInTheDocument()
+  })
+
+  it('hides the actions menu while the row is being edited', async () => {
+    const user = userEvent.setup()
+    wrap(<ChartOfAccountsSection />)
+    await waitFor(() => screen.getByText('Equipment & Instr.'))
+
+    const menu = await openRowMenu(user, 3)
+    await user.click(within(menu).getByRole('menuitem', { name: /rename account/i }))
+
+    const row = screen.getByTestId('account-row-3')
+    expect(within(row).queryByRole('button', { name: /account actions/i })).toBeNull()
+  })
+})
+
+describe('ChartOfAccountsSection — reset name', () => {
+  it('offers reset on a customized system account and sends name: null', async () => {
+    accountsApi.updateAccount.mockResolvedValue({ ...ACCOUNTS[1], name: 'Touring' })
+    const user = userEvent.setup()
+    wrap(<ChartOfAccountsSection />)
+    await waitFor(() => screen.getByText('Band & Performance'))
+
+    const menu = await openRowMenu(user, 2)
+    await user.click(within(menu).getByRole('menuitem', { name: /reset to the default name/i }))
+
+    await waitFor(() => {
+      expect(accountsApi.updateAccount).toHaveBeenCalledWith(2, { name: null })
+    })
+  })
+
+  it('does not offer reset when the name still matches the country default', async () => {
+    const user = userEvent.setup()
+    wrap(<ChartOfAccountsSection />)
+    await waitFor(() => screen.getByText('Equipment & Instr.'))
+    const menu = await openRowMenu(user, 3)
+    expect(within(menu).queryByRole('menuitem', { name: /reset to the default name/i })).toBeNull()
+  })
+
+  it('does not offer reset on a customized tenant-created account', async () => {
+    const user = userEvent.setup()
+    wrap(<ChartOfAccountsSection />)
+    await waitFor(() => screen.getByText('Festival Costs'))
+    const menu = await openRowMenu(user, 5)
+    expect(within(menu).getByRole('menuitem', { name: /rename account/i })).toBeInTheDocument()
+    expect(within(menu).queryByRole('menuitem', { name: /reset to the default name/i })).toBeNull()
   })
 })
 
@@ -160,8 +315,8 @@ describe('ChartOfAccountsSection — 409 in-use error', () => {
     wrap(<ChartOfAccountsSection />)
     await waitFor(() => screen.getByText('Equipment & Instr.'))
 
-    const row = screen.getByTestId('account-row-3')
-    await user.click(within(row).getByRole('button', { name: /deactivate/i }))
+    const menu = await openRowMenu(user, 3)
+    await user.click(within(menu).getByRole('menuitem', { name: /deactivate/i }))
 
     await waitFor(() => {
       expect(screen.getByText(/in use/i)).toBeInTheDocument()
@@ -176,9 +331,8 @@ describe('ChartOfAccountsSection — 409 in-use error', () => {
     wrap(<ChartOfAccountsSection />)
     await waitFor(() => screen.getByText('Touring Expenses'))
 
-    // 61999 is deactivated (is_active:false) so delete button should show
-    const row = screen.getByTestId('account-row-4')
-    await user.click(within(row).getByRole('button', { name: /delete/i }))
+    const menu = await openRowMenu(user, 4)
+    await user.click(within(menu).getByRole('menuitem', { name: /delete/i }))
     // Confirm the delete dialog
     await waitFor(() => screen.getByRole('button', { name: /confirm/i }))
     await user.click(screen.getByRole('button', { name: /confirm/i }))

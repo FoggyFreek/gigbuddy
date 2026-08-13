@@ -3,7 +3,7 @@ import './_envSetup.js'
 import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
 import request from 'supertest'
 
-let app, pool, runMigrations, truncateAll, seedTwoTenants, DEFAULT_ACCOUNTS
+let app, pool, runMigrations, truncateAll, seedTwoTenants, DEFAULT_ACCOUNTS, seedTenantAccounting
 let seed
 
 beforeAll(async () => {
@@ -15,6 +15,7 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   DEFAULT_ACCOUNTS = seedMod.DEFAULT_ACCOUNTS
+  seedTenantAccounting = seedMod.seedTenantAccounting
   app = appMod.createTestApp()
   await runMigrations()
 })
@@ -107,6 +108,182 @@ describe('accounts — seeding (JS path)', () => {
     )
     expect(aRows[0].n).toBe(DEFAULT_ACCOUNTS.length)
     expect(bRows[0].n).toBe(DEFAULT_ACCOUNTS.length)
+  })
+})
+
+describe('accounts — country default names', () => {
+  async function seedFreshTenant(countryCode) {
+    const { rows: [t] } = await pool.query(
+      `INSERT INTO tenants (slug, band_name, display_name)
+       VALUES ($1, 'Gamma Band', 'Gamma Band') RETURNING id`,
+      [`gamma-${countryCode ?? 'none'}`],
+    )
+    await seedTenantAccounting(pool, t.id, countryCode)
+    const { rows } = await pool.query(
+      `SELECT code, name, default_name, name_is_customized
+         FROM chart_of_accounts WHERE tenant_id = $1`,
+      [t.id],
+    )
+    return Object.fromEntries(rows.map((r) => [r.code, r]))
+  }
+
+  it('seeds Dutch labels for an nl tenant, with name and default_name identical', async () => {
+    const byCode = await seedFreshTenant('nl')
+    expect(byCode['11200']).toMatchObject({
+      name: 'Debiteuren',
+      default_name: 'Debiteuren',
+      name_is_customized: false,
+    })
+    expect(byCode['21100'].name).toBe('Crediteuren')
+  })
+
+  it('falls back to the English base for a country without a pack', async () => {
+    const byCode = await seedFreshTenant('de')
+    expect(byCode['11200']).toMatchObject({
+      name: 'Accounts Receivable',
+      default_name: 'Accounts Receivable',
+      name_is_customized: false,
+    })
+    // A packless jurisdiction must never borrow another country's labels.
+    expect(byCode['21100'].name).not.toBe('Crediteuren')
+  })
+
+  it('falls back to the English base when no country is supplied', async () => {
+    const byCode = await seedFreshTenant(null)
+    expect(byCode['11200'].name).toBe('Accounts Receivable')
+  })
+
+  it('every seeded account starts non-customized with a default equal to its name', async () => {
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM chart_of_accounts
+        WHERE tenant_id = $1 AND (default_name IS DISTINCT FROM name OR name_is_customized)`,
+      [seed.tenantA.id],
+    )
+    expect(rows[0].n).toBe(0)
+  })
+
+  it('the insert trigger fills default_name when a writer omits it', async () => {
+    // The previous app container still serves while a deploy migrates, and its
+    // INSERT has no default_name column.
+    const { rows: [row] } = await pool.query(
+      `INSERT INTO chart_of_accounts (tenant_id, code, name, type, parent_code, reporting_group)
+       VALUES ($1, '99123', 'Legacy insert', 'expense', '62000', 'operating_expense')
+       RETURNING default_name, name_is_customized`,
+      [seed.tenantA.id],
+    )
+    expect(row.default_name).toBe('Legacy insert')
+    expect(row.name_is_customized).toBe(false)
+  })
+})
+
+describe('accounts — renaming and resetting', () => {
+  async function accountByCode(tenantId, code) {
+    const { rows: [row] } = await pool.query(
+      `SELECT id, code, name, default_name, name_is_customized, is_system
+         FROM chart_of_accounts WHERE tenant_id = $1 AND code = $2`,
+      [tenantId, code],
+    )
+    return row
+  }
+
+  it('PATCH renames a system account and marks it customized', async () => {
+    const acc = await accountByCode(seed.tenantA.id, '11000')
+    const res = await asUserA(request(app).patch(`/api/accounts/${acc.id}`))
+      .send({ name: 'Rabobank zakelijk' })
+      .expect(200)
+
+    expect(res.body).toMatchObject({
+      code: '11000',
+      name: 'Rabobank zakelijk',
+      default_name: acc.default_name,
+      name_is_customized: true,
+    })
+  })
+
+  it('PATCH 400 name_required on a blank name', async () => {
+    const acc = await accountByCode(seed.tenantA.id, '11000')
+    const res = await asUserA(request(app).patch(`/api/accounts/${acc.id}`))
+      .send({ name: '   ' })
+      .expect(400)
+    expect(res.body.error).toBe('name_required')
+  })
+
+  it('PATCH name: null restores the country default and clears the flag', async () => {
+    const acc = await accountByCode(seed.tenantA.id, '11000')
+    await asUserA(request(app).patch(`/api/accounts/${acc.id}`))
+      .send({ name: 'Rabobank zakelijk' })
+      .expect(200)
+
+    const res = await asUserA(request(app).patch(`/api/accounts/${acc.id}`))
+      .send({ name: null })
+      .expect(200)
+
+    expect(res.body).toMatchObject({
+      name: acc.default_name,
+      default_name: acc.default_name,
+      name_is_customized: false,
+    })
+  })
+
+  it('PATCH name: null on a tenant-created account returns 409 not_system_account', async () => {
+    const created = await asUserA(request(app).post('/api/accounts'))
+      .send({ code: '61999', name: 'Touring Expenses', type: 'expense', parent_code: '61000' })
+      .expect(201)
+    // It has a default_name of its own; eligibility is decided by is_system.
+    expect(created.body.default_name).toBe('Touring Expenses')
+
+    const res = await asUserA(request(app).patch(`/api/accounts/${created.body.id}`))
+      .send({ name: null })
+      .expect(409)
+    expect(res.body.error).toBe('not_system_account')
+  })
+
+  it('POST stores the entered name as its own default, not customized', async () => {
+    const res = await asUserA(request(app).post('/api/accounts'))
+      .send({ code: '61998', name: 'Festival Costs', type: 'expense', parent_code: '61000' })
+      .expect(201)
+    expect(res.body).toMatchObject({
+      name: 'Festival Costs',
+      default_name: 'Festival Costs',
+      name_is_customized: false,
+    })
+  })
+
+  it('PATCH cannot change the account code, alone or alongside a name', async () => {
+    const acc = await accountByCode(seed.tenantA.id, '11000')
+
+    const alone = await asUserA(request(app).patch(`/api/accounts/${acc.id}`))
+      .send({ code: '99999' })
+      .expect(400)
+    expect(alone.body.error).toBe('nothing_to_update')
+
+    const withName = await asUserA(request(app).patch(`/api/accounts/${acc.id}`))
+      .send({ name: 'Renamed', code: '99999' })
+      .expect(200)
+    expect(withName.body.code).toBe('11000')
+
+    expect((await accountByCode(seed.tenantA.id, '11000')).name).toBe('Renamed')
+  })
+
+  it('PATCH cannot set default_name or name_is_customized from the request body', async () => {
+    const acc = await accountByCode(seed.tenantA.id, '11000')
+
+    await asUserA(request(app).patch(`/api/accounts/${acc.id}`))
+      .send({ default_name: 'Forged', name_is_customized: true })
+      .expect(400)
+
+    const after = await accountByCode(seed.tenantA.id, '11000')
+    expect(after.default_name).toBe(acc.default_name)
+    expect(after.name_is_customized).toBe(false)
+  })
+
+  it('cross-tenant reset returns 404', async () => {
+    const acc = await accountByCode(seed.tenantB.id, '11000')
+    await asUserA(request(app).patch(`/api/accounts/${acc.id}`))
+      .send({ name: null })
+      .expect(404)
+
+    expect((await accountByCode(seed.tenantB.id, '11000')).name_is_customized).toBe(false)
   })
 })
 

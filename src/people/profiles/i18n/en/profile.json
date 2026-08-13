@@ -71,7 +71,7 @@
     "contactHelper": "Printed on invoices as your public contact details.",
     "iban": "IBAN",
     "ibanHelper": "e.g. NL91 ABNA 0417 1643 00",
-    "taxId": "Tax ID (BTW)",
+    "taxId": "Tax ID (Btw)",
     "taxIdHelper": "Format: {{example}}"
   },
   "members": {

@@ -37,6 +37,9 @@ vi.mock('../../../contexts/authContext.ts', () => ({
 vi.mock('../../../finance/invoices/checkoutNavigation.ts', () => ({
   redirectToCheckout: vi.fn(),
 }))
+vi.mock('../../../utils/randomBackground.ts', () => ({
+  pickRandomBackground: vi.fn(),
+}))
 
 import { acceptTerms, onboardingComplete } from '../auth.ts'
 import { searchBandProfiles } from '../../../people/band-profiles/bandProfiles.ts'
@@ -51,6 +54,7 @@ import {
 import { uploadLogo } from '../../../people/profiles/profile.ts'
 import { useAuth } from '../../../contexts/authContext.ts'
 import { redirectToCheckout } from '../../../finance/invoices/checkoutNavigation.ts'
+import { pickRandomBackground } from '../../../utils/randomBackground.ts'
 
 const PLANS = [
   {
@@ -133,6 +137,13 @@ async function completeWelcomeStep(user, planName = 'Bronze', { kind = null } = 
 beforeEach(() => {
   vi.clearAllMocks()
   mockAuth()
+  // Deterministic stand-in for the random pick: each call yields the next
+  // background, so "re-picked" is observable without fighting Math.random.
+  let pick = 0
+  pickRandomBackground.mockImplementation(() => {
+    pick += 1
+    return { image: `url(/backgrounds/bg_0${pick}_light.webp)`, position: '0% 0%' }
+  })
   getBillingState.mockResolvedValue({ subscriptions: { band: null, artist: null }, ownedBandCount: 0, hasPersonalWorkspace: false, plans: PLANS })
   getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: true })
   listOwnedTenants.mockResolvedValue([])
@@ -251,6 +262,48 @@ describe('OnboardingPage — confirm (paid path)', () => {
   })
 })
 
+// jsdom quotes the url(); strip it so the expectations read as plain paths.
+const backgroundImages = () =>
+  screen.getAllByTestId('onboarding-background-layer')
+    .map((layer) => getComputedStyle(layer).backgroundImage.replace(/"/g, ''))
+
+describe('OnboardingPage — background', () => {
+  it('shows a random background and re-picks it on every step change', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await screen.findByText('Bronze')
+
+    expect(backgroundImages()).toEqual(['url(/backgrounds/bg_01_light.webp)'])
+
+    await completeWelcomeStep(user)
+    expect(await screen.findByLabelText('Band name')).toBeInTheDocument()
+    expect(backgroundImages()).toContain('url(/backgrounds/bg_02_light.webp)')
+
+    // Back counts too — every step change is a new picture.
+    await waitFor(() => expect(backgroundImages()).toEqual(['url(/backgrounds/bg_02_light.webp)']))
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    await screen.findByText('Bronze')
+    expect(backgroundImages()).toContain('url(/backgrounds/bg_03_light.webp)')
+  })
+
+  // Crossfade, not a swap: the outgoing picture stays underneath until the new
+  // one has faded in over it, then it's dropped.
+  it('keeps the outgoing image mounted while the new one fades in', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await screen.findByText('Bronze')
+
+    await completeWelcomeStep(user)
+    expect(await screen.findByLabelText('Band name')).toBeInTheDocument()
+
+    expect(backgroundImages()).toEqual([
+      'url(/backgrounds/bg_01_light.webp)',
+      'url(/backgrounds/bg_02_light.webp)',
+    ])
+    await waitFor(() => expect(backgroundImages()).toEqual(['url(/backgrounds/bg_02_light.webp)']))
+  })
+})
+
 describe('OnboardingPage — what are you setting up?', () => {
   it('offers both kinds on the welcome step, before the plans', async () => {
     const user = userEvent.setup()
@@ -267,6 +320,17 @@ describe('OnboardingPage — what are you setting up?', () => {
 
     await completeWelcomeStep(user)
     expect(await screen.findByLabelText('Band name')).toBeInTheDocument()
+  })
+
+  // Decorative illustrations: the tile's accessible name must stay the copy.
+  it('illustrates each kind with a square image', async () => {
+    wrap()
+
+    const [band, artist] = await screen.findAllByRole('radio')
+    expect(band.querySelector('img')).toHaveAttribute('src', '/images/band-rehearsal.webp')
+    expect(band.querySelector('img')).toHaveAttribute('alt', '')
+    expect(artist.querySelector('img')).toHaveAttribute('src', '/images/artist.webp')
+    expect(artist.querySelector('img')).toHaveAttribute('alt', '')
   })
 
   // Band and artist are separate products, so the grid must swap with the kind.

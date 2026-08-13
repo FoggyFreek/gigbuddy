@@ -38,6 +38,7 @@ import { ladderPlans } from '../../commerce/billing/planLadder.ts'
 import { audienceForTenantKind, isPlanAudience } from '../../auth/planAudiences.ts'
 import type { PlanAudience } from '../../auth/planAudiences.ts'
 import { redirectToCheckout } from '../../finance/invoices/checkoutNavigation.ts'
+import OnboardingBackground from './components/onboarding/OnboardingBackground.tsx'
 import WelcomeStep from './components/onboarding/WelcomeStep.tsx'
 import BandStep from './components/onboarding/BandStep.tsx'
 import ClaimBandProfileField from './components/onboarding/ClaimBandProfileField.tsx'
@@ -564,14 +565,23 @@ export default function OnboardingPage() {
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: '100vh',
-        bgcolor: 'background.default',
+        position: 'relative',
         px: 2,
         py: 4,
       }}
     >
+      <OnboardingBackground step={activeStep} />
       <Paper
         elevation={3}
-        sx={{ p: 4, maxWidth: 760, width: '100%', display: 'flex', flexDirection: 'column', gap: 3 }}
+        sx={{
+          p: 4,
+          maxWidth: 760,
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 3,
+          position: 'relative',
+        }}
       >
         <Stack spacing={1} sx={{ alignItems: 'center' }}>
           <Box

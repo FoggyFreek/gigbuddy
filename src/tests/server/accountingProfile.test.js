@@ -137,6 +137,43 @@ describe('accounting profile — country change', () => {
     expect(Number(product.vat_rate)).toBe(20)
   })
 
+  it('re-labels the chart for the new country but keeps renamed accounts', async () => {
+    // Put tenantA into the state a properly seeded nl tenant would be in: one
+    // account still on its Dutch default, one the tenant renamed by hand.
+    await pool.query(
+      `UPDATE chart_of_accounts SET name = 'Debiteuren', default_name = 'Debiteuren'
+        WHERE tenant_id = $1 AND code = '11200'`,
+      [seed.tenantA.id],
+    )
+    await pool.query(
+      `UPDATE chart_of_accounts
+          SET name = 'Rabobank zakelijk', default_name = 'Bankrekening', name_is_customized = true
+        WHERE tenant_id = $1 AND code = '11000'`,
+      [seed.tenantA.id],
+    )
+
+    await changeCountry({ country_code: 'gb', tax_id: null, kvk_number: null }).expect(200)
+
+    const { rows } = await pool.query(
+      `SELECT code, name, default_name, name_is_customized
+         FROM chart_of_accounts
+        WHERE tenant_id = $1 AND code IN ('11000', '11200') ORDER BY code`,
+      [seed.tenantA.id],
+    )
+    expect(rows).toEqual([
+      // Renamed by the tenant: wording survives, but the default follows the
+      // new country so a later reset lands on the right label.
+      { code: '11000', name: 'Rabobank zakelijk', default_name: 'Primary Bank Account', name_is_customized: true },
+      { code: '11200', name: 'Accounts Receivable', default_name: 'Accounts Receivable', name_is_customized: false },
+    ])
+
+    const { rows: [profile] } = await pool.query(
+      'SELECT pack_version FROM tenant_accounting_profiles WHERE tenant_id = $1',
+      [seed.tenantA.id],
+    )
+    expect(profile.pack_version).toBe('gb-pack-2026.1')
+  })
+
   it('blocks drafts and does not inspect another tenant', async () => {
     await pool.query(
       `INSERT INTO invoices (

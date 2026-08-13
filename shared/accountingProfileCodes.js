@@ -18,7 +18,9 @@
 // names. Framework labels name the standard, not a marketing tier.
 //
 // These tables become country-pack-owned when the pack registry lands; the codes
-// are chosen now so they survive that move unchanged. Selecting a code asserts
+// are chosen now so they survive that move unchanged. That registry now exists
+// in embryonic form — shared/countryPack.js — and folding this file in is one of
+// the expansions listed there. Selecting a code asserts
 // nothing about eligibility — that remains the user's or their accountant's
 // statement.
 

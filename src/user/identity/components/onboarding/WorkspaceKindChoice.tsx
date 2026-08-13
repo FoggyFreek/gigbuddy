@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import Box from '@mui/material/Box'
 import Card from '@mui/material/Card'
 import CardActionArea from '@mui/material/CardActionArea'
 import FormLabel from '@mui/material/FormLabel'
@@ -12,6 +13,12 @@ import { TENANT_KINDS, type TenantKind } from '../../../../auth/tenantKinds.ts'
 const KIND_ICONS: Record<TenantKind, SvgIconComponent> = {
   band: GroupsOutlined,
   personal: PersonOutlined,
+}
+
+// Decorative only (alt=""): the tile's accessible name must stay its copy.
+const KIND_IMAGES: Record<TenantKind, string> = {
+  band: '/images/band-rehearsal.webp',
+  personal: '/images/artist.webp',
 }
 
 interface WorkspaceKindChoiceProps {
@@ -55,14 +62,41 @@ export default function WorkspaceKindChoice({
                 aria-checked={selected}
                 disabled={disabled}
                 onClick={() => onChange(kind)}
-                sx={{ p: 2, height: '100%' }}
+                sx={{ p: 0, aspectRatio: '1 / 1', position: 'relative' }}
               >
-                <Stack spacing={1} sx={{ alignItems: 'flex-start' }}>
-                  <Icon color={selected ? 'primary' : 'action'} />
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    {t($ => $.kindChoice[kind].label)}
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                <Box
+                  component="img"
+                  src={KIND_IMAGES[kind]}
+                  alt=""
+                  sx={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: 'block',
+                  }}
+                />
+                {/* Scrim panel: the copy sits on translucent black so it stays
+                    legible whatever the photo does underneath. */}
+                <Stack
+                  spacing={0.5}
+                  sx={{
+                    position: 'absolute',
+                    insetInline: 0,
+                    bottom: 0,
+                    p: 2,
+                    bgcolor: 'rgba(0, 0, 0, 0.55)',
+                    color: 'common.white',
+                  }}
+                >
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    <Icon fontSize="small" sx={{ color: 'inherit' }} />
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, color: 'inherit' }}>
+                      {t($ => $.kindChoice[kind].label)}
+                    </Typography>
+                  </Stack>
+                  <Typography variant="body2" sx={{ color: 'inherit', opacity: 0.85 }}>
                     {t($ => $.kindChoice[kind].help)}
                   </Typography>
                 </Stack>

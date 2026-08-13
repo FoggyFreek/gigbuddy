@@ -8,6 +8,7 @@ import Typography from '@mui/material/Typography'
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents'
 import AchievementBanner from './components/AchievementBanner.tsx'
 import { listAchievements } from './achievements.ts'
+import { useThemeMode } from '../../contexts/themeModeContext.ts'
 import type { Achievement, AchievementCategory } from '../../types/entities.ts'
 
 const CATEGORY_ORDER: AchievementCategory[] = [
@@ -45,6 +46,7 @@ function buildSections(achievements: Achievement[]): CategorySection[] {
 
 export default function AchievementsPage() {
   const { t } = useTranslation('achievements')
+  const { mode } = useThemeMode()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [achievements, setAchievements] = useState<Achievement[]>([])
@@ -95,7 +97,25 @@ export default function AchievementsPage() {
         <Typography variant="h5" sx={{ fontWeight: 600 }}>
           {t($ => $.title)}
         </Typography>
-        <Chip label={t($ => $.summary, { earned, total })} size="small" />
+        <Chip
+          size="small"
+          aria-label={t($ => $.summaryAria, { earned, total })}
+          label={
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1 }}>
+              <Box
+                component="img"
+                src={mode === 'dark' ? '/icons/clap_light.png' : '/icons/clap_dark.png'}
+                alt=""
+                aria-hidden="true"
+                sx={{ width: 28, height: 'auto', display: 'block' }}
+              />
+              <Box component="span" sx={{ fontWeight: 600, mt: 0.25 }}>
+                {t($ => $.summary, { earned, total })}
+              </Box>
+            </Box>
+          }
+          sx={{ height: 'auto', ml: 'auto', bgcolor: 'transparent', '& .MuiChip-label': { px: 0.5, py: 0.5 } }}
+        />
       </Box>
 
       {buildSections(achievements).map(({ category, achievements: items }) => (

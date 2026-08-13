@@ -59,10 +59,13 @@ describe('AchievementsPage', () => {
     expect(screen.getAllByRole('img', { name: '1 cheer' })).toHaveLength(2)
   })
 
-  it('shows earned vs total cheers in the summary chip', async () => {
+  it('shows earned vs total cheers under the clap icon in the summary chip', async () => {
     wrap(<AchievementsPage />)
     // Earned: 1 + 1 unlocked; total: 1+1+2+5.
-    await waitFor(() => expect(screen.getByText('2 / 9 cheers')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('2 / 9')).toBeInTheDocument())
+    const chip = screen.getByLabelText('2 of 9 cheers')
+    // Light mode (the default) uses the dark clap icon.
+    expect(chip.querySelector('img')).toHaveAttribute('src', '/icons/clap_dark.png')
   })
 
   it('shows an error message when loading fails', async () => {

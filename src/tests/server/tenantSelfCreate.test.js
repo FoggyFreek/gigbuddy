@@ -123,6 +123,35 @@ describe('POST /api/tenants (self-service creation)', () => {
     expect(res.body).not.toHaveProperty('vat_country')
   })
 
+  it('seeds the chart of accounts with the requested country\'s labels', async () => {
+    const nl = await asUserA(request(app).post('/api/tenants')
+      .send(createBody('nl-band', { country_code: 'nl' }))).expect(201)
+    const de = await asUserB(request(app).post('/api/tenants')
+      .send(createBody('de-band', { country_code: 'de' }))).expect(201)
+
+    const receivable = async (tenantId) => (await pool.query(
+      `SELECT name, default_name, name_is_customized
+         FROM chart_of_accounts WHERE tenant_id = $1 AND code = '11200'`,
+      [tenantId],
+    )).rows[0]
+
+    expect(await receivable(nl.body.id)).toEqual({
+      name: 'Debiteuren', default_name: 'Debiteuren', name_is_customized: false,
+    })
+    // No pack for de, so the English base — never another country's labels.
+    expect(await receivable(de.body.id)).toEqual({
+      name: 'Accounts Receivable', default_name: 'Accounts Receivable', name_is_customized: false,
+    })
+
+    // The profile records which registry revision produced those labels.
+    const packVersion = async (tenantId) => (await pool.query(
+      'SELECT pack_version FROM tenant_accounting_profiles WHERE tenant_id = $1',
+      [tenantId],
+    )).rows[0].pack_version
+    expect(await packVersion(nl.body.id)).toBe('nl-pack-2026.1')
+    expect(await packVersion(de.body.id)).toBe('de-pack-2026.1')
+  })
+
   it('a generated slug keeps the requested country through every retry', async () => {
     await asUserA(request(app).post('/api/tenants')
       .send({ band_name: 'Retry Band', country_code: 'fr' })).expect(201)

@@ -3,6 +3,9 @@
 // Consumed by the backend (enrolment validation, VAT-treatment resolution) and
 // the frontend (scheme dropdown) via the typed wrapper in src/utils/taxSchemes.ts.
 //
+// Not yet part of the versioned country pack; folding it in is one of the
+// expansions listed in shared/countryPack.js.
+//
 // Why a registry and not a boolean: ten country packs need their own national
 // exemptions, and the cross-border EU SME scheme is per-DESTINATION, so several
 // enrolments coexist. Which is why every entry declares a `scope`: only a

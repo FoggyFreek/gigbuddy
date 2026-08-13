@@ -269,10 +269,22 @@ export async function patchAccount(db, tenantId, id, body = {}) {
 
   const updates = {}
 
+  // A null name clears the override and restores the country default. It has to
+  // be handled before the trim below, which would read null as an empty name.
+  // Only seeded accounts have a default worth returning to.
   if ('name' in body) {
-    const name = typeof body.name === 'string' ? body.name.trim() : ''
-    if (!name) return { error: { status: 400, body: { error: 'name_required' } } }
-    updates.name = name
+    if (body.name === null) {
+      if (!existing.is_system) {
+        return { error: { status: 409, body: { error: 'not_system_account' } } }
+      }
+      updates.name = existing.default_name
+      updates.name_is_customized = false
+    } else {
+      const name = typeof body.name === 'string' ? body.name.trim() : ''
+      if (!name) return { error: { status: 400, body: { error: 'name_required' } } }
+      updates.name = name
+      updates.name_is_customized = true
+    }
   }
 
   if ('is_active' in body) {

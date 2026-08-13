@@ -296,7 +296,7 @@ describe('FinancialDashboardPage', () => {
     await screen.findByText(/resultaat in eur/i)
 
     const card = screen.getByText(/^btw$/i).closest('[data-card]')
-    expect(within(card).getByRole('link', { name: 'BTW afrekenen' })).toBeInTheDocument()
+    expect(within(card).getByRole('link', { name: 'Btw afrekenen' })).toBeInTheDocument()
   })
 
   it('shows the merch gross profit, margin, revenue share and inventory value', async () => {

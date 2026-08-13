@@ -18,7 +18,7 @@ describe('LoginPage', () => {
     expect(screen.getByRole('button', { name: 'Sign in with Google' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sign in with Microsoft' })).toBeInTheDocument()
     expect(container.firstChild).toHaveStyle({
-      backgroundImage: 'url(/backgrounds/bg_01_light.webp)',
+      backgroundImage: 'url(/backgrounds/bg_04_light.webp)',
       backgroundSize: 'cover',
       backgroundPosition: 'center',
     })

@@ -291,7 +291,7 @@
   },
   "chartOfAccounts": {
     "title": "Rekeningschema",
-    "description": "De rekeningen die worden gebruikt om financiële transacties te categoriseren. Voeg subrekeningen toe of deactiveer rekeningen die je niet nodig hebt.",
+    "description": "De rekeningen die worden gebruikt om financiële transacties te categoriseren. Hernoem ze, voeg subrekeningen toe of deactiveer rekeningen die je niet nodig hebt. Rekeningnummers wijzigen nooit.",
     "types": {
       "asset": "Activa",
       "liability": "Passiva",
@@ -307,13 +307,19 @@
     "addSubAccount": "Subrekening toevoegen",
     "activate": "Activeren",
     "deactivate": "Deactiveren",
+    "rename": "Rekeningnaam wijzigen",
+    "resetName": "Terugzetten naar de standaardnaam voor je land",
+    "actions": "Acties voor rekening",
     "inUse": "Rekening is in gebruik en kan niet worden gewijzigd.",
     "aria": {
+      "actions": "acties voor rekening",
       "setCapitalizable": "activeerbaar instellen",
       "unsetCapitalizable": "activeerbaar uitzetten",
       "addSubAccount": "subrekening toevoegen",
       "activate": "activeren",
       "deactivate": "deactiveren",
+      "rename": "rekeningnaam wijzigen",
+      "resetName": "naam terugzetten",
       "delete": "verwijderen"
     },
     "addDialog": {

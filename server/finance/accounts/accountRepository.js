@@ -197,10 +197,12 @@ export async function getAccountClassificationByCode(executor, tenantId, code) {
 export async function insertAccount(executor, tenantId, {
   code, name, type, parent_code, reporting_group, is_capitalizable = false,
 }) {
+  // A tenant-created account is its own default, so resetting it would be a
+  // no-op; the reset path refuses it on is_system anyway.
   const { rows } = await executor.query(
     `INSERT INTO chart_of_accounts (
-       tenant_id, code, name, type, parent_code, reporting_group, is_system, is_capitalizable
-     ) VALUES ($1, $2, $3, $4, $5, $6, false, $7) RETURNING *`,
+       tenant_id, code, name, default_name, type, parent_code, reporting_group, is_system, is_capitalizable
+     ) VALUES ($1, $2, $3, $3, $4, $5, $6, false, $7) RETURNING *`,
     [tenantId, code, name, type, parent_code, reporting_group, is_capitalizable],
   )
   return rows[0]
@@ -208,7 +210,8 @@ export async function insertAccount(executor, tenantId, {
 
 export async function getAccountById(executor, tenantId, id) {
   const { rows } = await executor.query(
-    'SELECT id, code, type FROM chart_of_accounts WHERE id = $1 AND tenant_id = $2',
+    `SELECT id, code, type, is_system, default_name
+       FROM chart_of_accounts WHERE id = $1 AND tenant_id = $2`,
     [id, tenantId],
   )
   return rows[0] || null
@@ -241,7 +244,8 @@ export async function isCodeReferencedInSettings(executor, tenantId, code) {
   return rows.length > 0
 }
 
-// `updates` keys are whitelisted by the service ('name' / 'is_active' only).
+// `updates` keys are whitelisted by the service — never taken from a request
+// body, so they are safe to interpolate as column names.
 export async function updateAccountFields(executor, tenantId, id, updates) {
   const setClauses = []
   const values = []
@@ -258,6 +262,20 @@ export async function updateAccountFields(executor, tenantId, id, updates) {
     values,
   )
   return rows[0] || null
+}
+
+// Re-labels one seeded account for a new accounting country. The visible name
+// moves only when the tenant never renamed it; default_name always follows the
+// new pack so a later reset lands on the right label.
+export async function redefaultSystemAccountName(executor, tenantId, code, name) {
+  await executor.query(
+    `UPDATE chart_of_accounts
+        SET name = CASE WHEN name_is_customized THEN name ELSE $3 END,
+            default_name = $3,
+            updated_at = NOW()
+      WHERE tenant_id = $1 AND code = $2 AND is_system = true`,
+    [tenantId, code, name],
+  )
 }
 
 export async function deleteAccount(executor, tenantId, id) {

@@ -33,6 +33,7 @@ import { useCrossTenantNavigate } from '../../planning/shared/useCrossTenantNavi
 import { useTenantKind } from '../../hooks/useTenantKind.ts'
 import { TENANT_CAPABILITIES } from '../../auth/tenantCapabilities.ts'
 import { useSetWideContent } from '../../contexts/contentWidthContext.ts'
+import { pickRandomBackground } from '../../utils/randomBackground.ts'
 import { useThemeMode } from '../../contexts/themeModeContext.ts'
 import type { ThemeMode } from '../../contexts/themeModeContext.ts'
 import { listAchievements } from '../../user/achievements/achievements.ts'
@@ -61,27 +62,9 @@ function logoSrc(logoPath: string | undefined | null) {
   return logoPath ? `/api/files/${logoPath}` : '/share/logo.png'
 }
 
-// Background images live in /public/backgrounds as bg_NN_<mode>.jpg, with a
-// separate set per theme mode. Bump the matching count when you add files.
-const BACKGROUND_COUNTS: Record<ThemeMode, number> = { light: 5, dark: 5 }
-
 // Matches AppShell's CONTENT_MAX_WIDTH: the background bleeds edge-to-edge but
 // the cards stay capped/centered at this width like every other page.
 const CONTENT_MAX_WIDTH = 1400
-
-// Pick a random background image (for the active theme mode) plus a random crop
-// position. `cover` scaling already adapts to the viewport (compact vs.
-// desktop); randomizing backgroundPosition picks a different slice when the
-// image overflows.
-function pickRandomBackground(mode: ThemeMode) {
-  const n = Math.floor(Math.random() * BACKGROUND_COUNTS[mode]) + 1
-  const x = Math.floor(Math.random() * 101)
-  const y = Math.floor(Math.random() * 101)
-  return {
-    image: `url(/backgrounds/bg_${String(n).padStart(2, '0')}_${mode}.webp)`,
-    position: `${x}% ${y}%`,
-  }
-}
 
 const GIG_STATUS_COLOR: Record<string, 'success' | 'info' | 'default'> = {
   confirmed: 'success',
@@ -387,7 +370,7 @@ export default function DashboardPage() {
                 task.gig_id ? `/gigs/${task.gig_id}?tab=tasks` : '/tasks',
               )}
               disableGutters
-              sx={{ borderRadius: 1, px: 1, gap: 1, alignItems: 'baseline' }}
+              sx={{ borderRadius: 1, px: 1, gap: 1, alignItems: 'baseline', ml: showTaskHeadings ? 1 : 0 }}
             >
               <ListItemText
                 primary={task.title}

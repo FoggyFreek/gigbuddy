@@ -1,6 +1,7 @@
 {
   "title": "Prestaties",
-  "summary": "{{earned}} / {{total}} cheers",
+  "summary": "{{earned}} / {{total}}",
+  "summaryAria": "{{earned}} van {{total}} cheers",
   "showAll": "Toon alles",
   "unlockedOn": "Behaald op {{date}}",
   "cheersAria_one": "{{count}} cheer",

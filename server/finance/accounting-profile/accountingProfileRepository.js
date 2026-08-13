@@ -22,9 +22,10 @@ export async function fetchAccountingProfile(executor, tenantId) {
 export async function insertAccountingProfile(executor, tenantId, profile) {
   const { rows } = await executor.query(
     `INSERT INTO tenant_accounting_profiles (
-       tenant_id, country_code, base_currency, default_vat_rate, legal_form, profile_source, profile_status
+       tenant_id, country_code, base_currency, default_vat_rate, legal_form, profile_source, profile_status,
+       pack_version
      )
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (tenant_id) DO NOTHING
      RETURNING *`,
     [
@@ -35,6 +36,7 @@ export async function insertAccountingProfile(executor, tenantId, profile) {
       profile.legal_form ?? null,
       profile.profile_source,
       profile.profile_status,
+      profile.pack_version ?? null,
     ],
   )
   return rows[0] || null
@@ -121,6 +123,7 @@ export async function resetProfileCountry(executor, tenantId, {
   countryCode,
   baseCurrency,
   defaultVatRate,
+  packVersion,
 }) {
   const { rows } = await executor.query(
     `UPDATE tenant_accounting_profiles
@@ -137,11 +140,11 @@ export async function resetProfileCountry(executor, tenantId, {
             profile_status = 'incomplete',
             reviewed_at = NULL,
             reviewed_by_user_id = NULL,
-            pack_version = NULL,
+            pack_version = $5,
             updated_at = NOW()
       WHERE tenant_id = $1
       RETURNING *`,
-    [tenantId, countryCode, baseCurrency, defaultVatRate],
+    [tenantId, countryCode, baseCurrency, defaultVatRate, packVersion ?? null],
   )
   return rows[0] || null
 }

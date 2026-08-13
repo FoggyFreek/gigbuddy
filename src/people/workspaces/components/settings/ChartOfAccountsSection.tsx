@@ -10,15 +10,24 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
 import IconButton from '@mui/material/IconButton'
+import ListItemIcon from '@mui/material/ListItemIcon'
+import ListItemText from '@mui/material/ListItemText'
+import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
+import CheckIcon from '@mui/icons-material/Check'
+import CloseIcon from '@mui/icons-material/Close'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
+import MoreVertIcon from '@mui/icons-material/MoreVert'
 import SavingsIcon from '@mui/icons-material/Savings'
 import SavingsOutlinedIcon from '@mui/icons-material/SavingsOutlined'
+import SettingsBackupRestoreIcon from '@mui/icons-material/SettingsBackupRestore'
 import ToggleOffIcon from '@mui/icons-material/ToggleOff'
 import ToggleOnIcon from '@mui/icons-material/ToggleOn'
 import { listAccounts, createAccount, updateAccount, deleteAccount } from '../../../../finance/accounts/accounts.ts'
@@ -48,6 +57,56 @@ function buildTree(accounts: Account[]): AccountNode[] {
   return roots
 }
 
+interface AccountNameEditorProps {
+  initialName: string
+  saving: boolean
+  onSave: (name: string) => void
+  onCancel: () => void
+}
+
+// Owns the draft for the row being edited. Mounted only while editing, so the
+// draft starts from the current name without deriving state across renders.
+function AccountNameEditor({ initialName, saving, onSave, onCancel }: Readonly<AccountNameEditorProps>) {
+  const { t } = useTranslation(['settings', 'common'])
+  const [draft, setDraft] = useState(initialName)
+
+  return (
+    <Stack direction="row" spacing={0.5} sx={{ flex: 1, alignItems: 'center' }}>
+      <TextField
+        autoFocus
+        size="small"
+        variant="standard"
+        fullWidth
+        label={t($ => $.chartOfAccounts.addDialog.nameLabel)}
+        value={draft}
+        disabled={saving}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); onSave(draft) }
+          if (e.key === 'Escape') { e.preventDefault(); onCancel() }
+        }}
+        slotProps={{ htmlInput: { maxLength: 120 } }}
+      />
+      <IconButton
+        size="small"
+        aria-label={t($ => $.actions.save, { ns: 'common' })}
+        disabled={saving || !draft.trim()}
+        onClick={() => onSave(draft)}
+      >
+        <CheckIcon fontSize="small" color="primary" />
+      </IconButton>
+      <IconButton
+        size="small"
+        aria-label={t($ => $.actions.cancel, { ns: 'common' })}
+        disabled={saving}
+        onClick={onCancel}
+      >
+        <CloseIcon fontSize="small" />
+      </IconButton>
+    </Stack>
+  )
+}
+
 interface AccountRowProps {
   account: AccountNode
   depth: number
@@ -55,11 +114,31 @@ interface AccountRowProps {
   onToggleActive: (account: AccountNode) => void
   onToggleCapitalizable: (account: AccountNode) => void
   onDelete: (account: AccountNode) => void
+  onStartEdit: (account: AccountNode) => void
+  onRename: (account: AccountNode, name: string) => void
+  onCancelEdit: () => void
+  onResetName: (account: AccountNode) => void
+  editingId?: Id | null
+  renameSaving?: boolean
   errorId?: Id | null
 }
 
-function AccountRow({ account, depth, onAddChild, onToggleActive, onToggleCapitalizable, onDelete, errorId }: Readonly<AccountRowProps>) {
+function AccountRow({
+  account, depth, onAddChild, onToggleActive, onToggleCapitalizable, onDelete,
+  onStartEdit, onRename, onCancelEdit, onResetName, editingId, renameSaving, errorId,
+}: Readonly<AccountRowProps>) {
   const { t } = useTranslation(['settings', 'common'])
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null)
+  const editing = editingId === account.id
+  // Only a seeded account has a country default to go back to, which is the
+  // same is_system gate the backend enforces.
+  const resettable = Boolean(account.is_system && account.name_is_customized)
+
+  const closeMenu = () => setMenuAnchor(null)
+  // Every item dismisses the menu before acting, so a dialog or the inline
+  // editor never opens behind it.
+  const runFromMenu = (action: () => void) => () => { closeMenu(); action() }
+
   return (
     <>
       <Stack
@@ -73,59 +152,89 @@ function AccountRow({ account, depth, onAddChild, onToggleActive, onToggleCapita
         >
           {account.code}
         </Typography>
-        <Typography variant="body2" sx={{ flex: 1 }}>
-          {account.name}
-        </Typography>
+        {editing ? (
+          <AccountNameEditor
+            initialName={account.name ?? ''}
+            saving={Boolean(renameSaving)}
+            onSave={(name) => onRename(account, name)}
+            onCancel={onCancelEdit}
+          />
+        ) : (
+          <Typography variant="body2" sx={{ flex: 1 }}>
+            {account.name}
+          </Typography>
+        )}
         {!account.is_active && (
           <Chip label={t($ => $.chartOfAccounts.inactive)} size="small" sx={{ mr: 1, fontSize: 11 }} />
         )}
         {account.is_capitalizable && (
           <Chip label={t($ => $.chartOfAccounts.capitalizable)} size="small" color="primary" variant="outlined" sx={{ mr: 1, fontSize: 11 }} />
         )}
-        {account.type === 'asset' && (
-          <Tooltip title={account.is_capitalizable
-            ? t($ => $.chartOfAccounts.unsetCapitalizable)
-            : t($ => $.chartOfAccounts.setCapitalizable)}
-          >
-            <IconButton
-              size="small"
-              aria-label={account.is_capitalizable ? t($ => $.chartOfAccounts.aria.unsetCapitalizable) : t($ => $.chartOfAccounts.aria.setCapitalizable)}
-              onClick={() => onToggleCapitalizable(account)}
+        {!editing && (
+          <>
+            <Tooltip title={t($ => $.chartOfAccounts.actions)}>
+              <IconButton
+                size="small"
+                aria-label={t($ => $.chartOfAccounts.aria.actions)}
+                onClick={(e) => setMenuAnchor(e.currentTarget)}
+              >
+                <MoreVertIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Menu
+              anchorEl={menuAnchor}
+              open={Boolean(menuAnchor)}
+              onClose={closeMenu}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
             >
-              {account.is_capitalizable
-                ? <SavingsIcon fontSize="small" color="primary" />
-                : <SavingsOutlinedIcon fontSize="small" />}
-            </IconButton>
-          </Tooltip>
+              <MenuItem onClick={runFromMenu(() => onStartEdit(account))}>
+                <ListItemIcon><EditOutlinedIcon fontSize="small" /></ListItemIcon>
+                <ListItemText>{t($ => $.chartOfAccounts.rename)}</ListItemText>
+              </MenuItem>
+              {resettable && (
+                <MenuItem onClick={runFromMenu(() => onResetName(account))}>
+                  <ListItemIcon><SettingsBackupRestoreIcon fontSize="small" /></ListItemIcon>
+                  <ListItemText>{t($ => $.chartOfAccounts.resetName)}</ListItemText>
+                </MenuItem>
+              )}
+              <MenuItem onClick={runFromMenu(() => onAddChild(account))}>
+                <ListItemIcon><AddIcon fontSize="small" /></ListItemIcon>
+                <ListItemText>{t($ => $.chartOfAccounts.addSubAccount)}</ListItemText>
+              </MenuItem>
+              {account.type === 'asset' && (
+                <MenuItem onClick={runFromMenu(() => onToggleCapitalizable(account))}>
+                  <ListItemIcon>
+                    {account.is_capitalizable
+                      ? <SavingsIcon fontSize="small" color="primary" />
+                      : <SavingsOutlinedIcon fontSize="small" />}
+                  </ListItemIcon>
+                  <ListItemText>
+                    {account.is_capitalizable
+                      ? t($ => $.chartOfAccounts.unsetCapitalizable)
+                      : t($ => $.chartOfAccounts.setCapitalizable)}
+                  </ListItemText>
+                </MenuItem>
+              )}
+              <MenuItem onClick={runFromMenu(() => onToggleActive(account))}>
+                <ListItemIcon>
+                  {account.is_active
+                    ? <ToggleOnIcon fontSize="small" color="primary" />
+                    : <ToggleOffIcon fontSize="small" />}
+                </ListItemIcon>
+                <ListItemText>
+                  {account.is_active
+                    ? t($ => $.chartOfAccounts.deactivate)
+                    : t($ => $.chartOfAccounts.activate)}
+                </ListItemText>
+              </MenuItem>
+              <MenuItem onClick={runFromMenu(() => onDelete(account))} sx={{ color: 'error.main' }}>
+                <ListItemIcon><DeleteOutlineIcon fontSize="small" color="error" /></ListItemIcon>
+                <ListItemText>{t($ => $.actions.delete, { ns: 'common' })}</ListItemText>
+              </MenuItem>
+            </Menu>
+          </>
         )}
-        <Tooltip title={t($ => $.chartOfAccounts.addSubAccount)}>
-          <IconButton
-            size="small"
-            aria-label={t($ => $.chartOfAccounts.aria.addSubAccount)}
-            onClick={() => onAddChild(account)}
-          >
-            <AddIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title={account.is_active ? t($ => $.chartOfAccounts.deactivate) : t($ => $.chartOfAccounts.activate)}>
-          <IconButton
-            size="small"
-            aria-label={account.is_active ? t($ => $.chartOfAccounts.aria.deactivate) : t($ => $.chartOfAccounts.aria.activate)}
-            onClick={() => onToggleActive(account)}
-          >
-            {account.is_active ? <ToggleOnIcon fontSize="small" color="primary" /> : <ToggleOffIcon fontSize="small" />}
-          </IconButton>
-        </Tooltip>
-        <Tooltip title={t($ => $.actions.delete, { ns: 'common' })}>
-          <IconButton
-            size="small"
-            aria-label={t($ => $.chartOfAccounts.aria.delete)}
-            color="error"
-            onClick={() => onDelete(account)}
-          >
-            <DeleteOutlineIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
       </Stack>
       {errorId === account.id && (
         <Typography variant="caption" color="error" sx={{ pl: depth * 3 + 1 }}>
@@ -141,6 +250,12 @@ function AccountRow({ account, depth, onAddChild, onToggleActive, onToggleCapita
           onToggleActive={onToggleActive}
           onToggleCapitalizable={onToggleCapitalizable}
           onDelete={onDelete}
+          onStartEdit={onStartEdit}
+          onRename={onRename}
+          onCancelEdit={onCancelEdit}
+          onResetName={onResetName}
+          editingId={editingId}
+          renameSaving={renameSaving}
           errorId={errorId}
         />
       ))}
@@ -158,6 +273,9 @@ export default function ChartOfAccountsSection() {
   const [addName, setAddName] = useState('')
   const [addSaving, setAddSaving] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
+
+  const [editingId, setEditingId] = useState<Id | null>(null)
+  const [renameSaving, setRenameSaving] = useState(false)
 
   const [deleteTarget, setDeleteTarget] = useState<AccountNode | null>(null)
   const [deleteConfirming, setDeleteConfirming] = useState(false)
@@ -197,6 +315,33 @@ export default function ChartOfAccountsSection() {
     } catch {
       // leave previous state
     }
+  }
+
+  // Sends the label only — the account code is its identity and never moves.
+  async function submitName(account: AccountNode, name: string | null) {
+    setRenameSaving(true)
+    setErrorId(null)
+    try {
+      await updateAccount(account.id, { name })
+      setEditingId(null)
+      reload()
+    } catch (err) {
+      if ((err as { status?: number }).status === 409) setErrorId(account.id!)
+      // Stay in edit mode so the draft isn't lost.
+    } finally {
+      setRenameSaving(false)
+    }
+  }
+
+  async function handleRename(account: AccountNode, name: string) {
+    const next = name.trim()
+    if (!next || next === account.name) { setEditingId(null); return }
+    await submitName(account, next)
+  }
+
+  function handleStartEdit(account: AccountNode) {
+    setErrorId(null)
+    setEditingId(account.id!)
   }
 
   function handleAddChild(parent: AccountNode) {
@@ -277,6 +422,12 @@ export default function ChartOfAccountsSection() {
                 onToggleActive={handleToggleActive}
                 onToggleCapitalizable={handleToggleCapitalizable}
                 onDelete={handleDeleteClick}
+                onStartEdit={handleStartEdit}
+                onRename={handleRename}
+                onCancelEdit={() => setEditingId(null)}
+                onResetName={(account) => submitName(account, null)}
+                editingId={editingId}
+                renameSaving={renameSaving}
                 errorId={errorId}
               />
             ))}

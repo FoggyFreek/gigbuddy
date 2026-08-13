@@ -291,7 +291,7 @@
   },
   "chartOfAccounts": {
     "title": "Chart of Accounts",
-    "description": "The accounts used to categorize financial transactions. Add sub-accounts or deactivate accounts you don't need.",
+    "description": "The accounts used to categorize financial transactions. Rename them, add sub-accounts, or deactivate accounts you don't need. Account codes never change.",
     "types": {
       "asset": "Assets",
       "liability": "Liabilities",
@@ -307,13 +307,19 @@
     "addSubAccount": "Add sub-account",
     "activate": "Activate",
     "deactivate": "Deactivate",
+    "rename": "Rename account",
+    "resetName": "Reset to the default name for your country",
+    "actions": "Account actions",
     "inUse": "Account is in use and cannot be modified.",
     "aria": {
+      "actions": "account actions",
       "setCapitalizable": "set capitalizable",
       "unsetCapitalizable": "unset capitalizable",
       "addSubAccount": "add sub-account",
       "activate": "activate",
       "deactivate": "deactivate",
+      "rename": "rename account",
+      "resetName": "reset name",
       "delete": "delete"
     },
     "addDialog": {

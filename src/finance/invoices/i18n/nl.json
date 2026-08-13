@@ -71,7 +71,7 @@
     "city": "Plaats",
     "country": "Land",
     "customerKvk": "KVK nr.",
-    "customerVatId": "BTW nr.",
+    "customerVatId": "Btw nr.",
     "addMemo": "Notitie toevoegen",
     "memo": "Notitie"
   },

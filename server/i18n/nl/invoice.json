@@ -8,7 +8,7 @@
   "paymentTerm_other": "Betaalvoorwaarden: binnen {{count}} dagen",
   "attnPrefix": "t.a.v.",
   "customerChamberOfCommerceNumber": "KVK nr.",
-  "customerVatId": "BTW nr.",
+  "customerVatId": "Btw nr.",
   "directors": "Bestuurder(s)",
   "colDescription": "Beschrijving",
   "colQuantity": "Aantal",

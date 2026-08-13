@@ -2,6 +2,7 @@ import {
   ACCOUNT_REPORTING_GROUPS,
   defaultReportingGroupForType,
 } from '../domain/accountReportingGroups.js'
+import { getDefaultAccountName } from '../domain/accountNamePacks.js'
 
 // Default chart of accounts for every new tenant.
 // ORDER IS SIGNIFICANT: parents must appear before their children (self-referential FK is IMMEDIATE).
@@ -96,16 +97,21 @@ const DEFAULT_SETTINGS = {
 // Seeds the chart of accounts + settings row for a single tenant.
 // client can be a pool or a transaction client (both expose .query).
 // Safe to call multiple times: uses ON CONFLICT DO NOTHING.
-export async function seedTenantAccounting(client, tenantId) {
+//
+// `countryCode` selects the label pack; an omitted or packless country keeps the
+// English base names above. A freshly seeded account is never customized, so
+// name and default_name start out identical.
+export async function seedTenantAccounting(client, tenantId, countryCode = null) {
   for (const acc of DEFAULT_ACCOUNTS) {
     const reportingGroup = acc.reporting_group ?? defaultReportingGroupForType(acc.type)
+    const name = getDefaultAccountName(countryCode, acc.code, acc.name)
     await client.query(
       `INSERT INTO chart_of_accounts (
-         tenant_id, code, name, type, parent_code, is_system, is_capitalizable, reporting_group
-       ) VALUES ($1, $2, $3, $4, $5, true, $6, $7)
+         tenant_id, code, name, default_name, type, parent_code, is_system, is_capitalizable, reporting_group
+       ) VALUES ($1, $2, $3, $3, $4, $5, true, $6, $7)
        ON CONFLICT (tenant_id, code) DO NOTHING`,
       [
-        tenantId, acc.code, acc.name, acc.type, acc.parent_code ?? null,
+        tenantId, acc.code, name, acc.type, acc.parent_code ?? null,
         acc.capitalizable ?? false, reportingGroup,
       ],
     )

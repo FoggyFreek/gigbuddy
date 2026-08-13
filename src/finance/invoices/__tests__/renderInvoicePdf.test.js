@@ -18,7 +18,7 @@ describe('renderInvoicePdf', () => {
     const text = await pdfText(buffer)
 
     expect(text).toContain('KVK nr.: 87654321')
-    expect(text).toContain('BTW nr.: NL819789471B01')
+    expect(text).toContain('Btw nr.: NL819789471B01')
   })
 
   it('uses the English Chamber of Commerce label on an English invoice', async () => {

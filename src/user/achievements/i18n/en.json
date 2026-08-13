@@ -1,6 +1,7 @@
 {
   "title": "Achievements",
-  "summary": "{{earned}} / {{total}} cheers",
+  "summary": "{{earned}} / {{total}}",
+  "summaryAria": "{{earned}} of {{total}} cheers",
   "showAll": "Show all",
   "unlockedOn": "Unlocked on {{date}}",
   "cheersAria_one": "{{count}} cheer",
