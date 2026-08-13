@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
@@ -138,6 +138,35 @@ describe('GigFormModal — create mode', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 
+  it('sends the next date for a 22:00 to 02:00 gig', async () => {
+    createGig.mockClear()
+    const user = userEvent.setup()
+    wrap(<GigFormModal mode="create" onClose={() => {}} />)
+
+    await user.type(screen.getByLabelText(/event description/i), 'Late show')
+    await user.type(screen.getByLabelText(/^date$/i), '2026-08-13')
+    const [startHours, startMinutes] = within(screen.getByRole('group', { name: /start time/i }))
+      .getAllByRole('spinbutton')
+    await user.click(startHours)
+    await user.keyboard('22')
+    await user.click(startMinutes)
+    await user.keyboard('00')
+    const [endHours, endMinutes] = within(screen.getByRole('group', { name: /end time/i }))
+      .getAllByRole('spinbutton')
+    await user.click(endHours)
+    await user.keyboard('02')
+    await user.click(endMinutes)
+    await user.keyboard('00')
+    await user.click(screen.getByRole('button', { name: /create/i }))
+
+    await waitFor(() => expect(createGig).toHaveBeenCalledWith(expect.objectContaining({
+      event_date: '2026-08-13',
+      end_date: '2026-08-14',
+      start_time: '22:00',
+      end_time: '02:00',
+    })))
+  })
+
   // Regression: my_band_id is personal-workspace-only. The server 403s if the
   // field is present at all outside one, so a band workspace must omit it —
   // sending it as null used to trip that gate on every gig creation.
@@ -175,8 +204,8 @@ describe('GigFormModal — create mode', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
-  // A personal workspace has no roster, and /api/availability is gated on the
-  // band_availability capability — asking would 403.
+  // A personal workspace's fixed profile member is not a band availability
+  // roster; /api/availability is gated on band_availability.
   it('skips the member availability panel in a personal workspace', async () => {
     getAvailabilityOn.mockClear()
     vi.useFakeTimers()

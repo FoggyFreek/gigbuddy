@@ -35,7 +35,7 @@ import {
   INVALID_BOUNDED_RANGE,
   MAX_RANGE_DAYS,
   parseDateRange,
-  validateDailyTimeRange,
+  validateTimeValues,
 } from '../../platform/http/requestValidators.js'
 
 const NOT_FOUND = notFound('Not found')
@@ -209,8 +209,11 @@ export async function evaluateEvent(db, tenantId, body, viewer = null) {
 
   const startTime = body?.start_time || null
   const endTime = body?.end_time || null
-  const timeError = validateDailyTimeRange(startTime, endTime)
+  const timeError = validateTimeValues(startTime, endTime)
   if (timeError) return badRequest(timeError)
+  if (range.from === range.to && startTime && endTime && endTime <= startTime) {
+    return badRequest('end_time must be after start_time')
+  }
 
   const eventId = body?.event_id == null ? null : Number(body.event_id)
   if (eventId !== null) {

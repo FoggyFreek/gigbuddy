@@ -16,18 +16,17 @@ import type { SvgIconComponent } from '@mui/icons-material'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import TuneIcon from '@mui/icons-material/Tune'
 import CreditCardOutlinedIcon from '@mui/icons-material/CreditCardOutlined'
-import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined'
+import PersonIcon  from '@mui/icons-material/Person'
 import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined'
 import PaletteOutlinedIcon from '@mui/icons-material/PaletteOutlined'
 import GroupIcon from '@mui/icons-material/Group'
-import VerifiedOutlinedIcon from '@mui/icons-material/VerifiedOutlined'
 import StorageIcon from '@mui/icons-material/Storage'
 import ExtensionOutlinedIcon from '@mui/icons-material/ExtensionOutlined'
 import AccountTreeOutlinedIcon from '@mui/icons-material/AccountTreeOutlined'
 import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined'
 import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined'
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined'
-import ManageAccountsIcon from '@mui/icons-material/ManageAccounts'
+import GroupsIcon from '@mui/icons-material/Groups'
 import { usePermissions } from '../../hooks/usePermissions.ts'
 import { useAuth } from '../../contexts/authContext.ts'
 import { PERMISSIONS, type Permission } from '../../auth/permissions.ts'
@@ -61,14 +60,14 @@ import { TENANT_CAPABILITIES, type TenantCapability } from '../../auth/tenantCap
 // when the active tenant role grants the matching permission.
 type SectionId =
   | 'preferences' | 'billing' | 'connected-accounts' | 'my-availability'
-  | 'accent' | 'members' | 'band-profile' | 'storage'
+  | 'accent' | 'members' | 'storage'
   | 'integrations' | 'chart-of-accounts' | 'default-accounts'
   | 'financial-profile' | 'accounting-profile' | 'delete-account'
 
 // camelCase leaf keys under settings.nav.items — a literal union so the typed
 // selector index (`t($ => $.nav.items[labelKey])`) stays compile-checked.
 type ItemLabelKey =
-  | 'preferences' | 'billing' | 'connectedAccounts' | 'myAvailability' | 'accent' | 'membersAndInvites' | 'bandProfile'
+  | 'preferences' | 'billing' | 'connectedAccounts' | 'myAvailability' | 'accent' | 'membersAndInvites'
   | 'storage' | 'integrations' | 'chartOfAccounts' | 'defaultAccounts'
   | 'financialProfile' | 'accountingProfile' | 'manageAccounts'
 
@@ -84,27 +83,18 @@ interface NavItemDef {
 
 const ACCOUNT_ITEMS: NavItemDef[] = [
   { id: 'preferences', labelKey: 'preferences', icon: TuneIcon },
-  { id: 'billing', labelKey: 'billing', icon: CreditCardOutlinedIcon },
-  { id: 'connected-accounts', labelKey: 'connectedAccounts', icon: LinkOutlinedIcon },
-  // Availability belongs to the user, not a tenant, so its privacy and
-  // delegation controls sit with the account items — never under a band.
   { id: 'my-availability', labelKey: 'myAvailability', icon: EventAvailableOutlinedIcon },
+  { id: 'connected-accounts', labelKey: 'connectedAccounts', icon: PersonIcon  },
+  { id: 'billing', labelKey: 'billing', icon: CreditCardOutlinedIcon },
 ]
 
 const BAND_ITEMS: NavItemDef[] = [
   { id: 'accent', labelKey: 'accent', icon: PaletteOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
-  // A workspace of one has no roster to manage and nobody to invite into it.
   { id: 'members', labelKey: 'membersAndInvites', icon: GroupIcon, permission: PERMISSIONS.MEMBERS_MANAGE, capability: TENANT_CAPABILITIES.BAND_MEMBERSHIP_ADMIN },
-  // Claiming the global profile musicians have been tagging events against.
-  // Band-only, and an administrative act — see docs/tenant-kind-architecture.md.
-  { id: 'band-profile', labelKey: 'bandProfile', icon: VerifiedOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE, capability: TENANT_CAPABILITIES.BAND_PROFILE_CLAIM },
   { id: 'storage', labelKey: 'storage', icon: StorageIcon, permission: PERMISSIONS.TENANT_MANAGE },
   { id: 'integrations', labelKey: 'integrations', icon: ExtensionOutlinedIcon, permission: PERMISSIONS.TENANT_MANAGE },
 ]
 
-// Uniformly gated on finance.manage to match the APIs behind them (both
-// /accounts and /accounting-profile mutate under that permission), so a
-// financial_admin reaches exactly the records they are allowed to change.
 const FINANCE_ITEMS: NavItemDef[] = [
   { id: 'financial-profile', labelKey: 'financialProfile', icon: BadgeOutlinedIcon, permission: PERMISSIONS.FINANCE_MANAGE },
   { id: 'accounting-profile', labelKey: 'accountingProfile', icon: GavelOutlinedIcon, permission: PERMISSIONS.FINANCE_MANAGE },
@@ -113,7 +103,7 @@ const FINANCE_ITEMS: NavItemDef[] = [
 ]
 
 const MANAGE_ACCOUNT_ITEMS: NavItemDef[] = [
-  { id: 'delete-account', labelKey: 'manageAccounts', icon: ManageAccountsIcon },
+  { id: 'delete-account', labelKey: 'manageAccounts', icon: GroupsIcon },
 ]
 
 export default function SettingsPage() {
@@ -169,8 +159,6 @@ export default function SettingsPage() {
         )
       case 'storage':
         return <StorageUsageSection />
-      case 'band-profile':
-        return <BandProfileClaimSection />
       case 'integrations':
         return <IntegrationsSection />
       case 'financial-profile':
@@ -184,6 +172,7 @@ export default function SettingsPage() {
       case 'delete-account':
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {supports(TENANT_CAPABILITIES.BAND_PROFILE_CLAIM) && <BandProfileClaimSection />}
             <TenantSlugSection key={String(user?.activeTenantId ?? '')} />
             <TenantDeletionSection />
           </Box>

@@ -356,41 +356,55 @@ describe('DELETE /api/my-bands/:id', () => {
   })
 })
 
-describe('terminal deletion', () => {
+// A global profile is a directory entry, not a possession: it outlives every
+// holder so the next musician to join finds the band already described.
+describe('profile persistence', () => {
   const profileCount = async () => {
     const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM band_profiles')
     return rows[0].n
   }
 
-  it('deletes the profile when the last holder lets go', async () => {
+  it('keeps the profile when the last holder lets go', async () => {
     const band = await addFor(asA)
     const profileId = band.bandProfile.id
     await pool.query('INSERT INTO my_bands (tenant_id, band_profile_id) VALUES ($1, $2)', [personalB.id, profileId])
 
-    const first = await asA(request(app).delete(`/api/my-bands/${band.id}`)).expect(200)
-    expect(first.body.profileDeleted).toBe(false)
+    await asA(request(app).delete(`/api/my-bands/${band.id}`)).expect(200)
     expect(await profileCount()).toBe(1)
 
     const { rows: [other] } = await pool.query('SELECT id FROM my_bands WHERE tenant_id = $1', [personalB.id])
-    const second = await asB(request(app).delete(`/api/my-bands/${other.id}`)).expect(200)
+    await asB(request(app).delete(`/api/my-bands/${other.id}`)).expect(200)
 
-    expect(second.body.profileDeleted).toBe(true)
-    expect(await profileCount()).toBe(0)
+    expect(await profileCount()).toBe(1)
+  })
+
+  // Holderless is not orphaned: the row stays searchable, so a later arrival
+  // adds the existing band rather than minting a duplicate.
+  it('leaves a holderless profile searchable and addable again', async () => {
+    const band = await addFor(asA)
+    const profileId = band.bandProfile.id
+    await asA(request(app).delete(`/api/my-bands/${band.id}`)).expect(200)
+
+    const found = await asB(
+      request(app).get(`/api/band-profiles/search?q=${encodeURIComponent(band.bandProfile.name)}`),
+    ).expect(200)
+    expect(found.body.items.map((item) => item.id)).toContain(profileId)
+
+    const readded = await asB(addBand({ bandProfileId: profileId })).expect(201)
+    expect(readded.body.bandProfile.id).toBe(profileId)
+    expect(await profileCount()).toBe(1)
   })
 
   it('keeps a profile whose claim is still pending', async () => {
     const band = await addFor(asA)
     await insertPendingClaim(pool, band.bandProfile.id, seed.tenantB.id, seed.userB.id)
 
-    const res = await asA(request(app).delete(`/api/my-bands/${band.id}`)).expect(200)
+    await asA(request(app).delete(`/api/my-bands/${band.id}`)).expect(200)
 
-    expect(res.body.profileDeleted).toBe(false)
     expect(await profileCount()).toBe(1)
   })
 
-  // The foreign keys drop these rows without running any service code, so
-  // without an explicit sweep the profile would survive with nobody holding it.
-  it('sweeps a profile stranded by deleting the last holder\'s workspace', async () => {
+  it('keeps a profile when the last holder\'s workspace is deleted', async () => {
     await addFor(asA)
     await pool.query('UPDATE tenants SET archived_at = NOW() WHERE id = $1', [personalA.id])
 
@@ -402,7 +416,9 @@ describe('terminal deletion', () => {
       .expect(204)
 
     expect(deleteTenantObjects).toHaveBeenCalledWith(personalA.id, [])
-    expect(await profileCount()).toBe(0)
+    expect(await profileCount()).toBe(1)
+    const { rowCount } = await pool.query('SELECT 1 FROM my_bands WHERE tenant_id = $1', [personalA.id])
+    expect(rowCount).toBe(0)
   })
 
   it('keeps a profile another workspace still holds', async () => {
@@ -422,7 +438,9 @@ describe('terminal deletion', () => {
     expect(await profileCount()).toBe(1)
   })
 
-  it('sweeps a profile stranded by deleting its sole pending claimant', async () => {
+  // A band tenant holds no my_bands rows, but its claim cascades away with it.
+  // That releases the profile back to claimable; it does not remove it.
+  it('releases but keeps a profile whose sole pending claimant is deleted', async () => {
     const profile = await insertProfile(pool, { createdBy: seed.userA.id })
     await insertPendingClaim(pool, profile.id, seed.tenantB.id, seed.userB.id)
     await pool.query('UPDATE tenants SET archived_at = NOW() WHERE id = $1', [seed.tenantB.id])
@@ -438,6 +456,9 @@ describe('terminal deletion', () => {
       seed.tenantB.id,
       expect.arrayContaining([`tenants/${seed.tenantB.id}/share/beta.jpg`]),
     )
-    expect(await profileCount()).toBe(0)
+    expect(await profileCount()).toBe(1)
+
+    const res = await asA(request(app).get(`/api/band-profiles/${profile.id}`)).expect(200)
+    expect(res.body.status).toBe('claimable')
   })
 })

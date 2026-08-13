@@ -25,6 +25,7 @@ import ProfileSocialsTab from './components/ProfileSocialsTab.tsx'
 import ProfileLinksTab from './components/ProfileLinksTab.tsx'
 import SaveStatusLabel from '../../components/SaveStatusLabel.tsx'
 import LinkpageEditButton from './components/LinkpageEditButton.tsx'
+import ArtistRolesCard from './components/ArtistRolesCard.tsx'
 import type { Id } from '../../types/entities.ts'
 import { usePermissions } from '../../hooks/usePermissions.ts'
 import PlanningReadOnlyAlert from '../../components/PlanningReadOnlyAlert.tsx'
@@ -42,7 +43,7 @@ export default function ProfilePage() {
   const { t } = useTranslation('profile')
   const { user } = useAuth()
   const { canWritePlanning } = usePermissions()
-  const { supports } = useTenantKind()
+  const { isPersonal, supports } = useTenantKind()
   const hasBandRoster = supports(TENANT_CAPABILITIES.BAND_ROSTER)
   const hasLinkpage = supports(TENANT_CAPABILITIES.BAND_LINKPAGE)
   const isAdmin = user?.isSuperAdmin || user?.activeTenantRole === 'tenant_admin'
@@ -192,6 +193,11 @@ export default function ProfilePage() {
         {hasBandRoster && (
           <Grid size={{ xs: 12, lg: 4 }}>
             <BandMembersSection />
+          </Grid>
+        )}
+        {isPersonal && (
+          <Grid size={{ xs: 12, lg: 4 }}>
+            <ArtistRolesCard canWrite={canWritePlanning} />
           </Grid>
         )}
       </Grid>

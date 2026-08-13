@@ -52,6 +52,7 @@ export default function RehearsalParticipantsSection({
   const statusKey = isPlanned ? 'planned' : 'option'
   const availability = useEventAvailability({
     eventDate: showAvailability ? rehearsal.proposed_date : undefined,
+    endDate: rehearsal.end_date ?? undefined,
     eventType: 'rehearsal',
     eventId: rehearsal.id,
     startTime: rehearsal.start_time,

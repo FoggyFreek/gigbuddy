@@ -32,11 +32,13 @@ import MyBandSelect from '../../../people/my-bands/components/MyBandSelect.tsx'
 import RehearsalFields from './RehearsalFields.tsx'
 import RehearsalParticipantsSection from './RehearsalParticipantsSection.tsx'
 import SaveStatusLabel from '../../../components/SaveStatusLabel.tsx'
+import { resolveEventEndDate } from '../../../../shared/eventTimes.js'
 
 const REQUIRED_FIELDS = ['proposed_date']
 
 interface RehearsalForm {
   proposed_date: string
+  end_date: string
   start_time: string
   end_time: string
   location: string
@@ -47,6 +49,7 @@ interface RehearsalForm {
 
 const EMPTY_FORM: RehearsalForm = {
   proposed_date: '',
+  end_date: '',
   start_time: '',
   end_time: '',
   location: '',
@@ -64,8 +67,8 @@ interface RehearsalFormModalProps {
 export default function RehearsalFormModal({ mode, rehearsalId, onClose, initialDate }: Readonly<RehearsalFormModalProps>) {
   const { t } = useTranslation(['rehearsals', 'common'])
   const supportsMyBand = useTenantKind().supports(TENANT_CAPABILITIES.MY_BANDS)
-  // A personal workspace has no roster, and /api/availability is gated on the
-  // band_availability capability — asking there would 403.
+  // A personal workspace's fixed artist member is not a band availability
+  // roster; /api/availability is gated on band_availability.
   const showAvailability = useTenantKind().supports(TENANT_CAPABILITIES.BAND_AVAILABILITY)
   const [form, setForm] = useState<RehearsalForm>(() =>
     mode === 'create' && initialDate ? { ...EMPTY_FORM, proposed_date: initialDate } : EMPTY_FORM,
@@ -94,6 +97,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
     setRehearsal(r)
     setForm({
       proposed_date: toDateInput(r.proposed_date),
+      end_date: toDateInput(r.end_date),
       start_time: toTimeInput((r as Record<string, unknown>).start_time as string),
       end_time: toTimeInput((r as Record<string, unknown>).end_time as string),
       location: r.location || '',
@@ -109,6 +113,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
         setRehearsal(r)
         setForm({
           proposed_date: toDateInput(r.proposed_date),
+          end_date: toDateInput(r.end_date),
           start_time: toTimeInput((r as Record<string, unknown>).start_time as string),
           end_time: toTimeInput((r as Record<string, unknown>).end_time as string),
           location: r.location || '',
@@ -120,17 +125,34 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
   }, [mode, rehearsalId])
 
   function handleChange(field: string, value: string | null) {
-    setForm((prev) => ({ ...prev, [field]: value ?? '' }))
-    setErrors((prev) => ({ ...prev, [field]: undefined }))
+    const updates: Partial<RehearsalForm> = { [field]: value ?? '' }
+    const candidate = { ...form, ...updates }
+    if (['proposed_date', 'start_time', 'end_time'].includes(field)) {
+      updates.end_date = resolveEventEndDate(
+        candidate.proposed_date,
+        candidate.proposed_date,
+        candidate.start_time,
+        candidate.end_time,
+      ) || ''
+    }
+    const nextForm = { ...form, ...updates }
+    setForm(nextForm)
+    setErrors((prev) => Object.keys(updates).reduce(
+      (next, key) => ({ ...next, [key]: undefined }),
+      prev,
+    ))
     if (mode === 'edit') {
-      if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
-      schedule({ [field]: value || null })
+      if (hasRequiredErrors(nextForm, REQUIRED_FIELDS)) return
+      schedule(Object.fromEntries(
+        Object.entries(updates).map(([key, update]) => [key, update || null]),
+      ))
     }
   }
 
   async function doCreate() {
     await (createRehearsal as unknown as (body: Record<string, unknown>) => Promise<unknown>)({
       proposed_date: form.proposed_date,
+      end_date: form.end_date || form.proposed_date || null,
       start_time: form.start_time || null,
       end_time: form.end_time || null,
       location: form.location || null,
@@ -265,6 +287,7 @@ export default function RehearsalFormModal({ mode, rehearsalId, onClose, initial
                 </Typography>
                 <BandAvailabilityPanel
                   eventDate={form.proposed_date}
+                  endDate={form.end_date || form.proposed_date}
                   eventType="rehearsal"
                   startTime={form.start_time}
                   endTime={form.end_time}

@@ -85,7 +85,7 @@ describe('BandEventAvailabilitySection', () => {
     const onRemoveMember = vi.fn()
     wrap(
       <BandEventAvailabilitySection
-        members={MEMBERS.slice(0, 1)}
+        members={MEMBERS}
         days={SPAN_DAYS}
         candidateMembers={[{ id: 3, name: 'Sam Kerr', position: 'optional' }]}
         canWrite

@@ -163,7 +163,10 @@ describe('what a profile payload may disclose', () => {
     let res = await asUserA(request(app).get(`/api/band-profiles/${profile.id}`)).expect(200)
     expect(res.body.claimedTenant).toBeNull()
 
-    await pool.query(`UPDATE tenants SET archived_at = NULL, kind = 'personal' WHERE id = $1`, [seed.tenantB.id])
+    await pool.query(
+      `UPDATE tenants SET archived_at = NULL, kind = 'personal', owner_user_id = $2 WHERE id = $1`,
+      [seed.tenantB.id, seed.userB.id],
+    )
     res = await asUserA(request(app).get(`/api/band-profiles/${profile.id}`)).expect(200)
     expect(res.body.claimedTenant).toBeNull()
   })

@@ -21,6 +21,7 @@ import MyBandSelect from '../../../people/my-bands/components/MyBandSelect.tsx'
 import BandAvailabilityPanel, { type AvailabilityData } from '../../availability/components/BandAvailabilityPanel.tsx'
 import SaveStatusLabel from '../../../components/SaveStatusLabel.tsx'
 import type { Id, BandEvent } from '../../../types/entities.ts'
+import { resolveEventEndDate } from '../../../../shared/eventTimes.js'
 
 type BandEventDetail = BandEvent & { start_time?: string; end_time?: string; notes?: string }
 
@@ -46,8 +47,8 @@ const EMPTY_FORM = {
 
 export default function BandEventFormModal({ mode, bandEventId, onClose, initialDate }: Readonly<BandEventFormModalProps>) {
   const { t } = useTranslation(['bandEvents', 'common'])
-  // A personal workspace has no roster, and /api/availability is gated on the
-  // band_availability capability — asking there would 403.
+  // A personal workspace's fixed artist member is not a band availability
+  // roster; /api/availability is gated on band_availability.
   const showAvailability = useTenantKind().supports(TENANT_CAPABILITIES.BAND_AVAILABILITY)
   const supportsMyBand = useTenantKind().supports(TENANT_CAPABILITIES.MY_BANDS)
   const [form, setForm] = useState(() =>
@@ -86,11 +87,28 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
   }, [mode, bandEventId])
 
   function handleChange(field: string, value: string | boolean | null) {
-    setForm((prev) => ({ ...prev, [field]: value }))
-    setErrors((prev) => ({ ...prev, [field]: undefined }))
+    const updates: Record<string, string | boolean | null> = { [field]: value }
+    const candidate = { ...form, ...updates }
+    const effectiveEndDate = candidate.end_date || candidate.start_date
+    const resolvedEndDate = resolveEventEndDate(
+      candidate.start_date,
+      effectiveEndDate,
+      candidate.start_time,
+      candidate.end_time,
+    )
+    if (resolvedEndDate !== effectiveEndDate) updates.end_date = resolvedEndDate
+
+    const nextForm = { ...form, ...updates }
+    setForm(nextForm)
+    setErrors((prev) => Object.keys(updates).reduce(
+      (next, key) => ({ ...next, [key]: undefined }),
+      prev,
+    ))
     if (mode === 'edit') {
-      if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
-      schedule({ [field]: value || null } as Partial<BandEventDetail>)
+      if (hasRequiredErrors(nextForm, REQUIRED_FIELDS)) return
+      schedule(Object.fromEntries(
+        Object.entries(updates).map(([key, update]) => [key, update || null]),
+      ) as Partial<BandEventDetail>)
     }
   }
 
@@ -152,7 +170,7 @@ export default function BandEventFormModal({ mode, bandEventId, onClose, initial
                 onChange={(id) => handleChange('my_band_id', id === null ? null : String(id))}
               />
             </Grid>
-            {mode === 'create' && showAvailability && form.start_date && (
+            {mode === 'create' && showAvailability && (
               <Grid size={12}>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>

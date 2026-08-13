@@ -42,11 +42,12 @@ import {
   listGigMapData as listGigMapRows,
   listGigTasks,
   listGigAttachments,
-  getLeadMemberIds,
   insertGigForImport,
   insertGigWithRelations,
   insertGigParticipant,
   deleteGigParticipant,
+  lockGigForParticipantRemoval,
+  getGigParticipantRemovalState,
   updateParticipantVote,
   lockGigOptionResponseState,
   getGigParticipantResponseState,
@@ -76,11 +77,16 @@ import {
   deleteGigEquipment,
   insertGigEquipment,
 } from './gigRepository.js'
-import { bandMemberExistsInTenant } from '../../people/roster/bandMemberRepository.js'
+import {
+  bandMemberExistsInTenant,
+  listLeadMemberIds,
+} from '../../people/roster/bandMemberRepository.js'
 import { getTaskById } from '../tasks/taskRepository.js'
-import { INVALID_CURSOR, INVALID_TODAY, MAX_RANGE_DAYS, parseLocalDate, parseListCursor, validateDailyTimeRange } from '../../platform/http/requestValidators.js'
+import { INVALID_CURSOR, INVALID_TODAY, MAX_RANGE_DAYS, parseLocalDate, parseListCursor } from '../../platform/http/requestValidators.js'
 import { badRequest, notFound } from '../../platform/http/serviceErrors.js'
 import { assertMyBandWritable } from '../../people/my-bands/myBandService.js'
+import { LAST_PARTICIPANT } from '../shared/participantErrors.js'
+import { normalizeSingleDayEventTiming } from '../shared/eventTiming.js'
 import {
   limitedCollectionWithCursor,
   limitedCollectionWithTotal,
@@ -200,7 +206,10 @@ export async function listGigs(db, tenantId) {
 export async function enrichGigsWithAvailability(db, tenantId, gigs, viewer = null, shared = null) {
   if (!gigs.length) return []
 
-  const dates = gigs.map((g) => toDateStr(g.event_date)).filter(Boolean)
+  const dates = gigs.flatMap((gig) => [
+    toDateStr(gig.event_date),
+    toDateStr(gig.end_date) ?? toDateStr(gig.event_date),
+  ]).filter(Boolean)
   if (!dates.length) return gigs.map((gig) => ({ ...gig, members_availability: [] }))
   const minDate = dates.reduce((a, b) => (a < b ? a : b))
   const maxDate = dates.reduce((a, b) => (a > b ? a : b))
@@ -216,11 +225,12 @@ export async function enrichGigsWithAvailability(db, tenantId, gigs, viewer = nu
   return gigs.map((gig) => {
     const dateStr = toDateStr(gig.event_date)
     if (!dateStr) return { ...gig, members_availability: [] }
+    const endDateStr = toDateStr(gig.end_date) ?? dateStr
     const selected = new Set((participantsByGig.get(gig.id) ?? []).map((participant) => participant.band_member_id))
     const participants = matrix.members.filter((member) => selected.has(member.id))
-    const { members } = summarizeSpan(withMembers(prepared, participants), dateStr, dateStr, {
+    const { members } = summarizeSpan(withMembers(prepared, participants), dateStr, endDateStr, {
       start_date: dateStr,
-      end_date: dateStr,
+      end_date: endDateStr,
       start_time: gig.start_time,
       end_time: gig.end_time,
       exclude: { type: 'gig', id: gig.id },
@@ -327,7 +337,7 @@ export async function importGigs(tenantId, userId, body) {
   }
 
   return withTransaction(async (client) => {
-    const leadIds = await getLeadMemberIds(client, tenantId)
+    const leadIds = await listLeadMemberIds(client, tenantId)
 
     let created = 0
     let skipped = 0
@@ -361,14 +371,16 @@ export async function importGigs(tenantId, userId, body) {
 // Creates a gig plus its initial lead-member participants in one transaction.
 // The caller fires the created notification. Returns { error } | { gig }.
 export async function createGig(tenantId, userId, body) {
-  const { event_date, event_description, start_time, end_time, status } = body
+  const { event_date, event_description } = body
   if (!event_date || !event_description) {
     return { error: { status: 400, body: { error: 'event_date and event_description are required' } } }
   }
-  const timeError = validateDailyTimeRange(start_time, end_time)
-  if (timeError) return badRequest(timeError)
-  const refs = normalizeGigVenueRefs(body)
+  const timing = normalizeSingleDayEventTiming(body, null, 'event_date')
+  if (timing.error) return badRequest(timing.error)
+  const refs = normalizeGigVenueRefs(timing.body)
   if (refs.error) return { error: { status: 400, body: { error: refs.error } } }
+  const normalizedBody = refs.body
+  const { start_time, end_time, status } = normalizedBody
   const venueId = refs.body.venue_id ?? null
   const festivalId = refs.body.festival_id ?? null
   const finalStatus = VALID_STATUSES.includes(status) ? status : 'option'
@@ -382,16 +394,16 @@ export async function createGig(tenantId, userId, body) {
     }
     // Holds the My Bands row for the rest of this transaction, so a concurrent
     // removal cannot turn this insert into a foreign-key violation.
-    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    const bandCheck = await assertMyBandWritable(client, tenantId, normalizedBody.my_band_id)
     if (bandCheck) abortTransaction(bandCheck)
 
     const gig = await insertGigWithRelations(client, tenantId, {
-      event_date, event_description, venueId, festivalId,
+      event_date, end_date: normalizedBody.end_date, event_description, venueId, festivalId,
       start_time: start_time || null, end_time: end_time || null, status: finalStatus,
-      myBandId: body.my_band_id ?? null,
+      myBandId: normalizedBody.my_band_id ?? null,
     })
 
-    const leadIds = await getLeadMemberIds(client, tenantId)
+    const leadIds = await listLeadMemberIds(client, tenantId)
     for (const memberId of leadIds) {
       await insertGigParticipant(client, tenantId, gig.id, memberId, userId)
     }
@@ -406,16 +418,14 @@ export async function createGig(tenantId, userId, body) {
 export async function patchGig(db, tenantId, gigId, body) {
   const refs = normalizeGigVenueRefs(body)
   if (refs.error) return { error: { status: 400, body: { error: refs.error } } }
-  const normalizedBody = refs.body
+  let normalizedBody = refs.body
 
-  if ('start_time' in normalizedBody || 'end_time' in normalizedBody) {
+  if (['event_date', 'end_date', 'start_time', 'end_time'].some((field) => field in normalizedBody)) {
     const current = await fetchGigWithRelations(db, gigId, tenantId)
     if (!current) return NOT_FOUND
-    const timeError = validateDailyTimeRange(
-      'start_time' in normalizedBody ? normalizedBody.start_time : current.start_time,
-      'end_time' in normalizedBody ? normalizedBody.end_time : current.end_time,
-    )
-    if (timeError) return badRequest(timeError)
+    const timing = normalizeSingleDayEventTiming(normalizedBody, current, 'event_date')
+    if (timing.error) return badRequest(timing.error)
+    normalizedBody = timing.body
   }
 
   const venueCheck = await validateVenueAndFestivalForTenant(db, normalizedBody, tenantId)
@@ -428,7 +438,7 @@ export async function patchGig(db, tenantId, gigId, body) {
   // In a transaction so the My Bands row stays locked from validation through
   // the write; the check is a no-op when the body doesn't mention the link.
   const result = await withTransaction(async (client) => {
-    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    const bandCheck = await assertMyBandWritable(client, tenantId, normalizedBody.my_band_id)
     if (bandCheck) abortTransaction(bandCheck)
 
     const gig = await updateGigFields(client, tenantId, gigId, built.fields, built.values)
@@ -557,10 +567,15 @@ export async function addParticipant(db, tenantId, userId, gigId, memberId) {
 }
 
 export async function removeParticipant(db, tenantId, gigId, memberId) {
-  const removed = await deleteGigParticipant(db, gigId, memberId, tenantId)
-  if (!removed) return NOT_FOUND
-  await touchGig(db, gigId, tenantId)
-  return {}
+  return withTransaction(async (client) => {
+    if (!(await lockGigForParticipantRemoval(client, gigId, tenantId))) abortTransaction(NOT_FOUND)
+    const state = await getGigParticipantRemovalState(client, gigId, memberId, tenantId)
+    if (!state.target_exists) abortTransaction(NOT_FOUND)
+    if (state.participant_count <= 1) abortTransaction(LAST_PARTICIPANT)
+    if (!(await deleteGigParticipant(client, gigId, memberId, tenantId))) abortTransaction(NOT_FOUND)
+    await touchGig(client, gigId, tenantId)
+    return {}
+  }, { db })
 }
 
 export async function setParticipantVote(db, tenantId, userId, gigId, memberId, body) {

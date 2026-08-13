@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
@@ -123,6 +123,34 @@ describe('RehearsalFormModal — create mode', () => {
       })
     )
     await waitFor(() => expect(onClose).toHaveBeenCalled())
+  })
+
+  it('sends the next date for a 22:00 to 02:00 rehearsal', async () => {
+    const user = userEvent.setup()
+    wrap(<RehearsalFormModal mode="create" onClose={() => {}} />)
+    await waitFor(() => screen.getByText(/Sam/))
+
+    await user.type(screen.getByLabelText(/^date\s*\*?$/i), '2026-08-13')
+    const [startHours, startMinutes] = within(screen.getByRole('group', { name: /start time/i }))
+      .getAllByRole('spinbutton')
+    await user.click(startHours)
+    await user.keyboard('22')
+    await user.click(startMinutes)
+    await user.keyboard('00')
+    const [endHours, endMinutes] = within(screen.getByRole('group', { name: /end time/i }))
+      .getAllByRole('spinbutton')
+    await user.click(endHours)
+    await user.keyboard('02')
+    await user.click(endMinutes)
+    await user.keyboard('00')
+    await user.click(screen.getByRole('button', { name: /propose/i }))
+
+    await waitFor(() => expect(createRehearsal).toHaveBeenCalledWith(expect.objectContaining({
+      proposed_date: '2026-08-13',
+      end_date: '2026-08-14',
+      start_time: '22:00',
+      end_time: '02:00',
+    })))
   })
 
   // Regression: my_band_id is personal-workspace-only. The server 403s if the

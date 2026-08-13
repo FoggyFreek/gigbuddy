@@ -162,10 +162,6 @@ describe('reading and withdrawing', () => {
   })
 
   it('withdrawing frees the profile for someone else', async () => {
-    // The profile needs a holder to survive the withdrawal: a claim is the only
-    // other thing keeping a holderless profile alive.
-    const personal = await makePersonalTenant()
-    await pool.query('INSERT INTO my_bands (tenant_id, band_profile_id) VALUES ($1, $2)', [personal.id, profile.id])
     const created = await asA(claim({ bandProfileId: profile.id })).expect(201)
 
     await asA(request(app).delete(`/api/band-profile-claims/${created.body.id}`)).expect(204)
@@ -173,19 +169,9 @@ describe('reading and withdrawing', () => {
     await asB(claim({ bandProfileId: profile.id })).expect(201)
   })
 
-  it('withdrawing a holderless profile\'s only claim deletes the profile', async () => {
+  // Withdrawal releases the profile; it never removes it, holders or none.
+  it('keeps a holderless profile after its only claim is withdrawn', async () => {
     const created = await asA(claim({ bandProfileId: profile.id })).expect(201)
-
-    await asA(request(app).delete(`/api/band-profile-claims/${created.body.id}`)).expect(204)
-
-    const { rowCount } = await pool.query('SELECT 1 FROM band_profiles WHERE id = $1', [profile.id])
-    expect(rowCount).toBe(0)
-  })
-
-  it('keeps a profile someone still holds', async () => {
-    const created = await asA(claim({ bandProfileId: profile.id })).expect(201)
-    const personal = await makePersonalTenant()
-    await pool.query('INSERT INTO my_bands (tenant_id, band_profile_id) VALUES ($1, $2)', [personal.id, profile.id])
 
     await asA(request(app).delete(`/api/band-profile-claims/${created.body.id}`)).expect(204)
 

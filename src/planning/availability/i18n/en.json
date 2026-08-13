@@ -36,7 +36,8 @@
     "gigFallback": "Gig",
     "rehearsalTooltip": "Rehearsal — {{status}}",
     "rehearsalAbbrev": "Reh {{yes}}/{{total}}",
-    "votesYes": "{{yes}}/{{total}} yes"
+    "votesYes": "{{yes}}/{{total}} yes",
+    "awaitingDate": "Availability is shown as soon as you select a date."
   },
   "exportDialog": {
     "title": "Export calendar",

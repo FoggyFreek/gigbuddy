@@ -168,6 +168,25 @@ export async function deleteBandEventParticipant(executor, tenantId, eventId, me
   return rowCount > 0
 }
 
+export async function lockBandEventForParticipantRemoval(executor, tenantId, eventId) {
+  const { rowCount } = await executor.query(
+    'SELECT 1 FROM band_events WHERE tenant_id = $1 AND id = $2 FOR UPDATE',
+    [tenantId, eventId],
+  )
+  return rowCount > 0
+}
+
+export async function getBandEventParticipantRemovalState(executor, tenantId, eventId, memberId) {
+  const { rows } = await executor.query(
+    `SELECT COUNT(*)::int AS participant_count,
+            COALESCE(BOOL_OR(band_member_id = $3), FALSE) AS target_exists
+       FROM band_event_participants
+      WHERE tenant_id = $1 AND band_event_id = $2`,
+    [tenantId, eventId, memberId],
+  )
+  return rows[0]
+}
+
 export async function updateBandEventFields(executor, tenantId, eventId, fields, values) {
   const assignments = [...fields, 'updated_at = NOW()']
   const whereIdx = values.length + 1

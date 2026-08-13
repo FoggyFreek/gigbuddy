@@ -87,7 +87,7 @@ async function addUserSlot(userId, start, end, status, reason = null) {
   )
 }
 
-// A personal workspace owned by user A: an ordinary tenant with no roster.
+// A personal workspace owned by user A; its fixed profile member is not a band availability roster.
 async function addPersonalWorkspace(slug = 'solo-ws') {
   const { rows: [workspace] } = await pool.query(
     `INSERT INTO tenants (slug, band_name, display_name, kind, created_by_user_id, owner_user_id)
@@ -196,11 +196,11 @@ describe('band event availability', () => {
     expect(created.body).toMatchObject({
       title: 'Studio day', location: 'Home studio', tenant_id: workspace.id,
     })
-    // No roster, so the lead-member default has nobody to add.
+    // The fixed personal member participates just like a band's lead member.
     const { rows: participants } = await pool.query(
       'SELECT * FROM band_event_participants WHERE band_event_id = $1', [created.body.id],
     )
-    expect(participants).toHaveLength(0)
+    expect(participants).toHaveLength(1)
 
     const calendar = await inTenant(seed.userA.id, workspace.id)(request(app)
       .get('/api/band-events/range').query({ from: SPAN.start, to: SPAN.end })).expect(200)
@@ -210,6 +210,54 @@ describe('band event availability', () => {
       .get('/api/band-events/range').query({ from: SPAN.start, to: SPAN.end })).expect(200)
     expect(bandCalendar.body.items).toHaveLength(0)
     await asUserA(request(app).get(`/api/band-events/${created.body.id}`)).expect(404)
+  })
+
+  it('moves an earlier end time to the next day for a single-date event', async () => {
+    const created = await asUserA(request(app).post('/api/band-events').send({
+      title: 'Late show',
+      start_date: '2027-09-10',
+      end_date: '2027-09-10',
+      start_time: '22:00',
+    })).expect(201)
+    const updated = await asUserA(request(app).patch(`/api/band-events/${created.body.id}`).send({
+      end_time: '02:00',
+    })).expect(200)
+
+    expect(updated.body).toMatchObject({
+      start_date: '2027-09-10',
+      end_date: '2027-09-11',
+      start_time: '22:00:00',
+      end_time: '02:00:00',
+    })
+  })
+
+  it('allows an inferred overnight event up to 23:59 but not 24 hours', async () => {
+    const maximum = await asUserA(request(app).post('/api/band-events').send({
+      title: 'Maximum overnight event',
+      start_date: '2027-09-10',
+      end_date: '2027-09-10',
+      start_time: '22:00',
+      end_time: '21:59',
+    })).expect(201)
+    expect(maximum.body.end_date).toBe('2027-09-11')
+
+    const tooLong = await asUserA(request(app).post('/api/band-events').send({
+      title: 'Full-day event',
+      start_date: '2027-09-10',
+      end_date: '2027-09-10',
+      start_time: '22:00',
+      end_time: '22:00',
+    })).expect(400)
+    expect(tooLong.body.error).toBe('end_time must be after start_time')
+  })
+
+  it('does not allow an overnight time update to cross tenant boundaries', async () => {
+    const eventB = seed.bandEvents.find((event) => event.tenant_id === seed.tenantB.id)
+
+    await asUserA(request(app).patch(`/api/band-events/${eventB.id}`).send({
+      start_time: '22:00',
+      end_time: '02:00',
+    })).expect(404)
   })
 
   it('never leaks another tenant\'s members, slots or events', async () => {

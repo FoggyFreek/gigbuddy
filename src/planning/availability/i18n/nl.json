@@ -36,7 +36,8 @@
     "gigFallback": "Optreden",
     "rehearsalTooltip": "Repetitie — {{status}}",
     "rehearsalAbbrev": "Rep {{yes}}/{{total}}",
-    "votesYes": "{{yes}}/{{total}} ja"
+    "votesYes": "{{yes}}/{{total}} ja",
+    "awaitingDate": "Beschikbaarheid wordt getoond zodra je een datum kiest."
   },
   "exportDialog": {
     "title": "Agenda exporteren",

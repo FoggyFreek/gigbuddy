@@ -38,6 +38,7 @@ const queue = (qs = '') => request(app).get(`/api/admin/band-profile-claims${qs}
 const unclaimed = (qs = '') => request(app).get(`/api/admin/band-profile-claims/unclaimed${qs}`)
 const approve = (id) => request(app).post(`/api/admin/band-profile-claims/${id}/approve`).send({})
 const reject = (id, body) => request(app).post(`/api/admin/band-profile-claims/${id}/reject`).send(body)
+const destroy = (id) => request(app).delete(`/api/admin/band-profile-claims/unclaimed/${id}`)
 
 async function makeClaim(profileId = profile.id) {
   const res = await asA(
@@ -80,6 +81,7 @@ describe('authorization', () => {
     await asA(unclaimed()).expect(403)
     await asA(approve(claimId)).expect(403)
     await asA(reject(claimId, { reason: 'no' })).expect(403)
+    await asA(destroy(profile.id)).expect(403)
   })
 })
 
@@ -137,6 +139,70 @@ describe('unclaimed profiles', () => {
   it('rejects malformed pagination input', async () => {
     await asAdmin(unclaimed('?limit=0')).expect(400)
     await asAdmin(unclaimed('?cursor=not-a-cursor')).expect(400)
+  })
+})
+
+// Nothing in the application deletes a band profile — it is a directory entry
+// that outlives its holders. This is the one exception: a super admin clearing
+// out a junk or duplicate row, which is why it is deliberately narrow.
+describe('deleting an unclaimed profile', () => {
+  it('removes it from every collection and unlinks their events', async () => {
+    const holder = await addHolder('holder-a')
+    await pool.query(
+      `INSERT INTO gigs (tenant_id, event_date, event_description, my_band_id)
+       SELECT $1, '2099-01-01', 'Tagged', id FROM my_bands WHERE tenant_id = $1`, [holder],
+    )
+
+    await asAdmin(destroy(profile.id)).expect(204)
+
+    const { rowCount } = await pool.query('SELECT 1 FROM band_profiles WHERE id = $1', [profile.id])
+    expect(rowCount).toBe(0)
+    const { rowCount: held } = await pool.query('SELECT 1 FROM my_bands WHERE band_profile_id = $1', [profile.id])
+    expect(held).toBe(0)
+
+    // The artist's own event survives; only the band tag it carried is gone.
+    const { rows } = await pool.query('SELECT tenant_id, my_band_id FROM gigs WHERE tenant_id = $1', [holder])
+    expect(rows).toEqual([{ tenant_id: holder, my_band_id: null }])
+  })
+
+  // A pending claim is a decision waiting to be made. Deleting the profile
+  // under it would leave the claim pointing at nothing while still occupying
+  // the claimant's one live claim, with no way to reach it.
+  it('refuses while a claim is pending', async () => {
+    await makeClaim()
+
+    const res = await asAdmin(destroy(profile.id)).expect(409)
+
+    expect(res.body.code).toBe('claim_pending')
+    const { rowCount } = await pool.query('SELECT 1 FROM band_profiles WHERE id = $1', [profile.id])
+    expect(rowCount).toBe(1)
+  })
+
+  it('refuses a profile a band has already been granted', async () => {
+    const claimId = await makeClaim()
+    await asAdmin(approve(claimId)).expect(200)
+
+    const res = await asAdmin(destroy(profile.id)).expect(409)
+
+    expect(res.body.code).toBe('profile_claimed')
+  })
+
+  it('keeps a decided claim readable after its profile is deleted', async () => {
+    const claimId = await makeClaim()
+    await asAdmin(reject(claimId, { reason: 'Could not verify ownership' })).expect(200)
+
+    await asAdmin(destroy(profile.id)).expect(204)
+
+    const res = await asAdmin(queue('?status=rejected')).expect(200)
+    expect(res.body.items[0]).toMatchObject({
+      bandProfileId: null,
+      bandProfileName: 'Off Platform',
+      bandProfile: null,
+    })
+  })
+
+  it('404s an unknown profile', async () => {
+    await asAdmin(destroy(999999)).expect(404)
   })
 })
 
@@ -275,28 +341,30 @@ describe('approval', () => {
     const res = await asAdmin(approve(claimId)).expect(200)
 
     expect(res.body.claim.status).toBe('approved')
-    expect(res.body.profileDeleted).toBe(false)
     expect(res.body.profile.status).toBe('claimed')
 
     const { rows } = await pool.query('SELECT my_band_id FROM gigs WHERE tenant_id = $1', [holder])
     expect(rows[0].my_band_id).not.toBeNull()
   })
 
-  // Without this the approval mints a claimed profile nobody holds, which
-  // removeMyBand can never revisit and nothing else would ever delete.
-  it('deletes a profile nobody holds any more', async () => {
+  // The directory entry survives having no holders: it now points at the real
+  // band, which is what makes the band findable to everyone who arrives later.
+  it('claims a profile nobody holds any more rather than removing it', async () => {
     const claimId = await makeClaim()
 
     const res = await asAdmin(approve(claimId)).expect(200)
 
-    expect(res.body.profileDeleted).toBe(true)
-    const { rowCount } = await pool.query('SELECT 1 FROM band_profiles WHERE id = $1', [profile.id])
-    expect(rowCount).toBe(0)
+    expect(res.body.profile.status).toBe('claimed')
+    const { rows } = await pool.query('SELECT claimed_by_tenant_id FROM band_profiles WHERE id = $1', [profile.id])
+    expect(rows[0].claimed_by_tenant_id).toBe(seed.tenantA.id)
   })
 
+  // Nothing deletes a profile any more, but a super admin still can, and the
+  // decided claim is the audit record of the decision — it must outlive it.
   it('keeps the decided claim readable after the profile is gone', async () => {
     const claimId = await makeClaim()
     await asAdmin(approve(claimId)).expect(200)
+    await pool.query('DELETE FROM band_profiles WHERE id = $1', [profile.id])
 
     const res = await asAdmin(queue('?status=approved')).expect(200)
 
@@ -360,7 +428,6 @@ describe('rejection', () => {
   })
 
   it('frees the profile to be claimed again', async () => {
-    await addHolder('holder-a')
     const claimId = await makeClaim()
 
     await asAdmin(reject(claimId, { reason: 'Could not verify ownership' })).expect(200)

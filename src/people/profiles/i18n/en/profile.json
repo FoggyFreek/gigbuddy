@@ -8,6 +8,10 @@
     "edit": "Edit link page",
     "error": "Could not open the link page editor"
   },
+  "artistRoles": {
+    "title": "My roles",
+    "loadError": "Could not load my roles"
+  },
   "crop": {
     "logo": "Crop profile logo",
     "logoDark": "Crop dark logo",
@@ -76,6 +80,7 @@
     "emptyHint": "No members yet. Click Edit to add one.",
     "name": "Name",
     "roles": "Roles",
+    "noRoles": "No roles selected.",
     "rolesOrderHelp": "Selected roles are displayed in this order.",
     "moveRoleUp": "Move {{role}} up",
     "moveRoleDown": "Move {{role}} down",

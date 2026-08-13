@@ -187,14 +187,3 @@ export async function deleteLinkedEvents(executor, tenantId, myBandId) {
   }
   return deleted
 }
-
-// The profiles a tenant's collection points at. Read before a tenant is deleted
-// so the cascade's effect on those profiles can be swept up in the same
-// transaction — the FK does not run service code.
-export async function listProfileIdsHeldByTenant(executor, tenantId) {
-  const { rows } = await executor.query(
-    'SELECT band_profile_id FROM my_bands WHERE tenant_id = $1 ORDER BY band_profile_id',
-    [tenantId],
-  )
-  return rows.map((row) => row.band_profile_id)
-}

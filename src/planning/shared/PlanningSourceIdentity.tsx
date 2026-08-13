@@ -3,6 +3,7 @@ import Box from '@mui/material/Box'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import SourceTenantIdentity from '../../components/SourceTenantIdentity.tsx'
+import { identityInitials } from '../../utils/identityInitials.ts'
 import type { Id, MyBandRef } from '../../types/entities.ts'
 
 interface PlanningSource {
@@ -15,13 +16,6 @@ interface PlanningSource {
 interface Props {
   source: PlanningSource
   withName?: boolean
-}
-
-function identityInitials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean)
-  if (words.length === 0) return '?'
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
-  return `${words[0][0]}${words[1][0]}`.toUpperCase()
 }
 
 function TextAvatarIdentity({ name, withName }: Readonly<{

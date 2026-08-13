@@ -44,6 +44,7 @@ export interface BandsintownMatchedVenue {
 export interface BandsintownEvent {
   bandsintown_event_id: string | null
   event_date: string
+  end_date: string
   event_description: string
   start_time: string | null
   end_time: string | null
@@ -64,6 +65,7 @@ export interface BandsintownEventsResponse {
 export interface BandsintownImportRow {
   bandsintown_event_id: string | null
   event_date: string
+  end_date: string
   event_description: string
   start_time: string | null
   end_time: string | null

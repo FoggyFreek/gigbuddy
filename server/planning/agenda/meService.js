@@ -34,9 +34,12 @@ export async function listMyAgenda(db, userId, scope, query = {}) {
     ])
 
     const items = [
-      ...gigs.map((gig) => agendaItem('gig', gig, gig.event_date, gig.event_description, scope)),
+      ...gigs.map((gig) => agendaItem(
+        'gig', gig, gig.event_date, gig.event_description, scope, gig.end_date ?? gig.event_date,
+      )),
       ...rehearsals.map((rehearsal) => agendaItem(
         'rehearsal', rehearsal, rehearsal.proposed_date, rehearsal.location, scope,
+        rehearsal.end_date ?? rehearsal.proposed_date,
       )),
       ...bandEvents.map((event) => agendaItem(
         'band_event', event, event.start_date, event.title, scope, event.end_date,

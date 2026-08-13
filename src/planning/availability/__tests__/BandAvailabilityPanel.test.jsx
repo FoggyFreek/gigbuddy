@@ -40,9 +40,10 @@ describe('BandAvailabilityPanel', () => {
       : getAvailabilityOn(body.start_date))
   })
 
-  it('renders nothing when eventDate is empty', () => {
+  it('explains that availability follows the date when eventDate is empty', () => {
     wrap(<BandAvailabilityPanel eventDate="" />)
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.getByText('Availability is shown as soon as you select a date.')).toBeInTheDocument()
+    expect(evaluateEventAvailability).not.toHaveBeenCalled()
   })
 
   it('renders nothing when no members returned', async () => {

@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ArtistCalendarSection from '../components/ArtistCalendarSection.tsx'
 import { AuthContext } from '../../../contexts/authContext.ts'
+import { CompactLayoutContext } from '../../../hooks/useCompactLayout.ts'
 import theme from '../../../theme.ts'
 import { listMyAgenda } from '../me.ts'
 import { createBandEvent } from '../../events/bandEvents.ts'
@@ -47,7 +48,7 @@ vi.mock('../../../people/venues/venues.ts', () => ({
 const USER = { id: 1, activeTenantId: 7, activeTenantKind: 'personal' }
 let switchTenant
 
-function wrap() {
+function wrap({ compact = false } = {}) {
   switchTenant = vi.fn().mockResolvedValue({})
   return render(
     <ThemeProvider theme={theme}>
@@ -60,10 +61,12 @@ function wrap() {
             switchTenant,
             refreshUser: vi.fn(),
           }}>
-            <Routes>
-              <Route path="/availability" element={<ArtistCalendarSection />} />
-              <Route path="/availability/events/:id" element={<div>other event detail</div>} />
-            </Routes>
+            <CompactLayoutContext.Provider value={compact}>
+              <Routes>
+                <Route path="/availability" element={<ArtistCalendarSection />} />
+                <Route path="/availability/events/:id" element={<div>other event detail</div>} />
+              </Routes>
+            </CompactLayoutContext.Provider>
           </AuthContext.Provider>
         </MemoryRouter>
       </LocalizationProvider>
@@ -113,6 +116,53 @@ beforeEach(() => {
 })
 
 describe('ArtistCalendarSection', () => {
+  it.each(['gig', 'rehearsal', 'band_event'])(
+    'does not repeat an overnight single-day %s in the compact list on its end date',
+    async (type) => {
+    const user = userEvent.setup()
+    const description = `Late ${type} — Other Band`
+    listMyAgenda.mockResolvedValue({
+      items: [agendaItem({
+        type,
+        date: '2026-08-13',
+        endDate: '2026-08-14',
+        startTime: '22:00',
+        endTime: '02:00',
+        title: `Late ${type}`,
+        description,
+      })],
+      meta: { from: '', to: '', returned: 1 },
+    })
+    const { container } = wrap({ compact: true })
+    await screen.findByText(description)
+
+    await user.click(container.querySelector('[data-date="2026-08-14"]'))
+
+    await waitFor(() => expect(screen.queryByText(description)).not.toBeInTheDocument())
+    },
+  )
+
+  it('still shows an explicit multi-day band event on its end date', async () => {
+    const user = userEvent.setup()
+    listMyAgenda.mockResolvedValue({
+      items: [agendaItem({
+        date: '2026-08-12',
+        endDate: '2026-08-14',
+        startTime: '22:00',
+        endTime: '02:00',
+        title: 'Tour weekend',
+        description: 'Tour weekend — Other Band',
+      })],
+      meta: { from: '', to: '', returned: 1 },
+    })
+    const { container } = wrap({ compact: true })
+    await waitFor(() => expect(listMyAgenda).toHaveBeenCalled())
+
+    await user.click(container.querySelector('[data-date="2026-08-14"]'))
+
+    expect(await screen.findByText('Tour weekend — Other Band')).toBeInTheDocument()
+  })
+
   it('renders required bookings with the band name and opens them inside the artist workspace', async () => {
     const user = userEvent.setup()
     listMyAgenda.mockResolvedValue({

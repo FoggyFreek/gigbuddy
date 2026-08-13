@@ -27,7 +27,9 @@ function gigToRow(gig: ExportGig, artistName: string): string {
     'Europe/Amsterdam',
     typeof gig.event_date === 'string' ? gig.event_date : '',
     gig.start_time ? String(gig.start_time).slice(0, 5) : '',
-    typeof gig.event_date === 'string' ? gig.event_date : '',
+    typeof gig.end_date === 'string'
+      ? gig.end_date
+      : (typeof gig.event_date === 'string' ? gig.event_date : ''),
     gig.end_time ? String(gig.end_time).slice(0, 5) : '',
     gig.event_link,
     gig.ticket_link,

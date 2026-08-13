@@ -37,6 +37,7 @@ import { usePermissions } from '../../../hooks/usePermissions.ts'
 import { useTenantKind } from '../../../hooks/useTenantKind.ts'
 import { TENANT_CAPABILITIES } from '../../../auth/tenantCapabilities.ts'
 import type { Id, Venue, Gig } from '../../../types/entities.ts'
+import { resolveEventEndDate } from '../../../../shared/eventTimes.js'
 
 dayjs.extend(customParseFormat)
 
@@ -78,8 +79,8 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
   const { t } = useTranslation(['gigs', 'common'])
   const contentRef = useRef<GigDetailHandle | null>(null)
   const { canWritePlanning: canWrite } = usePermissions()
-  // A personal workspace has no roster, and /api/availability is gated on the
-  // band_availability capability — asking there would 403.
+  // A personal workspace's fixed artist member is not a band availability
+  // roster; /api/availability is gated on band_availability.
   const showAvailability = useTenantKind().supports(TENANT_CAPABILITIES.BAND_AVAILABILITY)
   const supportsMyBand = useTenantKind().supports(TENANT_CAPABILITIES.MY_BANDS)
 
@@ -117,8 +118,15 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
   )
 
   async function doCreate() {
+    const endDate = resolveEventEndDate(
+      form.event_date,
+      form.event_date,
+      form.start_time,
+      form.end_time,
+    )
     await createGig({
       event_date: form.event_date,
+      end_date: endDate || null,
       event_description: form.event_description,
       venue_id: form.venue_id,
       festival_id: form.festival_id,
@@ -243,6 +251,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
                 </Typography>
                 <BandAvailabilityPanel
                   eventDate={form.event_date}
+                  endDate={resolveEventEndDate(form.event_date, form.event_date, form.start_time, form.end_time)}
                   eventType="gig"
                   startTime={form.start_time}
                   endTime={form.end_time}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
@@ -27,6 +28,7 @@ import Typography from '@mui/material/Typography'
 import {
   listClaimQueue,
   listUnclaimedProfiles,
+  deleteUnclaimedProfile,
   approveClaim,
   rejectClaim,
 } from './bandProfileClaims.ts'
@@ -257,15 +259,72 @@ interface UnclaimedPageState {
   total: number
 }
 
+/**
+ * What deleting a profile costs, spelled out before it happens: the row is the
+ * shared record of a band, so its holders lose it from My Bands and every event
+ * they tagged with it loses that tag. The events themselves are kept.
+ */
+function DeleteProfileDialog({
+  profile,
+  busy,
+  error,
+  onCancel,
+  onConfirm,
+}: Readonly<{
+  profile: AdminUnclaimedBandProfile
+  busy: boolean
+  error: string | null
+  onCancel: () => void
+  onConfirm: () => void
+}>) {
+  return (
+    <Dialog open fullWidth maxWidth="xs" onClose={busy ? undefined : onCancel}>
+      <DialogTitle>Delete this band profile?</DialogTitle>
+      <DialogContent>
+        <Stack spacing={1.5}>
+          <Typography variant="body2">
+            <strong>{profile.name}</strong> is a shared record every musician can find. Deleting it
+            cannot be undone.
+          </Typography>
+          {profile.memberCount > 0 ? (
+            <Alert severity="warning">
+              {profile.memberCount === 1
+                ? '1 musician has this band in My Bands.'
+                : `${profile.memberCount} musicians have this band in My Bands.`}{' '}
+              They lose it from their collection, and the events they tagged with it lose the band
+              tag. The events themselves are kept.
+            </Alert>
+          ) : (
+            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+              Nobody has this band in My Bands.
+            </Typography>
+          )}
+          {error && <Alert severity="error">{error}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button disabled={busy} onClick={onCancel}>Cancel</Button>
+        <Button variant="contained" color="error" disabled={busy} onClick={onConfirm}>
+          Delete
+        </Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
+
 function UnclaimedProfilesTable() {
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(UNCLAIMED_PAGE_SIZE)
   const [cursors, setCursors] = useState<Array<string | null>>([null])
   const [state, setState] = useState<UnclaimedPageState | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<AdminUnclaimedBandProfile | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [reloadNonce, setReloadNonce] = useState(0)
 
   const cursor = cursors[page]
-  const pageKey = `${rowsPerPage}:${page}:${cursor ?? ''}`
+  const pageKey = `${rowsPerPage}:${page}:${cursor ?? ''}:${reloadNonce}`
   const loading = cursor !== undefined && state?.key !== pageKey
   const items = state?.key === pageKey ? state.items : []
   const total = state?.key === pageKey ? state.total : 0
@@ -294,6 +353,23 @@ function UnclaimedProfilesTable() {
     return () => { cancelled = true }
   }, [cursor, page, pageKey, rowsPerPage])
 
+  // A refusal (a claim arrived while the dialog was open) is worth reading, so
+  // it stays in the dialog rather than closing it.
+  async function handleDelete() {
+    if (!confirming) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await deleteUnclaimedProfile(confirming.id)
+      setConfirming(null)
+      setReloadNonce((n) => n + 1)
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   if (loading) {
     return <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
   }
@@ -309,6 +385,7 @@ function UnclaimedProfilesTable() {
             <TableRow>
               <TableCell>Band profile</TableCell>
               <TableCell align="right">Member count</TableCell>
+              <TableCell align="right">Delete</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -316,6 +393,18 @@ function UnclaimedProfilesTable() {
               <TableRow key={String(profile.id)} hover>
                 <TableCell sx={{ fontWeight: 600 }}>{profile.name}</TableCell>
                 <TableCell align="right">{profile.memberCount}</TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Delete band profile">
+                    <IconButton
+                      size="small"
+                      color="error"
+                      aria-label={`Delete ${profile.name}`}
+                      onClick={() => { setConfirming(profile); setDeleteError(null) }}
+                    >
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -334,6 +423,15 @@ function UnclaimedProfilesTable() {
           setState(null)
         }}
       />
+      {confirming && (
+        <DeleteProfileDialog
+          profile={confirming}
+          busy={deleting}
+          error={deleteError}
+          onCancel={() => setConfirming(null)}
+          onConfirm={handleDelete}
+        />
+      )}
     </Paper>
   )
 }

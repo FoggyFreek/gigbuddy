@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { ThemeProvider } from '@mui/material/styles'
@@ -11,7 +11,7 @@ import theme from '../../../theme.ts'
 vi.mock('../../memberships/bandMembers.ts', () => ({
   listMembers: vi.fn().mockResolvedValue([]),
   createMember: vi.fn(),
-  updateMember: vi.fn(),
+  updateMember: vi.fn().mockResolvedValue({}),
   deleteMember: vi.fn(),
 }))
 
@@ -78,6 +78,7 @@ vi.mock('../../../utils/compressImage.ts', () => ({
 }))
 
 import { createLink, deleteLink, getProfile, updateProfile, uploadLogo } from '../profile.ts'
+import { listMembers, updateMember } from '../../memberships/bandMembers.ts'
 import { getLinkpageStatus } from '../../../promotion/linkpage/linkpage.ts'
 import { compressLogo } from '../../../utils/compressImage.ts'
 
@@ -131,6 +132,9 @@ describe('ProfilePage', () => {
     createLink.mockClear()
     deleteLink.mockClear()
     getLinkpageStatus.mockClear()
+    listMembers.mockClear()
+    listMembers.mockResolvedValue([])
+    updateMember.mockClear()
   })
 
   it('fetches and renders profile data', async () => {
@@ -244,9 +248,20 @@ describe('ProfilePage', () => {
     expect(label.parentElement).toHaveTextContent('The Testers')
   })
 
-  it('keeps the shared profile but omits band-only roster and promotion fields in a personal workspace', async () => {
+  it('shows and auto-saves artist roles without exposing band management in a personal workspace', async () => {
+    listMembers.mockResolvedValueOnce([{
+      id: 21,
+      name: 'The Testers',
+      roles: ['Piano'],
+      color: null,
+      sort_order: 0,
+      position: 'lead',
+      user_id: 7,
+    }])
+    const user = userEvent.setup()
     wrap(<ProfilePage />, {
       user: {
+        id: 7,
         isSuperAdmin: false,
         activeTenantRole: 'contributor',
         activeTenantKind: 'personal',
@@ -256,6 +271,20 @@ describe('ProfilePage', () => {
     await waitFor(() => expect(getProfile).toHaveBeenCalled())
 
     expect(screen.queryByText('Band members')).not.toBeInTheDocument()
+    const rolesCard = (await screen.findByText('My roles')).closest('.MuiPaper-root')
+    expect(rolesCard).not.toBeNull()
+    expect(within(rolesCard).getByText('Piano')).toBeInTheDocument()
+    expect(within(rolesCard).queryByRole('button', { name: /add member/i })).not.toBeInTheDocument()
+
+    await user.click(within(rolesCard).getByRole('button', { name: /^edit$/i }))
+    await user.click(within(rolesCard).getByLabelText(/^roles$/i))
+    await user.click(screen.getByRole('option', { name: 'Lead Vocals' }))
+    await user.keyboard('{Escape}')
+    await user.click(within(rolesCard).getByRole('button', { name: /^done$/i }))
+
+    await waitFor(() => expect(updateMember).toHaveBeenCalledWith(21, {
+      roles: ['Piano', 'Lead Vocals'],
+    }))
     expect(screen.queryByText(/Bandsintown artist name/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/Bandsintown artist ID/i)).not.toBeInTheDocument()
     expect(screen.getAllByAltText('Profile logo')).not.toHaveLength(0)

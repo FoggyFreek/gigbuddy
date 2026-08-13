@@ -212,7 +212,6 @@ const tenantManage = [...tenantMember, requirePermission(PERMISSIONS.TENANT_MANA
 // Kind-specific surfaces use the shared capability registry. These backend
 // gates are authoritative; the frontend consumes the same registry for UX.
 const bandMembershipAdmin = requireTenantCapability(TENANT_CAPABILITIES.BAND_MEMBERSHIP_ADMIN)
-const bandRoster = requireTenantCapability(TENANT_CAPABILITIES.BAND_ROSTER)
 const bandAvailability = requireTenantCapability(TENANT_CAPABILITIES.BAND_AVAILABILITY)
 const setlists = requireTenantCapability(TENANT_CAPABILITIES.SETLISTS)
 const merch = requireTenantCapability(TENANT_CAPABILITIES.MERCH)
@@ -271,7 +270,7 @@ router.use('/places', tenantMember, placeSearchLimiter, placesRouter)
 router.use('/bandsintown', tenantMember, bandPromotion, integrations, bandsintownRouter)
 router.use('/tasks', tenantMember, tasksRouter)
 router.use('/profile', tenantMember, profileRouter)
-router.use('/band-members', tenantMember, bandRoster, bandMembersRouter)
+router.use('/band-members', tenantMember, bandMembersRouter)
 router.use('/availability', tenantMember, bandAvailability, availabilityRouter)
 router.use('/rehearsals', tenantMember, myBandField, rehearsalsRouter)
 router.use('/achievements', tenantMember, achievementsRouter)

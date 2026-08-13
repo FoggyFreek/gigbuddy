@@ -15,7 +15,6 @@
 import { withTransaction, abortTransaction } from '../../db/withTransaction.js'
 import { limitedCollection } from '../../platform/collections/limitedCollectionService.js'
 import { safeRemove } from '../../platform/files/storageService.js'
-import { logger } from '../../utils/logger.js'
 import { lockTenantRow } from '../workspaces/tenantRepository.js'
 import {
   parseBandProfileCreate,
@@ -32,7 +31,6 @@ import {
   lockBandProfile,
   insertBandProfile,
   countProfilesCreatedByUser,
-  deleteBandProfileIfAbandoned,
 } from '../band-profiles/bandProfileRepository.js'
 import {
   listMyBands as listMyBandRows,
@@ -101,9 +99,9 @@ export async function getRemovalPreview(db, tenantId, myBandId) {
 // ---------- writes ----------
 
 // Takes either an existing profile id or a whole profile to create. Creating and
-// holding are ONE transaction on purpose: a create-then-add pair could be
-// interrupted between the two calls and leave a global row nobody holds, which
-// nothing would ever clean up.
+// holding are ONE transaction on purpose: profiles are never deleted, so a
+// create-then-add pair interrupted between the two calls would leave a permanent
+// global row for a band the artist never actually added.
 export async function addBand(db, user, tenantId, body) {
   const target = parseAddTarget(body)
   if (target.error) return target
@@ -214,14 +212,12 @@ export async function removeBand(db, tenantId, myBandId, query) {
 
     await deleteMyBand(client, myBandId, tenantId)
 
-    // The profile's whole purpose is to serve the people holding it. With the
-    // last holder gone and no claim in flight, it has none.
-    const profileDeleted = await deleteBandProfileIfAbandoned(client, row.band_profile_id)
-
+    // Only the holder's link goes. The global profile is a directory entry that
+    // outlives every holder, so the next musician to look this band up finds it
+    // already described instead of typing it in again.
     return {
       mode,
       storageKeys,
-      profileDeleted,
       unlinked: mode === MY_BAND_REMOVAL_MODES.KEEP ? counts : NO_EVENTS,
       deleted,
       audit: { action: 'my_band.remove', details: { tenantId, bandProfileId: row.band_profile_id, mode } },
@@ -242,7 +238,6 @@ export async function removeBand(db, tenantId, myBandId, query) {
       mode: result.mode,
       unlinked: result.unlinked,
       deleted: result.deleted,
-      profileDeleted: result.profileDeleted,
     },
     audit: result.audit,
   }
@@ -268,19 +263,5 @@ export async function assertMyBandWritable(client, tenantId, value) {
     return notFound('Band not found in your bands')
   }
   return null
-}
-
-// Called from tenant deletion, INSIDE its transaction and after its cascades.
-// The foreign keys drop a personal workspace's my_bands rows and a claiming
-// tenant's pending claim without running any of the service code above, so a
-// profile can fall to zero holders with nothing left to notice. This is what
-// notices.
-export async function sweepAbandonedProfiles(client, profileIds) {
-  let deleted = 0
-  for (const profileId of profileIds) {
-    if (await deleteBandProfileIfAbandoned(client, profileId)) deleted += 1
-  }
-  if (deleted > 0) logger.info('band_profile.swept_abandoned', { sweptProfiles: deleted })
-  return deleted
 }
 

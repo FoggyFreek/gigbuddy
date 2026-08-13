@@ -157,6 +157,28 @@ describe('summarizeSpan', () => {
     expect(result.members[0]).toEqual(expect.objectContaining({ status: 'unavailable', source: 'booking' }))
   })
 
+  it('treats an overnight booking as one interval across midnight', () => {
+    const matrix = {
+      members: [MEMBERS[0]],
+      slots: [{
+        id: 'gig-9', source: 'booking', source_id: 9, band_member_id: 1,
+        start_date: '2099-07-10', end_date: '2099-07-11',
+        start_time: '22:00', end_time: '02:00', travel_margin_hours: 2,
+        status: 'unavailable', reason: 'Late show',
+      }],
+    }
+
+    const afterMidnight = summarizeSpan(matrix, '2099-07-11', '2099-07-11', {
+      start_date: '2099-07-11', end_date: '2099-07-11', start_time: '01:00', end_time: '01:30',
+    })
+    const laterThatDay = summarizeSpan(matrix, '2099-07-11', '2099-07-11', {
+      start_date: '2099-07-11', end_date: '2099-07-11', start_time: '12:00', end_time: '13:00',
+    })
+
+    expect(afterMidnight.members[0].status).toBe('unavailable')
+    expect(laterThatDay.members[0].status).toBe('available')
+  })
+
   it('marks a gap inside the configured travel margin orange', () => {
     const matrix = {
       members: [MEMBERS[0]],

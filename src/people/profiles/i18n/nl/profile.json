@@ -8,6 +8,10 @@
     "edit": "Linkpagina bewerken",
     "error": "Kon de linkpagina-editor niet openen"
   },
+  "artistRoles": {
+    "title": "Mijn rollen",
+    "loadError": "Kon mijn rollen niet laden"
+  },
   "crop": {
     "logo": "Profiellogo bijsnijden",
     "logoDark": "Donker logo bijsnijden",
@@ -76,6 +80,7 @@
     "emptyHint": "Nog geen leden. Klik op Bewerken om er een toe te voegen.",
     "name": "Naam",
     "roles": "Rollen",
+    "noRoles": "Geen rollen geselecteerd.",
     "rolesOrderHelp": "De geselecteerde rollen worden in deze volgorde getoond.",
     "moveRoleUp": "{{role}} omhoog verplaatsen",
     "moveRoleDown": "{{role}} omlaag verplaatsen",

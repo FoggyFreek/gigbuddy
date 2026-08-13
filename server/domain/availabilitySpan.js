@@ -153,10 +153,14 @@ function dayMinute(date, time = '00:00') {
 // An untimed event is treated as occupying the working day, so a date-only
 // booking still conflicts with a date-only event.
 function intervals(start, end, startTime, endTime) {
-  const timed = !!startTime && !!endTime && endTime > startTime
-  return eachDay(start, end).map((date) => (timed
-    ? { start: dayMinute(date, startTime), end: dayMinute(date, endTime) }
-    : { start: dayMinute(date, CALCULATION_FALLBACK_START_TIME), end: dayMinute(date) + 1440 }))
+  if (startTime && endTime) {
+    const timed = { start: dayMinute(start, startTime), end: dayMinute(end, endTime) }
+    if (timed.end > timed.start) return [timed]
+  }
+  return eachDay(start, end).map((date) => ({
+    start: dayMinute(date, CALCULATION_FALLBACK_START_TIME),
+    end: dayMinute(date) + 1440,
+  }))
 }
 
 function bookingIntervals(booking) {
@@ -223,9 +227,17 @@ function memberEntry(member, date, index, bandWide, wanted, exclude) {
 
 function summarizeDay(date, index, members, event) {
   const bandWide = lastCovering(index.bandWide, date)
-  // The candidate is always evaluated one day at a time, so its intervals are
-  // the same for every member on this day.
-  const wanted = intervals(date, date, event.start_time, event.end_time)
+  const dayStart = dayMinute(date)
+  const dayEnd = dayStart + 1440
+  const wanted = intervals(
+    event.start_date ?? date,
+    event.end_date ?? date,
+    event.start_time,
+    event.end_time,
+  ).map((interval) => ({
+    start: Math.max(interval.start, dayStart),
+    end: Math.min(interval.end, dayEnd),
+  })).filter((interval) => interval.end > interval.start)
 
   return {
     date,

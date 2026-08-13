@@ -117,6 +117,7 @@ export function exportMonthToICS(
       location: location || undefined,
       url: gigUrl,
       startDate: d,
+      endDate: normalizeIsoDate(gig.end_date) || d,
       startTime: gig.start_time,
       endTime: gig.end_time,
     })
@@ -137,6 +138,7 @@ export function exportMonthToICS(
       location: reh.location || undefined,
       url: rehUrl,
       startDate: d,
+      endDate: normalizeIsoDate(reh.end_date) || d,
       startTime: reh.start_time,
       endTime: reh.end_time,
     })

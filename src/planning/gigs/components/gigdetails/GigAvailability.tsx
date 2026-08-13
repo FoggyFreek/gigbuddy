@@ -19,6 +19,7 @@ interface Props {
   gigId: Id
   showAvailability: boolean
   eventDate: string
+  endDate?: string | null
   eventStatus?: string | null
   startTime?: string | null
   endTime?: string | null
@@ -39,6 +40,7 @@ export default function GigAvailability({
   gigId,
   showAvailability,
   eventDate,
+  endDate,
   eventStatus,
   startTime,
   endTime,
@@ -58,6 +60,7 @@ export default function GigAvailability({
     participant.band_member_id === undefined ? [] : [participant.band_member_id])
   const availability = useEventAvailability({
     eventDate: showAvailability ? eventDate : undefined,
+    endDate: endDate ?? undefined,
     eventType: 'gig',
     eventId: gigId,
     startTime,

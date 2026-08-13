@@ -145,18 +145,6 @@ export async function lockBandProfile(executor, profileId) {
   return rows[0] ?? null
 }
 
-// Locks several profiles at once, ascending by id so concurrent callers touching
-// overlapping sets cannot deadlock against each other.
-export async function lockBandProfiles(executor, profileIds) {
-  if (profileIds.length === 0) return []
-  const { rows } = await executor.query(
-    `SELECT id, claimed_by_tenant_id FROM band_profiles
-      WHERE id = ANY($1) ORDER BY id FOR UPDATE`,
-    [profileIds],
-  )
-  return rows
-}
-
 export async function insertBandProfile(executor, profile, createdByUserId) {
   const { rows } = await executor.query(
     `INSERT INTO band_profiles
@@ -219,23 +207,13 @@ export async function countProfilesCreatedByUser(executor, userId) {
   return rows[0].count
 }
 
-// Terminal deletion. A profile exists only while somebody holds it or a claim
-// is live; the moment neither is true it is gone, so the table cannot silt up
-// with rows nobody can reach.
-//
-// One statement, so it is atomic on its own; callers still take the profile row
-// lock first, because they have already read the state they are acting on.
-export async function deleteBandProfileIfAbandoned(executor, profileId) {
-  const { rowCount } = await executor.query(
-    `DELETE FROM band_profiles bp
-      WHERE bp.id = $1
-        AND NOT EXISTS (SELECT 1 FROM my_bands mb WHERE mb.band_profile_id = bp.id)
-        AND NOT EXISTS (
-          SELECT 1 FROM band_profile_claims c
-           WHERE c.band_profile_id = bp.id AND c.status = 'pending'
-        )`,
-    [profileId],
-  )
+// The only delete path there is, and it is a super-admin repair tool rather
+// than part of the profile's lifecycle: nothing else removes a directory entry.
+// It is destructive beyond the row — my_bands rows cascade and every event that
+// pointed at one loses its band tag — so the caller must have established that
+// the profile is unclaimed and unreviewed first.
+export async function deleteBandProfile(executor, profileId) {
+  const { rowCount } = await executor.query('DELETE FROM band_profiles WHERE id = $1', [profileId])
   return rowCount > 0
 }
 

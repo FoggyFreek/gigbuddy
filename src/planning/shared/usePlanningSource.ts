@@ -122,7 +122,7 @@ export interface PlanningSource<K extends PlanningAggregate> {
    * — is a per-row question for `useCrossTenantRow` / `isCrossTenantRow`.
    */
   labelsTenant: boolean
-  /** The active tenant's roster describes these rows; a personal workspace has none. */
+  /** Whether participant management can load the active tenant's editable roster. */
   canLoadRoster: boolean
   /** Every row is the active tenant's, so tenant-scoped writes always apply. */
   canWriteOrdinaryEndpoint: boolean

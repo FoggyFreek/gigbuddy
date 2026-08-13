@@ -27,6 +27,7 @@ export interface GigDetail extends MaybeCrossTenant<Gig> {
 export interface GigDetailForm {
   [key: string]: unknown
   event_date: string
+  end_date: string
   event_description: string
   venue_id: Id | null
   festival_id: Id | null

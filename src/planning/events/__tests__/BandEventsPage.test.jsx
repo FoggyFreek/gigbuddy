@@ -221,6 +221,14 @@ describe('BandEventsPage', () => {
       status: 'available',
       reason: null,
     }
+    const bob = {
+      member_id: 8,
+      name: 'Bob',
+      position: 'bass',
+      color: '#1e88e5',
+      status: 'available',
+      reason: null,
+    }
     const eventDetail = {
       id: 1,
       title: 'Studio session',
@@ -230,16 +238,16 @@ describe('BandEventsPage', () => {
       end_time: null,
       location: null,
       notes: '',
-      members_availability: [alice],
+      members_availability: [alice, bob],
       availability_days: [],
     }
     listUpcomingBandEvents.mockResolvedValue({
-      items: [{ ...EVENTS[0], members_availability: [alice] }],
+      items: [{ ...EVENTS[0], members_availability: [alice, bob] }],
       meta: { limit: 100, returned: 1 },
     })
     getBandEvent
       .mockResolvedValueOnce(eventDetail)
-      .mockResolvedValueOnce({ ...eventDetail, members_availability: [] })
+      .mockResolvedValueOnce({ ...eventDetail, members_availability: [bob] })
 
     wrapWithRoutes({ initialEntries: ['/events/1'] })
     expect(await screen.findByText('A')).toBeInTheDocument()
@@ -248,6 +256,7 @@ describe('BandEventsPage', () => {
 
     await waitFor(() => expect(removeBandEventParticipant).toHaveBeenCalledWith(1, 7))
     await waitFor(() => expect(screen.queryByText('A')).not.toBeInTheDocument())
+    expect(screen.getByText('B')).toBeInTheDocument()
   })
 
   it('renders detail alongside the list at /events/:id and the Close button returns to /events', async () => {

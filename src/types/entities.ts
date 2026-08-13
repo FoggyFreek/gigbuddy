@@ -122,6 +122,7 @@ export interface BandProfileClaim {
 export interface Gig {
   id?: Id
   event_date?: string | Date
+  end_date?: string | null
   event_description?: string
   status?: string
   my_band?: MyBandRef | null
@@ -208,6 +209,7 @@ export interface RehearsalSong {
 export interface Rehearsal {
   id?: Id
   proposed_date?: string
+  end_date?: string | null
   status?: string
   my_band?: MyBandRef | null
   location?: string
@@ -1051,9 +1053,9 @@ export interface Period {
 
 /**
  * How the calendar renders a slot with no `band_member_id`. A band reads that as
- * "whole band" (the default); a personal workspace, which has no roster at all,
- * reads it as "me" — so the artist calendar overrides the label and colour
- * instead of inventing a member row to match against.
+ * "whole band" (the default); a personal workspace reads it as "me" because
+ * the fixed profile member is not an availability roster. The artist calendar
+ * therefore overrides the label and colour instead of matching a member row.
  */
 export interface UnassignedSlotLane {
   name: string

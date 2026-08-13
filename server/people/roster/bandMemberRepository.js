@@ -26,6 +26,25 @@ export async function bandMemberExistsInTenant(executor, memberId, tenantId) {
   return rowCount > 0
 }
 
+export async function listLeadMemberIds(executor, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT id FROM band_members
+      WHERE tenant_id = $1 AND position = 'lead' AND deleted_at IS NULL`,
+    [tenantId],
+  )
+  return rows.map((row) => row.id)
+}
+
+export async function filterMemberIdsInTenant(executor, memberIds, tenantId) {
+  if (!memberIds.length) return []
+  const { rows } = await executor.query(
+    `SELECT id FROM band_members
+      WHERE id = ANY($1) AND tenant_id = $2 AND deleted_at IS NULL`,
+    [memberIds, tenantId],
+  )
+  return rows.map((row) => row.id)
+}
+
 // The account a roster row is linked to, or null for a dep/CRM-only member.
 // This is the bridge availability writes use to decide whether a slot belongs
 // to a person (user-level) or to this band alone.
@@ -133,22 +152,72 @@ export async function syncLeadIntoCurrentEvents(executor, tenantId, memberId, ac
 }
 
 export async function removeMemberFromCurrentEvents(executor, tenantId, memberId) {
+  // Participant removals lock their parent event before counting/deleting. Use the
+  // same order here so concurrent roster changes cannot both remove the final two
+  // participants from an event.
+  await executor.query(
+    `SELECT g.id FROM gigs g
+       JOIN gig_participants gp
+         ON gp.tenant_id = g.tenant_id AND gp.gig_id = g.id
+      WHERE g.tenant_id = $1 AND gp.band_member_id = $2
+        AND g.event_date >= CURRENT_DATE
+      ORDER BY g.id
+      FOR UPDATE OF g`,
+    [tenantId, memberId],
+  )
+  await executor.query(
+    `SELECT r.id FROM rehearsals r
+       JOIN rehearsal_participants rp
+         ON rp.tenant_id = r.tenant_id AND rp.rehearsal_id = r.id
+      WHERE r.tenant_id = $1 AND rp.band_member_id = $2
+        AND r.proposed_date >= CURRENT_DATE
+      ORDER BY r.id
+      FOR UPDATE OF r`,
+    [tenantId, memberId],
+  )
+  await executor.query(
+    `SELECT e.id FROM band_events e
+       JOIN band_event_participants bep
+         ON bep.tenant_id = e.tenant_id AND bep.band_event_id = e.id
+      WHERE e.tenant_id = $1 AND bep.band_member_id = $2
+        AND e.end_date >= CURRENT_DATE
+      ORDER BY e.id
+      FOR UPDATE OF e`,
+    [tenantId, memberId],
+  )
+
   await executor.query(
     `DELETE FROM gig_participants gp USING gigs g
       WHERE gp.gig_id = g.id AND gp.tenant_id = $1 AND g.tenant_id = $1
-        AND gp.band_member_id = $2 AND g.event_date >= CURRENT_DATE`,
+        AND gp.band_member_id = $2 AND g.event_date >= CURRENT_DATE
+        AND EXISTS (
+          SELECT 1 FROM gig_participants other
+           WHERE other.tenant_id = gp.tenant_id AND other.gig_id = gp.gig_id
+             AND other.band_member_id <> gp.band_member_id
+        )`,
     [tenantId, memberId],
   )
   await executor.query(
     `DELETE FROM rehearsal_participants rp USING rehearsals r
       WHERE rp.rehearsal_id = r.id AND rp.tenant_id = $1 AND r.tenant_id = $1
-        AND rp.band_member_id = $2 AND r.proposed_date >= CURRENT_DATE`,
+        AND rp.band_member_id = $2 AND r.proposed_date >= CURRENT_DATE
+        AND EXISTS (
+          SELECT 1 FROM rehearsal_participants other
+           WHERE other.tenant_id = rp.tenant_id AND other.rehearsal_id = rp.rehearsal_id
+             AND other.band_member_id <> rp.band_member_id
+        )`,
     [tenantId, memberId],
   )
   await executor.query(
     `DELETE FROM band_event_participants bep USING band_events e
       WHERE bep.band_event_id = e.id AND bep.tenant_id = $1 AND e.tenant_id = $1
-        AND bep.band_member_id = $2 AND e.end_date >= CURRENT_DATE`,
+        AND bep.band_member_id = $2 AND e.end_date >= CURRENT_DATE
+        AND EXISTS (
+          SELECT 1 FROM band_event_participants other
+           WHERE other.tenant_id = bep.tenant_id
+             AND other.band_event_id = bep.band_event_id
+             AND other.band_member_id <> bep.band_member_id
+        )`,
     [tenantId, memberId],
   )
 }

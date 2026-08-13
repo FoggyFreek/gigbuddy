@@ -26,7 +26,6 @@ import { parseArtistId } from '../../promotion/bandsintown/bandsintownValidators
 import {
   listProfileLinks,
   fetchProfileTenant,
-  updateTenantFields,
   nextLinkSortOrder,
   insertProfileLink,
   updateProfileLink,
@@ -35,6 +34,7 @@ import {
   setTenantImagePath,
   gigBelongsToTenant,
 } from './profileRepository.js'
+import { updateTenantFields } from '../workspaces/tenantRepository.js'
 import {
   getShopifyClientId,
   setShopifyClientId,

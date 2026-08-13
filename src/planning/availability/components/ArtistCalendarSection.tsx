@@ -30,9 +30,10 @@ import {
 } from '../../../user/availability/userAvailability.ts'
 import { toIsoDate } from '../availabilityUtils.ts'
 import type { BandEvent, Gig, Id, Member, Rehearsal, Slot, UnassignedSlotLane } from '../../../types/entities.ts'
+import { nextIsoDate, timeToMinutes } from '../../../../shared/eventTimes.js'
 
-// A personal workspace has no roster, so its slots carry no band_member_id at
-// all; the calendar's "no member" lane is relabelled as the artist instead.
+// The artist calendar is user-level, so it does not attach the workspace's
+// fixed profile member; its "no member" lane is relabelled as the artist.
 const SELF_LANE_COLOR = '#5c6bc0'
 const NO_MEMBERS: Member[] = []
 
@@ -55,6 +56,17 @@ function asSlot(slot: UserAvailabilitySlot): Slot {
     createdByUserId: slot.created_by_user_id,
     createdInTenantId: slot.created_in_tenant_id,
   }
+}
+
+function occursInCompactDayList(item: AgendaItem, date: string) {
+  if (date === item.date) return true
+  if (item.type !== 'band_event' || date < item.date || date > item.endDate) return false
+
+  const isOvernightSingleDay = item.endDate === nextIsoDate(item.date)
+    && timeToMinutes(item.startTime) !== null
+    && timeToMinutes(item.endTime) !== null
+    && timeToMinutes(item.endTime)! < timeToMinutes(item.startTime)!
+  return !isOvernightSingleDay
 }
 
 async function fetchCalendar(year: number, month: number) {
@@ -202,7 +214,7 @@ export default function ArtistCalendarSection({ eventReloadKey = 0 }: Readonly<A
     await reloadCalendar()
   }
 
-  const dayItems = agenda.filter((item) => selectedDay >= item.date && selectedDay <= item.endDate)
+  const dayItems = agenda.filter((item) => occursInCompactDayList(item, selectedDay))
   const daySlots = slots.filter((slot) => selectedDay >= (slot.start_date ?? '') && selectedDay <= (slot.end_date ?? ''))
 
   return (

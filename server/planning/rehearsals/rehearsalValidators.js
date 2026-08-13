@@ -11,7 +11,7 @@ export { parseId }
 export function buildRehearsalUpdateFields(body) {
   // my_band_id is only meaningful in a personal workspace; the route gates the
   // field on the MY_BANDS capability and the service validates it against my_bands.
-  const allowed = ['proposed_date', 'start_time', 'end_time', 'location', 'notes', 'status', 'my_band_id']
+  const allowed = ['proposed_date', 'end_date', 'start_time', 'end_time', 'location', 'notes', 'status', 'my_band_id']
   const fields = []
   const values = []
   let idx = 1

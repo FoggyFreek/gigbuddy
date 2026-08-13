@@ -22,11 +22,11 @@ import {
   rehearsalExistsInTenant,
   loadParticipants,
   loadSongs,
-  getLeadMemberIds,
-  filterMemberIdsInTenant,
   insertRehearsal,
   insertParticipant,
   deleteParticipant,
+  lockRehearsalForParticipantRemoval,
+  getRehearsalParticipantRemovalState,
   updateParticipantVote,
   lockRehearsalOptionResponseState,
   getRehearsalParticipantResponseState,
@@ -42,12 +42,16 @@ import {
 } from './rehearsalRepository.js'
 import {
   bandMemberExistsInTenant,
+  filterMemberIdsInTenant,
   getBandMemberIdForUser,
+  listLeadMemberIds,
 } from '../../people/roster/bandMemberRepository.js'
 import { songExistsInTenant } from '../../music/songs/songRepository.js'
-import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate, validateDailyTimeRange } from '../../platform/http/requestValidators.js'
+import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate } from '../../platform/http/requestValidators.js'
 import { badRequest, notFound } from '../../platform/http/serviceErrors.js'
 import { assertMyBandWritable } from '../../people/my-bands/myBandService.js'
+import { LAST_PARTICIPANT } from '../shared/participantErrors.js'
+import { normalizeSingleDayEventTiming } from '../shared/eventTiming.js'
 import {
   limitedCollection,
   limitedCollectionWithCursor,
@@ -193,19 +197,20 @@ export async function createRehearsal(tenantId, userId, body) {
   if (!body.proposed_date) {
     return { error: { status: 400, body: { error: 'proposed_date is required' } } }
   }
-  const timeError = validateDailyTimeRange(body.start_time, body.end_time)
-  if (timeError) return badRequest(timeError)
+  const timing = normalizeSingleDayEventTiming(body, null, 'proposed_date')
+  if (timing.error) return badRequest(timing.error)
+  const normalizedBody = timing.body
   const extras = normalizeExtraMemberIds(body.extra_member_ids)
 
   const rehearsal = await withTransaction(async (client) => {
     // Holds the My Bands row for the rest of this transaction, so a concurrent
     // removal cannot turn this insert into a foreign-key violation.
-    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    const bandCheck = await assertMyBandWritable(client, tenantId, normalizedBody.my_band_id)
     if (bandCheck) abortTransaction(bandCheck)
 
-    const created = await insertRehearsal(client, tenantId, body, userId)
+    const created = await insertRehearsal(client, tenantId, normalizedBody, userId)
 
-    const leadIds = await getLeadMemberIds(client, tenantId)
+    const leadIds = await listLeadMemberIds(client, tenantId)
     const extraIds = await filterMemberIdsInTenant(client, extras, tenantId)
     const memberIds = Array.from(new Set([...leadIds, ...extraIds]))
     const creatorMemberId = await getBandMemberIdForUser(client, userId, tenantId)
@@ -228,14 +233,13 @@ export async function createRehearsal(tenantId, userId, body) {
 // { rehearsal, confirmed } — `confirmed` is true when this PATCH set the
 // status to planned; the caller fires the confirmed notification.
 export async function patchRehearsal(db, tenantId, rehearsalId, body) {
-  if ('start_time' in body || 'end_time' in body) {
+  let normalizedBody = body
+  if (['proposed_date', 'end_date', 'start_time', 'end_time'].some((field) => field in body)) {
     const current = await fetchRehearsal(db, rehearsalId, tenantId)
     if (!current) return NOT_FOUND
-    const timeError = validateDailyTimeRange(
-      'start_time' in body ? body.start_time : current.start_time,
-      'end_time' in body ? body.end_time : current.end_time,
-    )
-    if (timeError) return badRequest(timeError)
+    const timing = normalizeSingleDayEventTiming(body, current, 'proposed_date')
+    if (timing.error) return badRequest(timing.error)
+    normalizedBody = timing.body
   }
   if ('status' in body) {
     if (!VALID_STATUSES.has(body.status)) {
@@ -249,7 +253,7 @@ export async function patchRehearsal(db, tenantId, rehearsalId, body) {
     }
   }
 
-  const built = buildRehearsalUpdateFields(body)
+  const built = buildRehearsalUpdateFields(normalizedBody)
   if (!built.fields.length) {
     return { error: { status: 400, body: { error: 'No valid fields to update' } } }
   }
@@ -257,7 +261,7 @@ export async function patchRehearsal(db, tenantId, rehearsalId, body) {
   // In a transaction so the My Bands row stays locked from validation through
   // the write; the check is a no-op when the body doesn't mention the link.
   const result = await withTransaction(async (client) => {
-    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    const bandCheck = await assertMyBandWritable(client, tenantId, normalizedBody.my_band_id)
     if (bandCheck) abortTransaction(bandCheck)
 
     const row = await updateRehearsalFields(client, tenantId, rehearsalId, built.fields, built.values)
@@ -308,10 +312,17 @@ export async function addParticipant(db, tenantId, userId, rehearsalId, memberId
 }
 
 export async function removeParticipant(db, tenantId, rehearsalId, memberId) {
-  const removed = await deleteParticipant(db, rehearsalId, memberId, tenantId)
-  if (!removed) return NOT_FOUND
-  await touchRehearsal(db, rehearsalId, tenantId)
-  return {}
+  return withTransaction(async (client) => {
+    if (!(await lockRehearsalForParticipantRemoval(client, rehearsalId, tenantId))) {
+      abortTransaction(NOT_FOUND)
+    }
+    const state = await getRehearsalParticipantRemovalState(client, rehearsalId, memberId, tenantId)
+    if (!state.target_exists) abortTransaction(NOT_FOUND)
+    if (state.participant_count <= 1) abortTransaction(LAST_PARTICIPANT)
+    if (!(await deleteParticipant(client, rehearsalId, memberId, tenantId))) abortTransaction(NOT_FOUND)
+    await touchRehearsal(client, rehearsalId, tenantId)
+    return {}
+  }, { db })
 }
 
 export async function setParticipantVote(db, tenantId, userId, rehearsalId, memberId, body, caller = {}) {

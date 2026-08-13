@@ -1,7 +1,7 @@
 // Band-event domain logic. Route handlers stay thin and delegate here. Functions
 // that can fail with a specific HTTP outcome return { error: { status, body } };
 // success returns a domain payload.
-import { buildEventUpdateFields } from './bandEventValidators.js'
+import { buildEventUpdateFields, normalizeEventTiming } from './bandEventValidators.js'
 import {
   listBandEvents,
   listUpcomingBandEvents as listUpcomingBandEventRows,
@@ -12,10 +12,12 @@ import {
   insertBandEvent,
   insertBandEventParticipant,
   deleteBandEventParticipant,
+  lockBandEventForParticipantRemoval,
+  getBandEventParticipantRemovalState,
   updateBandEventFields,
   deleteBandEvent as deleteBandEventRow,
 } from './bandEventRepository.js'
-import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate, validateDailyTimeRange } from '../../platform/http/requestValidators.js'
+import { INVALID_CURSOR, INVALID_TODAY, parseListCursor, parseLocalDate } from '../../platform/http/requestValidators.js'
 import { badRequest, notFound } from '../../platform/http/serviceErrors.js'
 import { assertMyBandWritable } from '../../people/my-bands/myBandService.js'
 import {
@@ -27,8 +29,12 @@ import { loadAvailabilityMatrix } from '../availability/availabilityService.js'
 import { prepareMatrix, summarizeSpan, withMembers } from '../../domain/availabilitySpan.js'
 import { toDateStr } from '../../utils/dateOnly.js'
 import { TENANT_CAPABILITIES, tenantKindSupports } from '../../../shared/tenantCapabilities.js'
-import { listBandMembers, bandMemberExistsInTenant } from '../../people/roster/bandMemberRepository.js'
+import {
+  bandMemberExistsInTenant,
+  listLeadMemberIds,
+} from '../../people/roster/bandMemberRepository.js'
 import { withTransaction, abortTransaction } from '../../db/withTransaction.js'
+import { LAST_PARTICIPANT } from '../shared/participantErrors.js'
 
 const NOT_FOUND = notFound('Not found')
 
@@ -132,15 +138,16 @@ export async function getEvent(db, tenantId, eventId, scope = {}) {
 }
 
 export async function createEvent(db, tenantId, body) {
-  const { title, start_date, end_date, start_time, end_time, location, notes } = body
-  if (!title || !start_date) return badRequest('title and start_date are required')
-  const timeError = validateDailyTimeRange(start_time, end_time)
-  if (timeError) return badRequest(timeError)
+  if (!body.title || !body.start_date) return badRequest('title and start_date are required')
+  const timing = normalizeEventTiming(body)
+  if (timing.error) return badRequest(timing.error)
+  const normalizedBody = timing.body
+  const { title, start_date, end_date, start_time, end_time, location, notes } = normalizedBody
 
   return withTransaction(async (client) => {
     // Holds the My Bands row for the rest of this transaction, so a concurrent
     // removal cannot turn this insert into a foreign-key violation.
-    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    const bandCheck = await assertMyBandWritable(client, tenantId, normalizedBody.my_band_id)
     if (bandCheck) abortTransaction(bandCheck)
 
     const event = await insertBandEvent(client, tenantId, {
@@ -151,11 +158,11 @@ export async function createEvent(db, tenantId, body) {
       end_time: end_time || null,
       location: location || null,
       notes: notes || null,
-      my_band_id: body.my_band_id ?? null,
+      my_band_id: normalizedBody.my_band_id ?? null,
     })
-    const members = await listBandMembers(client, tenantId)
-    for (const member of members.filter((candidate) => candidate.position === 'lead')) {
-      await insertBandEventParticipant(client, tenantId, event.id, member.id)
+    const leadMemberIds = await listLeadMemberIds(client, tenantId)
+    for (const memberId of leadMemberIds) {
+      await insertBandEventParticipant(client, tenantId, event.id, memberId)
     }
     return { event }
   }, { db })
@@ -178,27 +185,36 @@ export async function addParticipant(db, tenantId, eventId, memberId, scope = {}
 }
 
 export async function removeParticipant(db, tenantId, eventId, memberId) {
-  const removed = await deleteBandEventParticipant(db, tenantId, eventId, memberId)
-  return removed ? {} : NOT_FOUND
+  return withTransaction(async (client) => {
+    if (!(await lockBandEventForParticipantRemoval(client, tenantId, eventId))) {
+      abortTransaction(NOT_FOUND)
+    }
+    const state = await getBandEventParticipantRemovalState(client, tenantId, eventId, memberId)
+    if (!state.target_exists) abortTransaction(NOT_FOUND)
+    if (state.participant_count <= 1) abortTransaction(LAST_PARTICIPANT)
+    if (!(await deleteBandEventParticipant(client, tenantId, eventId, memberId))) {
+      abortTransaction(NOT_FOUND)
+    }
+    return {}
+  }, { db })
 }
 
 export async function patchEvent(db, tenantId, eventId, body) {
-  if ('start_time' in body || 'end_time' in body) {
+  let normalizedBody = body
+  if (['start_date', 'end_date', 'start_time', 'end_time'].some((field) => field in body)) {
     const current = await fetchBandEvent(db, eventId, tenantId)
     if (!current) return NOT_FOUND
-    const timeError = validateDailyTimeRange(
-      'start_time' in body ? body.start_time : current.start_time,
-      'end_time' in body ? body.end_time : current.end_time,
-    )
-    if (timeError) return badRequest(timeError)
+    const timing = normalizeEventTiming(body, current)
+    if (timing.error) return badRequest(timing.error)
+    normalizedBody = timing.body
   }
-  const built = buildEventUpdateFields(body)
+  const built = buildEventUpdateFields(normalizedBody)
   if (!built.fields.length) return badRequest('No valid fields to update')
 
   // In a transaction so the My Bands row stays locked from validation through
   // the write; the check is a no-op when the body doesn't mention the link.
   return withTransaction(async (client) => {
-    const bandCheck = await assertMyBandWritable(client, tenantId, body.my_band_id)
+    const bandCheck = await assertMyBandWritable(client, tenantId, normalizedBody.my_band_id)
     if (bandCheck) abortTransaction(bandCheck)
 
     const event = await updateBandEventFields(client, tenantId, eventId, built.fields, built.values)

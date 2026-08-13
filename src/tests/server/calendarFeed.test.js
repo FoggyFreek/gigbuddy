@@ -95,6 +95,21 @@ describe('calendar feed — public .ics', () => {
     expect(res.text).not.toContain(`gigbuddy-rehearsal-${seed.rehearsalB.id}@gigbuddy`)
   })
 
+  it('exports an overnight gig end time on the next date', async () => {
+    await pool.query(
+      `UPDATE gigs
+          SET event_date = '2026-08-13', end_date = '2026-08-14',
+              start_time = '22:00', end_time = '02:00'
+        WHERE id = $1 AND tenant_id = $2`,
+      [seed.gigA.id, seed.tenantA.id],
+    )
+    const feed = await createFeed()
+    const res = await request(app).get(feedPath(feed.url)).expect(200)
+
+    expect(res.text).toContain('DTSTART;TZID=Europe/Amsterdam:20260813T220000')
+    expect(res.text).toContain('DTEND;TZID=Europe/Amsterdam:20260814T020000')
+  })
+
   it('reproduces the in-app exporter rehearsal description (vote count + deep link)', async () => {
     await pool.query(
       `INSERT INTO rehearsal_participants (tenant_id, rehearsal_id, band_member_id, vote, updated_by_user_id)

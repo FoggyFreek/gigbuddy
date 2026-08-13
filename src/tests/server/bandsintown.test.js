@@ -166,6 +166,7 @@ describe('bandsintown validators', () => {
     expect(row).toMatchObject({
       bandsintown_event_id: '108197116',
       event_date: '2026-07-06',
+      end_date: '2026-07-06',
       event_description: 'Tall Ships Races 2026',
       start_time: '15:00',
       end_time: '16:00',
@@ -411,6 +412,7 @@ function importRowFromEvent(event, overrides = {}) {
   return {
     bandsintown_event_id: normalized.bandsintown_event_id,
     event_date: normalized.event_date,
+    end_date: normalized.end_date,
     event_description: normalized.event_description,
     start_time: normalized.start_time,
     end_time: normalized.end_time,

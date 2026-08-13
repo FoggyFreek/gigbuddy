@@ -87,8 +87,11 @@ export const listUnclaimedProfiles = (params: { limit?: number; cursor?: string 
   }>(`/unclaimed?${qs}`)
 }
 
+export const deleteUnclaimedProfile = (id: Id) =>
+  api<void>(`/unclaimed/${id}`, { method: 'DELETE' })
+
 export const approveClaim = (id: Id) =>
-  api<{ claim: BandProfileClaim; profileDeleted: boolean }>(`/${id}/approve`, { method: 'POST', body: '{}' })
+  api<{ claim: BandProfileClaim }>(`/${id}/approve`, { method: 'POST', body: '{}' })
 
 /** A reason is required: a rejection without one is unactionable for the band. */
 export const rejectClaim = (id: Id, reason: string) =>

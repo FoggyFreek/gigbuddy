@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { describe, expect, it, vi } from 'vitest'
@@ -35,10 +35,17 @@ function baseProps(overrides = {}) {
 
 describe('BandParticipantsSection', () => {
   it('writer mode shows vote, remove and the add row', () => {
-    wrap(<BandParticipantsSection {...baseProps()} />)
-    expect(screen.getByRole('button', { name: 'Yes' })).toBeEnabled()
+    wrap(<BandParticipantsSection {...baseProps({
+      participants: [...PARTICIPANTS, { band_member_id: 2, name: 'Bob', position: 'bass' }],
+    })} />)
+    expect(screen.getAllByRole('button', { name: 'Yes' })[0]).toBeEnabled()
     expect(screen.getByLabelText('remove Alice')).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Add participant' })).toBeInTheDocument()
+  })
+
+  it('hides removal for the last participant', () => {
+    wrap(<BandParticipantsSection {...baseProps()} />)
+    expect(screen.queryByLabelText('remove Alice')).not.toBeInTheDocument()
   })
 
   it('adds the candidate as soon as it is picked from the autocomplete', async () => {
@@ -113,7 +120,9 @@ describe('BandParticipantsSection', () => {
   it('uses the compact two-column layout with identity, details and actions in their requested cells', () => {
     wrap(
       <BandParticipantsSection
-        {...baseProps()}
+        {...baseProps({
+          participants: [...PARTICIPANTS, { band_member_id: 2, name: 'Bob', position: 'bass' }],
+        })}
         renderParticipantEnd={() => <span>Available</span>}
       />,
       { compact: true },
@@ -126,7 +135,7 @@ describe('BandParticipantsSection', () => {
     expect(identity).toHaveTextContent('Alice')
     expect(details).toHaveTextContent('guitar')
     expect(details).toHaveTextContent('Available')
-    expect(actions).toContainElement(screen.getByRole('button', { name: 'Yes' }))
+    expect(within(actions).getByRole('button', { name: 'Yes' })).toBeEnabled()
     expect(actions).toContainElement(screen.getByLabelText('remove Alice'))
   })
 })

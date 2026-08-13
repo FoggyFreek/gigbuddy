@@ -21,6 +21,15 @@ A personal workspace is a tenant with these additional invariants:
 - It has one owner and one approved membership. The owner is its
   `tenant_admin`; invite, membership-grant, and roster-management paths do not
   apply.
+- It has exactly one hidden `band_members` row linked to that owner. The row
+  carries the artist's ordered roles and mirrors the profile display name, but
+  it is not exposed as a managed band roster or used for band availability. It
+  is the personal workspace's single participant in every gig, rehearsal, and
+  band event. Writes that can touch both rows lock `tenants` before
+  `band_members`; profile-name and role auto-saves run concurrently on the
+  profile page. The member guard probes kind without locking and returns
+  immediately for bands, so ordinary roster writes do not serialize on the
+  tenant row.
 - Each user owns at most one personal workspace. The partial unique index on
   `tenants.owner_user_id` enforces this at the database boundary.
 - Its accounting profile is created with the `sole_trader` legal form.
@@ -38,6 +47,12 @@ tenant, workspace, and display name unless the concept is specifically a band.
 Profile, gigs, rehearsals, band events, tasks, contacts, venues, songs, files,
 email templates, finance, accounting, calendar feeds, and tenant-scoped storage
 apply to both kinds. They use the same tables and the same backend stacks.
+
+Gigs, rehearsals, and band events use the same participant invariant for both
+kinds: once an event has participants, its final participant cannot be removed.
+Participant removals lock the event row before counting and deleting, so two
+concurrent removals cannot empty it. Roster cleanup likewise preserves a final
+former-member participant.
 
 Do not create parallel band and personal routes, services, repositories, pages,
 or tables for a shared domain. A kind-specific field or subtype stays on the
@@ -260,10 +275,19 @@ describes, so the band can never correct it or grow into a real tenant.
   and the claim rows are the only facts, so deleting a band tenant releases its
   profile through the foreign keys alone — no code in the delete path has to
   remember this feature exists.
-- **A profile is self-cleaning**: it lives only while somebody holds it or a
-  claim is live. The foreign keys are the exception, since a cascade runs no
-  service code, so `deleteTenant` collects and locks the affected profiles before
-  deleting and sweeps them afterwards, inside the same transaction.
+- **A profile is permanent, and nothing in the application deletes one.** It is a
+  directory entry for a band, not a possession of whoever happens to hold it, so
+  it outlives every holder and every claim: the whole point is that the next
+  musician to arrive finds the band already described instead of typing it in
+  again. Losing the last holder, withdrawing a claim, having a claim rejected,
+  approving one, and deleting the holding or claiming tenant all release the
+  profile back to `claimable` and leave the row standing. The single exception is
+  a super admin clearing out junk from the unclaimed listing
+  (`DELETE /api/admin/band-profile-claims/unclaimed/:id`), which refuses a
+  claimed profile and one with a pending claim — a claim row outlives its profile
+  and would otherwise sit in the claimant's one live claim slot, unreachable from
+  the queue. Deleting cascades `my_bands` and unlinks (never deletes) the events
+  that were tagged with it.
 - Locks are taken **`tenants` → `band_profiles` (ascending id) → claims /
   `my_bands` / event rows**. The order is global rather than local to this
   feature because tenant deletion already holds the tenant row and then cascades

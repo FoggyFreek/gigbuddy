@@ -4,6 +4,11 @@ import { requirePermission } from '../../middleware/permissions.js'
 import { PERMISSIONS } from '../../auth/permissions.js'
 import { requireParam, sendError } from '../../platform/http/routeHelpers.js'
 import {
+  requireTenantCapability,
+  requireTenantCapabilityWhen,
+} from '../../middleware/tenant.js'
+import { TENANT_CAPABILITIES } from '../../../shared/tenantCapabilities.js'
+import {
   listMembers,
   createMember,
   patchMember,
@@ -11,25 +16,34 @@ import {
 } from './bandMemberService.js'
 
 const router = Router()
+const bandRoster = requireTenantCapability(TENANT_CAPABILITIES.BAND_ROSTER)
 
 router.get('/', async (req, res) => {
   res.json(await listMembers(pool, req.tenantId))
 })
 
-router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.PLANNING_WRITE), bandRoster, async (req, res) => {
   const result = await createMember(pool, req.tenantId, req.body, req.user.id)
   if (result.error) return sendError(res, result.error)
   res.status(201).json(result.member)
 })
 
-router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
-  const id = requireParam(req, res, 'id'); if (id === null) return
-  const result = await patchMember(pool, req.tenantId, id, req.body, req.user.id)
-  if (result.error) return sendError(res, result.error)
-  res.json(result.member)
-})
+router.patch(
+  '/:id',
+  requirePermission(PERMISSIONS.PLANNING_WRITE),
+  requireTenantCapabilityWhen(
+    TENANT_CAPABILITIES.BAND_ROSTER,
+    (req) => Object.keys(req.body ?? {}).some((field) => field !== 'roles'),
+  ),
+  async (req, res) => {
+    const id = requireParam(req, res, 'id'); if (id === null) return
+    const result = await patchMember(pool, req.tenantId, id, req.body, req.user.id, req.tenantKind)
+    if (result.error) return sendError(res, result.error)
+    res.json(result.member)
+  },
+)
 
-router.delete('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+router.delete('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), bandRoster, async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await deleteMember(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)

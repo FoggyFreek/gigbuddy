@@ -24,6 +24,7 @@ import GigTagEditor from './GigTagEditor.tsx'
 import ImageCropDialog from '../../../../components/ImageCropDialog.tsx'
 import PlanningReadOnlyAlert from '../../../../components/PlanningReadOnlyAlert.tsx'
 import { SourceTenantSwitch } from '../../../../components/SourceTenantIdentity.tsx'
+import MyBandSelect from '../../../../people/my-bands/components/MyBandSelect.tsx'
 import GigAvailability from './GigAvailability.tsx'
 import GigEventDetails from './GigEventDetails.tsx'
 import GigTasksSection from './GigTasksSection.tsx'
@@ -43,6 +44,7 @@ import { compressBanner } from '../../../../utils/compressImage.ts'
 import { toDateInput, toTimeInput } from '../../../events/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../../../../utils/requiredFields.ts'
 import type { AvailabilitySummary, Id, GigEquipmentEntry, GigTag, Member, Venue, Task } from '../../../../types/entities.ts'
+import { resolveEventEndDate } from '../../../../../shared/eventTimes.js'
 
 const REQUIRED_FIELDS = ['event_date', 'event_description']
 
@@ -107,6 +109,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   const currentBandMemberId = user?.bandMemberId ?? null
   const [form, setForm] = useState<GigDetailForm>({
     event_date: '',
+    end_date: '',
     event_description: '',
     venue_id: null,
     festival_id: null,
@@ -160,6 +163,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     setSelectedFestival(g.festival || null)
     setForm({
       event_date: toDateInput(g.event_date instanceof Date ? g.event_date.toISOString().slice(0, 10) : g.event_date),
+      end_date: toDateInput(g.end_date),
       event_description: g.event_description || '',
       venue_id: g.venue?.id ?? null,
       festival_id: g.festival?.id ?? null,
@@ -180,6 +184,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   const refresh = useCallback(async () => {
     const g = await source.api.detail(gigId)
     applyGig(g)
+    return g
   }, [gigId, applyGig, source])
 
   // The split view swaps `gigId` under a mounted pane, so between that render
@@ -213,7 +218,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
 
   // The roster is the active tenant's, so it only means anything for a gig that
   // tenant owns — hence the wait for the gig rather than a fetch on mount. A
-  // personal workspace has no roster at all (/band-members is band-only).
+  // Personal events already carry their fixed participant; there is no roster to load.
   useEffect(() => {
     if (gig == null || isCrossBand || !source.canLoadRoster) return
     listMembers().then(setMembers).catch(() => {})
@@ -244,6 +249,18 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     await refresh()
   }
 
+  // Which of the artist's bands this gig was for. Saved on the spot rather than
+  // debounced — a picker has no half-typed state to wait for — but the pending
+  // field edits are flushed first so the re-read below can't undo them.
+  async function handleMyBandChange(myBandId: Id | null) {
+    if (!editable) return
+    await flush()
+    const patch: Record<string, unknown> = { my_band_id: myBandId }
+    await updateGig(gigId, patch)
+    const updated = await refresh()
+    onBannerUpdate?.(gigId, { my_band: updated.my_band ?? null })
+  }
+
   // The only write a cross-band viewer gets: ticking their own assigned task.
   // /api/gigs is out of reach, so it goes through the hub instead.
   async function completeOwnTaskCrossBand(task: Task, done: boolean): Promise<Task> {
@@ -270,9 +287,19 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       schedule({ admission: 'free', ticket_link: null, percentage_of_sales: null })
       return
     }
-    setForm((prev) => ({ ...prev, [field]: value }))
-    if (hasRequiredErrors({ ...form, [field]: value }, REQUIRED_FIELDS)) return
     const patch: Record<string, unknown> = { [field]: value }
+    const candidate = { ...form, ...patch }
+    if (['event_date', 'start_time', 'end_time'].includes(field)) {
+      patch.end_date = resolveEventEndDate(
+        candidate.event_date as string,
+        candidate.event_date as string,
+        candidate.start_time as string,
+        candidate.end_time as string,
+      ) || null
+    }
+    const nextForm = { ...form, ...patch }
+    setForm(nextForm as GigDetailForm)
+    if (hasRequiredErrors(nextForm, REQUIRED_FIELDS)) return
     if (field === 'booking_fee') {
       patch.booking_fee_cents = feeToCents(value as string)
       delete patch.booking_fee
@@ -589,6 +616,17 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       <PlanningReadOnlyAlert canWrite={editable} />
 
       <Box sx={{ display: shownTab === 'event' ? 'block' : 'none' }}>
+        {/* The band a gig was played with, where a gigbuddy band's gig shows the
+            band switcher. A band profile is no tenant to switch into, so it sits
+            at the top of the Event tab instead of in the banner. */}
+        {ownRow && (
+          <MyBandSelect
+            withAvatar
+            value={gig?.my_band?.id ?? null}
+            onChange={handleMyBandChange}
+            disabled={!editable}
+          />
+        )}
         <GigEventDetails
           active={shownTab === 'event'}
           editable={editable}
@@ -631,6 +669,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           gigId={gigId}
           showAvailability={showAvailability}
           eventDate={form.event_date}
+          endDate={form.end_date}
           eventStatus={form.status}
           startTime={form.start_time}
           endTime={form.end_time}

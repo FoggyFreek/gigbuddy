@@ -71,9 +71,15 @@ export function parseDateRange(query, maxDays = Infinity) {
 
 const LOCAL_TIME_RE = /^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/
 
-export function validateDailyTimeRange(startTime, endTime) {
+export function validateTimeValues(startTime, endTime) {
   if (startTime != null && startTime !== '' && !LOCAL_TIME_RE.test(startTime)) return 'start_time must be HH:mm'
   if (endTime != null && endTime !== '' && !LOCAL_TIME_RE.test(endTime)) return 'end_time must be HH:mm'
+  return null
+}
+
+export function validateDailyTimeRange(startTime, endTime) {
+  const timeError = validateTimeValues(startTime, endTime)
+  if (timeError) return timeError
   if (startTime && endTime && endTime <= startTime) return 'end_time must be after start_time'
   return null
 }

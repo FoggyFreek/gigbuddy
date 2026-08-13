@@ -8,7 +8,7 @@
     "items": {
       "preferences": "Mijn voorkeuren",
       "billing": "Facturering",
-      "connectedAccounts": "Gekoppelde accounts",
+      "connectedAccounts": "Mijn account",
       "myAvailability": "Mijn beschikbaarheid",
       "accent": "Accentkleur",
       "membersAndInvites": "Leden en uitnodigingen",
@@ -18,8 +18,7 @@
       "defaultAccounts": "Boekhoudinstellingen",
       "financialProfile": "Financieel profiel",
       "accountingProfile": "Boekhoudprofiel",
-      "bandProfile": "Openbaar bandprofiel",
-      "manageAccounts": "Toegang en beheer"
+      "manageAccounts": "Bandtoegang en beheer"
     },
     "workspaceSettings": "Werkruimte-instellingen"
   },

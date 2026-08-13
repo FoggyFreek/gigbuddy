@@ -67,7 +67,10 @@ export default function BandParticipantsSection({
       {participants.map((participant) => {
         const participantKey = String(participant.band_member_id)
         const voteVisible = showVotes && onVote && shouldShowVote(participant)
-        const removeVisible = canWrite && participant.band_member_id !== undefined && onRemoveParticipant
+        const removeVisible = canWrite
+          && participants.length > 1
+          && participant.band_member_id !== undefined
+          && onRemoveParticipant
 
         if (isCompact) {
           return (

@@ -24,11 +24,11 @@ import {
   listVenuesForImportMatching,
 } from '../../people/venues/venueRepository.js'
 import {
-  getLeadMemberIds,
   insertGigForImport,
   insertGigParticipant,
   listGigsForImportDuplicateCheck,
 } from '../../planning/gigs/gigRepository.js'
+import { listLeadMemberIds } from '../../people/roster/bandMemberRepository.js'
 import { CREDENTIAL_TYPES } from '../../security/integrationSecrets.js'
 import { loadIntegrationCredential } from '../../platform/integrations/integrationCredentialService.js'
 import { getBandsintownArtistId } from '../integrations/tenantIntegrationRepository.js'
@@ -244,7 +244,7 @@ function parseImportRows(items) {
 async function loadImportContext(client, tenantId) {
   const venues = await listVenuesForImportMatching(client, tenantId)
   const existingGigs = await listGigsForImportDuplicateCheck(client, tenantId)
-  const leadIds = await getLeadMemberIds(client, tenantId)
+  const leadIds = await listLeadMemberIds(client, tenantId)
   return {
     leadIds,
     existingGigs,
@@ -260,6 +260,7 @@ async function createImportGig(client, tenantId, userId, row, venue, ctx) {
   const isFestival = venue?.category === 'festival'
   const gigId = await insertGigForImport(client, tenantId, {
     event_date: row.event_date,
+    end_date: row.end_date,
     event_description: row.event_description,
     venueId: isFestival ? null : (venue?.id ?? null),
     festivalId: isFestival ? venue.id : null,

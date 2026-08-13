@@ -40,13 +40,19 @@ async function createUser(email) {
   return rows[0]
 }
 
-async function createBand(displayName, { joinPolicy = 'request', kind = 'band', archived = false } = {}) {
+async function createBand(displayName, {
+  joinPolicy = 'request',
+  kind = 'band',
+  archived = false,
+  ownerUserId = kind === 'personal' ? seed.userA.id : null,
+} = {}) {
   const { rows: [tenant] } = await pool.query(
-    `INSERT INTO tenants (slug, band_name, display_name, kind, join_policy, archived_at, created_by_user_id)
-     VALUES ($1, $2, $2, $3, $4, $5, $6) RETURNING *`,
+    `INSERT INTO tenants
+       (slug, band_name, display_name, kind, join_policy, archived_at, created_by_user_id, owner_user_id)
+     VALUES ($1, $2, $2, $3, $4, $5, $6, $7) RETURNING *`,
     [
       `t-${Math.random().toString(36).slice(2, 10)}`, displayName, kind, joinPolicy,
-      archived ? new Date() : null, seed.userA.id,
+      archived ? new Date() : null, seed.userA.id, ownerUserId,
     ],
   )
   return tenant
@@ -442,7 +448,11 @@ describe('PATCH /api/profile/join-policy', () => {
 
   it('is refused in a personal workspace', async () => {
     const artist = await createUser('artist@test.local')
-    const workspace = await createBand('Solo Artist', { kind: 'personal', joinPolicy: 'invite_only' })
+    const workspace = await createBand('Solo Artist', {
+      kind: 'personal',
+      joinPolicy: 'invite_only',
+      ownerUserId: artist.id,
+    })
     await pool.query(
       `INSERT INTO memberships (user_id, tenant_id, role, status, source, approved_at)
        VALUES ($1, $2, 'tenant_admin', 'approved', 'owner', NOW())`,

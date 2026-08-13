@@ -76,9 +76,12 @@ finds the same record. Four rules are load-bearing:
 - **Claim state is derived, never stored.** `band_profiles.claimed_by_tenant_id` plus the
   claim rows are the only facts, so deleting a band tenant releases its profile through the
   foreign keys alone.
-- **A profile is self-cleaning** — it lives only while somebody holds it or a claim is live
-  — but **a FK cascade runs no service code**, so `deleteTenant` and claim approval both
-  collect, lock and sweep the affected profiles inside their own transaction.
+- **A profile is permanent — no ordinary path deletes one.** It is a directory entry, not a
+  possession, so it outlives its last holder, a withdrawn or rejected claim, an approval,
+  and the deletion of the holding or claiming tenant; each of those only releases it back
+  to `claimable`. Do not reintroduce a cleanup sweep. The one delete is a super admin
+  clearing junk from the unclaimed listing, which refuses a claimed profile or one with a
+  pending claim and cascades `my_bands` (events keep their rows, lose the band tag).
 - **Lock order is global: `tenants` → `band_profiles` (ascending id) → claims / `my_bands` /
   event rows.** Tenant deletion already holds the tenant row and then cascades into the
   others; taking the profile first deadlocks against it.

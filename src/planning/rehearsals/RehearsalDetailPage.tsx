@@ -25,6 +25,7 @@ import RehearsalFields from './components/RehearsalFields.tsx'
 import PastEventAlert from '../../components/PastEventAlert.tsx'
 import RehearsalParticipantsSection from './components/RehearsalParticipantsSection.tsx'
 import RehearsalSongsSection from './components/RehearsalSongsSection.tsx'
+import MyBandSelect from '../../people/my-bands/components/MyBandSelect.tsx'
 import SaveStatusLabel from '../../components/SaveStatusLabel.tsx'
 import PlanningReadOnlyAlert from '../../components/PlanningReadOnlyAlert.tsx'
 import { useAuth } from '../../contexts/authContext.ts'
@@ -36,6 +37,7 @@ import { useTenantKind } from '../../hooks/useTenantKind.ts'
 import { usePlanningSource } from '../shared/usePlanningSource.ts'
 import { SourceTenantSwitch } from '../../components/SourceTenantIdentity.tsx'
 import { TENANT_CAPABILITIES } from '../../auth/tenantCapabilities.ts'
+import { resolveEventEndDate } from '../../../shared/eventTimes.js'
 
 interface RehearsalDetailOutletContext {
   insideSplitView?: boolean
@@ -52,6 +54,7 @@ type RehearsalDetail = MaybeCrossTenant<Rehearsal>
 
 interface RehearsalForm {
   proposed_date: string
+  end_date: string
   start_time: string
   end_time: string
   location: string
@@ -73,7 +76,7 @@ export default function RehearsalDetailPage() {
   const onRehearsalDetailLoaded = outletCtx.onRehearsalDetailLoaded
   const onRehearsalDetailLoadError = outletCtx.onRehearsalDetailLoadError
 
-  const [form, setForm] = useState<RehearsalForm>({ proposed_date: '', start_time: '', end_time: '', location: '', notes: '' })
+  const [form, setForm] = useState<RehearsalForm>({ proposed_date: '', end_date: '', start_time: '', end_time: '', location: '', notes: '' })
   const [loading, setLoading] = useState(true)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [rehearsal, setRehearsal] = useState<RehearsalDetail | null>(null)
@@ -99,11 +102,13 @@ export default function RehearsalDetailPage() {
     setRehearsal(r)
     setForm({
       proposed_date: toDateInput(r.proposed_date),
+      end_date: toDateInput(r.end_date),
       start_time: toTimeInput(r.start_time),
       end_time: toTimeInput(r.end_time),
       location: r.location || '',
       notes: r.notes || '',
     })
+    return r
   }, [rehearsalId, source])
 
   useEffect(() => {
@@ -113,6 +118,7 @@ export default function RehearsalDetailPage() {
         onRehearsalDetailLoaded?.(rehearsalData)
         setForm({
           proposed_date: toDateInput(rehearsalData.proposed_date),
+          end_date: toDateInput(rehearsalData.end_date),
           start_time: toTimeInput(rehearsalData.start_time),
           end_time: toTimeInput(rehearsalData.end_time),
           location: rehearsalData.location || '',
@@ -125,9 +131,22 @@ export default function RehearsalDetailPage() {
 
   function handleChange(field: string, value: string | null) {
     if (!detailCanWrite) return
-    setForm((prev) => ({ ...prev, [field]: value ?? '' }))
-    if (hasRequiredErrors({ ...form, [field]: value } as Record<string, unknown>, REQUIRED_FIELDS)) return
-    schedule({ [field]: value || null } as Partial<RehearsalForm>)
+    const patch: Partial<RehearsalForm> = { [field]: value ?? '' }
+    const candidate = { ...form, ...patch }
+    if (['proposed_date', 'start_time', 'end_time'].includes(field)) {
+      patch.end_date = resolveEventEndDate(
+        candidate.proposed_date,
+        candidate.proposed_date,
+        candidate.start_time,
+        candidate.end_time,
+      ) || ''
+    }
+    const nextForm = { ...form, ...patch }
+    setForm(nextForm)
+    if (hasRequiredErrors(nextForm as unknown as Record<string, unknown>, REQUIRED_FIELDS)) return
+    schedule(Object.fromEntries(
+      Object.entries(patch).map(([key, update]) => [key, update || null]),
+    ) as Partial<RehearsalForm>)
   }
 
   async function handleVote(memberId: Id | undefined, vote: string | null) {
@@ -146,6 +165,18 @@ export default function RehearsalDetailPage() {
   async function handleAddParticipant(memberId: Id) {
     await addParticipant(rehearsalId, Number(memberId))
     await refresh()
+  }
+
+  // Which of the artist's bands this rehearsal was for. Saved on the spot rather
+  // than debounced — a picker has no half-typed state to wait for — but the
+  // pending field edits are flushed first so the re-read can't undo them.
+  async function handleMyBandChange(myBandId: Id | null) {
+    if (!detailCanWrite) return
+    await flush()
+    const patch: Record<string, unknown> = { my_band_id: myBandId }
+    await updateRehearsal(rehearsalId, patch)
+    const updated = await refresh()
+    outletCtx.onRehearsalUpdate?.(rehearsalId, { my_band: updated.my_band ?? null })
   }
 
   async function handleAddSong(song: Song) {
@@ -206,6 +237,17 @@ export default function RehearsalDetailPage() {
           tenantId={rehearsal.tenantId}
           tenantName={rehearsal.tenantName}
           tenantAvatarPath={rehearsal.tenantAvatarPath}
+        />
+      )}
+
+      {/* The band a personal workspace's rehearsal was for takes the same slot: a
+          band profile is no tenant to switch into, so it gets a picker instead. */}
+      {!isCrossBand && rehearsal && (
+        <MyBandSelect
+          withAvatar
+          value={rehearsal.my_band?.id ?? null}
+          onChange={handleMyBandChange}
+          disabled={!detailCanWrite}
         />
       )}
 

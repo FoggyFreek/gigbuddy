@@ -33,8 +33,6 @@ export interface MyBandRemoval {
   mode: RemovalMode
   unlinked: MyBandEventCounts
   deleted: MyBandEventCounts
-  /** True when that was the last holder and the global profile is now gone. */
-  profileDeleted: boolean
 }
 
 export const removeMyBand = (id: Id, mode: RemovalMode = 'keep') =>

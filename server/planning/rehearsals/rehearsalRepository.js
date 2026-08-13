@@ -180,33 +180,16 @@ export async function loadSongs(executor, rehearsalId, tenantId) {
   return rows
 }
 
-export async function getLeadMemberIds(executor, tenantId) {
-  const { rows } = await executor.query(
-    `SELECT id FROM band_members
-      WHERE tenant_id = $1 AND position = 'lead' AND deleted_at IS NULL`,
-    [tenantId],
-  )
-  return rows.map((r) => r.id)
-}
-
-export async function filterMemberIdsInTenant(executor, memberIds, tenantId) {
-  if (!memberIds.length) return []
-  const { rows } = await executor.query(
-    'SELECT id FROM band_members WHERE id = ANY($1) AND tenant_id = $2 AND deleted_at IS NULL',
-    [memberIds, tenantId],
-  )
-  return rows.map((r) => r.id)
-}
-
 export async function insertRehearsal(executor, tenantId, data, createdByUserId) {
   const { rows } = await executor.query(
     `INSERT INTO rehearsals
-       (tenant_id, proposed_date, start_time, end_time, location, notes, created_by_user_id, my_band_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       (tenant_id, proposed_date, end_date, start_time, end_time, location, notes, created_by_user_id, my_band_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *, ${myBandSelect('rehearsals')}`,
     [
       tenantId,
       data.proposed_date,
+      data.end_date,
       data.start_time || null,
       data.end_time || null,
       data.location || null,
@@ -234,6 +217,25 @@ export async function deleteParticipant(executor, rehearsalId, memberId, tenantI
     [rehearsalId, memberId, tenantId],
   )
   return rowCount > 0
+}
+
+export async function lockRehearsalForParticipantRemoval(executor, rehearsalId, tenantId) {
+  const { rowCount } = await executor.query(
+    'SELECT 1 FROM rehearsals WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
+    [rehearsalId, tenantId],
+  )
+  return rowCount > 0
+}
+
+export async function getRehearsalParticipantRemovalState(executor, rehearsalId, memberId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT COUNT(*)::int AS participant_count,
+            COALESCE(BOOL_OR(band_member_id = $2), FALSE) AS target_exists
+       FROM rehearsal_participants
+      WHERE rehearsal_id = $1 AND tenant_id = $3`,
+    [rehearsalId, memberId, tenantId],
+  )
+  return rows[0]
 }
 
 export async function updateParticipantVote(executor, tenantId, rehearsalId, memberId, vote, updatedByUserId) {

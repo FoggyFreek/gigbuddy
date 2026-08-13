@@ -8,7 +8,7 @@
     "items": {
       "preferences": "My preferences",
       "billing": "Billing",
-      "connectedAccounts": "Connected accounts",
+      "connectedAccounts": "My account",
       "myAvailability": "My availability",
       "accent": "Accent color",
       "membersAndInvites": "Members and invites",
@@ -18,8 +18,7 @@
       "defaultAccounts": "Accounting Settings",
       "financialProfile": "Financial profile",
       "accountingProfile": "Accounting profile",
-      "bandProfile": "Public band profile",
-      "manageAccounts": "Manage account"
+      "manageAccounts": "Manage band account"
     },
     "workspaceSettings": "Workspace settings"
   },

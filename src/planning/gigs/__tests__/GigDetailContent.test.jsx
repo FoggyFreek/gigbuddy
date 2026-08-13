@@ -66,6 +66,12 @@ vi.mock('../../availability/me.ts', () => ({
   setMyTaskDone: vi.fn(),
 }))
 
+// The band picker only fetches in a personal workspace; a band tenant fails the
+// capability gate before this is ever called.
+vi.mock('../../../people/my-bands/myBands.ts', () => ({
+  listMyBands: vi.fn().mockResolvedValue({ items: [] }),
+}))
+
 // The blurred header banner behind the gig is the active tenant's own.
 vi.mock('../../../people/profiles/profile.ts', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -114,6 +120,7 @@ import { createInvoice, draftFromGig, listInvoicesByGig } from '../../../finance
 import { evaluateEventAvailability, getAvailabilityOn } from '../../availability/availability.ts'
 import { listMembers } from '../../../people/memberships/bandMembers.ts'
 import { getMyGig, setMyTaskDone } from '../../availability/me.ts'
+import { listMyBands } from '../../../people/my-bands/myBands.ts'
 import { AuthContext } from '../../../contexts/authContext.ts'
 import { geocodePlace } from '../../../people/venues/geocode.ts'
 
@@ -267,6 +274,15 @@ describe('GigDetailContent — field rendering', () => {
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/percentage of net sales/i))
     expect(screen.getByLabelText(/percentage of net sales/i)).toBeInTheDocument()
+  })
+
+  // A band's own gigs are already the band's, so there is nothing to pick and
+  // the collection is never fetched.
+  it('shows no band picker in a band workspace', async () => {
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
+    expect(screen.queryByTestId('my-band-identity')).not.toBeInTheDocument()
+    expect(listMyBands).not.toHaveBeenCalled()
   })
 })
 
@@ -1067,7 +1083,18 @@ describe('GigDetailContent — personal workspace', () => {
     tags: [],
   }
 
-  const OWN_GIG = { ...CROSS_BAND_GIG, tenantId: 1, tenantName: 'Solo', viewerBandMemberId: null }
+  const OWN_GIG = {
+    ...CROSS_BAND_GIG,
+    tenantId: 1,
+    tenantName: 'Solo',
+    viewerBandMemberId: null,
+    my_band: { id: 4, name: 'Static Waves', country_code: 'NL' },
+  }
+
+  const MY_BANDS = [
+    { id: 4, bandProfile: { id: 40, name: 'Static Waves', country_code: 'NL' }, eventCounts: {}, addedAt: '2026-01-01' },
+    { id: 5, bandProfile: { id: 50, name: 'Nirvana', country_code: 'US' }, eventCounts: {}, addedAt: '2026-01-01' },
+  ]
 
   function asArtist(ui) {
     return (
@@ -1099,6 +1126,7 @@ describe('GigDetailContent — personal workspace', () => {
     listInvoicesByGig.mockResolvedValue([])
     listMembers.mockResolvedValue([])
     getAvailabilityOn.mockResolvedValue({ bandWide: null, members: [] })
+    listMyBands.mockResolvedValue({ items: MY_BANDS })
   })
 
   // The split view swaps the gig id under a mounted detail pane. Until the new
@@ -1218,12 +1246,59 @@ describe('GigDetailContent — personal workspace', () => {
     expect(screen.getByRole('button', { name: 'Terms' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Participants' })).toBeInTheDocument()
     expect(screen.queryByTestId('source-tenant-switch')).not.toBeInTheDocument()
-    // /band-members is band-only, so a personal workspace has no roster to load
-    // even for its own gig — asking would 403.
+    // The personal workspace has a fixed participant, not an editable roster.
     expect(listMembers).not.toHaveBeenCalled()
 
     await openTab(user, 'Terms')
     await user.type(screen.getByLabelText(/merchandise cut/i), '15')
     await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, { merchandise_cut: 15 }))
+  })
+
+  // The band switcher takes the event-banner slot for a gigbuddy band's gig; a
+  // band profile is not a tenant to switch into, so it gets the top of the Event
+  // tab instead — between the tab pill and the event fields.
+  it("labels the workspace's own gig with its band, above the Event tab content", async () => {
+    getMyGig.mockResolvedValue(OWN_GIG)
+    wrapAsArtist(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    const identity = screen.getByTestId('my-band-identity')
+    expect(identity).toHaveTextContent('SW')
+    expect(screen.getByRole('combobox', { name: 'Band' })).toHaveTextContent('Static Waves')
+
+    const tabPill = screen.getByRole('button', { name: 'Tasks' })
+    const description = screen.getByLabelText(/event description/i)
+    expect(tabPill.compareDocumentPosition(identity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(identity.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('relinks the gig to another band through the tenant route', async () => {
+    const user = userEvent.setup()
+    getMyGig.mockResolvedValue(OWN_GIG)
+    wrapAsArtist(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    await user.click(await screen.findByRole('combobox', { name: 'Band' }))
+    await user.click(screen.getByRole('option', { name: 'Nirvana' }))
+
+    await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, { my_band_id: 5 }))
+    // Re-read so the avatar follows what the server actually stored.
+    await waitFor(() => expect(getMyGig.mock.calls.length).toBeGreaterThan(1))
+  })
+
+  it("shows no band picker for another band's gig", async () => {
+    wrapAsArtist(<GigDetailContent gigId={1} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    expect(screen.queryByTestId('my-band-identity')).not.toBeInTheDocument()
+    expect(screen.getByTestId('source-tenant-switch')).toBeInTheDocument()
+  })
+
+  it('leaves the picker read-only for a reader', async () => {
+    getMyGig.mockResolvedValue(OWN_GIG)
+    wrapAsArtist(<GigDetailContent gigId={1} canWrite={false} />)
+    await waitFor(() => expect(screen.getByDisplayValue('Festival set')).toBeInTheDocument())
+
+    expect(await screen.findByRole('combobox', { name: 'Band' })).toHaveAttribute('aria-disabled', 'true')
   })
 })

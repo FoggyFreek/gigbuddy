@@ -25,10 +25,8 @@ export async function fetchTenant(executor, tenantId) {
   return rows[0] || null
 }
 
-// Locks the tenant row FOR UPDATE and returns the safe projection. Lets a
-// read-validate-write sequence (the profile VAT/registration consistency check)
-// run atomically so a concurrent PATCH can't slip an incompatible tax_id or
-// kvk_number between the check and the write.
+// Locks the tenant row FOR UPDATE and returns the safe projection. This is also
+// the first lock in the tenant -> child lock order used by cross-table writes.
 export async function lockTenantRow(executor, tenantId) {
   const { rows } = await executor.query(
     `SELECT ${tenantSafeProjection()} FROM tenants WHERE id = $1 FOR UPDATE`,

@@ -75,7 +75,7 @@ export default function TenantSlugSection() {
       <Stack spacing={2}>
         <TextField
           fullWidth
-          size="small"
+          size="medium"
           label={t($ => $.tenantSlug.label)}
           value={slug}
           onChange={(event) => {

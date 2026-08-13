@@ -91,8 +91,8 @@ export default function BandProfileClaimSection() {
   const canClaim = claim === null || claim.status === 'rejected'
 
   return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
-      <Typography variant="h6" sx={{ mb: 0.5 }}>{t($ => $.bandProfileClaim.title)}</Typography>
+    <Paper variant="outlined" sx={{ p: 3 }}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{t($ => $.bandProfileClaim.title)}</Typography>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
         {t($ => $.bandProfileClaim.description)}
       </Typography>

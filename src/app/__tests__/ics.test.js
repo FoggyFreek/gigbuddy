@@ -34,6 +34,20 @@ describe('shared/ics buildIcsCalendar', () => {
     expect(ics).toContain('UID:u1@gigbuddy')
   })
 
+  it('formats an overnight timed event with its end on the next date', () => {
+    const ics = buildIcsCalendar([{
+      uid: 'overnight@gigbuddy',
+      summary: 'Late show',
+      startDate: '2026-08-13',
+      endDate: '2026-08-14',
+      startTime: '22:00',
+      endTime: '02:00',
+    }])
+
+    expect(ics).toContain('DTSTART;TZID=Europe/Amsterdam:20260813T220000')
+    expect(ics).toContain('DTEND;TZID=Europe/Amsterdam:20260814T020000')
+  })
+
   it('formats an all-day event with an exclusive DTEND (end + 1 day)', () => {
     const ics = buildIcsCalendar([
       {

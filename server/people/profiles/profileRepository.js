@@ -32,19 +32,6 @@ export async function listProfileLinks(executor, tenantId) {
   return rows
 }
 
-// Applies prebuilt SET fragments to the tenant row, appending updated_at and the
-// id WHERE binding. Returns the updated row or null.
-export async function updateTenantFields(executor, tenantId, fields, values) {
-  const assignments = [...fields, 'updated_at = NOW()']
-  const whereIdx = values.length + 1
-  const { rows } = await executor.query(
-    `UPDATE tenants SET ${assignments.join(', ')} WHERE id = $${whereIdx}
-     RETURNING ${tenantSafeProjection()}`,
-    [...values, tenantId],
-  )
-  return rows[0] || null
-}
-
 // ---------- links ----------
 
 export async function nextLinkSortOrder(executor, tenantId) {

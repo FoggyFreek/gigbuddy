@@ -3,6 +3,7 @@
 import {
   LATITUDE_MAX, LATITUDE_MIN, LONGITUDE_MAX, LONGITUDE_MIN, coordinateOrNull,
 } from '../../utils/coordinates.js'
+import { resolveEventEndDate, timeToMinutes } from '../../../shared/eventTimes.js'
 
 export const VALID_IMPORT_STATUSES = ['option', 'confirmed', 'announced']
 export const VALID_IMPORT_CATEGORIES = new Set(['venue', 'festival'])
@@ -74,12 +75,15 @@ export function normalizeBandsintownEvent(event) {
   const longitude = normalizedCoordinate(venue.longitude, LONGITUDE_MIN, LONGITUDE_MAX)
   const hasCoordinatePair = latitude !== null && longitude !== null
 
+  const startTime = timeFromIso(trimmed(event.starts_at) || trimmed(event.datetime))
+  const endTime = timeFromIso(trimmed(event.ends_at))
   return {
     bandsintown_event_id: trimmed(event.id) || extractEventIdFromLink(event.url),
     event_date: dateMatch[1],
+    end_date: resolveEventEndDate(dateMatch[1], dateMatch[1], startTime, endTime),
     event_description: description,
-    start_time: timeFromIso(trimmed(event.starts_at) || trimmed(event.datetime)),
-    end_time: timeFromIso(trimmed(event.ends_at)),
+    start_time: startTime,
+    end_time: endTime,
     event_link: trimmed(event.url) || null,
     ticket_link: offers.map((o) => trimmed(o?.url)).find(Boolean) || null,
     admission: event.free === true ? 'free' : 'paid',
@@ -200,12 +204,19 @@ export function isValidTimeOfDay(value) {
 export function normalizeImportEventRow(item) {
   if (!item || typeof item !== 'object') return { error: 'Invalid event row' }
   if (!isValidCalendarDate(item.event_date)) return { error: 'Invalid event_date' }
+  if (item.end_date && !isValidCalendarDate(item.end_date)) return { error: 'Invalid end_date' }
   if (item.start_time && !isValidTimeOfDay(item.start_time)) return { error: 'Invalid start_time' }
   if (item.end_time && !isValidTimeOfDay(item.end_time)) return { error: 'Invalid end_time' }
+  if (item.start_time && item.end_time && timeToMinutes(item.start_time) === timeToMinutes(item.end_time)) {
+    return { error: 'end_time must be after start_time' }
+  }
+  const endDate = resolveEventEndDate(
+    item.event_date, item.event_date, item.start_time, item.end_time,
+  )
   const normalized = normalizeBandsintownEvent({
     id: item.bandsintown_event_id,
     starts_at: `${item.event_date}T${item.start_time || '00:00'}`,
-    ends_at: item.end_time ? `${item.event_date}T${item.end_time}` : '',
+    ends_at: item.end_time ? `${endDate}T${item.end_time}` : '',
     title: item.event_description,
     url: item.event_link,
     offers: item.ticket_link ? [{ url: item.ticket_link }] : [],
@@ -214,6 +225,7 @@ export function normalizeImportEventRow(item) {
   })
   if (!normalized) return { error: 'event_date and event_description are required' }
   normalized.start_time = item.start_time || null
+  normalized.end_date = endDate
 
   const status = item.status && VALID_IMPORT_STATUSES.includes(item.status) ? item.status : 'confirmed'
   const category = VALID_IMPORT_CATEGORIES.has(item.category) ? item.category : 'venue'

@@ -27,7 +27,7 @@ export async function listBookingsForMembersInRange(executor, tenantId, memberId
   if (!memberIds.length) return []
   const { rows } = await executor.query(
     `SELECT 'gig' AS source, g.id AS source_id, gp.band_member_id,
-            g.event_date AS start_date, g.event_date AS end_date,
+            g.event_date AS start_date, COALESCE(g.end_date, g.event_date) AS end_date,
             g.start_time, g.end_time, g.event_description AS title
        FROM gigs g
        JOIN gig_participants gp ON gp.gig_id = g.id AND gp.tenant_id = g.tenant_id
@@ -36,7 +36,7 @@ export async function listBookingsForMembersInRange(executor, tenantId, memberId
         AND g.event_date BETWEEN ($3::date - 1) AND ($4::date + 1)
      UNION ALL
      SELECT 'rehearsal', r.id, rp.band_member_id,
-            r.proposed_date, r.proposed_date, r.start_time, r.end_time, r.location
+            r.proposed_date, COALESCE(r.end_date, r.proposed_date), r.start_time, r.end_time, r.location
        FROM rehearsals r
        JOIN rehearsal_participants rp ON rp.rehearsal_id = r.id AND rp.tenant_id = r.tenant_id
       WHERE r.tenant_id = $1 AND rp.band_member_id = ANY($2)

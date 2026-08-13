@@ -20,7 +20,6 @@ import { CLAIM_STATUSES } from '../../domain/bandProfiles.js'
 import {
   lockBandProfile,
   hasPendingClaim,
-  deleteBandProfileIfAbandoned,
 } from './bandProfileRepository.js'
 import {
   insertClaim,
@@ -132,12 +131,9 @@ export async function withdrawClaim(db, tenantId, claimId) {
     }
 
     if (claim.band_profile_id !== null) await lockBandProfile(client, claim.band_profile_id)
+    // Only the claim goes: the profile returns to claimable and stays in the
+    // directory, holders or none.
     await deletePendingClaim(client, claimId, tenantId)
-
-    // The pending claim was the only thing keeping a holderless profile alive.
-    if (claim.band_profile_id !== null) {
-      await deleteBandProfileIfAbandoned(client, claim.band_profile_id)
-    }
 
     return { audit: { action: 'band_profile_claim.withdraw', details: { tenantId, claimId } } }
   }, { db })

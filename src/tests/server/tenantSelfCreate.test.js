@@ -7,6 +7,7 @@ import { seedDefaultPlans } from '../../../server/db/defaultPlans.js'
 let app, pool, runMigrations, truncateAll, seedTwoTenants
 let clearEntitlementCaches
 let billing
+let patchMember
 let seed
 
 beforeAll(async () => {
@@ -19,6 +20,8 @@ beforeAll(async () => {
   app = appMod.createTestApp()
   const entMod = await import('../../../server/commerce/billing/entitlementService.js')
   clearEntitlementCaches = entMod.clearEntitlementCaches
+  const rosterMod = await import('../../../server/people/roster/bandMemberService.js')
+  patchMember = rosterMod.patchMember
   billing = await import('./_billing.js')
   await runMigrations()
 })
@@ -188,6 +191,20 @@ describe('POST /api/tenants/personal (artist workspace)', () => {
       { user_id: seed.userA.id, role: 'tenant_admin', status: 'approved' },
     ])
 
+    const { rows: roster } = await pool.query(
+      `SELECT name, roles, color, sort_order, position, user_id
+         FROM band_members WHERE tenant_id = $1 AND deleted_at IS NULL`,
+      [res.body.id],
+    )
+    expect(roster).toEqual([{
+      name: 'Alpha User',
+      roles: [],
+      color: null,
+      sort_order: 0,
+      position: 'lead',
+      user_id: seed.userA.id,
+    }])
+
     const { rows: [accounts] } = await pool.query(
       'SELECT COUNT(*)::int AS count FROM chart_of_accounts WHERE tenant_id = $1', [res.body.id],
     )
@@ -277,7 +294,7 @@ describe('POST /api/tenants/personal (artist workspace)', () => {
     expect(count.count).toBe(0)
   })
 
-  it('rejects band-only surfaces inside the workspace', async () => {
+  it('exposes only the fixed member roles inside the workspace', async () => {
     const ws = await asUserA(request(app).post('/api/tenants/personal').send(personalBody()))
       .expect(201)
 
@@ -285,7 +302,33 @@ describe('POST /api/tenants/personal (artist workspace)', () => {
       .send({ role: 'member' }).expect(403)
     expect(invite.body.code).toBe('tenant_kind_not_supported')
 
-    await inWorkspace(request(app).get('/api/band-members'), ws.body.id).expect(403)
+    const roster = await inWorkspace(request(app).get('/api/band-members'), ws.body.id).expect(200)
+    expect(roster.body).toHaveLength(1)
+    expect(roster.body[0]).toMatchObject({ name: 'Alpha User', user_id: seed.userA.id, roles: [] })
+
+    const updated = await inWorkspace(
+      request(app).patch(`/api/band-members/${roster.body[0].id}`), ws.body.id,
+    ).send({ roles: ['Lead Vocals', 'Piano'] }).expect(200)
+    expect(updated.body.roles).toEqual(['Lead Vocals', 'Piano'])
+
+    const forbiddenPatch = await inWorkspace(
+      request(app).patch(`/api/band-members/${roster.body[0].id}`), ws.body.id,
+    ).send({ name: 'Not the profile name' }).expect(403)
+    expect(forbiddenPatch.body.code).toBe('tenant_kind_not_supported')
+
+    const createMember = await inWorkspace(request(app).post('/api/band-members'), ws.body.id)
+      .send({ name: 'Second artist' }).expect(403)
+    expect(createMember.body.code).toBe('tenant_kind_not_supported')
+
+    const deleteMember = await inWorkspace(
+      request(app).delete(`/api/band-members/${roster.body[0].id}`), ws.body.id,
+    ).expect(403)
+    expect(deleteMember.body.code).toBe('tenant_kind_not_supported')
+
+    await inWorkspace(
+      request(app).patch(`/api/band-members/${seed.memberB.id}`), ws.body.id,
+    ).send({ roles: ['Drums'] }).expect(404)
+
     await inWorkspace(request(app).get('/api/setlists'), ws.body.id).expect(403)
     await inWorkspace(request(app).get('/api/profile/bandsintown-key'), ws.body.id).expect(403)
     await inWorkspace(request(app).get('/api/profile/shopify-client-id'), ws.body.id).expect(403)
@@ -298,6 +341,230 @@ describe('POST /api/tenants/personal (artist workspace)', () => {
 
     // Planning and the books are exactly the point of the workspace.
     await inWorkspace(request(app).get('/api/gigs'), ws.body.id).expect(200)
+  })
+
+  it('keeps the fixed member name synchronized with the artist profile', async () => {
+    const ws = await asUserA(request(app).post('/api/tenants/personal').send(personalBody()))
+      .expect(201)
+
+    await inWorkspace(request(app).patch('/api/profile'), ws.body.id)
+      .send({ band_name: 'Alpha Artist' }).expect(200)
+
+    const { rows: [tenant] } = await pool.query(
+      'SELECT band_name, display_name FROM tenants WHERE id = $1', [ws.body.id],
+    )
+    expect(tenant).toEqual({ band_name: 'Alpha Artist', display_name: 'Alpha Artist' })
+
+    const roster = await inWorkspace(request(app).get('/api/band-members'), ws.body.id).expect(200)
+    expect(roster.body).toHaveLength(1)
+    expect(roster.body[0].name).toBe('Alpha Artist')
+  })
+
+  it('waits for the personal tenant lock before locking its fixed member', async () => {
+    const ws = await asUserA(request(app).post('/api/tenants/personal').send(personalBody()))
+      .expect(201)
+    const { rows: [member] } = await pool.query(
+      'SELECT id FROM band_members WHERE tenant_id = $1 AND deleted_at IS NULL', [ws.body.id],
+    )
+
+    const tenantLocker = await pool.connect()
+    const rolesClient = await pool.connect()
+    let rolesWrite
+    let lockError = null
+    try {
+      await tenantLocker.query('BEGIN')
+      await tenantLocker.query('SELECT id FROM tenants WHERE id = $1 FOR UPDATE', [ws.body.id])
+      const { rows: [{ pid }] } = await rolesClient.query('SELECT pg_backend_pid() AS pid')
+
+      rolesWrite = patchMember(
+        { connect: async () => rolesClient },
+        ws.body.id,
+        member.id,
+        { roles: ['Piano'] },
+        seed.userA.id,
+        'personal',
+      )
+
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const { rows: [activity] } = await pool.query(
+          'SELECT wait_event_type FROM pg_stat_activity WHERE pid = $1', [pid],
+        )
+        if (activity?.wait_event_type === 'Lock') break
+        if (attempt === 99) throw new Error('roles update did not wait for the tenant lock')
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      }
+
+      try {
+        await pool.query(
+          'SELECT id FROM band_members WHERE id = $1 FOR UPDATE NOWAIT', [member.id],
+        )
+      } catch (err) {
+        lockError = err
+      }
+    } finally {
+      await tenantLocker.query('ROLLBACK')
+      tenantLocker.release()
+    }
+
+    const result = await rolesWrite
+    expect(lockError).toBeNull()
+    expect(result.member.roles).toEqual(['Piano'])
+  })
+
+  it('does not lock a band tenant row for ordinary roster writes', async () => {
+    const tenantLocker = await pool.connect()
+    const memberWriter = await pool.connect()
+    const writeErrors = []
+    try {
+      await tenantLocker.query('BEGIN')
+      await tenantLocker.query('SELECT id FROM tenants WHERE id = $1 FOR UPDATE', [seed.tenantA.id])
+
+      await memberWriter.query('BEGIN')
+      await memberWriter.query("SET LOCAL lock_timeout = '100ms'")
+      try {
+        await memberWriter.query(
+          `UPDATE band_members SET roles = ARRAY['Piano']::TEXT[] WHERE id = $1`,
+          [seed.memberA.id],
+        )
+      } catch (err) {
+        writeErrors.push(err)
+      }
+      try {
+        await memberWriter.query('DELETE FROM band_members WHERE id = $1', [seed.memberA.id])
+      } catch (err) {
+        writeErrors.push(err)
+      }
+    } finally {
+      await memberWriter.query('ROLLBACK')
+      await tenantLocker.query('ROLLBACK')
+      memberWriter.release()
+      tenantLocker.release()
+    }
+
+    expect(writeErrors).toEqual([])
+  })
+
+  it('uses the fixed member as the sole participant in every personal event', async () => {
+    const ws = await asUserA(request(app).post('/api/tenants/personal').send(personalBody()))
+      .expect(201)
+    const { rows: [member] } = await pool.query(
+      'SELECT id FROM band_members WHERE tenant_id = $1 AND deleted_at IS NULL', [ws.body.id],
+    )
+
+    const gig = await inWorkspace(request(app).post('/api/gigs'), ws.body.id)
+      .send({ event_date: '2027-06-01', event_description: 'Solo gig' }).expect(201)
+    const rehearsal = await inWorkspace(request(app).post('/api/rehearsals'), ws.body.id)
+      .send({ proposed_date: '2027-06-02' }).expect(201)
+    const bandEvent = await inWorkspace(request(app).post('/api/band-events'), ws.body.id)
+      .send({ title: 'Studio day', start_date: '2027-06-03' }).expect(201)
+
+    const participantQueries = [
+      ['gig_participants', 'gig_id', gig.body.id],
+      ['rehearsal_participants', 'rehearsal_id', rehearsal.body.id],
+      ['band_event_participants', 'band_event_id', bandEvent.body.id],
+    ]
+    for (const [table, eventColumn, eventId] of participantQueries) {
+      const { rows } = await pool.query(
+        `SELECT band_member_id FROM ${table} WHERE ${eventColumn} = $1`, [eventId],
+      )
+      expect(rows).toEqual([{ band_member_id: member.id }])
+    }
+
+    const removals = [
+      `/api/gigs/${gig.body.id}/participants/${member.id}`,
+      `/api/rehearsals/${rehearsal.body.id}/participants/${member.id}`,
+      `/api/band-events/${bandEvent.body.id}/participants/${member.id}`,
+    ]
+    for (const path of removals) {
+      const res = await inWorkspace(request(app).delete(path), ws.body.id).expect(409)
+      expect(res.body.code).toBe('last_participant')
+    }
+  })
+
+  it('does not remove the last participant from band events either', async () => {
+    const gig = await asUserA(request(app).post('/api/gigs'))
+      .send({ event_date: '2027-07-01', event_description: 'Band gig' }).expect(201)
+    const rehearsal = await asUserA(request(app).post('/api/rehearsals'))
+      .send({ proposed_date: '2027-07-02' }).expect(201)
+    const bandEvent = await asUserA(request(app).post('/api/band-events'))
+      .send({ title: 'Band day', start_date: '2027-07-03' }).expect(201)
+
+    const removals = [
+      `/api/gigs/${gig.body.id}/participants/${seed.memberA.id}`,
+      `/api/rehearsals/${rehearsal.body.id}/participants/${seed.memberA.id}`,
+      `/api/band-events/${bandEvent.body.id}/participants/${seed.memberA.id}`,
+    ]
+    for (const path of removals) {
+      const res = await asUserA(request(app).delete(path)).expect(409)
+      expect(res.body.code).toBe('last_participant')
+    }
+  })
+
+  it('serializes concurrent participant removals so one participant remains', async () => {
+    const optional = await asUserA(request(app).post('/api/band-members'))
+      .send({ name: 'Optional player', position: 'optional', roles: [] }).expect(201)
+    const cases = [
+      {
+        create: () => asUserA(request(app).post('/api/gigs'))
+          .send({ event_date: '2027-08-01', event_description: 'Concurrent gig' }),
+        resource: 'gigs',
+      },
+      {
+        create: () => asUserA(request(app).post('/api/rehearsals'))
+          .send({ proposed_date: '2027-08-02' }),
+        resource: 'rehearsals',
+      },
+      {
+        create: () => asUserA(request(app).post('/api/band-events'))
+          .send({ title: 'Concurrent event', start_date: '2027-08-03' }),
+        resource: 'band-events',
+      },
+    ]
+
+    for (const eventCase of cases) {
+      const created = await eventCase.create().expect(201)
+      await asUserA(request(app).post(`/api/${eventCase.resource}/${created.body.id}/participants`))
+        .send({ band_member_id: optional.body.id }).expect(201)
+
+      const responses = await Promise.all([
+        asUserA(request(app).delete(
+          `/api/${eventCase.resource}/${created.body.id}/participants/${seed.memberA.id}`,
+        )),
+        asUserA(request(app).delete(
+          `/api/${eventCase.resource}/${created.body.id}/participants/${optional.body.id}`,
+        )),
+      ])
+      expect(responses.map((response) => response.status).sort()).toEqual([204, 409])
+      expect(responses.find((response) => response.status === 409).body.code).toBe('last_participant')
+    }
+  })
+
+  it('enforces exactly one active owner-linked member at the database boundary', async () => {
+    const ws = await asUserA(request(app).post('/api/tenants/personal').send(personalBody()))
+      .expect(201)
+    const { rows: [member] } = await pool.query(
+      'SELECT id FROM band_members WHERE tenant_id = $1 AND deleted_at IS NULL', [ws.body.id],
+    )
+
+    await expect(pool.query(
+      `INSERT INTO band_members (tenant_id, name, position, sort_order)
+       VALUES ($1, 'Extra', 'lead', 1)`, [ws.body.id],
+    )).rejects.toMatchObject({ code: '23514' })
+    await expect(pool.query(
+      'UPDATE band_members SET user_id = NULL WHERE id = $1', [member.id],
+    )).rejects.toMatchObject({ code: '23514' })
+    await expect(pool.query(
+      `UPDATE band_members SET name = 'Detached artist' WHERE id = $1`, [member.id],
+    )).rejects.toMatchObject({ code: '23514' })
+    await expect(pool.query(
+      'UPDATE band_members SET tenant_id = $2 WHERE id = $1', [member.id, seed.tenantB.id],
+    )).rejects.toMatchObject({ code: '23514' })
+    await expect(pool.query(
+      'UPDATE band_members SET deleted_at = NOW() WHERE id = $1', [member.id],
+    )).rejects.toMatchObject({ code: '23514' })
+    await expect(pool.query(
+      'DELETE FROM band_members WHERE id = $1', [member.id],
+    )).rejects.toMatchObject({ code: '23514' })
   })
 
   it('refuses even a super admin adding a second member', async () => {

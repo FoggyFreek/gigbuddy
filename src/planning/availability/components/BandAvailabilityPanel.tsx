@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import Chip from '@mui/material/Chip'
 import Stack from '@mui/material/Stack'
 import Tooltip from '@mui/material/Tooltip'
@@ -29,6 +30,7 @@ export default function BandAvailabilityPanel({
   participantIds,
   onDataLoad,
 }: Readonly<BandAvailabilityPanelProps>) {
+  const { t } = useTranslation('availability')
   const data = useEventAvailability({
     eventDate,
     endDate,
@@ -40,7 +42,17 @@ export default function BandAvailabilityPanel({
     onDataLoad,
   })
 
-  if (!eventDate || !data?.members?.length) return null
+  // The whole panel is a function of the date, so say so rather than leaving a
+  // blank gap under the heading while the form is still empty.
+  if (!eventDate) {
+    return (
+      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+        {t($ => $.events.awaitingDate)}
+      </Typography>
+    )
+  }
+
+  if (!data?.members?.length) return null
 
   const visible = participantIds === undefined && eventId === undefined
     ? data.members.filter((member) => member.position === 'lead')

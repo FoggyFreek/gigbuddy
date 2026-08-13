@@ -114,6 +114,7 @@ function buildImportRow(row: BandsintownRow, state: RowState): BandsintownImport
   return {
     bandsintown_event_id: row.eventId || null,
     event_date: row.event_date,
+    end_date: row.end_date,
     event_description: row.event_description,
     start_time: row.start_time || null,
     end_time: row.end_time || null,

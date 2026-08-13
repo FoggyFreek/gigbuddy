@@ -57,6 +57,11 @@ vi.mock('../../memberships/invites.ts', async (importOriginal) => {
   const actual = await importOriginal()
   return { ...actual, listInvites: vi.fn().mockResolvedValue([]) }
 })
+vi.mock('../../band-profiles/bandProfileClaims.ts', () => ({
+  getOwnClaim: vi.fn().mockResolvedValue({ claim: null }),
+  requestClaim: vi.fn(),
+  withdrawClaim: vi.fn(),
+}))
 vi.mock('../tenants.ts', async (importOriginal) => {
   const actual = await importOriginal()
   return { ...actual, updateActiveTenantSlug: vi.fn() }
@@ -111,8 +116,8 @@ describe('SettingsPage — nav gating', () => {
     expect(screen.getByText('Members and invites')).toBeInTheDocument()
     expect(screen.getByText('Integrations')).toBeInTheDocument()
     expect(screen.getByText('Chart of accounts')).toBeInTheDocument()
-    expect(screen.getByText('Manage account')).toBeInTheDocument()
-    expect(screen.getByTestId('ManageAccountsIcon')).toBeInTheDocument()
+    expect(screen.getByText('Manage band account')).toBeInTheDocument()
+    expect(screen.getByTestId('GroupsIcon')).toBeInTheDocument()
   })
 
   it('hides tenant-admin settings for a plain member', async () => {
@@ -122,7 +127,7 @@ describe('SettingsPage — nav gating', () => {
     expect(screen.queryByText('Members and invites')).not.toBeInTheDocument()
     expect(screen.queryByText('Integrations')).not.toBeInTheDocument()
     expect(screen.queryByText('Chart of accounts')).not.toBeInTheDocument()
-    expect(screen.queryByText('Manage account')).not.toBeInTheDocument()
+    expect(screen.queryByText('Manage band account')).not.toBeInTheDocument()
   })
 
   it('keeps Manage account inside band settings, before the finance group', async () => {
@@ -137,8 +142,8 @@ describe('SettingsPage — nav gating', () => {
       'Accounting Settings',
       'Chart of accounts',
     ])
-    expect(texts.indexOf('Band settings')).toBeLessThan(texts.indexOf('Manage account'))
-    expect(texts.indexOf('Manage account')).toBeLessThan(texts.indexOf('Finance and accounting settings'))
+    expect(texts.indexOf('Band settings')).toBeLessThan(texts.indexOf('Manage band account'))
+    expect(texts.indexOf('Manage band account')).toBeLessThan(texts.indexOf('Finance and accounting settings'))
     expect(screen.queryByText('Delete account (permanent)')).not.toBeInTheDocument()
   })
 
@@ -165,12 +170,13 @@ describe('SettingsPage — nav gating', () => {
     expect(await screen.findAllByText('My preferences')).not.toHaveLength(0)
     expect(screen.queryByText('Members and invites')).not.toBeInTheDocument()
     expect(screen.queryByText('Band profile')).not.toBeInTheDocument()
-    expect(screen.queryByText('Manage account')).not.toBeInTheDocument()
+    expect(screen.queryByText('Manage band account')).not.toBeInTheDocument()
   })
 
-  it('offers the band profile claim to a band admin', async () => {
-    wrap('/settings')
-    expect(await screen.findAllByText('Public band profile')).not.toHaveLength(0)
+  it('offers the band profile claim to a band admin under manage band account', async () => {
+    wrap('/settings/delete-account')
+    expect(await screen.findByRole('heading', { name: 'Global band profile' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Public band profile' })).not.toBeInTheDocument()
   })
 })
 

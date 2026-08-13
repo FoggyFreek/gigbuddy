@@ -64,6 +64,7 @@ function buildImportRow(event: BandsintownEvent, state: RowState): BandsintownIm
   return {
     bandsintown_event_id: event.bandsintown_event_id,
     event_date: event.event_date,
+    end_date: event.end_date,
     event_description: event.event_description,
     start_time: event.start_time,
     end_time: event.end_time,

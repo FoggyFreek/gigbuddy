@@ -28,6 +28,7 @@ import { toDateInput } from './eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../../utils/requiredFields.ts'
 import BandEventFields from './components/BandEventFields.tsx'
 import BandEventAvailabilitySection from './components/BandEventAvailabilitySection.tsx'
+import MyBandSelect from '../../people/my-bands/components/MyBandSelect.tsx'
 import PastEventAlert from '../../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../../components/SaveStatusLabel.tsx'
 import { useCrossTenantRow } from '../shared/useCrossTenantRow.ts'
@@ -156,6 +157,21 @@ export default function BandEventDetailPage() {
     else navigate(-1)
   }
 
+  // Which of the artist's bands this event was for. Saved on the spot rather than
+  // debounced — a picker has no half-typed state to wait for — but the pending
+  // field edits are flushed first so the re-read can't undo them.
+  async function handleMyBandChange(myBandId: Id | null) {
+    if (!detailCanWrite) return
+    await flush()
+    const patch: Record<string, unknown> = { my_band_id: myBandId }
+    await updateBandEvent(bandEventId, patch)
+    const updated = await source.api.detail(bandEventId) as BandEventDetail
+    setEvent(updated)
+    if (typeof outletCtx.onBandEventUpdate === 'function') {
+      outletCtx.onBandEventUpdate(bandEventId, { my_band: updated.my_band ?? null })
+    }
+  }
+
   async function handleAddMember(memberId: Id) {
     const updatedEvent = await addBandEventParticipant(bandEventId, memberId)
     setEventAvailability(updatedEvent)
@@ -203,6 +219,17 @@ export default function BandEventDetailPage() {
           tenantId={event.tenantId}
           tenantName={event.tenantName}
           tenantAvatarPath={event.tenantAvatarPath}
+        />
+      )}
+
+      {/* The band a personal workspace's event was for takes the same slot: a band
+          profile is no tenant to switch into, so it gets a picker instead. */}
+      {!isCrossBand && event && (
+        <MyBandSelect
+          withAvatar
+          value={event.my_band?.id ?? null}
+          onChange={handleMyBandChange}
+          disabled={!detailCanWrite}
         />
       )}
 

@@ -157,7 +157,8 @@ export async function listBookingsForUsersInRange(executor, userIds, from, to) {
           AND t.deletion_status IS NULL
      )
      SELECT mt.user_id, 'gig' AS source, g.tenant_id, t.display_name AS tenant_name,
-            g.id AS source_id, g.event_date AS start_date, g.event_date AS end_date,
+            g.id AS source_id, g.event_date AS start_date,
+            COALESCE(g.end_date, g.event_date) AS end_date,
             g.start_time, g.end_time,
             g.event_description AS title
        FROM member_tenants mt
@@ -172,7 +173,8 @@ export async function listBookingsForUsersInRange(executor, userIds, from, to) {
         ))
      UNION ALL
      SELECT mt.user_id, 'rehearsal', r.tenant_id, t.display_name,
-            r.id, r.proposed_date, r.proposed_date, r.start_time, r.end_time, r.location
+            r.id, r.proposed_date, COALESCE(r.end_date, r.proposed_date),
+            r.start_time, r.end_time, r.location
        FROM member_tenants mt
        JOIN rehearsals r ON r.tenant_id = mt.tenant_id
        JOIN tenants t ON t.id = r.tenant_id

@@ -203,9 +203,9 @@ export async function listPastGigs(executor, tenantId, today, limit, cursor = nu
 // These are the ONLY gig queries not scoped to a single tenant. The id list is
 // resolved server-side from the caller's approved memberships
 // (resolveMemberTenantIds) — never taken from the client. Band-tenant rows are
-// further limited to events where the caller's linked roster member is a
-// participant; their personal workspace is intrinsically user-owned. An empty
-// tenant list is valid and `= ANY('{}')` correctly matches nothing.
+// further limited to events where the caller's linked member is a participant,
+// regardless of tenant kind. An empty tenant list is valid and `= ANY('{}')`
+// correctly matches nothing.
 
 export async function listGigsInRangeForMemberTenants(executor, userId, tenantIds, from, to) {
   const { rows } = await executor.query(
@@ -445,15 +445,6 @@ export async function listGigAttachments(executor, gigId, tenantId) {
   return rows
 }
 
-export async function getLeadMemberIds(executor, tenantId) {
-  const { rows } = await executor.query(
-    `SELECT id FROM band_members
-      WHERE tenant_id = $1 AND position = 'lead' AND deleted_at IS NULL`,
-    [tenantId],
-  )
-  return rows.map((r) => r.id)
-}
-
 export async function getGigDescription(executor, gigId, tenantId) {
   const { rows } = await executor.query(
     'SELECT event_description FROM gigs WHERE id = $1 AND tenant_id = $2',
@@ -465,11 +456,11 @@ export async function getGigDescription(executor, gigId, tenantId) {
 // Inserts a normalized import row (see normalizeImportRow). Returns the new id.
 export async function insertGigForImport(executor, tenantId, row) {
   const { rows } = await executor.query(
-    `INSERT INTO gigs (tenant_id, event_date, event_description, venue_id, festival_id,
+    `INSERT INTO gigs (tenant_id, event_date, end_date, event_description, venue_id, festival_id,
        start_time, end_time, status, admission, event_link, ticket_link)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
     [
-      tenantId, row.event_date, row.event_description, row.venueId, row.festivalId,
+      tenantId, row.event_date, row.end_date, row.event_description, row.venueId, row.festivalId,
       row.start_time, row.end_time, row.status, row.admission,
       row.event_link, row.ticket_link,
     ],
@@ -481,9 +472,9 @@ export async function insertGigForImport(executor, tenantId, row) {
 export async function insertGigWithRelations(executor, tenantId, data) {
   const { rows } = await executor.query(
     `WITH inserted AS (
-       INSERT INTO gigs (tenant_id, event_date, event_description, venue_id, festival_id, start_time, end_time, status,
+       INSERT INTO gigs (tenant_id, event_date, end_date, event_description, venue_id, festival_id, start_time, end_time, status,
                          my_band_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *
      )
      SELECT g.*, ${VENUE_JSON_SELECT}, ${FESTIVAL_JSON_SELECT}, ${GIG_TAGS_SELECT}, ${GIG_EQUIPMENT_SELECT}, ${myBandSelect('g')}
@@ -492,7 +483,7 @@ export async function insertGigWithRelations(executor, tenantId, data) {
        ${FESTIVAL_JOIN}`,
     [
       tenantId,
-      data.event_date, data.event_description, data.venueId, data.festivalId,
+      data.event_date, data.end_date, data.event_description, data.venueId, data.festivalId,
       data.start_time, data.end_time, data.status,
       data.myBandId ?? null,
     ],
@@ -514,6 +505,25 @@ export async function deleteGigParticipant(executor, gigId, memberId, tenantId) 
     [gigId, memberId, tenantId],
   )
   return rowCount > 0
+}
+
+export async function lockGigForParticipantRemoval(executor, gigId, tenantId) {
+  const { rowCount } = await executor.query(
+    'SELECT 1 FROM gigs WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
+    [gigId, tenantId],
+  )
+  return rowCount > 0
+}
+
+export async function getGigParticipantRemovalState(executor, gigId, memberId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT COUNT(*)::int AS participant_count,
+            COALESCE(BOOL_OR(band_member_id = $2), FALSE) AS target_exists
+       FROM gig_participants
+      WHERE gig_id = $1 AND tenant_id = $3`,
+    [gigId, memberId, tenantId],
+  )
+  return rows[0]
 }
 
 // Returns the updated participant row, or null when no matching row exists.

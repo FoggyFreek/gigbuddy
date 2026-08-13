@@ -92,6 +92,18 @@ describe('lead participant synchronization', () => {
       `INSERT INTO band_events (tenant_id, title, start_date, end_date)
        VALUES ($1, 'Future event', '2099-09-10', '2099-09-12') RETURNING id`, [seed.tenantA.id],
     )
+    await pool.query(
+      `INSERT INTO gig_participants (tenant_id, gig_id, band_member_id)
+       VALUES ($1, $2, $3)`, [seed.tenantA.id, gig.id, seed.memberA.id],
+    )
+    await pool.query(
+      `INSERT INTO rehearsal_participants (tenant_id, rehearsal_id, band_member_id)
+       VALUES ($1, $2, $3)`, [seed.tenantA.id, rehearsal.id, seed.memberA.id],
+    )
+    await pool.query(
+      `INSERT INTO band_event_participants (tenant_id, band_event_id, band_member_id)
+       VALUES ($1, $2, $3)`, [seed.tenantA.id, event.id, seed.memberA.id],
+    )
     return { gig, rehearsal, event }
   }
 
@@ -130,7 +142,7 @@ describe('lead participant synchronization', () => {
     expect(remaining).toEqual({ gigs: 0, rehearsals: 0, events: 0 })
   })
 
-  it('keeps completed-event participation when deleting a member', async () => {
+  it('keeps historic and last-participant event links when deleting a member', async () => {
     const { rows: [past] } = await pool.query(
       `INSERT INTO gigs (tenant_id, event_date, event_description)
        VALUES ($1, '2000-01-01', 'Historic gig') RETURNING id`, [seed.tenantA.id],
@@ -151,10 +163,16 @@ describe('lead participant synchronization', () => {
       'SELECT COUNT(*)::int AS count FROM gig_participants WHERE gig_id = $1 AND band_member_id = $2',
       [past.id, seed.memberA.id],
     )).rows[0].count).toBe(1)
-    expect((await pool.query(
-      'SELECT COUNT(*)::int AS count FROM gig_participants WHERE gig_id = $1 AND band_member_id = $2',
-      [future.gig.id, seed.memberA.id],
-    )).rows[0].count).toBe(0)
+    for (const [table, fk, eventId] of [
+      ['gig_participants', 'gig_id', future.gig.id],
+      ['rehearsal_participants', 'rehearsal_id', future.rehearsal.id],
+      ['band_event_participants', 'band_event_id', future.event.id],
+    ]) {
+      expect((await pool.query(
+        `SELECT COUNT(*)::int AS count FROM ${table} WHERE ${fk} = $1 AND band_member_id = $2`,
+        [eventId, seed.memberA.id],
+      )).rows[0].count).toBe(1)
+    }
     expect((await asUserA(request(app).get('/api/band-members')).expect(200)).body)
       .not.toContainEqual(expect.objectContaining({ id: seed.memberA.id }))
   })

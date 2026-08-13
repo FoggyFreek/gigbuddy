@@ -187,6 +187,20 @@ describe('GET /api/me/agenda', () => {
     expect(res.body.meta).toMatchObject({ from: WINDOW.from, to: WINDOW.to, returned: 3 })
   })
 
+  it('lists an overnight gig once on its start date and exposes its derived end date', async () => {
+    const gig = await addGig(seed.tenantA.id, { date: '2099-07-10', name: 'Late show' })
+    await pool.query(
+      `UPDATE gigs SET end_date = '2099-07-11', start_time = '22:00', end_time = '02:00'
+        WHERE id = $1 AND tenant_id = $2`,
+      [gig.id, seed.tenantA.id],
+    )
+
+    const res = await agenda(seed.userA.id).expect(200)
+    expect(res.body.items.filter((item) => item.id === gig.id && item.type === 'gig')).toEqual([
+      expect.objectContaining({ date: '2099-07-10', endDate: '2099-07-11' }),
+    ])
+  })
+
   it('omits a band event when the artist is a member but not a required participant', async () => {
     const artist = await createUser('artist@test.local')
     await addMembership(artist.id, seed.tenantA.id)
@@ -206,7 +220,7 @@ describe('GET /api/me/agenda', () => {
     expect((await agenda(artist.id).expect(200)).body.items).toEqual([])
   })
 
-  it('includes the artist\'s own personal-workspace event without a participant row', async () => {
+  it('includes the artist\'s own personal-workspace event through its fixed participant', async () => {
     const workspace = await addPersonalWorkspace(seed.userA.id, 'artist-agenda')
     await addBandEvent(workspace.id, {
       start: '2099-07-22', end: '2099-07-23', title: 'Artist appointment',
@@ -364,12 +378,9 @@ describe('GET /api/me/gigs/upcoming', () => {
     expect((await upcoming(artist.id).expect(200)).body.items).toEqual([])
   })
 
-  it('includes the artist\'s own workspace gig without a participant row', async () => {
+  it('includes the artist\'s own workspace gig through its fixed participant', async () => {
     const workspace = await addPersonalWorkspace(seed.userA.id, 'artist-gigs')
-    await pool.query(
-      `INSERT INTO gigs (tenant_id, event_description, event_date) VALUES ($1, 'Solo set', '2099-07-05')`,
-      [workspace.id],
-    )
+    await addGig(workspace.id, { date: '2099-07-05', name: 'Solo set' })
     const res = await upcoming(seed.userA.id).expect(200)
     expect(res.body.items.map((g) => g.event_description)).toEqual(['Solo set'])
   })

@@ -3,9 +3,9 @@
 // The verification itself is manual and offline; this file records the outcome
 // and applies its consequences. Two of those consequences are easy to miss:
 //
-//   - approving a claim whose profile nobody holds any more must DELETE that
-//     profile, not leave a claimed row with no purpose that removeMyBand will
-//     never revisit;
+//   - a decision never deletes the profile. Approval points it at the real
+//     tenant and rejection releases it back to claimable; either way the
+//     directory entry stays, holders or none, so the band keeps being findable;
 //   - the artists who have been tagging events against the profile need telling
 //     that the band is on gigbuddy now, because their next step is to join it.
 import { withTransaction, abortTransaction } from '../../db/withTransaction.js'
@@ -22,11 +22,12 @@ import { lockTenantRow, fetchTenantArchiveState } from '../../people/workspaces/
 import {
   lockBandProfile,
   setClaimedTenant,
-  deleteBandProfileIfAbandoned,
+  deleteBandProfile,
+  hasPendingClaim,
   fetchBandProfile,
   listUnclaimedBandProfiles,
 } from '../../people/band-profiles/bandProfileRepository.js'
-import { listHolderTenantIds } from '../../people/my-bands/myBandRepository.js'
+import { listHolderTenantIds, countHolders } from '../../people/my-bands/myBandRepository.js'
 import {
   listClaims,
   listProfileUsersForClaims,
@@ -146,6 +147,32 @@ export async function listUnclaimedProfiles(db, query) {
   }
 }
 
+export async function deleteUnclaimedProfile(db, profileId) {
+  return withTransaction(async (client) => {
+    const profile = await lockBandProfile(client, profileId)
+    if (!profile) abortTransaction(notFound('Band profile not found'))
+
+    if (profile.claimed_by_tenant_id !== null) {
+      abortTransaction(conflict('A band has been granted this profile', { code: 'profile_claimed' }))
+    }
+    if (await hasPendingClaim(client, profileId)) {
+      abortTransaction(conflict('Decide the pending claim on this profile first', {
+        code: 'claim_pending',
+      }))
+    }
+
+    // Recorded because the cascade is invisible afterwards: this many personal
+    // workspaces lose the band from their collection, and their events lose the
+    // tag that named it.
+    const holders = await countHolders(client, profileId)
+    await deleteBandProfile(client, profileId)
+
+    return {
+      audit: { action: 'band_profile.delete', details: { bandProfileId: profileId, holders } },
+    }
+  }, { db })
+}
+
 export async function approveClaim(db, adminUser, claimId) {
   return decide(db, adminUser, claimId, { status: CLAIM_STATUSES.APPROVED, reason: null })
 }
@@ -188,11 +215,8 @@ async function decide(db, adminUser, claimId, { status, reason }) {
     await decideClaim(client, claimId, { status, reason, decidedByUserId: adminUser.id })
 
     if (status !== CLAIM_STATUSES.APPROVED) {
-      // The pending claim may have been the only thing keeping a holderless
-      // profile alive.
-      if (claim.band_profile_id !== null) {
-        await deleteBandProfileIfAbandoned(client, claim.band_profile_id)
-      }
+      // Rejection only releases the profile back to claimable; the directory
+      // entry itself stays, so the band can fix whatever was wrong and retry.
       return {
         claim: shapeClaim(await fetchClaim(client, claimId)),
         notify: { tenantId: claim.tenant_id, status, profileName: claim.band_profile_name },
@@ -209,15 +233,10 @@ async function decide(db, adminUser, claimId, { status, reason }) {
     await setClaimedTenant(client, claim.band_profile_id, claim.tenant_id)
 
     const holderTenantIds = await listHolderTenantIds(client, claim.band_profile_id)
-    // With nobody holding it, a claimed profile has no purpose left: its only
-    // job was to keep existing holders' event links resolving. Without this,
-    // approval mints a row removeMyBand can never reach.
-    const profileDeleted = await deleteBandProfileIfAbandoned(client, claim.band_profile_id)
 
     return {
       claim: shapeClaim(await fetchClaim(client, claimId)),
-      profile: profileDeleted ? null : shapeBandProfile(await fetchBandProfile(client, claim.band_profile_id)),
-      profileDeleted,
+      profile: shapeBandProfile(await fetchBandProfile(client, claim.band_profile_id)),
       notify: {
         tenantId: claim.tenant_id,
         status,

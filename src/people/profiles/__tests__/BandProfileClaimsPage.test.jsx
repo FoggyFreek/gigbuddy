@@ -9,6 +9,7 @@ import { CompactLayoutContext } from '../../../hooks/useCompactLayout.ts'
 vi.mock('../../../admin/band-profile-claims/bandProfileClaims.ts', () => ({
   listClaimQueue: vi.fn(),
   listUnclaimedProfiles: vi.fn(),
+  deleteUnclaimedProfile: vi.fn(),
   approveClaim: vi.fn(),
   rejectClaim: vi.fn(),
 }))
@@ -257,6 +258,7 @@ describe('BandProfileClaimsPage unclaimed profiles', () => {
     expect(within(table).getAllByRole('columnheader').map((header) => header.textContent)).toEqual([
       'Band profile',
       'Member count',
+      'Delete',
     ])
     expect(within(table).getByText('Unclaimed Band')).toBeInTheDocument()
     expect(within(table).getByText('4')).toBeInTheDocument()

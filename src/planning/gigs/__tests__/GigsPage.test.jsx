@@ -169,7 +169,9 @@ describe('GigsPage', () => {
     wrap(<GigsPage />, {
       auth: { user: { isSuperAdmin: true, activeTenantId: 1, activeTenantKind: 'personal' } },
     })
-    await screen.findByText('Other Band')
+    // The desktop Band column carries the identity as an initials avatar labelled
+    // with the band name — the full name only renders in the compact card.
+    expect(await screen.findByLabelText('Other Band')).toHaveTextContent('OB')
     expect(listMyUpcomingGigs).toHaveBeenCalledWith(100, expect.any(String))
     expect(listUpcomingGigs).not.toHaveBeenCalled()
   })
@@ -326,19 +328,36 @@ describe('GigsPage — split-view detail route', () => {
       status: 'available',
       reason: null,
     }
+    const bob = {
+      member_id: 8,
+      name: 'Bob',
+      position: 'bass',
+      color: '#1e88e5',
+      status: 'available',
+      reason: null,
+    }
     listUpcomingGigs.mockResolvedValue(limitedCollection([{
       ...GIGS[0],
-      members_availability: [alice],
+      members_availability: [alice, bob],
     }]))
     getGig
       .mockResolvedValueOnce({
         ...GIG_DETAIL,
-        participants: [{ band_member_id: 7, name: 'Alice', position: 'lead', color: '#e53935' }],
+        participants: [
+          { band_member_id: 7, name: 'Alice', position: 'lead', color: '#e53935' },
+          { band_member_id: 8, name: 'Bob', position: 'bass', color: '#1e88e5' },
+        ],
       })
-      .mockResolvedValueOnce(GIG_DETAIL)
+      .mockResolvedValueOnce({
+        ...GIG_DETAIL,
+        participants: [{ band_member_id: 8, name: 'Bob', position: 'bass', color: '#1e88e5' }],
+      })
     evaluateEventAvailability.mockImplementation(async ({ participant_ids }) => ({
       bandWide: null,
-      members: participant_ids?.includes(7) ? [alice] : [],
+      members: [
+        ...(participant_ids?.includes(7) ? [alice] : []),
+        ...(participant_ids?.includes(8) ? [bob] : []),
+      ],
     }))
 
     wrapWithRoutes({ initialEntries: ['/gigs/42?tab=participants'] })
@@ -348,6 +367,7 @@ describe('GigsPage — split-view detail route', () => {
 
     await waitFor(() => expect(removeGigParticipant).toHaveBeenCalledWith(42, 7))
     await waitFor(() => expect(screen.queryByText('A')).not.toBeInTheDocument())
+    expect(screen.getByText('B')).toBeInTheDocument()
   })
 
   it('renders detail alongside the list at /gigs/:id and the Close button returns to /gigs', async () => {

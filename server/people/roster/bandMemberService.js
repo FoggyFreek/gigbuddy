@@ -19,6 +19,7 @@ import {
 import { enforceMemberCap } from '../../commerce/billing/limitService.js'
 import { withTransaction, abortTransaction } from '../../db/withTransaction.js'
 import { badRequest, notFound } from '../../platform/http/serviceErrors.js'
+import { lockTenantRow } from '../workspaces/tenantRepository.js'
 
 const NOT_FOUND = notFound('Not found')
 
@@ -56,7 +57,14 @@ export async function createMember(db, tenantId, body, actorUserId = null) {
   }, { db })
 }
 
-export async function patchMember(db, tenantId, memberId, body, actorUserId = null) {
+export async function patchMember(
+  db,
+  tenantId,
+  memberId,
+  body,
+  actorUserId = null,
+  tenantKind = 'band',
+) {
   if ('roles' in body) {
     const rolesError = validateMemberRoles(body.roles)
     if (rolesError) return badRequest(rolesError)
@@ -65,8 +73,15 @@ export async function patchMember(db, tenantId, memberId, body, actorUserId = nu
   if (!built.fields.length) return badRequest('No valid fields to update')
 
   return withTransaction(async (client) => {
+    // Profile renames lock tenants before the fixed personal member. Take the
+    // same order here so the two debounced profile saves cannot deadlock.
+    if (tenantKind === 'personal') {
+      const tenant = await lockTenantRow(client, tenantId)
+      if (!tenant || tenant.kind !== 'personal') abortTransaction(NOT_FOUND)
+    }
     const previous = await fetchBandMemberForUpdate(client, memberId, tenantId)
     if (!previous) abortTransaction(NOT_FOUND)
+    if (tenantKind === 'personal' && previous.user_id == null) abortTransaction(NOT_FOUND)
     const member = await updateBandMemberFields(client, tenantId, memberId, built.fields, built.values)
     if (!member) abortTransaction(NOT_FOUND)
     if (previous.position !== member.position) {

@@ -1,5 +1,6 @@
 import Papa from 'papaparse'
 import type { Gig } from '../../types/entities.ts'
+import { resolveEventEndDate } from '../../../shared/eventTimes.js'
 
 const REQUIRED_COLS = ['Start Date* (yyyy-mm-dd)', 'Event Name', 'Venue*']
 const PAID_TYPES = new Set(['tickets', 'collections', 'rsvp'])
@@ -18,6 +19,7 @@ function countNonEmpty(row: Record<string, unknown>): number {
 export interface ParsedBandsintownRow {
   eventId: string
   event_date: string
+  end_date: string
   event_description: string
   start_time: string
   end_time: string
@@ -50,19 +52,25 @@ export function parseBandsintownCsv(text: string): ParseBandsintownResult {
     return { rows: [], parseError: 'No data rows found in file.' }
   }
 
-  const rawRows: RawRow[] = parsed.data.map((row) => ({
-    eventId: (row['Event Id'] || '').trim(),
-    event_date: (row['Start Date* (yyyy-mm-dd)'] || '').trim(),
-    event_description: (row['Event Name'] || '').trim(),
-    start_time: (row['Start Time* (HH:MM)'] || '').trim(),
-    end_time: (row['End Time'] || '').trim(),
-    event_link: (row['Streaming Link'] || '').trim(),
-    ticket_link: (row['Ticket Link'] || '').trim(),
-    admission: csvTicketTypeToAdmission(row['Ticket Type'], row['Ticket Link']),
-    venueName: (row['Venue*'] || '').trim(),
-    city: (row['City*'] || '').trim(),
-    _raw: row,
-  }))
+  const rawRows: RawRow[] = parsed.data.map((row) => {
+    const eventDate = (row['Start Date* (yyyy-mm-dd)'] || '').trim()
+    const startTime = (row['Start Time* (HH:MM)'] || '').trim()
+    const endTime = (row['End Time'] || '').trim()
+    return {
+      eventId: (row['Event Id'] || '').trim(),
+      event_date: eventDate,
+      end_date: resolveEventEndDate(eventDate, eventDate, startTime, endTime),
+      event_description: (row['Event Name'] || '').trim(),
+      start_time: startTime,
+      end_time: endTime,
+      event_link: (row['Streaming Link'] || '').trim(),
+      ticket_link: (row['Ticket Link'] || '').trim(),
+      admission: csvTicketTypeToAdmission(row['Ticket Type'], row['Ticket Link']),
+      venueName: (row['Venue*'] || '').trim(),
+      city: (row['City*'] || '').trim(),
+      _raw: row,
+    }
+  })
 
   // Deduplicate by non-empty Event Id
   const byEventId = new Map<string, RawRow>()
@@ -88,10 +96,12 @@ export function parseBandsintownCsv(text: string): ParseBandsintownResult {
     }
   }
 
-  const rows = [...byEventId.values(), ...bySecondaryKey.values()].map(
-     
-    ({ _raw, ...r }) => r,
-  )
+  const rows = [...byEventId.values(), ...bySecondaryKey.values()].map(({ _raw, ...row }) => ({
+    ...row,
+    end_date: resolveEventEndDate(
+      row.event_date, row.event_date, row.start_time, row.end_time,
+    ),
+  }))
 
   return { rows, parseError: null }
 }

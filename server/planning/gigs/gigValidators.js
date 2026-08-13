@@ -6,6 +6,7 @@ import {
   GIG_EQUIPMENT_PROVIDERS,
   MAX_GIG_EQUIPMENT_ITEMS,
 } from '../../../shared/gigEquipment.js'
+import { resolveEventEndDate, timeToMinutes } from '../../../shared/eventTimes.js'
 
 export const VALID_STATUSES = ['option', 'confirmed', 'announced']
 export const VALID_VOTES = ['yes', 'no']
@@ -13,7 +14,7 @@ export const MAX_GIG_TAGS = 20
 export const MAX_GIG_TAG_LENGTH = 50
 
 export const GIG_PATCH_FIELDS = [
-  'event_date', 'event_description', 'venue_id', 'festival_id', 'event_link',
+  'event_date', 'end_date', 'event_description', 'venue_id', 'festival_id', 'event_link',
   'start_time', 'end_time', 'status', 'booking_fee_cents', 'admission',
   'ticket_link', 'notes', 'merchandise_cut', 'percentage_of_sales',
   // Only meaningful in a personal workspace; the route gates the field on the
@@ -152,9 +153,14 @@ export function normalizeImportRow(item) {
   if (statusResult.error) return statusResult
   const { status: finalStatus } = statusResult
 
+  if (start_time && end_time && timeToMinutes(start_time) === timeToMinutes(end_time)) {
+    return { error: 'end_time must be after start_time' }
+  }
+  const end_date = resolveEventEndDate(event_date, event_date, start_time, end_time)
+
   return {
     data: {
-      event_date, event_description, venueId, festivalId,
+      event_date, end_date, event_description, venueId, festivalId,
       start_time: start_time || null, end_time: end_time || null,
       status: finalStatus, admission: admission === 'paid' ? 'paid' : 'free',
       event_link: event_link || null, ticket_link: ticket_link || null,
