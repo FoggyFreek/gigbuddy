@@ -22,6 +22,7 @@ const SongsPage = lazy(() => import('../music/songs/SongsPage.tsx'))
 const SongDetailPage = lazy(() => import('../music/songs/SongDetailPage.tsx'))
 const SetlistsPage = lazy(() => import('../music/setlists/SetlistsPage.tsx'))
 const SetlistEditorPage = lazy(() => import('../music/setlists/SetlistEditorPage.tsx'))
+const PerformancePage = lazy(() => import('../music/setlists/PerformancePage.tsx'))
 const EmailTemplatesPage = lazy(() => import('../people/profiles/EmailTemplatesPage.tsx'))
 const MyBandsPage = lazy(() => import('../people/my-bands/MyBandsPage.tsx'))
 const BandProfileClaimsPage = lazy(() => import('../admin/band-profile-claims/BandProfileClaimsPage.tsx'))
@@ -70,6 +71,11 @@ export default function App() {
         <Route element={<RequireAuth />}>
           <Route path="/redeem-invite" element={<RedeemInvitePage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
+          {/* Performance mode runs outside the app shell: on stage the whole
+              viewport belongs to the chart, and nav chrome is in the way. */}
+          <Route element={<RequireTenantCapability capability={TENANT_CAPABILITIES.SETLISTS} />}>
+            <Route path="/setlists/:id/perform" element={<PerformancePage />} />
+          </Route>
           <Route path="/accept-terms" element={<AcceptTermsPage />} />
           <Route element={<AppShell />}>
             <Route path="/" element={<DashboardPage />} />

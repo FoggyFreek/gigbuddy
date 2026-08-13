@@ -408,6 +408,246 @@ describe('Per-member song notes', () => {
   })
 })
 
+describe('Performance sources', () => {
+  async function createChart(tenantId, songId, name, source = '{title: X}\n[C]hello') {
+    const { rows } = await pool.query(
+      'INSERT INTO song_chordpro_charts (song_id, tenant_id, name, source) VALUES ($1, $2, $3, $4) RETURNING *',
+      [songId, tenantId, name, source],
+    )
+    return rows[0]
+  }
+
+  async function createDocument(tenantId, songId, filename) {
+    const { rows } = await pool.query(
+      `INSERT INTO song_documents (song_id, tenant_id, object_key, original_filename, content_type, file_size)
+       VALUES ($1, $2, $3, $4, 'application/pdf', 1234) RETURNING *`,
+      [songId, tenantId, `tenants/${tenantId}/song_documents/${filename}`, filename],
+    )
+    return rows[0]
+  }
+
+  // One tenant-A setlist with a single song item in set 1.
+  async function setupSongItem(title = 'Perf song') {
+    const song = await createSong(seed.tenantA.id, title, 100)
+    const setlist = await createSetlistA()
+    const tree = await asUserA(request(app).get(`/api/setlists/${setlist.id}`)).expect(200)
+    const set1 = tree.body.sets[0].id
+    const item = (await asUserA(request(app).post(`/api/setlists/${setlist.id}/sets/${set1}/items`)
+      .send({ item_type: 'song', song_id: song.id })).expect(201)).body
+    return { song, setlistId: setlist.id, set1, item }
+  }
+
+  function getTree(setlistId) {
+    return asUserA(request(app).get(`/api/setlists/${setlistId}`)).expect(200)
+  }
+
+  it('assigns a chart and exposes its name in the tree', async () => {
+    const { song, setlistId, item } = await setupSongItem()
+    const chart = await createChart(seed.tenantA.id, song.id, 'Guitar')
+
+    const res = await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
+      .send({ chart_id: chart.id })).expect(200)
+    expect(res.body.chart_id).toBe(chart.id)
+    // The PATCH response stays enriched (guards the NULL-duration blanking bug).
+    expect(res.body.duration_seconds).toBe(100)
+
+    const stored = (await getTree(setlistId)).body.sets[0].items[0]
+    expect(stored.chart_id).toBe(chart.id)
+    expect(stored.chart_name).toBe('Guitar')
+    expect(stored.document_id).toBeNull()
+  })
+
+  it('assigning a document clears a previously assigned chart', async () => {
+    const { song, setlistId, item } = await setupSongItem()
+    const chart = await createChart(seed.tenantA.id, song.id, 'Guitar')
+    const doc = await createDocument(seed.tenantA.id, song.id, 'sheet.pdf')
+
+    await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
+      .send({ chart_id: chart.id })).expect(200)
+    const res = await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
+      .send({ document_id: doc.id })).expect(200)
+
+    expect(res.body.document_id).toBe(doc.id)
+    expect(res.body.chart_id).toBeNull()
+    const stored = (await getTree(setlistId)).body.sets[0].items[0]
+    expect(stored.document_filename).toBe('sheet.pdf')
+  })
+
+  it('clears the source with null', async () => {
+    const { song, setlistId, item } = await setupSongItem()
+    const chart = await createChart(seed.tenantA.id, song.id, 'Guitar')
+    await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
+      .send({ chart_id: chart.id })).expect(200)
+
+    const res = await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
+      .send({ chart_id: null })).expect(200)
+    expect(res.body.chart_id).toBeNull()
+  })
+
+  it('rejects assigning both a chart and a document at once (400)', async () => {
+    const { song, setlistId, item } = await setupSongItem()
+    const chart = await createChart(seed.tenantA.id, song.id, 'Guitar')
+    const doc = await createDocument(seed.tenantA.id, song.id, 'sheet.pdf')
+    await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
+      .send({ chart_id: chart.id, document_id: doc.id })).expect(400)
+  })
+
+  it('rejects a source on a non-song item (400)', async () => {
+    const { song, setlistId, set1 } = await setupSongItem()
+    const chart = await createChart(seed.tenantA.id, song.id, 'Guitar')
+    const pause = (await asUserA(request(app).post(`/api/setlists/${setlistId}/sets/${set1}/items`)
+      .send({ item_type: 'pause', duration_seconds: 30 })).expect(201)).body
+    await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${pause.id}`)
+      .send({ chart_id: chart.id })).expect(400)
+  })
+
+  it('404s on a chart belonging to a different song in the same tenant', async () => {
+    const { setlistId, item } = await setupSongItem()
+    const other = await createSong(seed.tenantA.id, 'Other', 90)
+    const chart = await createChart(seed.tenantA.id, other.id, 'Wrong song')
+    await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
+      .send({ chart_id: chart.id })).expect(404)
+  })
+
+  it('404s (no leak) on a chart owned by another tenant', async () => {
+    const { setlistId, item } = await setupSongItem()
+    const songB = await createSong(seed.tenantB.id, 'B song', 100)
+    const chartB = await createChart(seed.tenantB.id, songB.id, 'B chart')
+    const res = await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
+      .send({ chart_id: chartB.id })).expect(404)
+    expect(JSON.stringify(res.body)).not.toContain('B chart')
+  })
+
+  it('404s (no leak) on a document owned by another tenant', async () => {
+    const { setlistId, item } = await setupSongItem()
+    const songB = await createSong(seed.tenantB.id, 'B song', 100)
+    const docB = await createDocument(seed.tenantB.id, songB.id, 'secret.pdf')
+    await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
+      .send({ document_id: docB.id })).expect(404)
+  })
+
+  it('keeps the setlist item when its assigned chart is deleted, clearing the source', async () => {
+    const { song, setlistId, item } = await setupSongItem()
+    const chart = await createChart(seed.tenantA.id, song.id, 'Guitar')
+    await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
+      .send({ chart_id: chart.id })).expect(200)
+
+    await pool.query('DELETE FROM song_chordpro_charts WHERE id = $1', [chart.id])
+
+    const items = (await getTree(setlistId)).body.sets[0].items
+    expect(items).toHaveLength(1)
+    expect(items[0].chart_id).toBeNull()
+  })
+})
+
+describe('GET /api/setlists/:id/performance', () => {
+  async function createChart(tenantId, songId, name, source) {
+    const { rows } = await pool.query(
+      'INSERT INTO song_chordpro_charts (song_id, tenant_id, name, source) VALUES ($1, $2, $3, $4) RETURNING *',
+      [songId, tenantId, name, source],
+    )
+    return rows[0]
+  }
+
+  async function createDocument(tenantId, songId, filename) {
+    const { rows } = await pool.query(
+      `INSERT INTO song_documents (song_id, tenant_id, object_key, original_filename, content_type, file_size)
+       VALUES ($1, $2, $3, $4, 'application/pdf', 1234) RETURNING *`,
+      [songId, tenantId, `tenants/${tenantId}/song_documents/${filename}`, filename],
+    )
+    return rows[0]
+  }
+
+  // Set 1: charted song (with a transition note) + a source-less song.
+  // Set 2: a pause + a song with a PDF. Exercises ordering across sets.
+  async function setupSetlist() {
+    const setlist = await createSetlistA('Show')
+    const set1 = (await asUserA(request(app).get(`/api/setlists/${setlist.id}`)).expect(200)).body.sets[0].id
+    const set2 = (await asUserA(request(app).post(`/api/setlists/${setlist.id}/sets`)
+      .send({ name: 'Set 2' })).expect(201)).body.id
+
+    const addSong = async (setId, title) => {
+      const song = await createSong(seed.tenantA.id, title, 100)
+      const item = (await asUserA(request(app).post(`/api/setlists/${setlist.id}/sets/${setId}/items`)
+        .send({ item_type: 'song', song_id: song.id })).expect(201)).body
+      return { song, item }
+    }
+
+    const first = await addSong(set1, 'Opener')
+    const second = await addSong(set1, 'Bare')
+    const pause = (await asUserA(request(app).post(`/api/setlists/${setlist.id}/sets/${set2}/items`)
+      .send({ item_type: 'pause', duration_seconds: 600, label: 'Break' })).expect(201)).body
+    const third = await addSong(set2, 'Closer')
+
+    const chart = await createChart(seed.tenantA.id, first.song.id, 'Guitar', '{title: Opener}\n[C]hi')
+    const doc = await createDocument(seed.tenantA.id, third.song.id, 'closer.pdf')
+
+    await asUserA(request(app).patch(`/api/setlists/${setlist.id}/items/${first.item.id}`)
+      .send({ chart_id: chart.id, linked_to_next: true, transition_note: 'straight in' })).expect(200)
+    await asUserA(request(app).patch(`/api/setlists/${setlist.id}/items/${third.item.id}`)
+      .send({ document_id: doc.id })).expect(200)
+
+    await asUserA(request(app).put(`/api/setlists/${setlist.id}/items/${first.item.id}/note`)
+      .send({ note: 'capo 2' })).expect(200)
+
+    return { setlistId: setlist.id, first, second, pause, third, chart, doc }
+  }
+
+  it('returns every row in running order with its resolved source', async () => {
+    const { setlistId, chart, doc } = await setupSetlist()
+    const res = await asUserA(request(app).get(`/api/setlists/${setlistId}/performance`)).expect(200)
+
+    expect(res.body.name).toBe('Show')
+    expect(res.body.slides.map((s) => s.title ?? s.label)).toEqual(['Opener', 'Bare', 'Break', 'Closer'])
+
+    const [opener, bare, brk, closer] = res.body.slides
+    expect(opener.source_kind).toBe('chart')
+    expect(opener.chart_source).toContain('[C]hi')
+    expect(opener.chart_name).toBe('Guitar')
+    expect(opener.transition_note).toBe('straight in')
+
+    expect(bare.source_kind).toBe('none')
+    expect(brk.source_kind).toBe('none')
+    expect(brk.item_type).toBe('pause')
+
+    expect(closer.source_kind).toBe('document')
+    expect(closer.document_object_key).toBe(doc.object_key)
+    expect(closer.document_content_type).toBe('application/pdf')
+    expect(closer.chart_id).toBeNull()
+    expect(opener.chart_id).toBe(chart.id)
+  })
+
+  it('carries the requesting member\'s own note, and only theirs', async () => {
+    const { setlistId, first } = await setupSetlist()
+    // superUser is a second approved member of tenant A, with their own note.
+    await asUser(request(app).put(`/api/setlists/${setlistId}/items/${first.item.id}/note`)
+      .send({ note: 'drop D' }), seed.superUser.id, seed.tenantA.id).expect(200)
+
+    const mine = await asUserA(request(app).get(`/api/setlists/${setlistId}/performance`)).expect(200)
+    expect(mine.body.slides[0].my_note).toBe('capo 2')
+
+    const theirs = await asUser(request(app).get(`/api/setlists/${setlistId}/performance`),
+      seed.superUser.id, seed.tenantA.id).expect(200)
+    expect(theirs.body.slides[0].my_note).toBe('drop D')
+    // A row nobody noted stays null rather than borrowing someone else's.
+    expect(mine.body.slides[1].my_note).toBeNull()
+  })
+
+  it('404s for another tenant\'s setlist', async () => {
+    const { rows } = await pool.query(
+      'INSERT INTO setlists (tenant_id, name) VALUES ($1, $2) RETURNING id',
+      [seed.tenantB.id, 'B list'],
+    )
+    await asUserA(request(app).get(`/api/setlists/${rows[0].id}/performance`)).expect(404)
+  })
+
+  it('returns an empty slide list for an empty setlist', async () => {
+    const setlist = await createSetlistA('Empty')
+    const res = await asUserA(request(app).get(`/api/setlists/${setlist.id}/performance`)).expect(200)
+    expect(res.body.slides).toEqual([])
+  })
+})
+
 describe('GET /api/setlists/search', () => {
   const names = (res) => res.body.map((s) => s.name)
 

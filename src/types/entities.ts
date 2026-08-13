@@ -635,14 +635,27 @@ export interface SetlistItem {
   sort_order?: number
   linked_to_next?: boolean
   transition_note?: string
-  /** requesting member's personal note on this song-in-set */
   my_note?: string
+  chart_id?: Id | null
+  document_id?: Id | null
   // enrichment for song items (joined server-side)
   title?: string
   artist?: string
   song_key?: string
   tempo?: number
   tag?: string
+  chart_name?: string | null
+  document_filename?: string | null
+}
+
+/** Fields a setlist-item PATCH may carry; null clears a nullable column. */
+export interface SetlistItemPatch {
+  duration_seconds?: number
+  label?: string | null
+  linked_to_next?: boolean
+  transition_note?: string | null
+  chart_id?: Id | null
+  document_id?: Id | null
 }
 
 export interface SetlistSet {
@@ -660,6 +673,43 @@ export interface Setlist {
   set_count?: number
   song_count?: number
   sets?: SetlistSet[]
+}
+
+/**
+ * One screen of performance mode: a setlist row flattened into running order,
+ * carrying the content itself (ChordPro source inline, PDF by object key).
+ * `source_kind` is 'none' for pause/break rows and for songs with nothing
+ * assigned — those still get a slide so the position matches the setlist.
+ */
+export interface PerformanceSlide {
+  item_id: Id
+  item_type: 'song' | 'pause' | 'break'
+  source_kind: 'chart' | 'document' | 'none'
+  set_id: Id
+  set_name?: string | null
+  song_id?: Id | null
+  label?: string | null
+  title?: string | null
+  artist?: string | null
+  song_key?: string | null
+  tempo?: number | null
+  transition_note?: string | null
+  /** the requesting member's own note on this song-in-set */
+  my_note?: string | null
+  linked_to_next?: boolean
+  chart_id?: Id | null
+  chart_name?: string | null
+  chart_source?: string | null
+  document_id?: Id | null
+  document_object_key?: string | null
+  document_filename?: string | null
+  document_content_type?: string | null
+}
+
+export interface SetlistPerformance {
+  id: Id
+  name: string
+  slides: PerformanceSlide[]
 }
 
 export interface Account {

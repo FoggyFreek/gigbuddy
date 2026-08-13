@@ -4,19 +4,14 @@ import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
-import AddLinkIcon from '@mui/icons-material/AddLink'
-import LinkIcon from '@mui/icons-material/Link'
-import LinkOffIcon from '@mui/icons-material/LinkOff'
-
-interface SetlistTransitionPatch {
-  linked_to_next?: boolean
-  transition_note?: string | null
-}
+import RemoveIcon from '@mui/icons-material/Remove'
+import ShuffleIcon from '@mui/icons-material/Shuffle'
+import type { SetlistItemPatch } from '../../../types/entities.ts'
 
 interface SetlistTransitionProps {
   linked?: boolean
   note?: string | null
-  onUpdate: (patch: SetlistTransitionPatch) => void
+  onUpdate: (patch: SetlistItemPatch) => void
   editing?: boolean
 }
 
@@ -46,7 +41,7 @@ export default function SetlistTransition({ linked = false, note = null, onUpdat
           bgcolor: 'action.hover',
         }}
       >
-        <LinkIcon fontSize="small" color="primary" />
+        <ShuffleIcon fontSize="small" color="primary" />
         {note && (
           <Typography variant="caption" sx={{ fontSize: '0.8rem' }}>
             {note}
@@ -83,7 +78,7 @@ export default function SetlistTransition({ linked = false, note = null, onUpdat
               boxShadow: 1,
             }}
           >
-            <AddLinkIcon fontSize="small" />
+            <ShuffleIcon fontSize="small" />
           </IconButton>
         </Tooltip>
       </Box>
@@ -106,7 +101,7 @@ export default function SetlistTransition({ linked = false, note = null, onUpdat
         '&:hover .unlink-btn': { opacity: 1 },
       }}
     >
-      <LinkIcon fontSize="small" color="primary" />
+      <ShuffleIcon fontSize="small" color="primary" />
       <TextField
         variant="standard"
         size="small"
@@ -130,7 +125,7 @@ export default function SetlistTransition({ linked = false, note = null, onUpdat
           aria-label={t($ => $.transition.removeAria)}
           sx={{ p: 0.25, opacity: 0, transition: 'opacity 120ms' }}
         >
-          <LinkOffIcon fontSize="small" />
+          <RemoveIcon fontSize="small" />
         </IconButton>
       </Tooltip>
     </Box>

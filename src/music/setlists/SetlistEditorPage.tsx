@@ -22,6 +22,7 @@ import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
 import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import AccessTimeIcon from '@mui/icons-material/AccessTime'
 import AddIcon from '@mui/icons-material/Add'
@@ -30,6 +31,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import DoneIcon from '@mui/icons-material/Done'
 import EditIcon from '@mui/icons-material/Edit'
 import PlagiarismOutlinedIcon from '@mui/icons-material/PlagiarismOutlined'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import {
   addItem,
   addSet,
@@ -55,15 +57,7 @@ import SetlistItemCard from './components/SetlistItemCard.tsx'
 import SetlistSetComponent from './components/SetlistSet.tsx'
 import SetlistPreviewModal from './components/SetlistPreviewModal.tsx'
 import { setDomId, parseDomId } from './components/ids.ts'
-import type { SetlistSet, SetlistItem, Song, Id } from '../../types/entities.ts'
-
-// Matches SetlistSet's local SetlistItemPatch (which allows null for nullable fields).
-interface SetlistItemPatch {
-  duration_seconds?: number
-  label?: string | null
-  linked_to_next?: boolean
-  transition_note?: string | null
-}
+import type { SetlistSet, SetlistItem, SetlistItemPatch, Song, Id } from '../../types/entities.ts'
 
 const PAUSE_DEFAULT_SECONDS = 60
 const BREAK_DEFAULT_SECONDS = 600
@@ -282,6 +276,14 @@ export default function SetlistEditorPage() {
     navigate('/setlists')
   }
 
+  // Navigating unmounts the page, which cancels the debounced name save — flush
+  // it first so starting a show can't quietly drop a rename typed a moment ago.
+  async function handleStart(setId?: Id) {
+    await flushName()
+    const target = `/setlists/${setlistId}/perform`
+    navigate(setId ? `${target}?set=${setId}` : target)
+  }
+
   async function handleToggleEditing() {
     if (editing) await flushName() // persist a pending name edit before showing the clean view
     setEditing((prev) => !prev)
@@ -431,6 +433,16 @@ export default function SetlistEditorPage() {
               >
                 {t($ => $.editor.preview)}
               </Button>
+              <Tooltip title={t($ => $.editor.start)}>
+                <IconButton
+                  onClick={() => { void handleStart() }}
+                  size="small"
+                  aria-label={t($ => $.editor.start)}
+                  sx={{ border: '1px solid', borderColor: 'divider', color: 'primary.main' }}
+                >
+                  <PlayArrowIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             </Box>
           </Box>
         </Box>
@@ -463,6 +475,7 @@ export default function SetlistEditorPage() {
             onAddBreak={() => handleAddBreakLike(Number(s.id), 'break', BREAK_DEFAULT_SECONDS)}
             onMoveUp={() => handleMoveSet(index, -1)}
             onMoveDown={() => handleMoveSet(index, 1)}
+            onStart={() => { void handleStart(s.id) }}
             onDeleteItem={handleDeleteItem}
             onUpdateItem={handleUpdateItem}
             onUpdateNote={handleUpdateNote}

@@ -11,6 +11,7 @@ import DialogTitle from '@mui/material/DialogTitle'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Switch from '@mui/material/Switch'
 import PrintIcon from '@mui/icons-material/Print'
+import ShuffleIcon from '@mui/icons-material/Shuffle'
 import { formatDuration } from '../../../utils/formatDuration.ts'
 
 interface PageRow {
@@ -106,7 +107,8 @@ function PageContent({ page, showKey, showBpm, showNotes }: Readonly<PageContent
               </div>
               {isSong && item.linked_to_next ? (
                 <div style={{ marginLeft: '2.35em', fontStyle: 'italic', opacity: 0.7, fontSize: '0.85em' }}>
-                  ↳ {item.transition_note || t($ => $.preview.segueFallback)}
+                  <ShuffleIcon style={{ fontSize: '1em', verticalAlign: 'text-bottom', marginRight: '0.35em' }} />
+                  {item.transition_note || t($ => $.preview.segueFallback)}
                 </div>
               ) : null}
               {isSong && showNotes && item.my_note ? (

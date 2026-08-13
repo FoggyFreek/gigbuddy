@@ -16,6 +16,7 @@
     "untitled": "Naamloze setlijst",
     "total": "Totaal {{duration}}",
     "preview": "Voorbeeld",
+    "start": "Starten",
     "addSet": "Set toevoegen",
     "deleteSetlist": "Setlijst verwijderen",
     "nameAria": "setlijstnaam",
@@ -31,6 +32,8 @@
     "moveDownAria": "set omlaag",
     "delete": "Set verwijderen",
     "deleteAria": "set verwijderen",
+    "start": "Vanaf deze set starten",
+    "startAria": "afspelen starten vanaf {{name}}",
     "emptyEditing": "Leeg — voeg songs, pauzes of breaks toe, of sleep items hierheen.",
     "empty": "Leeg",
     "addSong": "Song toevoegen",
@@ -47,10 +50,22 @@
     "dragAria": "slepen",
     "songOrderAria": "songvolgorde {{order}}",
     "deleteAria": "item verwijderen",
+    "openSong": "Song openen",
+    "openSongAria": "de songpagina van {{title}} openen",
     "myNote": "Mijn notitie",
     "noteAria": "songnotitie",
     "notePlaceholder": "Jouw notitie voor deze song…",
-    "noteTextAria": "songnotitietekst"
+    "noteTextAria": "songnotitietekst",
+    "source": {
+      "title": "Spelen vanaf",
+      "ariaLabel": "chart of bladmuziek voor deze song",
+      "unassigned": "Geen chart of bladmuziek",
+      "none": "Niets",
+      "untitledChart": "(naamloze chart)",
+      "empty": "Deze song heeft nog geen charts of pdf's.",
+      "emptyLink": "Voeg er een toe op de songpagina",
+      "loadFailed": "Laden van de bestanden van deze song mislukt"
+    }
   },
   "transition": {
     "link": "Koppelen als overgang",
@@ -69,6 +84,22 @@
     "showNotes": "Notities tonen",
     "showPausesBreaks": "Pauzes & breaks tonen",
     "print": "Afdrukken"
+  },
+  "perform": {
+    "loadFailed": "Laden van deze setlijst mislukt",
+    "empty": "Deze setlijst is leeg — voeg eerst songs toe.",
+    "exit": "Afsluiten",
+    "counter": "{{current}} van {{total}}",
+    "noSource": "Geen chart of bladmuziek toegewezen",
+    "pdfError": "Deze pdf kon niet worden weergegeven",
+    "fullscreen": "Volledig scherm",
+    "showNotes": "Persoonlijke notities tonen",
+    "hideNotes": "Persoonlijke notities verbergen",
+    "switchToLight": "Overschakelen naar een lichte achtergrond",
+    "switchToDark": "Overschakelen naar een donkere achtergrond",
+    "nextAria": "volgende",
+    "previousAria": "vorige",
+    "toggleControlsAria": "bediening tonen of verbergen"
   },
   "toast": {
     "generic": "Er is iets misgegaan",

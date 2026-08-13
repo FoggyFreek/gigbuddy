@@ -73,13 +73,18 @@ export async function fetchSetlistTree(executor, tenantId, setlistId, userId) {
     `SELECT
        i.id, i.set_id, i.item_type, i.song_id, i.label, i.sort_order,
        i.linked_to_next, i.transition_note,
+       i.chart_id, i.document_id,
        CASE WHEN i.item_type = 'song' THEN sg.duration_seconds ELSE i.duration_seconds END AS duration_seconds,
        sg.title, sg.artist, sg.song_key, sg.tempo,
+       c.name AS chart_name,
+       d.original_filename AS document_filename,
        tag.name AS tag,
        n.note AS my_note
      FROM setlist_items i
      JOIN setlist_sets st ON st.id = i.set_id AND st.tenant_id = i.tenant_id
      LEFT JOIN songs sg ON sg.id = i.song_id AND sg.tenant_id = i.tenant_id
+     LEFT JOIN song_chordpro_charts c ON c.id = i.chart_id AND c.tenant_id = i.tenant_id
+     LEFT JOIN song_documents d ON d.id = i.document_id AND d.tenant_id = i.tenant_id
      LEFT JOIN setlist_item_notes n
             ON n.setlist_item_id = i.id AND n.tenant_id = i.tenant_id AND n.user_id = $3
      LEFT JOIN LATERAL (
@@ -105,6 +110,46 @@ export async function fetchSetlistTree(executor, tenantId, setlistId, userId) {
     ...head[0],
     sets: sets.map((s) => ({ ...s, items: itemsBySet.get(s.id) || [] })),
   }
+}
+
+// Existence + name only, for reads that don't need the whole tree.
+export async function fetchSetlistHead(executor, tenantId, setlistId) {
+  const { rows } = await executor.query(
+    'SELECT id, name FROM setlists WHERE id = $1 AND tenant_id = $2',
+    [setlistId, tenantId],
+  )
+  return rows[0] || null
+}
+
+// Every row of a setlist flattened into running order, with the assigned chart's
+// source (inline text) or the assigned document's object key, plus the
+// requesting user's own note on that song-in-set. Powers performance mode, which
+// needs the content itself rather than just a reference — the setlist tree
+// deliberately carries only names so the editor stays light.
+export async function fetchPerformanceSlides(executor, tenantId, setlistId, userId) {
+  const { rows } = await executor.query(
+    `SELECT
+       i.id AS item_id, i.item_type, i.label, i.transition_note, i.linked_to_next,
+       i.chart_id, i.document_id, i.song_id,
+       st.id AS set_id, st.name AS set_name,
+       sg.title, sg.artist, sg.song_key, sg.tempo,
+       c.name AS chart_name, c.source AS chart_source,
+       d.object_key AS document_object_key,
+       d.original_filename AS document_filename,
+       d.content_type AS document_content_type,
+       n.note AS my_note
+     FROM setlist_items i
+     JOIN setlist_sets st ON st.id = i.set_id AND st.tenant_id = i.tenant_id
+     LEFT JOIN songs sg ON sg.id = i.song_id AND sg.tenant_id = i.tenant_id
+     LEFT JOIN song_chordpro_charts c ON c.id = i.chart_id AND c.tenant_id = i.tenant_id
+     LEFT JOIN song_documents d ON d.id = i.document_id AND d.tenant_id = i.tenant_id
+     LEFT JOIN setlist_item_notes n
+            ON n.setlist_item_id = i.id AND n.tenant_id = i.tenant_id AND n.user_id = $3
+     WHERE st.setlist_id = $1 AND i.tenant_id = $2
+     ORDER BY st.sort_order ASC, st.id ASC, i.sort_order ASC, i.id ASC`,
+    [setlistId, tenantId, userId],
+  )
+  return rows
 }
 
 export async function insertSetlist(executor, tenantId, name) {
@@ -221,7 +266,7 @@ export async function insertSetlistItem(executor, params) {
      FROM setlist_sets st
      WHERE st.id = $1 AND st.setlist_id = $2 AND st.tenant_id = $3
      RETURNING id, set_id, item_type, song_id, duration_seconds, label, sort_order,
-               linked_to_next, transition_note`,
+               linked_to_next, transition_note, chart_id, document_id`,
     [setId, setlistId, tenantId, itemType, songId, durationSeconds, label, sortOrder],
   )
   return rows[0] || null
@@ -243,10 +288,10 @@ export async function loadSongEnrichment(executor, songId, tenantId) {
   return rows[0] || null
 }
 
-// Loads an item's id + type, scoped to a set within this setlist + tenant.
+// Loads an item's id, type and song, scoped to a set within this setlist + tenant.
 export async function fetchItemInSetlist(executor, itemId, tenantId, setlistId) {
   const { rows } = await executor.query(
-    `SELECT i.id, i.item_type FROM setlist_items i
+    `SELECT i.id, i.item_type, i.song_id FROM setlist_items i
        JOIN setlist_sets st ON st.id = i.set_id AND st.tenant_id = i.tenant_id
       WHERE i.id = $1 AND i.tenant_id = $2 AND st.setlist_id = $3`,
     [itemId, tenantId, setlistId],
@@ -263,7 +308,7 @@ export async function updateSetlistItem(executor, tenantId, itemId, assignments,
     `UPDATE setlist_items SET ${assignments.join(', ')}
        WHERE id = $${whereIdx} AND tenant_id = $${whereIdx + 1}
        RETURNING id, set_id, item_type, song_id, duration_seconds, label, sort_order,
-                 linked_to_next, transition_note`,
+                 linked_to_next, transition_note, chart_id, document_id`,
     [...values, itemId, tenantId],
   )
   return rows[0]
@@ -294,6 +339,30 @@ export async function clearBrokenPredecessorLink(executor, tenantId, setId, sort
     [tenantId, setId, sortOrder],
   )
   return rows.map((r) => r.id)
+}
+
+// ---------- performance sources ----------
+
+// A chart is assignable to an item only when it belongs to that item's song in
+// this tenant. Returns { id, name } or null — a chart from another song or
+// another tenant is indistinguishable from one that doesn't exist.
+export async function findChartForSong(executor, tenantId, songId, chartId) {
+  const { rows } = await executor.query(
+    `SELECT id, name FROM song_chordpro_charts
+      WHERE id = $1 AND song_id = $2 AND tenant_id = $3`,
+    [chartId, songId, tenantId],
+  )
+  return rows[0] || null
+}
+
+// Same contract as findChartForSong, for a PDF document.
+export async function findDocumentForSong(executor, tenantId, songId, documentId) {
+  const { rows } = await executor.query(
+    `SELECT id, original_filename FROM song_documents
+      WHERE id = $1 AND song_id = $2 AND tenant_id = $3`,
+    [documentId, songId, tenantId],
+  )
+  return rows[0] || null
 }
 
 export async function deleteSetlistItem(executor, itemId, tenantId) {

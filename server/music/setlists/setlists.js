@@ -23,6 +23,7 @@ import {
   reorderItems,
   deleteItem,
   setItemNote,
+  getSetlistPerformance,
 } from './setlistService.js'
 
 const router = Router()
@@ -49,6 +50,16 @@ router.get('/:id', async (req, res) => {
   const result = await getSetlist(pool, req.tenantId, id, req.user.id)
   if (result.error) return sendError(res, result.error)
   res.json(result.tree)
+})
+
+// Flat running order with each row's chart source / document key, for
+// performance mode. Read-only, so it needs no write permission; the whole
+// contents of one setlist, like GET /:id, so no collection envelope.
+router.get('/:id/performance', async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await getSetlistPerformance(pool, req.tenantId, id, req.user.id)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.performance)
 })
 
 router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {

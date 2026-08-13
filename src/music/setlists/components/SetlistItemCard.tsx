@@ -1,7 +1,8 @@
 import type { RefObject } from 'react'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { SetlistItem } from '../../../types/entities.ts'
+import { Link as RouterLink } from 'react-router'
+import type { SetlistItem, SetlistItemPatch } from '../../../types/entities.ts'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import Box from '@mui/material/Box'
@@ -15,7 +16,12 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator'
 import StickyNote2Icon from '@mui/icons-material/StickyNote2'
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined'
+import LaunchIcon from '@mui/icons-material/Launch'
+import LibraryMusicIcon from '@mui/icons-material/LibraryMusic'
+import LibraryMusicOutlinedIcon from '@mui/icons-material/LibraryMusicOutlined'
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 import { formatDuration, parseDuration } from '../../../utils/formatDuration.ts'
+import SetlistItemSourcePicker from './SetlistItemSourcePicker.tsx'
 import { itemDomId } from './ids.ts'
 
 // A member's personal note on a song-in-set, edited in a popover anchored to the
@@ -72,6 +78,51 @@ function SongNoteButton({ note, onUpdateNote }: Readonly<SongNoteButtonProps>) {
   )
 }
 
+// What performance mode plays from for this song-in-set. The icon reflects the
+// assigned kind (chart / PDF) and greys out when nothing is assigned. Read-only
+// viewers still see the assignment; only editors can change it.
+interface SongSourceButtonProps {
+  item: SetlistItem
+  onUpdate: (patch: SetlistItemPatch) => void
+  editing: boolean
+}
+
+function SongSourceButton({ item, onUpdate, editing }: Readonly<SongSourceButtonProps>) {
+  const { t } = useTranslation('setlists')
+  const [open, setOpen] = useState(false)
+  const assignedName = item.chart_id ? item.chart_name : item.document_filename
+
+  let icon = <LibraryMusicOutlinedIcon fontSize="small" />
+  if (item.chart_id) icon = <LibraryMusicIcon fontSize="small" />
+  else if (item.document_id) icon = <PictureAsPdfIcon fontSize="small" />
+
+  return (
+    <>
+      <Tooltip title={assignedName || t($ => $.item.source.unassigned)}>
+        <span>
+          <IconButton
+            size="small"
+            color={assignedName ? 'primary' : 'default'}
+            disabled={!editing}
+            onClick={() => setOpen(true)}
+            aria-label={t($ => $.item.source.ariaLabel)}
+          >
+            {icon}
+          </IconButton>
+        </span>
+      </Tooltip>
+      {open && (
+        <SetlistItemSourcePicker
+          open={open}
+          item={item}
+          onClose={() => setOpen(false)}
+          onSelect={onUpdate}
+        />
+      )}
+    </>
+  )
+}
+
 interface SongBodyProps {
   item: SetlistItem
 }
@@ -96,11 +147,6 @@ function SongBody({ item }: Readonly<SongBodyProps>) {
       )}
     </Box>
   )
-}
-
-interface SetlistItemPatch {
-  duration_seconds?: number
-  label?: string | null
 }
 
 interface BreakBodyProps {
@@ -234,12 +280,29 @@ export default function SetlistItemCard({ item, onDelete, onUpdate, onUpdateNote
       {isSong ? <SongBody item={item} /> : <BreakBody item={item} onUpdate={onUpdate} editing={editing} />}
       <Box sx={{ flexGrow: isSong ? 1 : 0 }} />
       {isSong && !dragOverlay && (
-        <SongNoteButton note={item.my_note} onUpdateNote={onUpdateNote} />
+        <>
+          <SongSourceButton item={item} onUpdate={onUpdate} editing={editing} />
+          <SongNoteButton note={item.my_note} onUpdateNote={onUpdateNote} />
+        </>
       )}
       {editing && (
         <IconButton size="small" color="error" onClick={onDelete} aria-label={t($ => $.item.deleteAria)}>
           <DeleteIcon fontSize="small" />
         </IconButton>
+      )}
+      {isSong && !dragOverlay && item.song_id && (
+        <Tooltip title={t($ => $.item.openSong)}>
+          {/* A real link, so ctrl/cmd-click opens the song in a new tab and
+              leaves the setlist where it is. */}
+          <IconButton
+            size="small"
+            component={RouterLink}
+            to={`/songs/${item.song_id}`}
+            aria-label={t($ => $.item.openSongAria, { title: item.title ?? '' })}
+          >
+            <LaunchIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       )}
     </Box>
   )

@@ -1,5 +1,7 @@
 import { request } from '../../api/_client.ts'
-import type { Setlist, SetlistSet, SetlistItem, Id } from '../../types/entities.ts'
+import type {
+  Setlist, SetlistSet, SetlistItem, SetlistItemPatch, SetlistPerformance, Id,
+} from '../../types/entities.ts'
 
 const api = <T = unknown>(path: string, options?: RequestInit) =>
   request<T>(`/api/setlists${path}`, options)
@@ -25,7 +27,7 @@ export const reorderSets = (id: Id, orderedSetIds: Id[]) =>
 
 export const addItem = (id: Id, setId: Id, body: Partial<SetlistItem>) =>
   api<SetlistItem>(`/${id}/sets/${setId}/items`, { method: 'POST', body: JSON.stringify(body) })
-export const updateItem = (id: Id, itemId: Id, body: Partial<SetlistItem>) =>
+export const updateItem = (id: Id, itemId: Id, body: SetlistItemPatch) =>
   api<SetlistItem>(`/${id}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteItem = (id: Id, itemId: Id) =>
   api<void>(`/${id}/items/${itemId}`, { method: 'DELETE' })
@@ -33,3 +35,9 @@ export const saveItemNote = (id: Id, itemId: Id, note: string) =>
   api<void>(`/${id}/items/${itemId}/note`, { method: 'PUT', body: JSON.stringify({ note }) })
 export const reorderItems = (id: Id, sets: unknown[]) =>
   api<void>(`/${id}/items/reorder`, { method: 'PATCH', body: JSON.stringify({ sets }) })
+
+// Flat running order with each row's chart source / document key — the read
+// performance mode runs on. Separate from getSetlist so the editor never pulls
+// full chart sources it doesn't render.
+export const getSetlistPerformance = (id: Id) =>
+  api<SetlistPerformance>(`/${id}/performance`)

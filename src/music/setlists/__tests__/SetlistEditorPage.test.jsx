@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // dnd-kit measures with ResizeObserver, which jsdom lacks.
@@ -30,10 +30,12 @@ vi.mock('../setlists.ts', () => ({
 
 vi.mock('../../songs/songs.ts', () => ({
   listSongs: vi.fn().mockResolvedValue([]),
+  getSong: vi.fn().mockResolvedValue({ id: 1, chordpro_charts: [], documents: [] }),
 }))
 
 import SetlistEditorPage from '../SetlistEditorPage.tsx'
-import { addItem, deleteItem, getSetlist, saveItemNote, updateItem, updateSet } from '../setlists.ts'
+import { addItem, deleteItem, getSetlist, saveItemNote, updateItem, updateSet, updateSetlist } from '../setlists.ts'
+import { getSong } from '../../songs/songs.ts'
 import { ToastProvider } from '../../../contexts/ToastContext.tsx'
 import theme from '../../../theme.ts'
 import { AuthContext } from '../../../contexts/authContext.ts'
@@ -69,6 +71,13 @@ const TREE = {
   ],
 }
 
+// Stands in for the performance view, reporting which set it was asked to start
+// from so the Start buttons' targets are observable.
+function PerformStub() {
+  const [params] = useSearchParams()
+  return <div>performing from {params.get('set') ?? 'the top'}</div>
+}
+
 async function enterEditMode(user) {
   await user.click(screen.getByRole('button', { name: /^edit$/i }))
 }
@@ -81,6 +90,7 @@ function wrap() {
           <ToastProvider>
             <Routes>
               <Route path="/setlists/:id" element={<SetlistEditorPage />} />
+              <Route path="/setlists/:id/perform" element={<PerformStub />} />
             </Routes>
           </ToastProvider>
         </AuthContext.Provider>
@@ -104,6 +114,75 @@ describe('SetlistEditorPage', () => {
     wrap()
     expect(await screen.findByText('Creep')).toBeInTheDocument()
     expect(screen.getByText(/^Total/).textContent).toContain('1:40')
+  })
+
+  it('links each song row to its song page', async () => {
+    wrap()
+    await screen.findByText('Creep')
+    expect(screen.getByRole('link', { name: 'open the song page for Creep' }))
+      .toHaveAttribute('href', '/songs/1')
+  })
+
+  it('starts performance mode from the top', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await screen.findByText('Creep')
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    expect(await screen.findByText('performing from the top')).toBeInTheDocument()
+  })
+
+  it('persists a pending rename before starting the show', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await screen.findByText('Creep')
+    await enterEditMode(user)
+
+    await user.clear(screen.getByLabelText('setlist name'))
+    await user.type(screen.getByLabelText('setlist name'), 'Renamed')
+    // Navigating unmounts the page, which would cancel the debounced save.
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+
+    expect(updateSetlist).toHaveBeenCalledWith(5, { name: 'Renamed' })
+    expect(await screen.findByText('performing from the top')).toBeInTheDocument()
+  })
+
+  it('starts performance mode from a chosen set', async () => {
+    const user = userEvent.setup()
+    wrap()
+    await screen.findByText('Creep')
+    await user.click(screen.getByRole('button', { name: 'start playing from Set 1' }))
+    expect(await screen.findByText('performing from 10')).toBeInTheDocument()
+  })
+
+  it('cannot start the show from a set with nothing in it', async () => {
+    getSetlist.mockResolvedValue({
+      id: 5,
+      name: 'My List',
+      sets: [
+        { ...TREE.sets[0] },
+        { id: 11, name: 'Set 2', include_in_total: true, sort_order: 1, items: [] },
+      ],
+    })
+    wrap()
+    await screen.findByText('Creep')
+    expect(screen.getByRole('button', { name: 'start playing from Set 2' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'start playing from Set 1' })).toBeEnabled()
+  })
+
+  it('assigns a chart to a song from its source picker', async () => {
+    const user = userEvent.setup()
+    getSong.mockResolvedValue({
+      id: 1, chordpro_charts: [{ id: 7, name: 'Guitar' }], documents: [],
+    })
+    updateItem.mockResolvedValue({ ...song(100, 'Creep'), chart_id: 7, chart_name: 'Guitar' })
+    wrap()
+    await screen.findByText('Creep')
+    await enterEditMode(user)
+
+    await user.click(screen.getByRole('button', { name: 'chart or sheet music for this song' }))
+    await user.click(await screen.findByRole('radio', { name: /Guitar/ }))
+
+    expect(updateItem).toHaveBeenCalledWith(5, 100, { chart_id: 7 })
   })
 
   it('numbers song cards without counting pauses or breaks', async () => {

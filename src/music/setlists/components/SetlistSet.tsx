@@ -1,4 +1,6 @@
-import type { SetlistSet as SetlistSetType, SetlistItem, Id } from '../../../types/entities.ts'
+import type {
+  SetlistSet as SetlistSetType, SetlistItem, SetlistItemPatch, Id,
+} from '../../../types/entities.ts'
 import { useTranslation } from 'react-i18next'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -16,17 +18,11 @@ import FreeBreakfastIcon from '@mui/icons-material/FreeBreakfast'
 import LibraryMusicIcon from '@mui/icons-material/LibraryMusic'
 import MoreTimeIcon from '@mui/icons-material/MoreTime'
 import PauseCircleOutlineIcon from '@mui/icons-material/PauseCircleOutlined'
+import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import SetlistItemCard from './SetlistItemCard.tsx'
 import SetlistTransition from './SetlistTransition.tsx'
 import { formatDuration } from '../../../utils/formatDuration.ts'
 import { itemDomId, setDomId } from './ids.ts'
-
-interface SetlistItemPatch {
-  duration_seconds?: number
-  label?: string | null
-  linked_to_next?: boolean
-  transition_note?: string | null
-}
 
 function countSongsThrough(items: SetlistItem[], index: number): number {
   return items.slice(0, index + 1).filter((item) => item.item_type === 'song').length
@@ -44,6 +40,7 @@ interface SetlistSetProps {
   onAddBreak: () => void
   onMoveUp: () => void
   onMoveDown: () => void
+  onStart: () => void
   onDeleteItem: (id: Id) => void
   onUpdateItem: (id: Id, patch: SetlistItemPatch) => void
   onUpdateNote: (id: Id, note: string) => void
@@ -63,6 +60,7 @@ export default function SetlistSet({
   onAddBreak,
   onMoveUp,
   onMoveDown,
+  onStart,
   onDeleteItem,
   onUpdateItem,
   onUpdateNote,
@@ -118,6 +116,21 @@ export default function SetlistSet({
           <AccessTimeIcon fontSize="small" />
           <Typography variant="caption">{formatDuration(setSeconds) || '0:00'}</Typography>
         </Box>
+        {/* Available to everyone, not just editors — playing isn't editing.
+            An empty set has no slide to start on, so there is nothing to play. */}
+        <Tooltip title={t($ => $.set.start)}>
+          <span>
+            <IconButton
+              size="small"
+              color="inherit"
+              disabled={itemIds.length === 0}
+              onClick={onStart}
+              aria-label={t($ => $.set.startAria, { name: set.name })}
+            >
+              <PlayArrowIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
         {editing && (
           <>
             <Tooltip title={t($ => $.set.includeInTotal)}>

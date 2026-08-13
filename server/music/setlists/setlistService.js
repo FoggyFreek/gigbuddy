@@ -14,6 +14,10 @@ import {
   listSetlistsWithAggregates,
   searchSetlists as searchSetlistRows,
   fetchSetlistTree,
+  fetchSetlistHead,
+  fetchPerformanceSlides,
+  findChartForSong,
+  findDocumentForSong,
   insertSetlist,
   updateSetlistName,
   deleteSetlist as deleteSetlistRow,
@@ -191,6 +195,26 @@ export async function createItem(db, tenantId, setlistId, setId, body) {
   return { item: await enrichSongItem(db, row, tenantId) }
 }
 
+// Verifies an assigned performance source belongs to this item's song in this
+// tenant, and returns the display fields the client needs alongside the id.
+// A chart/document from another song — or another tenant — is a 404, so a
+// probing client can't tell the two apart.
+async function resolveSource(db, tenantId, songId, source) {
+  if (!source) return {}
+  const { chartId, documentId } = source
+  if (chartId !== null) {
+    const chart = await findChartForSong(db, tenantId, songId, chartId)
+    if (!chart) return NOT_FOUND
+    return { display: { chart_name: chart.name, document_filename: null } }
+  }
+  if (documentId !== null) {
+    const doc = await findDocumentForSong(db, tenantId, songId, documentId)
+    if (!doc) return NOT_FOUND
+    return { display: { chart_name: null, document_filename: doc.original_filename } }
+  }
+  return { display: { chart_name: null, document_filename: null } }
+}
+
 export async function patchItem(db, tenantId, setlistId, itemId, body) {
   const existing = await fetchItemInSetlist(db, itemId, tenantId, setlistId)
   if (!existing) return NOT_FOUND
@@ -200,16 +224,48 @@ export async function patchItem(db, tenantId, setlistId, itemId, body) {
   if (touchesLink && existing.item_type !== 'song') {
     return badRequest('Transitions are only valid on song items')
   }
+  // Same for performance sources: only a song has a chart or sheet to show.
+  const touchesSource = 'chart_id' in body || 'document_id' in body
+  if (touchesSource && existing.item_type !== 'song') {
+    return badRequest('Performance sources are only valid on song items')
+  }
 
   const patch = buildItemPatch(body, existing.item_type)
   if (patch.error) return badRequest(patch.error)
-  const { sets, rawSets } = patch
+  const { sets, rawSets, source } = patch
   if (!sets.length && !rawSets.length) return badRequest('No valid fields to update')
+
+  const resolved = await resolveSource(db, tenantId, existing.song_id, source)
+  if (resolved.error) return resolved
 
   const values = sets.map((s) => s.value)
   const assignments = [...sets.map((s, i) => `${s.col} = $${i + 1}`), ...rawSets]
   const row = await updateSetlistItem(db, tenantId, itemId, assignments, values)
-  return { item: await enrichSongItem(db, row, tenantId) }
+  const enriched = await enrichSongItem(db, row, tenantId)
+  return { item: { ...enriched, ...resolved.display } }
+}
+
+// Flat, ordered view of a setlist for performance mode: every row in running
+// order, each carrying its resolved source (chart text inline, document by
+// object key) and the requesting user's own note. Rows with nothing to show are
+// kept — the on-screen position must match the printed setlist — and are marked
+// source_kind 'none'.
+export async function getSetlistPerformance(db, tenantId, setlistId, userId) {
+  const head = await fetchSetlistHead(db, tenantId, setlistId)
+  if (!head) return NOT_FOUND
+
+  const rows = await fetchPerformanceSlides(db, tenantId, setlistId, userId)
+  const slides = rows.map((row) => ({
+    ...row,
+    source_kind: sourceKindOf(row),
+  }))
+  return { performance: { ...head, slides } }
+}
+
+function sourceKindOf(row) {
+  if (row.chart_id !== null) return 'chart'
+  if (row.document_id !== null) return 'document'
+  return 'none'
 }
 
 // Reorder (and move across sets) items in one transaction. `payloadSets` is

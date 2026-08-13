@@ -22,6 +22,7 @@ interface ChordProViewProps {
   // {transpose} directives in the source (so the on-screen key shifts without
   // editing the chart).
   transposeOffset?: number
+  diagramsOpen?: boolean
 }
 
 interface AnchoredImage { src: string; scale: string | null }
@@ -478,9 +479,9 @@ function DiagramGrid({ chords }: Readonly<{ chords: ResolvedChord[] }>) {
 
 // A collapsible header at the top of the view holding the guitar chord diagrams.
 // Starts collapsed so the chart stays the focus; the count hints at what's inside.
-function CollapsibleDiagrams({ chords }: Readonly<{ chords: ResolvedChord[] }>) {
+function CollapsibleDiagrams({ chords, defaultOpen }: Readonly<{ chords: ResolvedChord[]; defaultOpen: boolean }>) {
   const { t } = useTranslation('songs')
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(defaultOpen)
   return (
     <Box className="cp-diagrams-collapsible" sx={{ mb: 2 }}>
       <ButtonBase
@@ -506,7 +507,7 @@ function PrintDiagrams({ chords }: Readonly<{ chords: ResolvedChord[] }>) {
   )
 }
 
-export default function ChordProView({ source, transposeOffset = 0 }: Readonly<ChordProViewProps>) {
+export default function ChordProView({ source, transposeOffset = 0, diagramsOpen = false }: Readonly<ChordProViewProps>) {
   const { columns, blocks, warnings } = parseChordProDocument(source)
   const { sections, anchoredImages } = buildSections(blocks)
   const { placement, chords } = analyzeChords(source, transposeOffset)
@@ -522,7 +523,7 @@ export default function ChordProView({ source, transposeOffset = 0 }: Readonly<C
           {warnings.map((w, i) => <Box key={i}>⚠ {w}</Box>)}
         </Box>
       )}
-      {showGrid && <CollapsibleDiagrams chords={chords} />}
+      {showGrid && <CollapsibleDiagrams chords={chords} defaultOpen={diagramsOpen} />}
       {chords.length > 0 && <PrintDiagrams chords={chords} />}
       {sections.map((s, i) =>
         s.type === 'abc'

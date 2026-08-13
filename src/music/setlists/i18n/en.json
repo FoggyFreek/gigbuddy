@@ -16,6 +16,7 @@
     "untitled": "Untitled setlist",
     "total": "Total {{duration}}",
     "preview": "Preview",
+    "start": "Start",
     "addSet": "Add set",
     "deleteSetlist": "Delete setlist",
     "nameAria": "setlist name",
@@ -31,6 +32,8 @@
     "moveDownAria": "move set down",
     "delete": "Delete set",
     "deleteAria": "delete set",
+    "start": "Start from this set",
+    "startAria": "start playing from {{name}}",
     "emptyEditing": "Empty — add songs, pauses or breaks, or drag items here.",
     "empty": "Empty",
     "addSong": "Add song",
@@ -47,10 +50,22 @@
     "dragAria": "drag",
     "songOrderAria": "song order {{order}}",
     "deleteAria": "delete item",
+    "openSong": "Open song",
+    "openSongAria": "open the song page for {{title}}",
     "myNote": "My note",
     "noteAria": "song note",
     "notePlaceholder": "Your note for this song…",
-    "noteTextAria": "song note text"
+    "noteTextAria": "song note text",
+    "source": {
+      "title": "Play from",
+      "ariaLabel": "chart or sheet music for this song",
+      "unassigned": "No chart or sheet music",
+      "none": "Nothing",
+      "untitledChart": "(untitled chart)",
+      "empty": "This song has no charts or PDFs yet.",
+      "emptyLink": "Add one on the song page",
+      "loadFailed": "Failed to load this song's files"
+    }
   },
   "transition": {
     "link": "Link as transition",
@@ -69,6 +84,22 @@
     "showNotes": "Show notes",
     "showPausesBreaks": "Show Pauses & Breaks",
     "print": "Print"
+  },
+  "perform": {
+    "loadFailed": "Failed to load this setlist",
+    "empty": "This setlist is empty — add some songs first.",
+    "exit": "Exit",
+    "counter": "{{current}} of {{total}}",
+    "noSource": "No chart or sheet music assigned",
+    "pdfError": "This PDF could not be displayed",
+    "fullscreen": "Full screen",
+    "showNotes": "Show personal notes",
+    "hideNotes": "Hide personal notes",
+    "switchToLight": "Switch to a light background",
+    "switchToDark": "Switch to a dark background",
+    "nextAria": "next",
+    "previousAria": "previous",
+    "toggleControlsAria": "show or hide controls"
   },
   "toast": {
     "generic": "Something went wrong",

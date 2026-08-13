@@ -49,9 +49,19 @@ export function parseNewItem(body) {
   return { itemType, songId: null, durationSeconds, label }
 }
 
+// Parses a nullable reference id: a positive id, or null to clear. Returns
+// `undefined` when the value is neither, so callers can tell "invalid" from "clear".
+function parseNullableId(val) {
+  if (val === null) return null
+  const id = parseId(val)
+  return id === null ? undefined : id
+}
+
 // Collect the SET clause for a setlist-item PATCH. Returns { error } on an invalid
-// field, otherwise { sets, rawSets }: `sets` are parameterized { col, value } pairs
-// and `rawSets` are literal assignments (e.g. clearing a note when unlinking).
+// field, otherwise { sets, rawSets, source }: `sets` are parameterized { col, value }
+// pairs, `rawSets` are literal assignments (e.g. clearing a note when unlinking),
+// and `source` is the resolved performance source when the patch touches it, so the
+// service can verify ownership before the write.
 export function buildItemPatch(body, itemType) {
   const sets = []
   const rawSets = []
@@ -75,7 +85,26 @@ export function buildItemPatch(body, itemType) {
   if ('transition_note' in body && !noteForcedNull) {
     sets.push({ col: 'transition_note', value: trimOrNull(body.transition_note) })
   }
-  return { sets, rawSets }
+
+  // Performance source. An item has at most one, so any patch that touches it
+  // rewrites both columns: assigning a chart clears a document and vice versa,
+  // and a null clears the source outright.
+  let source = null
+  if ('chart_id' in body || 'document_id' in body) {
+    const chartId = 'chart_id' in body ? parseNullableId(body.chart_id) : null
+    const documentId = 'document_id' in body ? parseNullableId(body.document_id) : null
+    if (chartId === undefined || documentId === undefined) {
+      return { error: 'Invalid performance source id' }
+    }
+    if (chartId !== null && documentId !== null) {
+      return { error: 'An item can have only one performance source' }
+    }
+    source = { chartId, documentId }
+    sets.push({ col: 'chart_id', value: chartId })
+    sets.push({ col: 'document_id', value: documentId })
+  }
+
+  return { sets, rawSets, source }
 }
 
 // Validates the body of PATCH /:id/sets/reorder. Returns { error } or { orderedSetIds }.
