@@ -179,7 +179,11 @@ describe('the cross-tenant hub', () => {
   })
 
   it('labels past feeds too', async () => {
-    await pool.query(`UPDATE gigs SET event_date = '2020-01-01' WHERE tenant_id = $1`, [personal.id])
+    // end_date moves with event_date or gigs_event_time_range_check rejects the row.
+    await pool.query(
+      `UPDATE gigs SET event_date = '2020-01-01', end_date = '2020-01-01' WHERE tenant_id = $1`,
+      [personal.id],
+    )
 
     const res = await asUserLevel(
       request(app).get(`/api/me/gigs/past?limit=10&today=${TODAY}`),
