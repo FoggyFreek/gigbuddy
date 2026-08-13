@@ -742,6 +742,128 @@ describe('merch sales — list & ledger browser', () => {
     expect(res.body.totals.expense_cents).toBe(2400)
   })
 
+  // The dashboard pie: the same merch revenue, split by the product behind it.
+  describe('overview merch revenue split by product', () => {
+    // A sale of `quantity` at the product's €36.30 default = €30 net each.
+    async function sell(product, quantity, sale_date = '2026-06-01') {
+      return asUserA(request(app).post('/api/merch/sales'))
+        .send({ product_id: product.id, quantity, sale_date }).expect(201)
+    }
+
+    async function merchOverview(as = asUserA) {
+      const res = await as(request(app).get('/api/ledger/overview'))
+        .query({ mode: 'fiscal_year', year: 2026 }).expect(200)
+      return res.body.merch
+    }
+
+    it('names each product and orders the buckets by revenue, summing to the total', async () => {
+      const shirt = await createProduct(asUserA)
+      const vinyl = await createProduct(asUserA, { name: 'Vinyl', revenue_account_code: '42100' })
+      await stockProduct(asUserA, shirt.id, 10)
+      await stockProduct(asUserA, vinyl.id, 10)
+      await sell(shirt, 1)
+      await sell(vinyl, 2)
+
+      const merch = await merchOverview()
+      expect(merch.revenue_by_product).toEqual([
+        { kind: 'product', product_id: vinyl.id, name: 'Vinyl', revenue_cents: 6000 },
+        { kind: 'product', product_id: shirt.id, name: 'Band T-Shirt', revenue_cents: 3000 },
+      ])
+      // The split partitions the headline figure — it never recomputes it.
+      const summed = merch.revenue_by_product.reduce((s, b) => s + b.revenue_cents, 0)
+      expect(summed).toBe(merch.revenue_cents)
+    })
+
+    it('drops a voided sale from the split', async () => {
+      const shirt = await createProduct(asUserA)
+      const vinyl = await createProduct(asUserA, { name: 'Vinyl' })
+      await stockProduct(asUserA, shirt.id, 10)
+      await stockProduct(asUserA, vinyl.id, 10)
+      const sale = await sell(shirt, 1)
+      await sell(vinyl, 1)
+      await asUserA(request(app).post(`/api/merch/sales/${sale.body.id}/void`)).expect(200)
+
+      const merch = await merchOverview()
+      expect(merch.revenue_by_product).toEqual([
+        { kind: 'product', product_id: vinyl.id, name: 'Vinyl', revenue_cents: 3000 },
+      ])
+      expect(merch.revenue_cents).toBe(3000)
+    })
+
+    it('reports merch revenue with no sale behind it as unattributed', async () => {
+      const shirt = await createProduct(asUserA)
+      await stockProduct(asUserA, shirt.id, 10)
+      await sell(shirt, 1)
+
+      // An invoice booked to ordinary revenue, then recategorised onto the merch
+      // revenue account — real merch revenue that traces back to no product.
+      const inv = await asUserA(request(app).post('/api/invoices')).send({
+        customer_name: 'Texel Buitengewoon',
+        customer_address_street: 'Hall Street 3',
+        customer_address_city: 'Utrecht',
+        issue_date: '2026-06-09',
+        payment_term_days: 14,
+        tax_inclusive: false,
+        discount_cents: 0,
+        lines: [{ description: 'Merch table', quantity: 1, unit_price_cents: 5000, tax_percentage: 21 }],
+      }).expect(201)
+      await asUserA(request(app).patch(`/api/invoices/${inv.body.id}`)).send({ status: 'sent' }).expect(200)
+
+      const list = await asUserA(request(app).get('/api/ledger')).expect(200)
+      const row = list.body.find((r) => r.source_type === 'invoice')
+      const detail = await asUserA(request(app).get(`/api/ledger/${row.id}`)).expect(200)
+      // The revenue leg is the largest credit (the smaller one is output VAT).
+      const revenueLine = detail.body.lines
+        .filter((l) => l.credit_cents > 0)
+        .sort((a, b) => b.credit_cents - a.credit_cents)[0]
+      await asUserA(request(app).post(`/api/ledger/${row.id}/reclassify`)).send({
+        source_line_id: revenueLine.id,
+        destination_account_code: '42000',
+      }).expect(201)
+
+      const merch = await merchOverview()
+      expect(merch.revenue_by_product).toEqual([
+        { kind: 'product', product_id: shirt.id, name: 'Band T-Shirt', revenue_cents: 3000 },
+        { kind: 'unattributed', product_id: null, name: null, revenue_cents: 5000 },
+      ])
+      expect(merch.revenue_cents).toBe(8000)
+    })
+
+    it('folds products past the fifth into a single other bucket', async () => {
+      // Six products selling 6, 5, 4, 3, 2 and 1 units at €30 net each.
+      const products = []
+      for (const [index, quantity] of [6, 5, 4, 3, 2, 1].entries()) {
+        const product = await createProduct(asUserA, { name: `Product ${index + 1}` })
+        await stockProduct(asUserA, product.id, quantity)
+        await sell(product, quantity)
+        products.push(product)
+      }
+
+      const merch = await merchOverview()
+      expect(merch.revenue_by_product).toEqual([
+        { kind: 'product', product_id: products[0].id, name: 'Product 1', revenue_cents: 18000 },
+        { kind: 'product', product_id: products[1].id, name: 'Product 2', revenue_cents: 15000 },
+        { kind: 'product', product_id: products[2].id, name: 'Product 3', revenue_cents: 12000 },
+        { kind: 'product', product_id: products[3].id, name: 'Product 4', revenue_cents: 9000 },
+        { kind: 'product', product_id: products[4].id, name: 'Product 5', revenue_cents: 6000 },
+        { kind: 'other', product_id: null, name: null, revenue_cents: 3000 },
+      ])
+      const summed = merch.revenue_by_product.reduce((s, b) => s + b.revenue_cents, 0)
+      expect(summed).toBe(merch.revenue_cents)
+    })
+
+    it('never leaks another tenant\'s products into the split', async () => {
+      const shirt = await createProduct(asUserA)
+      await stockProduct(asUserA, shirt.id, 10)
+      await sell(shirt, 1)
+
+      expect(await merchOverview(asUserB)).toMatchObject({
+        revenue_cents: 0,
+        revenue_by_product: [],
+      })
+    })
+  })
+
   it('overview merch revenue includes sub-accounts under the merch revenue account', async () => {
     // One product books to the band default (42000), another to a sub-account
     // (42100 Merchandise Sales - Vinyl and CDs). Both must count as merch revenue.

@@ -351,6 +351,49 @@ export async function merchTotals(executor, tenantId, { from, toExclusive }) {
   return rows[0] || { revenue_cents: 0, cogs_cents: 0 }
 }
 
+export async function merchRevenueByProduct(executor, tenantId, { from, toExclusive }) {
+  const { rows } = await executor.query(
+    `WITH RECURSIVE revenue_accounts AS (
+       SELECT code
+         FROM chart_of_accounts
+        WHERE tenant_id = $1
+          AND code = (SELECT merch_revenue_account_code
+                        FROM tenant_accounting_settings WHERE tenant_id = $1)
+       UNION ALL
+       SELECT child.code
+         FROM chart_of_accounts child
+         JOIN revenue_accounts ON child.parent_code = revenue_accounts.code
+        WHERE child.tenant_id = $1
+     )
+     SELECT p.id AS product_id,
+            p.name AS product_name,
+            SUM(le.credit_cents - le.debit_cents)::int AS revenue_cents
+       FROM ledger_transactions lt
+       JOIN ledger_entries le
+         ON le.transaction_id = lt.id AND le.tenant_id = lt.tenant_id
+       LEFT JOIN ledger_transactions orig
+         ON lt.source_type = 'ledger_transaction'
+        AND orig.id = lt.source_id AND orig.tenant_id = lt.tenant_id
+       LEFT JOIN merch_sales ms
+         ON ms.tenant_id = lt.tenant_id
+        AND ms.id = CASE WHEN lt.source_type = 'merch_sale' THEN lt.source_id
+                         WHEN orig.source_type = 'merch_sale' THEN orig.source_id
+                    END
+       LEFT JOIN products p
+         ON p.id = ms.product_id AND p.tenant_id = ms.tenant_id
+      WHERE lt.tenant_id = $1
+        AND lt.entry_date >= $2::date
+        AND lt.entry_date < $3::date
+        AND le.account_code IN (SELECT code FROM revenue_accounts)
+        ${EXCLUDE_VOIDED_SQL}
+      GROUP BY p.id, p.name
+     HAVING SUM(le.credit_cents - le.debit_cents) > 0
+      ORDER BY revenue_cents DESC, product_name ASC`,
+    [tenantId, from, toExclusive],
+  )
+  return rows
+}
+
 // Point-in-time value of the merch inventory account (an asset: debits
 // increase it). A running total like the bank balance, not a period movement.
 export async function merchInventoryValue(executor, tenantId) {

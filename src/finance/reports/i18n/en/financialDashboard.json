@@ -21,6 +21,8 @@
   "invoices": {
     "title": "Invoices",
     "create": "Create invoice",
+    "openTotal": "Open amount",
+    "noOpen": "No open invoices",
     "overdue": "Overdue",
     "unpaid": "Unpaid",
     "draft": "Draft",
@@ -31,12 +33,12 @@
     "title": "Merchandise",
     "manage": "Manage merch",
     "grossProfit": "Gross profit",
-    "noSales": "No merch sales in this period",
-    "margin": "{{pct}}% margin on sales",
+    "margin": "Margin",
+    "noMargin": "N/A",
     "inventoryValue": "Inventory value",
-    "stockOnHand": "Stock on hand, at cost",
-    "breakdown": "Sales {{sales}} − cost of goods {{cogs}}",
-    "breakdownWithShare": "Sales {{sales}} − cost of goods {{cogs}} — {{pct}}% of total revenue"
+    "salesByProduct": "Sales by product",
+    "unknownProduct": "Unknown",
+    "otherProducts": "Other"
   },
   "upcomingFees": {
     "title": "Upcoming fees",
@@ -45,6 +47,8 @@
     "noGigs": "No upcoming gigs with a fee",
     "across_one": "Across {{count}} upcoming gig",
     "across_other": "Across {{count}} upcoming gigs",
+    "gigCount_one": "{{count}} gig",
+    "gigCount_other": "{{count}} gigs",
     "confirmed": "Confirmed",
     "announced": "Announced",
     "option": "Option"
@@ -56,8 +60,6 @@
     "forPeriod": "For period: Q{{quarter}} {{year}}",
     "dueDate": "Due date",
     "days_one": "{{count}} day",
-    "days_other": "{{count}} days",
-    "oweBreakdown": "You owe tax: VAT on sales {{output}}, on purchases {{input}}",
-    "getBackBreakdown": "You get money back: VAT on sales {{output}}, on purchases {{input}}"
+    "days_other": "{{count}} days"
   }
 }

@@ -1,7 +1,7 @@
 {
   "title": "Invoices",
   "singularTitle": "Invoice",
-  "createInvoice": "Create Invoice",
+  "createInvoice": "Create",
   "state": {
     "all": "All invoices",
     "draft": "Draft",

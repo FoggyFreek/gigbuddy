@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link as RouterLink } from 'react-router'
 import Box from '@mui/material/Box'
+import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import DashboardCard from '../../app/dashboard/components/DashboardCard.tsx'
@@ -10,8 +11,9 @@ import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
 import AddOutlined from '@mui/icons-material/AddOutlined'
 import { ChartsContainer } from '@mui/x-charts/ChartsContainer'
-import { BarPlot } from '@mui/x-charts/BarChart'
+import { BarChart, BarPlot } from '@mui/x-charts/BarChart'
 import { LineChart, LinePlot } from '@mui/x-charts/LineChart'
+import { PieChart } from '@mui/x-charts/PieChart'
 import { ChartsXAxis } from '@mui/x-charts/ChartsXAxis'
 import { ChartsYAxis } from '@mui/x-charts/ChartsYAxis'
 import { ChartsAxisHighlight } from '@mui/x-charts/ChartsAxisHighlight'
@@ -33,7 +35,6 @@ interface Totals {
 }
 
 interface MonthData {
-  key: string
   year: number
   month: number
   revenue_cents: number
@@ -56,8 +57,6 @@ interface VatData {
   year: number
   quarter: number
   due_date: string
-  output_cents: number
-  input_cents: number
   net_cents: number
 }
 
@@ -68,16 +67,24 @@ interface BankData {
 interface AnnualResult {
   year: number
   has_data: boolean
-  revenue_cents: number
-  expense_cents: number
   result_cents: number
+}
+
+// One slice of the merch revenue split. `kind` is the discriminator: a named
+// product, the fold-up of the remaining products, or revenue on a merch account
+// that traces back to no product (Shopify shipping lines, manual journals).
+interface MerchRevenueBucket {
+  kind: 'product' | 'other' | 'unattributed'
+  product_id: number | null
+  name: string | null
+  revenue_cents: number
 }
 
 interface MerchData {
   revenue_cents: number
-  cogs_cents: number
   gross_profit_cents: number
   inventory_value_cents: number
+  revenue_by_product?: MerchRevenueBucket[]
 }
 
 interface FeeStatusBucket {
@@ -105,9 +112,6 @@ interface OverviewData {
   vat: VatData
   merch?: MerchData
   upcoming_fees: UpcomingFeesData
-  revenue_cents?: number
-  expense_cents?: number
-  net_cents?: number
 }
 
 const toEuros = (cents: number) => cents / 100
@@ -200,7 +204,7 @@ export default function FinancialDashboardPage() {
             <InvoicesCard invoices={data.invoices} />
             <VatCard vat={data.vat} />
             <UpcomingFeesCard fees={data.upcoming_fees} />
-            {data.merch && <MerchCard merch={data.merch} totals={data.totals} />}
+            {data.merch && <MerchCard merch={data.merch} />}
           </MasonryLayout>
         </Box>
       )}
@@ -218,12 +222,14 @@ interface HeadlineStatProps {
 
 function HeadlineStat({ label, cents, color }: Readonly<HeadlineStatProps>) {
   return (
-    <Typography variant="body2" color="text.secondary">
-      {label}:{' '}
+    <Stack>
+      <Typography variant="body2" color="text.secondary">
+        {label}
+      </Typography>
       <Box component="span" sx={{ color, fontWeight: 600 }}>
         {formatEur(cents)}
       </Box>
-    </Typography>
+    </Stack>
   )
 }
 
@@ -282,89 +288,88 @@ function ResultChartCard({ currency, months, totals }: Readonly<ResultChartCardP
           </Typography>
         </>
       )}
-      action={(
-        <Box sx={{ display: 'flex', gap: 2.5 }}>
-          <HeadlineStat label={t($ => $.resultCard.revenue)} cents={totals.revenue_cents} color={theme.palette.success.main} />
-          <HeadlineStat label={t($ => $.resultCard.expenses)} cents={-totals.expense_cents} color={theme.palette.error.main} />
-          <HeadlineStat label={t($ => $.resultCard.result)} cents={totals.result_cents} color={theme.palette.success.main} />
-        </Box>
-      )}
     >
+      <Stack direction="row" sx={{ justifyContent:"space-around" }}>
+        <HeadlineStat label={t($ => $.resultCard.revenue)} cents={totals.revenue_cents} color={theme.palette.success.main} />
+        <HeadlineStat label={t($ => $.resultCard.expenses)} cents={-totals.expense_cents} color={theme.palette.error.main} />
+        <HeadlineStat label={t($ => $.resultCard.result)} cents={totals.result_cents} color={theme.palette.success.main} />
+      </Stack>
       <Box ref={wrapperRef}>
-      <ChartsContainer
-        height={280}
-        xAxis={[{ id: 'months', data: monthLabels(months, i18n.language), scaleType: 'band', categoryGapRatio }]}
-        series={[
-          {
-            type: 'bar',
-            id: 'revenue',
-            label: t($ => $.resultCard.revenue),
-            data: months.map((m) => toEuros(m.revenue_cents)),
-            color: theme.palette.success.main,
-            // Shared stack id: one column per month, revenue above the zero
-            // line and (negative) expenses below it.
-            stack: 'result',
-            valueFormatter: formatChartValue,
-          },
-          {
-            type: 'bar',
-            id: 'expenses',
-            label: t($ => $.resultCard.expenses),
-            data: months.map((m) => toEuros(-m.expense_cents)),
-            color: theme.palette.error.main,
-            stack: 'result',
-            valueFormatter: formatChartValue,
-          },
-          {
-            type: 'line',
-            label: t($ => $.resultCard.result),
-            data: months.map((m) => toEuros(m.result_cents)),
-            color: theme.palette.text.disabled,
-            curve: 'monotoneX',
-            valueFormatter: formatChartValue,
-          },
-        ]}
-        sx={{
-          '& .MuiLineElement-root': { strokeWidth: 1.5 },
-          '& .MuiChartsAxisHighlight-root': {
-            stroke: theme.palette.text.disabled,
-            strokeWidth: 1,
-            strokeDasharray: 'none',
-          },
-        }}
-      >
-        <defs>
-          {/* Revenue bars sit above the zero line: 80% transparent at the
+        <ChartsContainer
+          height={280}
+          xAxis={[{ id: 'months', data: monthLabels(months, i18n.language), scaleType: 'band', categoryGapRatio }]}
+          series={[
+            {
+              type: 'bar',
+              id: 'revenue',
+              label: t($ => $.resultCard.revenue),
+              data: months.map((m) => toEuros(m.revenue_cents)),
+              color: theme.palette.success.main,
+              // Shared stack id: one column per month, revenue above the zero
+              // line and (negative) expenses below it.
+              stack: 'result',
+              valueFormatter: formatChartValue,
+            },
+            {
+              type: 'bar',
+              id: 'expenses',
+              label: t($ => $.resultCard.expenses),
+              data: months.map((m) => toEuros(-m.expense_cents)),
+              color: theme.palette.error.main,
+              stack: 'result',
+              valueFormatter: formatChartValue,
+            },
+            {
+              type: 'line',
+              label: t($ => $.resultCard.result),
+              data: months.map((m) => toEuros(m.result_cents)),
+              color: theme.palette.text.disabled,
+              curve: 'monotoneX',
+              valueFormatter: formatChartValue,
+            },
+          ]}
+          sx={{
+            '& .MuiLineElement-root': { strokeWidth: 1.5 },
+            '& .MuiChartsAxisHighlight-root': {
+              stroke: theme.palette.text.disabled,
+              strokeWidth: 1,
+              strokeDasharray: 'none',
+            },
+          }}
+        >
+          <defs>
+            {/* Revenue bars sit above the zero line: 80% transparent at the
               bottom (the line), reaching solid green 60% of the way up and
               staying solid to the top. */}
-          <linearGradient id={REVENUE_BAR_GRADIENT} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="40%" stopColor={theme.palette.success.main} />
-            <stop offset="100%" stopColor={theme.palette.success.main} stopOpacity={0.4} />
-          </linearGradient>
-          {/* Expense bars hang below the line: 80% transparent at the top (the
+            <linearGradient id={REVENUE_BAR_GRADIENT} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="40%" stopColor={theme.palette.success.main} />
+              <stop offset="100%" stopColor={theme.palette.success.main} stopOpacity={0.4} />
+            </linearGradient>
+            {/* Expense bars hang below the line: 80% transparent at the top (the
               line), reaching solid red 60% of the way down and staying solid to
               the bottom. */}
-          <linearGradient id={EXPENSE_BAR_GRADIENT} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={theme.palette.error.main} stopOpacity={0.4} />
-            <stop offset="60%" stopColor={theme.palette.error.main} />
-          </linearGradient>
-        </defs>
-        <ChartsGrid horizontal />
-        <BarPlot
-          borderRadius={4}
-          slotProps={{
-            bar: (ownerState) => ({
-              fill: `url(#${ownerState.seriesId === 'expenses' ? EXPENSE_BAR_GRADIENT : REVENUE_BAR_GRADIENT})`,
-            }),
-          }}
-        />
-        <LinePlot />
-        <ChartsXAxis axisId="months" disableLine disableTicks />
-        <ChartsYAxis disableLine disableTicks />
-        <ChartsAxisHighlight x="line" />
-        <ResultChartTooltip />
-      </ChartsContainer>
+            <linearGradient id={EXPENSE_BAR_GRADIENT} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={theme.palette.error.main} stopOpacity={0.4} />
+              <stop offset="60%" stopColor={theme.palette.error.main} />
+            </linearGradient>
+          </defs>
+          <ChartsGrid horizontal />
+          <BarPlot
+            borderRadius={4}
+            slotProps={{
+              bar: (ownerState) => ({
+                fill: `url(#${ownerState.seriesId === 'expenses' ? EXPENSE_BAR_GRADIENT : REVENUE_BAR_GRADIENT})`,
+              }),
+            }}
+          />
+          <LinePlot />
+          <ChartsXAxis axisId="months" disableLine disableTicks />
+          <ChartsYAxis disableLine disableTicks />
+          <ChartsAxisHighlight x="line" />
+          <ResultChartTooltip />
+        </ChartsContainer>
       </Box>
+
     </DashboardCard>
   )
 }
@@ -496,28 +501,73 @@ function ResultsTrendCard({ currency, annualResults }: Readonly<ResultsTrendCard
   )
 }
 
-// One Overdue / Unpaid / Draft column in the invoices card.
-interface InvoiceBucketProps {
+// One segment of a split bar. `detail` is the already-translated count phrase
+// ("2 invoices", "1 gig") that the tooltip carries now that the per-status text
+// lines are gone; the bar itself owns the money formatting.
+interface SplitSegment {
+  id: string
   label: string
-  bucket: Bucket
-  dotColor: string
+  color: string
+  cents: number
+  detail: string
 }
 
-function InvoiceBucket({ label, bucket, dotColor }: Readonly<InvoiceBucketProps>) {
-  const { t } = useTranslation('financialDashboard')
+interface StackedSplitBarProps {
+  stackId: string
+  segments: SplitSegment[]
+}
+
+// Enough room for a 24px bar plus the 2px surface gap that separates segments.
+const SPLIT_BAR_HEIGHT_PX = 28
+
+// Rough advance width of one character at the bar label's size, plus the room
+// the label needs to clear the segment edges. A label that doesn't fit its own
+// segment is dropped rather than clipped or spilled over its neighbour — the
+// amount is still one hover away in the tooltip.
+const LABEL_CHAR_PX = 7.5
+const LABEL_PADDING_PX = 12
+
+// How a total divides, as one horizontal stacked bar. Segments arrive in a fixed
+// slot order and are never re-sorted by size, so a status keeps its colour and
+// its place however the amounts move. The colours are status colours, not a
+// categorical palette — the chart legend names every one of them, so identity is
+// never carried by hue alone.
+function StackedSplitBar({ stackId, segments }: Readonly<StackedSplitBarProps>) {
+  const theme = useTheme()
   return (
-    <Box sx={{ flex: 1, minWidth: 95 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: dotColor }} />
-        <Typography variant="body2" color="text.secondary">{label}</Typography>
-      </Box>
-      <Typography variant="h6" sx={{ fontWeight: 600, mt: 0.5 }}>
-        {formatEur(bucket.total_cents)}
-      </Typography>
-      <Typography variant="caption" color="text.secondary">
-        {t($ => $.invoices.count, { count: bucket.count })}
-      </Typography>
-    </Box>
+    /* Both axes are hidden: the figures are written on the segments themselves,
+       so a scale would add nothing here. */
+    <BarChart
+      layout="horizontal"
+      height={SPLIT_BAR_HEIGHT_PX}
+      margin={{ top: 0, right: 0, bottom: 0, left: 0 }}
+      borderRadius={4}
+      yAxis={[{ scaleType: 'band', data: [''], position: 'none', categoryGapRatio: 0.15 }]}
+      xAxis={[{ position: 'none' }]}
+      series={segments.map((segment) => ({
+        id: segment.id,
+        label: segment.label,
+        data: [toEuros(segment.cents)],
+        color: segment.color,
+        stack: stackId,
+        highlightScope: { fade: 'global', highlight: 'item' },
+        valueFormatter: () => `${formatEur(segment.cents)} · ${segment.detail}`,
+        barLabel: (_item, context) => {
+          const label = formatEur(segment.cents)
+          const fits = context.bar.width >= label.length * LABEL_CHAR_PX + LABEL_PADDING_PX
+          return fits ? label : null
+        },
+      }))}
+      slotProps={{
+        // A 2px stroke in the surface colour straddles each segment edge, so
+        // neighbours read as separate fills without relying on hue contrast.
+        bar: { stroke: theme.palette.background.paper, strokeWidth: 2 },
+        // The label sits on its own segment, so it takes that fill's contrast
+        // colour rather than the page's ink.
+        barLabel: (ownerState) => ({ fill: theme.palette.getContrastText(ownerState.color) }),
+      }}
+      sx={{ '& .MuiBarChart-label': { fontSize: '0.75rem', fontWeight: 600 } }}
+    />
   )
 }
 
@@ -525,8 +575,24 @@ interface InvoicesCardProps {
   invoices: InvoicesData
 }
 
+const INVOICE_SEGMENTS: { key: keyof InvoicesData; color: 'error' | 'warning' | 'info' }[] = [
+  { key: 'overdue', color: 'error' },
+  { key: 'unpaid', color: 'warning' },
+  { key: 'draft', color: 'info' },
+]
+
 function InvoicesCard({ invoices }: Readonly<InvoicesCardProps>) {
   const { t } = useTranslation('financialDashboard')
+  const theme = useTheme()
+  const totalCents = INVOICE_SEGMENTS.reduce((sum, { key }) => sum + invoices[key].total_cents, 0)
+  const segments = INVOICE_SEGMENTS.map(({ key, color }) => ({
+    id: key,
+    label: t($ => $.invoices[key]),
+    color: theme.palette[color].main,
+    cents: invoices[key].total_cents,
+    detail: t($ => $.invoices.count, { count: invoices[key].count }),
+  }))
+
   return (
     <DashboardCard
       title={t($ => $.invoices.title)}
@@ -542,31 +608,81 @@ function InvoicesCard({ invoices }: Readonly<InvoicesCardProps>) {
         </Button>
       )}
     >
-      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-        <InvoiceBucket label={t($ => $.invoices.overdue)} bucket={invoices.overdue} dotColor="error.main" />
-        <InvoiceBucket label={t($ => $.invoices.unpaid)} bucket={invoices.unpaid} dotColor="warning.main" />
-        <InvoiceBucket label={t($ => $.invoices.draft)} bucket={invoices.draft} dotColor="info.main" />
-      </Box>
+      <Typography variant="caption" color="text.secondary">{t($ => $.invoices.openTotal)}</Typography>
+      <Typography variant="h4" sx={{ fontWeight: 600, my: 0.5 }}>{formatEur(totalCents)}</Typography>
+      {totalCents <= 0
+        ? <Typography variant="body2" color="text.secondary">{t($ => $.invoices.noOpen)}</Typography>
+        : <StackedSplitBar stackId="open" segments={segments} />}
     </DashboardCard>
   )
 }
 
-// Merch gross-margin panel: revenue/COGS within the selected period, the
-// resulting margin, merch's share of total revenue, and the current stock
-// value (a point-in-time asset balance, independent of the period).
-interface MerchCardProps {
-  merch: MerchData
-  totals: Totals
+// Categorical slots for the merch revenue split, assigned in fixed order and
+// never cycled — the fold to "other" upstream keeps the slice count inside the
+// palette. Both columns are validated against their own surface (adjacent-pair
+// CVD and normal-vision separation), so dark is a selected set, not a flip.
+const MERCH_SLICE_COLORS = {
+  light: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7'],
+  dark: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', '#9085e9'],
 }
 
-function MerchCard({ merch, totals }: Readonly<MerchCardProps>) {
+// Where the period's merch revenue came from. Slices arrive pre-sorted and
+// pre-folded from the API; this only labels them and paints them in slot order.
+interface MerchRevenuePieProps {
+  buckets: MerchRevenueBucket[]
+}
+
+function MerchRevenuePie({ buckets }: Readonly<MerchRevenuePieProps>) {
+  const { t } = useTranslation('financialDashboard')
+  const theme = useTheme()
+  const colors = MERCH_SLICE_COLORS[theme.palette.mode === 'dark' ? 'dark' : 'light']
+
+  const labelFor = (bucket: MerchRevenueBucket) => {
+    if (bucket.kind === 'other') return t($ => $.merch.otherProducts)
+    if (bucket.kind === 'unattributed') return t($ => $.merch.unknownProduct)
+    return bucket.name ?? t($ => $.merch.unknownProduct)
+  }
+
+  return (
+    <Box sx={{ mb: 2 }}>
+      <Typography variant="caption" color="text.secondary">{t($ => $.merch.salesByProduct)}</Typography>
+      <PieChart
+        height={180}
+        series={[{
+          data: buckets.map((bucket, index) => ({
+            id: `${bucket.kind}-${bucket.product_id ?? index}`,
+            value: bucket.revenue_cents,
+            label: labelFor(bucket),
+            color: colors[index % colors.length],
+          })),
+          // A donut with a 2px gap between arcs: the surface shows through, so
+          // neighbouring slices stay separable without relying on hue alone.
+          innerRadius: 34,
+          paddingAngle: 2,
+          cornerRadius: 4,
+          highlightScope: { fade: 'global', highlight: 'item' },
+          valueFormatter: (item) => formatEur(item.value),
+        }]}
+        slotProps={{ legend: { direction: 'vertical', sx: { gap: 0.5 } } }}
+        sx={{ mt: 1 }}
+      />
+    </Box>
+  )
+}
+
+// Merch gross-margin panel: the gross profit and margin on revenue/COGS within
+// the selected period, plus the current stock value (a point-in-time asset
+// balance, independent of the period).
+interface MerchCardProps {
+  merch: MerchData
+}
+
+function MerchCard({ merch }: Readonly<MerchCardProps>) {
   const { t } = useTranslation('financialDashboard')
   const marginPct = merch.revenue_cents > 0
     ? Math.round((merch.gross_profit_cents / merch.revenue_cents) * 100)
     : null
-  const sharePct = totals.revenue_cents > 0
-    ? Math.round((merch.revenue_cents / totals.revenue_cents) * 100)
-    : null
+  const buckets = merch.revenue_by_product ?? []
 
   return (
     <DashboardCard
@@ -577,14 +693,25 @@ function MerchCard({ merch, totals }: Readonly<MerchCardProps>) {
         </Button>
       )}
     >
-      <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+      {buckets.length > 0 && <MerchRevenuePie buckets={buckets} />}
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
         <Box sx={{ flex: 1, minWidth: 140 }}>
           <Typography variant="caption" color="text.secondary">{t($ => $.merch.grossProfit)}</Typography>
-          <Typography variant="h4" sx={{ fontWeight: 600, my: 0.5, color: 'success.main' }}>
+          <Typography
+            variant="h4"
+            sx={{
+              fontWeight: 600,
+              my: 0.5,
+              color: merch.gross_profit_cents < 0 ? 'error.main' : 'success.main',
+            }}
+          >
             {formatEur(merch.gross_profit_cents)}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {marginPct === null ? t($ => $.merch.noSales) : t($ => $.merch.margin, { pct: marginPct })}
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 140 }}>
+          <Typography variant="caption" color="text.secondary">{t($ => $.merch.margin)}</Typography>
+          <Typography variant="h4" sx={{ fontWeight: 600, my: 0.5 }}>
+            {marginPct === null ? t($ => $.merch.noMargin) : `${marginPct}%`}
           </Typography>
         </Box>
         <Box sx={{ flex: 1, minWidth: 140 }}>
@@ -592,40 +719,37 @@ function MerchCard({ merch, totals }: Readonly<MerchCardProps>) {
           <Typography variant="h4" sx={{ fontWeight: 600, my: 0.5 }}>
             {formatEur(merch.inventory_value_cents)}
           </Typography>
-          <Typography variant="body2" color="text.secondary">{t($ => $.merch.stockOnHand)}</Typography>
         </Box>
       </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 2 }}>
-        {sharePct === null
-          ? t($ => $.merch.breakdown, {
-              sales: formatEur(merch.revenue_cents),
-              cogs: formatEur(merch.cogs_cents),
-            })
-          : t($ => $.merch.breakdownWithShare, {
-              sales: formatEur(merch.revenue_cents),
-              cogs: formatEur(merch.cogs_cents),
-              pct: sharePct,
-            })}
-      </Typography>
     </DashboardCard>
   )
 }
 
 // Upcoming gross band-fee pipeline: a headline total across all future gigs in
-// the active statuses, with a per-status breakdown of count and fees. Pinned to
-// "today" (like VAT/bank), independent of the selected period.
+// the active statuses, split by status in the bar. Pinned to "today" (like
+// VAT/bank), independent of the selected period.
 interface UpcomingFeesCardProps {
   fees: UpcomingFeesData
 }
 
-const FEE_STATUS_META: { key: keyof UpcomingFeesData['by_status']; dotColor: string }[] = [
-  { key: 'confirmed', dotColor: 'success.main' },
-  { key: 'announced', dotColor: 'info.main' },
-  { key: 'option', dotColor: 'warning.main' },
+// Slot order runs most to least certain, so the pipeline reads left to right.
+const FEE_STATUS_META: { key: keyof UpcomingFeesData['by_status']; color: 'success' | 'info' | 'warning' }[] = [
+  { key: 'confirmed', color: 'success' },
+  { key: 'announced', color: 'info' },
+  { key: 'option', color: 'warning' },
 ]
 
 function UpcomingFeesCard({ fees }: Readonly<UpcomingFeesCardProps>) {
   const { t } = useTranslation('financialDashboard')
+  const theme = useTheme()
+  const segments = FEE_STATUS_META.map(({ key, color }) => ({
+    id: key,
+    label: t($ => $.upcomingFees[key]),
+    color: theme.palette[color].main,
+    cents: fees.by_status[key].total_cents,
+    detail: t($ => $.upcomingFees.gigCount, { count: fees.by_status[key].count }),
+  }))
+
   return (
     <DashboardCard
       title={t($ => $.upcomingFees.title)}
@@ -646,19 +770,11 @@ function UpcomingFeesCard({ fees }: Readonly<UpcomingFeesCardProps>) {
             : t($ => $.upcomingFees.across, { count: fees.gig_count })}
         </Typography>
       </Box>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mt: 2 }}>
-        {FEE_STATUS_META.map(({ key, dotColor }) => (
-          <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: dotColor }} />
-            <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
-              {t($ => $.upcomingFees[key])} ({fees.by_status[key].count})
-            </Typography>
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-              {formatEur(fees.by_status[key].total_cents)}
-            </Typography>
-          </Box>
-        ))}
-      </Box>
+      {fees.total_cents > 0 && (
+        <Box sx={{ mt: 2 }}>
+          <StackedSplitBar stackId="fees" segments={segments} />
+        </Box>
+      )}
     </DashboardCard>
   )
 }
@@ -675,7 +791,6 @@ function VatCard({ vat }: Readonly<VatCardProps>) {
   const due = new Date(`${vat.due_date}T00:00:00`)
   const daysUntilDue = Math.max(0, Math.ceil((due.getTime() - now) / 86400000))
   const dueLabel = due.toLocaleDateString(i18n.language, { month: 'long', day: 'numeric', year: 'numeric' })
-  const breakdownValues = { output: formatEur(vat.output_cents), input: formatEur(vat.input_cents) }
 
   return (
     <DashboardCard
@@ -713,11 +828,6 @@ function VatCard({ vat }: Readonly<VatCardProps>) {
           </Typography>
         </Box>
       </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 2 }}>
-        {owes
-          ? t($ => $.vat.oweBreakdown, breakdownValues)
-          : t($ => $.vat.getBackBreakdown, breakdownValues)}
-      </Typography>
     </DashboardCard>
   )
 }

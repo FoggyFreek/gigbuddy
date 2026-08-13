@@ -29,7 +29,36 @@ vi.mock('@mui/x-charts/ChartsContainer', () => ({
     </div>
   ),
 }))
-vi.mock('@mui/x-charts/BarChart', () => ({ BarPlot: () => null }))
+// Resolves a series' on-bar label as the chart would, for a segment of the
+// given pixel width. Hoisted so the mock factory below can reach it.
+const { barLabelOf } = vi.hoisted(() => ({
+  barLabelOf: (series, barWidth) => series.barLabel(
+    { seriesId: series.id, dataIndex: 0, value: series.data[0] },
+    { bar: { width: barWidth, height: 24 } },
+  ) ?? null,
+}))
+
+vi.mock('@mui/x-charts/BarChart', () => ({
+  BarPlot: () => null,
+  // The split bars (open invoices, upcoming fees): expose each segment's
+  // identity, value, colour and stack, plus the formatted tooltip, so the wiring
+  // is assertable without a layout (jsdom gives the chart no size). The stack id
+  // names the bar, since a card renders at most one.
+  BarChart: ({ series, layout }) => (
+    <div
+      data-testid={`split-bar-${series[0].stack}`}
+      data-layout={layout}
+      data-series={JSON.stringify(
+        series.map((s) => ({ id: s.id, label: s.label, value: s.data[0], color: s.color, stack: s.stack })),
+      )}
+      data-tooltips={JSON.stringify(series.map((s) => s.valueFormatter(s.data[0], { dataIndex: 0 })))}
+      // The on-bar labels, resolved against a segment wide enough to hold them
+      // and against one that is not — the fit rule is the interesting part.
+      data-labels-wide={JSON.stringify(series.map((s) => barLabelOf(s, 400)))}
+      data-labels-narrow={JSON.stringify(series.map((s) => barLabelOf(s, 12)))}
+    />
+  ),
+}))
 vi.mock('@mui/x-charts/LineChart', () => ({
   LinePlot: () => null,
   // High-level chart used by the result-trend card; expose its series, x-axis
@@ -41,6 +70,16 @@ vi.mock('@mui/x-charts/LineChart', () => ({
       data-xaxis={JSON.stringify(xAxis?.[0]?.data ?? null)}
       data-ymin={JSON.stringify(yAxis?.[0]?.min ?? null)}
       data-ymax={JSON.stringify(yAxis?.[0]?.max ?? null)}
+    />
+  ),
+}))
+// The merch revenue pie: expose each slice's label, value and assigned colour so
+// the legend wiring and the slot-order palette are assertable without a layout.
+vi.mock('@mui/x-charts/PieChart', () => ({
+  PieChart: ({ series }) => (
+    <div
+      data-testid="merch-pie"
+      data-slices={JSON.stringify(series[0].data.map((d) => ({ label: d.label, value: d.value, color: d.color })))}
     />
   ),
 }))
@@ -86,6 +125,11 @@ const OVERVIEW = {
     cogs_cents: 2400,
     gross_profit_cents: 3600,
     inventory_value_cents: 9600,
+    revenue_by_product: [
+      { kind: 'product', product_id: 1, name: 'Tour shirt', revenue_cents: 4000 },
+      { kind: 'product', product_id: 2, name: 'Vinyl', revenue_cents: 1500 },
+      { kind: 'unattributed', product_id: null, name: null, revenue_cents: 500 },
+    ],
   },
   upcoming_fees: {
     total_cents: 450000,
@@ -245,21 +289,71 @@ describe('FinancialDashboardPage', () => {
     expect(within(card).getByText(/€\s?1\.185,00/)).toBeInTheDocument()
   })
 
-  it('shows the open invoice buckets and links to invoices', async () => {
+  it('headlines the open total and links to invoices', async () => {
     const user = userEvent.setup()
     wrap(<FinancialDashboardPage />)
     await screen.findByText(/result in eur/i)
 
     const card = screen.getByText(/^invoices$/i).closest('[data-card]')
-    expect(within(card).getByText(/overdue/i)).toBeInTheDocument()
-    expect(within(card).getByText(/€\s?121,00/)).toBeInTheDocument()
-    expect(within(card).getByText(/unpaid/i)).toBeInTheDocument()
-    expect(within(card).getByText(/€\s?2\.420,00/)).toBeInTheDocument()
-    expect(within(card).getByText(/draft/i)).toBeInTheDocument()
-    expect(within(card).getByText(/€\s?500,00/)).toBeInTheDocument()
+    // 121,00 + 2.420,00 + 500,00 open across the three buckets.
+    expect(within(card).getByText(/^open amount$/i)).toBeInTheDocument()
+    expect(within(card).getByText(/€\s?3\.041,00/)).toBeInTheDocument()
 
     await user.click(within(card).getByRole('link', { name: /create invoice/i }))
     expect(screen.getByText('invoices-route')).toBeInTheDocument()
+  })
+
+  it('divides the open total over one horizontal stacked bar', async () => {
+    wrap(<FinancialDashboardPage />)
+    const bar = await screen.findByTestId('split-bar-open')
+
+    expect(bar.dataset.layout).toBe('horizontal')
+    // Fixed slot order, one shared stack, values in euros, status colours. The
+    // labels name each segment for the chart legend.
+    expect(JSON.parse(bar.dataset.series)).toEqual([
+      { id: 'overdue', label: 'Overdue', value: 121, color: theme.palette.error.main, stack: 'open' },
+      { id: 'unpaid', label: 'Unpaid', value: 2420, color: theme.palette.warning.main, stack: 'open' },
+      { id: 'draft', label: 'Draft', value: 500, color: theme.palette.info.main, stack: 'open' },
+    ])
+  })
+
+  it('writes each amount on its own segment, and drops labels that would not fit', async () => {
+    wrap(<FinancialDashboardPage />)
+    const bar = await screen.findByTestId('split-bar-open')
+
+    const wide = JSON.parse(bar.dataset.labelsWide)
+    expect(wide[0]).toMatch(/€\s?121,00/)
+    expect(wide[1]).toMatch(/€\s?2\.420,00/)
+    expect(wide[2]).toMatch(/€\s?500,00/)
+    // A 12px segment can't hold its amount, so it carries no label at all.
+    expect(JSON.parse(bar.dataset.labelsNarrow)).toEqual([null, null, null])
+  })
+
+  it('carries the amount and invoice count into each segment tooltip', async () => {
+    wrap(<FinancialDashboardPage />)
+    const bar = await screen.findByTestId('split-bar-open')
+
+    const tooltips = JSON.parse(bar.dataset.tooltips)
+    expect(tooltips[0]).toMatch(/€\s?121,00\s·\s1 invoice$/)
+    expect(tooltips[1]).toMatch(/€\s?2\.420,00\s·\s2 invoices$/)
+    expect(tooltips[2]).toMatch(/€\s?500,00\s·\s1 invoice$/)
+  })
+
+  it('replaces the split bar with an empty state when nothing is open', async () => {
+    getLedgerOverview.mockResolvedValue({
+      ...OVERVIEW,
+      invoices: {
+        overdue: { count: 0, total_cents: 0 },
+        unpaid: { count: 0, total_cents: 0 },
+        draft: { count: 0, total_cents: 0 },
+      },
+    })
+    wrap(<FinancialDashboardPage />)
+    await screen.findByText(/result in eur/i)
+
+    const card = screen.getByText(/^invoices$/i).closest('[data-card]')
+    expect(within(card).getByText(/no open invoices/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('split-bar-open')).not.toBeInTheDocument()
   })
 
   it('shows the current-quarter VAT position and links to VAT returns', async () => {
@@ -268,9 +362,9 @@ describe('FinancialDashboardPage', () => {
     await screen.findByText(/result in eur/i)
 
     const card = screen.getByText(/^vat$/i).closest('[data-card]')
-    expect(within(card).getByText(/€\s?205,66/)).toBeInTheDocument()
+    // A positive net is money owed — the balance is painted red.
+    expect(within(card).getByText(/€\s?205,66/)).toHaveStyle({ color: theme.palette.error.main })
     expect(within(card).getByText(/Q2 2026/)).toBeInTheDocument()
-    expect(within(card).getByText(/you owe tax/i)).toBeInTheDocument()
     expect(within(card).getByText(/50 days/i)).toBeInTheDocument()
     expect(within(card).getByText(/July 31, 2026/)).toBeInTheDocument()
 
@@ -278,7 +372,7 @@ describe('FinancialDashboardPage', () => {
     expect(screen.getByText('vat-returns-route')).toBeInTheDocument()
   })
 
-  it('shows a "get money back" hint when net VAT is negative', async () => {
+  it('shows a receivable net VAT as a green absolute amount', async () => {
     getLedgerOverview.mockResolvedValue({
       ...OVERVIEW,
       vat: { ...OVERVIEW.vat, output_cents: 0, input_cents: 434, net_cents: -434 },
@@ -286,8 +380,9 @@ describe('FinancialDashboardPage', () => {
     wrap(<FinancialDashboardPage />)
     await screen.findByText(/result in eur/i)
 
+    // Money back: the sign lives in the colour, not in the figure.
     const card = screen.getByText(/^vat$/i).closest('[data-card]')
-    expect(within(card).getByText(/you get money back/i)).toBeInTheDocument()
+    expect(within(card).getByText(/€\s?4,34/)).toHaveStyle({ color: theme.palette.success.main })
   })
 
   it('uses the Dutch VAT settlement label', async () => {
@@ -299,29 +394,151 @@ describe('FinancialDashboardPage', () => {
     expect(within(card).getByRole('link', { name: 'Btw afrekenen' })).toBeInTheDocument()
   })
 
-  it('shows the merch gross profit, margin, revenue share and inventory value', async () => {
+  // The merch card is three labelled tiles: gross profit, margin, inventory
+  // value. Renders the merch card for a given period slice and returns it.
+  async function renderMerchCard(merch) {
+    getLedgerOverview.mockResolvedValue({ ...OVERVIEW, merch })
     wrap(<FinancialDashboardPage />)
     await screen.findByText(/result in eur/i)
+    return screen.getByText(/^merchandise$/i).closest('[data-card]')
+  }
 
-    const card = screen.getByText(/^merchandise$/i).closest('[data-card]')
+  it('shows the merch gross profit, margin and inventory value as separate tiles', async () => {
+    const card = await renderMerchCard(OVERVIEW.merch)
+
+    expect(within(card).getByText(/^gross profit$/i)).toBeInTheDocument()
     expect(within(card).getByText(/€\s?36,00/)).toBeInTheDocument()
-    expect(within(card).getByText(/60% margin on sales/i)).toBeInTheDocument()
+    // €60 revenue − €24 cost of goods → €36 profit, 60% margin.
+    expect(within(card).getByText(/^margin$/i)).toBeInTheDocument()
+    expect(within(card).getByText('60%')).toBeInTheDocument()
+    expect(within(card).getByText(/^inventory value$/i)).toBeInTheDocument()
     expect(within(card).getByText(/€\s?96,00/)).toBeInTheDocument()
-    // €60 of €1.000 total revenue → 6%.
-    expect(within(card).getByText(/6% of total revenue/)).toBeInTheDocument()
     expect(within(card).getByRole('link', { name: /manage merch/i })).toBeInTheDocument()
   })
 
-  it('shows a no-sales hint when there is no merch revenue in the period', async () => {
-    getLedgerOverview.mockResolvedValue({
-      ...OVERVIEW,
-      merch: { revenue_cents: 0, cogs_cents: 0, gross_profit_cents: 0, inventory_value_cents: 9600 },
+  it('shows a negative gross profit and margin when merch sold at a loss', async () => {
+    const card = await renderMerchCard({
+      ...OVERVIEW.merch,
+      cogs_cents: 9000,
+      gross_profit_cents: -3000,
     })
+
+    expect(within(card).getByText(/€\s?-30,00/)).toBeInTheDocument()
+    expect(within(card).getByText('-50%')).toBeInTheDocument()
+    // Inventory is a point-in-time asset balance — unaffected by the loss.
+    expect(within(card).getByText(/€\s?96,00/)).toBeInTheDocument()
+  })
+
+  it('paints a losing gross profit red', async () => {
+    const card = await renderMerchCard({ ...OVERVIEW.merch, gross_profit_cents: -3000 })
+    expect(within(card).getByText(/€\s?-30,00/)).toHaveStyle({ color: theme.palette.error.main })
+  })
+
+  it('paints a positive gross profit green', async () => {
+    const card = await renderMerchCard(OVERVIEW.merch)
+    expect(within(card).getByText(/€\s?36,00/)).toHaveStyle({ color: theme.palette.success.main })
+  })
+
+  it.each([
+    { label: 'thin margin', revenue_cents: 10000, gross_profit_cents: 500, expected: '5%' },
+    { label: 'break-even', revenue_cents: 10000, gross_profit_cents: 0, expected: '0%' },
+    { label: 'high margin', revenue_cents: 10000, gross_profit_cents: 8500, expected: '85%' },
+    { label: 'full margin, no cost of goods', revenue_cents: 10000, gross_profit_cents: 10000, expected: '100%' },
+    // 1111 / 3333 = 33.33…% → rounded to whole percent.
+    { label: 'rounded', revenue_cents: 3333, gross_profit_cents: 1111, expected: '33%' },
+  ])('shows a $label as $expected', async ({ revenue_cents, gross_profit_cents, expected }) => {
+    const card = await renderMerchCard({
+      revenue_cents,
+      cogs_cents: revenue_cents - gross_profit_cents,
+      gross_profit_cents,
+      inventory_value_cents: 9600,
+    })
+
+    expect(within(card).getByText(expected)).toBeInTheDocument()
+  })
+
+  it('shows no margin when there was no merch revenue in the period', async () => {
+    const card = await renderMerchCard({
+      revenue_cents: 0,
+      cogs_cents: 0,
+      gross_profit_cents: 0,
+      inventory_value_cents: 9600,
+      revenue_by_product: [],
+    })
+
+    expect(within(card).getByText('N/A')).toBeInTheDocument()
+    expect(within(card).queryByText('0%')).not.toBeInTheDocument()
+    expect(within(card).getByText(/€\s?96,00/)).toBeInTheDocument()
+  })
+
+  it('charts where the merch revenue came from, per product', async () => {
+    const card = await renderMerchCard(OVERVIEW.merch)
+
+    expect(within(card).getByText(/sales by product/i)).toBeInTheDocument()
+    const slices = JSON.parse(within(card).getByTestId('merch-pie').dataset.slices)
+    expect(slices.map((s) => [s.label, s.value])).toEqual([
+      ['Tour shirt', 4000],
+      ['Vinyl', 1500],
+      ['Unknown', 500],
+    ])
+  })
+
+  it('paints the slices in fixed palette order, never cycling within a chart', async () => {
+    const card = await renderMerchCard(OVERVIEW.merch)
+
+    const slices = JSON.parse(within(card).getByTestId('merch-pie').dataset.slices)
+    expect(slices.map((s) => s.color)).toEqual(['#2a78d6', '#eb6834', '#1baf7a'])
+    expect(new Set(slices.map((s) => s.color)).size).toBe(slices.length)
+  })
+
+  it('labels the sales that trace back to no product as unknown', async () => {
+    const card = await renderMerchCard({
+      ...OVERVIEW.merch,
+      revenue_by_product: [
+        { kind: 'unattributed', product_id: null, name: null, revenue_cents: 6000 },
+      ],
+    })
+
+    const slices = JSON.parse(within(card).getByTestId('merch-pie').dataset.slices)
+    expect(slices).toEqual([expect.objectContaining({ label: 'Unknown', value: 6000 })])
+  })
+
+  it('labels the folded-up remainder as other, after the named products', async () => {
+    const card = await renderMerchCard({
+      ...OVERVIEW.merch,
+      revenue_by_product: [
+        { kind: 'product', product_id: 1, name: 'Tour shirt', revenue_cents: 4000 },
+        { kind: 'other', product_id: null, name: null, revenue_cents: 1500 },
+        { kind: 'unattributed', product_id: null, name: null, revenue_cents: 500 },
+      ],
+    })
+
+    const slices = JSON.parse(within(card).getByTestId('merch-pie').dataset.slices)
+    expect(slices.map((s) => s.label)).toEqual(['Tour shirt', 'Other', 'Unknown'])
+  })
+
+  it('uses the Dutch label for unattributed merch sales', async () => {
+    await i18n.changeLanguage('nl')
+    getLedgerOverview.mockResolvedValue(OVERVIEW)
     wrap(<FinancialDashboardPage />)
-    await screen.findByText(/result in eur/i)
+    await screen.findByText(/resultaat in eur/i)
 
     const card = screen.getByText(/^merchandise$/i).closest('[data-card]')
-    expect(within(card).getByText(/no merch sales in this period/i)).toBeInTheDocument()
+    const slices = JSON.parse(within(card).getByTestId('merch-pie').dataset.slices)
+    expect(slices.map((s) => s.label)).toEqual(['Tour shirt', 'Vinyl', 'Onbekend'])
+  })
+
+  it('omits the chart entirely when the period has no merch revenue to split', async () => {
+    const card = await renderMerchCard({
+      revenue_cents: 0,
+      cogs_cents: 0,
+      gross_profit_cents: 0,
+      inventory_value_cents: 9600,
+      revenue_by_product: [],
+    })
+
+    expect(within(card).queryByTestId('merch-pie')).not.toBeInTheDocument()
+    expect(within(card).queryByText(/sales by product/i)).not.toBeInTheDocument()
   })
 
   it('shows the upcoming gross band fees with a per-status breakdown', async () => {
@@ -332,11 +549,22 @@ describe('FinancialDashboardPage', () => {
     expect(within(card).getByText(/gross band fees/i)).toBeInTheDocument()
     expect(within(card).getByText(/€\s?4\.500,00/)).toBeInTheDocument()
     expect(within(card).getByText(/across 3 upcoming gigs/i)).toBeInTheDocument()
-    expect(within(card).getByText(/confirmed \(1\)/i)).toBeInTheDocument()
-    expect(within(card).getByText(/€\s?2\.500,00/)).toBeInTheDocument()
-    expect(within(card).getByText(/announced \(1\)/i)).toBeInTheDocument()
-    expect(within(card).getByText(/option \(1\)/i)).toBeInTheDocument()
     expect(within(card).getByRole('link', { name: /view gigs/i })).toBeInTheDocument()
+  })
+
+  it('divides the fee pipeline over one horizontal stacked bar', async () => {
+    wrap(<FinancialDashboardPage />)
+    const bar = await screen.findByTestId('split-bar-fees')
+
+    expect(bar.dataset.layout).toBe('horizontal')
+    // Most to least certain, one shared stack, values in euros.
+    expect(JSON.parse(bar.dataset.series)).toEqual([
+      { id: 'confirmed', label: 'Confirmed', value: 2500, color: theme.palette.success.main, stack: 'fees' },
+      { id: 'announced', label: 'Announced', value: 1000, color: theme.palette.info.main, stack: 'fees' },
+      { id: 'option', label: 'Option', value: 1000, color: theme.palette.warning.main, stack: 'fees' },
+    ])
+    expect(JSON.parse(bar.dataset.tooltips)[0]).toMatch(/€\s?2\.500,00\s·\s1 gig$/)
+    expect(JSON.parse(bar.dataset.labelsWide)[0]).toMatch(/€\s?2\.500,00/)
   })
 
   it('shows a no-gigs hint when there are no upcoming fees', async () => {
@@ -357,6 +585,7 @@ describe('FinancialDashboardPage', () => {
 
     const card = screen.getByText(/^upcoming fees$/i).closest('[data-card]')
     expect(within(card).getByText(/no upcoming gigs with a fee/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('split-bar-fees')).not.toBeInTheDocument()
   })
 
   it('refetches when another period is picked', async () => {
@@ -386,6 +615,6 @@ describe('FinancialDashboardPage', () => {
     expect(screen.getByText(/^facturen$/i)).toBeInTheDocument()
     // Plural picked from count (3 → _other).
     expect(screen.getByText(/verdeeld over 3 aankomende optredens/i)).toBeInTheDocument()
-    expect(screen.getByText(/je moet btw betalen/i)).toBeInTheDocument()
+    expect(screen.getByText(/saldo bij de belastingdienst/i)).toBeInTheDocument()
   })
 })

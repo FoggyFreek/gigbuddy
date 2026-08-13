@@ -1,7 +1,7 @@
 {
   "title": "Purchases",
   "singularTitle": "Purchase",
-  "createPurchase": "Create purchase",
+  "createPurchase": "Create",
   "state": {
     "all": "All purchases",
     "draft": "Draft",

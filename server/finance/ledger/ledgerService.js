@@ -30,6 +30,7 @@ import {
   vatTotals,
   checkingAccountBalance,
   merchTotals,
+  merchRevenueByProduct,
   merchInventoryValue,
   updateTransactionNote,
   lockTransactionRow,
@@ -641,6 +642,40 @@ export async function reverseLedgerTransaction(pool, tenantId, transactionId, ac
   return applyCorrection(pool, tenantId, transactionId, actorUserId, 'reversal')
 }
 
+// How many products the merch revenue split names before the rest is folded into
+// a single 'other' bucket — a pie stops being readable past a handful of slices,
+// and it bounds the payload for a tenant with a large catalogue.
+const MERCH_PRODUCT_SLICES = 5
+
+// Bounded merch revenue split for the dashboard pie. Rows arrive sorted by
+// revenue descending; the named products come first, whatever is left folds into
+// 'other', and revenue that traces back to no product at all is 'unattributed'.
+// `kind` is the discriminator — never infer the bucket from a null product_id.
+function merchRevenueBuckets(rows) {
+  const attributed = rows.filter((r) => r.product_id !== null)
+  const unattributedCents = rows
+    .filter((r) => r.product_id === null)
+    .reduce((sum, r) => sum + r.revenue_cents, 0)
+
+  const buckets = attributed.slice(0, MERCH_PRODUCT_SLICES).map((r) => ({
+    kind: 'product',
+    product_id: r.product_id,
+    name: r.product_name,
+    revenue_cents: r.revenue_cents,
+  }))
+
+  const otherCents = attributed
+    .slice(MERCH_PRODUCT_SLICES)
+    .reduce((sum, r) => sum + r.revenue_cents, 0)
+  if (otherCents > 0) {
+    buckets.push({ kind: 'other', product_id: null, name: null, revenue_cents: otherCents })
+  }
+  if (unattributedCents > 0) {
+    buckets.push({ kind: 'unattributed', product_id: null, name: null, revenue_cents: unattributedCents })
+  }
+  return buckets
+}
+
 // 'YYYY-MM-01' of the month `count` months after the given year/month (1-based).
 function monthStart(year, month, count = 0) {
   const d = new Date(Date.UTC(year, month - 1 + count, 1))
@@ -713,7 +748,7 @@ export async function getFinancialOverview(executor, tenantId, range) {
   }))
 
   const vatQuarter = currentVatQuarter()
-  const [monthRows, annualRows, vat, buckets, bankBalanceCents, merch, merchInventoryCents, feeRows] =
+  const [monthRows, annualRows, vat, buckets, bankBalanceCents, merch, merchProductRows, merchInventoryCents, feeRows] =
     await Promise.all([
       monthlyResultTotals(executor, tenantId, effectiveRange),
       annualResultTotals(executor, tenantId, annualRanges),
@@ -721,6 +756,7 @@ export async function getFinancialOverview(executor, tenantId, range) {
       openInvoiceBuckets(executor, tenantId),
       checkingAccountBalance(executor, tenantId),
       merchTotals(executor, tenantId, effectiveRange),
+      merchRevenueByProduct(executor, tenantId, effectiveRange),
       merchInventoryValue(executor, tenantId),
       upcomingBandFeesByStatus(executor, tenantId),
     ])
@@ -794,6 +830,7 @@ export async function getFinancialOverview(executor, tenantId, range) {
       cogs_cents: merch.cogs_cents,
       gross_profit_cents: merch.revenue_cents - merch.cogs_cents,
       inventory_value_cents: merchInventoryCents,
+      revenue_by_product: merchRevenueBuckets(merchProductRows),
     },
     upcoming_fees: {
       total_cents: feeTotalCents,

@@ -21,6 +21,8 @@
   "invoices": {
     "title": "Facturen",
     "create": "Factuur maken",
+    "openTotal": "Openstaand bedrag",
+    "noOpen": "Geen openstaande facturen",
     "overdue": "Achterstallig",
     "unpaid": "Onbetaald",
     "draft": "Concept",
@@ -31,12 +33,12 @@
     "title": "Merchandise",
     "manage": "Merch beheren",
     "grossProfit": "Brutowinst",
-    "noSales": "Geen merchverkoop in deze periode",
-    "margin": "{{pct}}% marge op verkoop",
+    "margin": "Marge",
+    "noMargin": "n.v.t.",
     "inventoryValue": "Voorraadwaarde",
-    "stockOnHand": "Voorraad, tegen kostprijs",
-    "breakdown": "Verkoop {{sales}} − kostprijs {{cogs}}",
-    "breakdownWithShare": "Verkoop {{sales}} − kostprijs {{cogs}} — {{pct}}% van de totale omzet"
+    "salesByProduct": "Verkoop per product",
+    "unknownProduct": "Onbekend",
+    "otherProducts": "Overig"
   },
   "upcomingFees": {
     "title": "Aankomende gages",
@@ -45,6 +47,8 @@
     "noGigs": "Geen aankomende optredens met een gage",
     "across_one": "Verdeeld over {{count}} aankomend optreden",
     "across_other": "Verdeeld over {{count}} aankomende optredens",
+    "gigCount_one": "{{count}} optreden",
+    "gigCount_other": "{{count}} optredens",
     "confirmed": "Bevestigd",
     "announced": "Aangekondigd",
     "option": "Optie"
@@ -56,8 +60,6 @@
     "forPeriod": "Voor periode: K{{quarter}} {{year}}",
     "dueDate": "Vervaldatum",
     "days_one": "{{count}} dag",
-    "days_other": "{{count}} dagen",
-    "oweBreakdown": "Je moet btw betalen: btw over verkopen {{output}}, over inkopen {{input}}",
-    "getBackBreakdown": "Je krijgt geld terug: btw over verkopen {{output}}, over inkopen {{input}}"
+    "days_other": "{{count}} dagen"
   }
 }
