@@ -25,6 +25,7 @@ import AchievementConfetti, { RECENT_WINDOW_MS } from '../../user/achievements/c
 import { getAchievementIcon } from '../../user/achievements/components/achievementIcons.ts'
 import GigMapTile from './components/GigMapTile.tsx'
 import MemoryTile, { type MemoryPatch } from './components/MemoryTile.tsx'
+import LinkpageStatsTile from './components/LinkpageStatsTile.tsx'
 import { SOCIALS } from '../../people/profiles/components/profileForm.ts'
 import { useEntitlements } from '../../hooks/useEntitlements.ts'
 import { usePermissions } from '../../hooks/usePermissions.ts'
@@ -713,6 +714,13 @@ export default function DashboardPage() {
         <Box>
           <GigMapTile />
         </Box>
+        {/* Link page statistics — a band surface, on plans that include it. The
+            tile hides itself when the link page app isn't configured. */}
+        {supports(TENANT_CAPABILITIES.BAND_LINKPAGE) && has('linkpage') && (
+          <Box>
+            <LinkpageStatsTile />
+          </Box>
+        )}
         {/* Band memory tile — celebratory photo (customization feature). */}
         {has('customization') && (
           <Box>

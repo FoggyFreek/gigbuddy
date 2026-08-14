@@ -47,6 +47,40 @@
     "summary_one": "{{gigCount}} in {{count}} stad",
     "summary_other": "{{gigCount}} in {{count}} steden"
   },
+  "linkpage": {
+    "title": "linkBuddy",
+    "edit": "Open",
+    "openError": "Kon de linkpagina-editor niet openen",
+    "noPage": "Nog geen linkpagina — open de editor om er een te maken",
+    "pageLabel": "Pagina",
+    "configure": "Pagina kiezen",
+    "done": "Klaar",
+    "collectionDisabled": "Bezoekstatistieken staan uit",
+    "chartTitle": "Weergaven en kliks per dag",
+    "chartEmpty": "Geen bezoeken in deze periode",
+    "range": {
+      "label": "Statistiekperiode",
+      "days_one": "{{count}} dag",
+      "days_other": "{{count}} dagen"
+    },
+    "stat": {
+      "views": "Weergaven",
+      "uniqueVisitors": "Gesch. unieke bezoekers",
+      "clicks": "Linkkliks",
+      "ctr": "Doorklikratio"
+    },
+    "category": {
+      "views": "Weergaven",
+      "platform": "Streaming",
+      "song": "Nummers",
+      "link": "Links",
+      "embed": "Previews",
+      "share": "Gedeeld",
+      "social": "Socials",
+      "shop": "Merchandise",
+      "other": "Overig"
+    }
+  },
   "memory": {
     "title": "In beeld",
     "empty": "Voeg een foto toe om een favoriet moment te vieren",

@@ -13,11 +13,22 @@ import { signPayload, verifyPayload, linkpageConfigured, linkpageEditorUrl } fro
 import { TENANT_CAPABILITIES, tenantKindSupports } from '../../../shared/tenantCapabilities.js'
 import { resolveTenantEntitlements } from '../../commerce/billing/entitlementService.js'
 import { FEATURES, LIMITS } from '../../auth/entitlements.js'
-import { notFound, serviceError } from '../../platform/http/serviceErrors.js'
+import { badRequest, notFound, serviceError } from '../../platform/http/serviceErrors.js'
 import { hasPendingSlugSync } from './linkpageSlugSyncRepository.js'
+import { fetchLinkpagePages, fetchLinkpageStats } from './linkpageStatsClient.js'
+import { logger } from '../../utils/logger.js'
 
 const NOT_FOUND = notFound('Not found')
 const NOT_CONFIGURED = serviceError(503, 'Link page integration is not configured')
+const STATS_UNAVAILABLE = serviceError(502, 'Link page statistics are unavailable', {
+  code: 'linkpage_stats_unavailable',
+})
+const PAGE_NOT_FOUND = notFound('Link page not found', { code: 'linkpage_page_not_found' })
+
+// The windows the dashboard tile offers. A closed set, not a clamp: the link
+// page app enforces the plan's rolling window itself, so anything outside this
+// list is a client bug and is refused rather than quietly rounded.
+export const LINKPAGE_STATS_WINDOWS = [7, 30]
 
 const GIG_LIMIT = 50
 // Image tokens live inside the exported content snapshot; the linkpage app
@@ -149,6 +160,49 @@ export async function createHandoff(db, tenantId) {
   })
   // The token rides in the fragment so it never hits server logs on the way in.
   return { url: `${linkpageEditorUrl()}/edit#gbtoken=${encodeURIComponent(token)}` }
+}
+
+// Aggregate link-page statistics for the active tenant's page, read live from
+// the decoupled app — nothing is mirrored into this database, so the tile can
+// never show a stale copy of numbers the other app owns.
+export async function getStats(tenantId, requestedDays, requestedPageId) {
+  if (!linkpageConfigured()) return NOT_CONFIGURED
+  const days = Number(requestedDays)
+  if (!LINKPAGE_STATS_WINDOWS.includes(days)) {
+    return badRequest('Unsupported statistics window', { code: 'invalid_window' })
+  }
+  // Absent means "the tenant's main page"; present must be a real id. The link
+  // page app scopes the lookup to this tenant, so a foreign id is simply not
+  // found there — nothing here has to trust the number.
+  const pageId = requestedPageId === undefined || requestedPageId === null || requestedPageId === ''
+    ? null
+    : Number(requestedPageId)
+  if (pageId !== null && (!Number.isSafeInteger(pageId) || pageId <= 0)) {
+    return badRequest('Invalid link page id', { code: 'invalid_page' })
+  }
+
+  const result = await fetchLinkpageStats(tenantId, days, { pageId })
+  if (!result.ok) {
+    logger.warn('linkpage.stats.unavailable', { tenantId, errorCode: result.code })
+    // A selection that no longer resolves is the caller's to fix (re-read the
+    // page list), not an outage.
+    if (result.code === 'page_not_found') return PAGE_NOT_FOUND
+    return STATS_UNAVAILABLE
+  }
+  return result.stats
+}
+
+// The tenant's link pages, so the dashboard can offer a picker when there is
+// more than one. Identity only — the editor owns everything else.
+export async function listPages(tenantId) {
+  if (!linkpageConfigured()) return NOT_CONFIGURED
+
+  const result = await fetchLinkpagePages(tenantId)
+  if (!result.ok) {
+    logger.warn('linkpage.pages.unavailable', { tenantId, errorCode: result.code })
+    return STATS_UNAVAILABLE
+  }
+  return { pages: result.pages }
 }
 
 export async function getStatus(db, tenantId) {

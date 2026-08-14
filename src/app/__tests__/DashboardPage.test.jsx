@@ -19,6 +19,11 @@ vi.mock('../../contexts/authContext.ts', () => ({ useAuth: vi.fn() }))
 vi.mock('../dashboard/components/GigMapTile.tsx', () => ({
   default: () => <div data-testid="gig-map-tile" />,
 }))
+// The link-page tile talks to the decoupled link-page app; stub it so these
+// tests assert only whether the dashboard mounts it for this tenant.
+vi.mock('../dashboard/components/LinkpageStatsTile.tsx', () => ({
+  default: () => <div data-testid="linkpage-stats-tile" />,
+}))
 vi.mock('../../people/profiles/profile.ts', () => ({
   getProfile: vi.fn(),
   updateProfile: vi.fn(),
@@ -120,6 +125,26 @@ describe('DashboardPage', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.clearAllMocks()
+  })
+
+  // A link page is a band surface on a plan that includes it. The entitlement
+  // is unenforced here (no owner), so the tenant kind is what decides.
+  it('mounts the link page statistics tile for a band', async () => {
+    wrap(<DashboardPage />)
+    expect(await screen.findByTestId('linkpage-stats-tile')).toBeInTheDocument()
+  })
+
+  it('leaves the link page tile out when the plan does not include it', async () => {
+    useAuth.mockReturnValue({
+      user: {
+        id: 1,
+        bandMemberId: 7,
+        entitlements: { flags: { linkpage: false }, limits: {}, planSlug: 'bronze' },
+      },
+    })
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByTestId('gig-map-tile')).toBeInTheDocument())
+    expect(screen.queryByTestId('linkpage-stats-tile')).not.toBeInTheDocument()
   })
 
   it('shows the next upcoming gig and upcoming shows, excluding past gigs', async () => {
@@ -387,6 +412,14 @@ describe('DashboardPage in an artist workspace', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.clearAllMocks()
+  })
+
+  // Link pages are a band surface: a personal workspace has none, so the tile
+  // never mounts there however permissive the plan is.
+  it('leaves the link page statistics tile out entirely', async () => {
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByTestId('gig-map-tile')).toBeInTheDocument())
+    expect(screen.queryByTestId('linkpage-stats-tile')).not.toBeInTheDocument()
   })
 
   it('reads the cross-band feeds and never the active-tenant ones', async () => {

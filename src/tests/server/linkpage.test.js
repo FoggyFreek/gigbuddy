@@ -1,6 +1,6 @@
 import './_envSetup.js'
 // @vitest-environment node
-import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
+import { describe, it, beforeAll, beforeEach, afterAll, afterEach, expect, vi } from 'vitest'
 import request from 'supertest'
 import { verifyPayload, isValidSyncBearer } from '../../../server/promotion/linkpage/linkpageTokens.js'
 import { seedDefaultPlans } from '../../../server/db/defaultPlans.js'
@@ -290,6 +290,7 @@ describe('linkpage handoff', () => {
       req.set('x-test-user-id', String(contributor.id)).set('x-test-tenant-id', String(seed.tenantA.id))
     expect((await asContributor(request(app).post('/api/linkpage/handoff'))).status).toBe(403)
     expect((await asContributor(request(app).get('/api/linkpage/status'))).status).toBe(403)
+    expect((await asContributor(request(app).get('/api/linkpage/stats'))).status).toBe(403)
   })
 
   it('is refused in a personal workspace — the owner is admin, the kind gate denies', async () => {
@@ -304,6 +305,10 @@ describe('linkpage handoff', () => {
     const status = await asOwner(request(app).get('/api/linkpage/status'))
     expect(status.status).toBe(403)
     expect(status.body.code).toBe('tenant_kind_not_supported')
+
+    const stats = await asOwner(request(app).get('/api/linkpage/stats'))
+    expect(stats.status).toBe(403)
+    expect(stats.body.code).toBe('tenant_kind_not_supported')
   })
 
   it('is gated on the linkpage entitlement (bronze fallback is denied)', async () => {
@@ -313,6 +318,10 @@ describe('linkpage handoff', () => {
     expect(res.status).toBe(403)
     expect(res.body.code).toBe('entitlement_required')
     expect(res.body.feature).toBe('linkpage')
+
+    const stats = await asUserA(request(app).get('/api/linkpage/stats'))
+    expect(stats.status).toBe(403)
+    expect(stats.body.feature).toBe('linkpage')
   })
 
   it('mints a verifiable short-lived token bound to the active tenant', async () => {
@@ -349,5 +358,325 @@ describe('linkpage handoff', () => {
     const res = await asUserA(request(app).get('/api/linkpage/status'))
     expect(res.status).toBe(200)
     expect(res.body.linkpageSync).toBe('pending')
+  })
+})
+
+describe('linkpage stats', () => {
+  const payload = {
+    hasPage: true,
+    pageId: 8,
+    slug: 'the-band',
+    days: 7,
+    retentionDays: 30,
+    enabled: true,
+    totalViews: 200,
+    uniqueVisits: 120,
+    totalClicks: 50,
+    clickThroughRate: 25,
+    byDay: [{ day: '2026-08-01', views: 12, clicks: { platform: 3, shop: 1 } }],
+  }
+
+  const upstream = (status, body) => vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }),
+  )
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('requires an authenticated tenant member', async () => {
+    const fetchSpy = upstream(200, payload)
+    const res = await request(app).get('/api/linkpage/stats')
+    expect(res.status).toBe(401)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('proxies the aggregate summary for the active tenant', async () => {
+    const fetchSpy = upstream(200, payload)
+    const res = await asUserA(request(app).get('/api/linkpage/stats?days=7'))
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual(payload)
+    expect(fetchSpy).toHaveBeenCalledWith(
+      `https://link.test.local/api/integrations/gigbuddy/tenants/${seed.tenantA.id}/stats?days=7`,
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${SECRET}` }) }),
+    )
+  })
+
+  it('defaults to the 30-day window', async () => {
+    const fetchSpy = upstream(200, { ...payload, days: 30 })
+    const res = await asUserA(request(app).get('/api/linkpage/stats'))
+    expect(res.status).toBe(200)
+    expect(fetchSpy.mock.calls[0][0]).toContain('?days=30')
+  })
+
+  // Isolation: the tenant on the wire is the session's active tenant, never a
+  // client-supplied id, so a member of alpha can only ever pull alpha's page.
+  it('reads the tenant from the session, ignoring any id the caller supplies', async () => {
+    const fetchSpy = upstream(200, payload)
+    const res = await asUserA(
+      request(app).get(`/api/linkpage/stats?days=7&tenantId=${seed.tenantB.id}&tenant_id=${seed.tenantB.id}`),
+    )
+    expect(res.status).toBe(200)
+    expect(fetchSpy.mock.calls[0][0]).toContain(`/tenants/${seed.tenantA.id}/stats`)
+    expect(fetchSpy.mock.calls[0][0]).not.toContain(`/tenants/${seed.tenantB.id}/`)
+  })
+
+  it('403s a member asking for a tenant they do not belong to', async () => {
+    const fetchSpy = upstream(200, payload)
+    const res = await request(app)
+      .get('/api/linkpage/stats')
+      .set('x-test-user-id', String(seed.userB.id))
+      .set('x-test-tenant-id', String(seed.tenantA.id))
+    expect(res.status).toBe(403)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('forwards the selected page to the link page app', async () => {
+    const fetchSpy = upstream(200, { ...payload, pageId: 9, slug: 'the-band/single' })
+    const res = await asUserA(request(app).get('/api/linkpage/stats?days=7&pageId=9'))
+    expect(res.status).toBe(200)
+    expect(res.body.pageId).toBe(9)
+    expect(fetchSpy.mock.calls[0][0]).toContain('&pageId=9')
+  })
+
+  it('omits pageId entirely when none is selected, so the main page answers', async () => {
+    const fetchSpy = upstream(200, payload)
+    await asUserA(request(app).get('/api/linkpage/stats?days=7'))
+    expect(fetchSpy.mock.calls[0][0]).not.toContain('pageId')
+  })
+
+  it.each(['0', '-2', '1.5', 'nine'])('refuses the malformed page id %s', async (pageId) => {
+    const fetchSpy = upstream(200, payload)
+    const res = await asUserA(request(app).get(`/api/linkpage/stats?days=7&pageId=${pageId}`))
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('invalid_page')
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  // A page id from another tenant is unknown to the link page app's
+  // tenant-scoped lookup, so it comes back 404 — never another band's numbers.
+  it('reports a page the link page app cannot resolve as 404, not an outage', async () => {
+    upstream(404, { code: 'page_not_found' })
+    const res = await asUserA(request(app).get('/api/linkpage/stats?days=7&pageId=999999'))
+    expect(res.status).toBe(404)
+    expect(res.body.code).toBe('linkpage_page_not_found')
+  })
+
+  it.each(['1', '90', '7.5', 'week', ''])('refuses the unsupported window %s', async (days) => {
+    const fetchSpy = upstream(200, payload)
+    const res = await asUserA(request(app).get(`/api/linkpage/stats?days=${days}`))
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('invalid_window')
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('passes the "no page yet" outcome through unchanged', async () => {
+    upstream(200, { hasPage: false })
+    const res = await asUserA(request(app).get('/api/linkpage/stats?days=7'))
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ hasPage: false })
+  })
+
+  it.each([
+    [500, {}],
+    [401, {}],
+    [200, { hasPage: true, totalViews: 'many' }],
+  ])('turns an unusable upstream reply (%s) into 502 without leaking its detail', async (status, body) => {
+    upstream(status, body)
+    const res = await asUserA(request(app).get('/api/linkpage/stats?days=30'))
+    expect(res.status).toBe(502)
+    expect(res.body.code).toBe('linkpage_stats_unavailable')
+    expect(JSON.stringify(res.body)).not.toContain(SECRET)
+  })
+
+  it('turns a transport failure into 502 rather than a crash', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
+    const res = await asUserA(request(app).get('/api/linkpage/stats?days=30'))
+    expect(res.status).toBe(502)
+  })
+})
+
+describe('linkpage page list', () => {
+  const upstreamPages = [
+    { id: 8, slug: 'alpha', pageType: 'main', release: null, publishedAt: '2026-07-01T10:00:00.000Z' },
+    { id: 9, slug: 'alpha/single', pageType: 'release', release: { title: 'New Single' }, publishedAt: null },
+  ]
+
+  const upstream = (status, body) => vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }),
+  )
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('requires an authenticated tenant member', async () => {
+    const fetchSpy = upstream(200, { pages: upstreamPages })
+    expect((await request(app).get('/api/linkpage/pages')).status).toBe(401)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('lists the active tenant pages, reduced to what a picker needs', async () => {
+    const fetchSpy = upstream(200, { pages: upstreamPages })
+    const res = await asUserA(request(app).get('/api/linkpage/pages'))
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({
+      pages: [
+        { id: 8, slug: 'alpha', pageType: 'main', title: null, published: true },
+        { id: 9, slug: 'alpha/single', pageType: 'release', title: 'New Single', published: false },
+      ],
+    })
+    expect(fetchSpy.mock.calls[0][0]).toBe(
+      `https://link.test.local/api/integrations/gigbuddy/tenants/${seed.tenantA.id}/pages`,
+    )
+  })
+
+  it('reads the tenant from the session, never from the request', async () => {
+    const fetchSpy = upstream(200, { pages: [] })
+    await asUserA(request(app).get(`/api/linkpage/pages?tenantId=${seed.tenantB.id}`))
+    expect(fetchSpy.mock.calls[0][0]).toContain(`/tenants/${seed.tenantA.id}/pages`)
+  })
+
+  it('turns an unusable upstream reply into 502', async () => {
+    upstream(200, { pages: 'nope' })
+    const res = await asUserA(request(app).get('/api/linkpage/pages'))
+    expect(res.status).toBe(502)
+    expect(res.body.code).toBe('linkpage_stats_unavailable')
+  })
+})
+
+// The link page app authorizes by tenant id alone (the shared secret speaks for
+// GigBuddy as a whole), so the id GigBuddy puts on the wire is the entire
+// isolation boundary. It must come from the session's active tenant and from
+// nowhere else.
+describe('linkpage statistics tenant isolation', () => {
+  const statsFor = (tenantId, pageId) => ({
+    hasPage: true,
+    pageId,
+    slug: `tenant-${tenantId}`,
+    days: 30,
+    retentionDays: 30,
+    enabled: true,
+    totalViews: tenantId,
+    uniqueVisits: tenantId,
+    totalClicks: 1,
+    clickThroughRate: 1,
+    byDay: [],
+  })
+
+  // Answers whichever tenant the URL names, so a mixed-up id shows up as the
+  // wrong tenant's numbers rather than as a failure.
+  function upstreamByTenant() {
+    return vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      const tenantId = Number(/\/tenants\/(\d+)\//.exec(String(url))[1])
+      const body = String(url).includes('/pages')
+        ? { pages: [{ id: tenantId * 10, slug: `tenant-${tenantId}`, pageType: 'main', release: null, publishedAt: null }] }
+        : statsFor(tenantId, tenantId * 10)
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } })
+    })
+  }
+
+  const asSuperUserIn = (req, tenantId) => req
+    .set('x-test-user-id', String(seed.superUser.id))
+    .set('x-test-tenant-id', String(tenantId))
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // The super user is an approved admin of both tenants — the case where the
+  // caller's identity cannot decide which band's numbers are meant.
+  it('follows the active tenant for a member of two tenants', async () => {
+    upstreamByTenant()
+
+    const inA = await asSuperUserIn(request(app).get('/api/linkpage/stats?days=30'), seed.tenantA.id)
+    expect(inA.status).toBe(200)
+    expect(inA.body.totalViews).toBe(seed.tenantA.id)
+    expect(inA.body.slug).toBe(`tenant-${seed.tenantA.id}`)
+
+    const inB = await asSuperUserIn(request(app).get('/api/linkpage/stats?days=30'), seed.tenantB.id)
+    expect(inB.status).toBe(200)
+    expect(inB.body.totalViews).toBe(seed.tenantB.id)
+    expect(inB.body.slug).toBe(`tenant-${seed.tenantB.id}`)
+  })
+
+  it('scopes the page list to the active tenant for the same member', async () => {
+    upstreamByTenant()
+
+    const inA = await asSuperUserIn(request(app).get('/api/linkpage/pages'), seed.tenantA.id)
+    expect(inA.body.pages).toEqual([
+      { id: seed.tenantA.id * 10, slug: `tenant-${seed.tenantA.id}`, pageType: 'main', title: null, published: false },
+    ])
+
+    const inB = await asSuperUserIn(request(app).get('/api/linkpage/pages'), seed.tenantB.id)
+    expect(inB.body.pages[0].slug).toBe(`tenant-${seed.tenantB.id}`)
+  })
+
+  // Every shape a caller could use to name a different tenant. None of them is
+  // read: req.tenantId comes from the session, so the wire always says alpha.
+  it.each([
+    ['query tenantId', `?days=30&tenantId=${'B'}`],
+    ['query tenant_id', `?days=30&tenant_id=${'B'}`],
+    ['repeated days', '?days=30&days=7'],
+  ])('ignores %s when naming the upstream tenant', async (_label, suffix) => {
+    const fetchSpy = upstreamByTenant()
+    const query = suffix.replace(/B/g, String(seed.tenantB.id))
+    const res = await asUserA(request(app).get(`/api/linkpage/stats${query}`))
+
+    expect([200, 400]).toContain(res.status)
+    for (const [url] of fetchSpy.mock.calls) {
+      expect(String(url)).toContain(`/tenants/${seed.tenantA.id}/`)
+      expect(String(url)).not.toContain(`/tenants/${seed.tenantB.id}/`)
+    }
+  })
+
+  it('ignores a tenant id supplied as a header', async () => {
+    const fetchSpy = upstreamByTenant()
+    const res = await asUserA(
+      request(app).get('/api/linkpage/stats?days=30').set('x-tenant-id', String(seed.tenantB.id)),
+    )
+    expect(res.status).toBe(200)
+    expect(res.body.totalViews).toBe(seed.tenantA.id)
+    expect(String(fetchSpy.mock.calls[0][0])).toContain(`/tenants/${seed.tenantA.id}/`)
+  })
+
+  // A page id is NOT an authorization token. GigBuddy forwards it unchanged
+  // under the caller's own tenant, so the link page app's tenant-scoped lookup
+  // is what refuses it — and it comes back as a plain 404.
+  it('forwards a foreign page id under the caller tenant, so it resolves to nothing', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ code: 'page_not_found' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+    const res = await asUserA(request(app).get('/api/linkpage/stats?days=30&pageId=987654'))
+
+    expect(res.status).toBe(404)
+    expect(res.body.code).toBe('linkpage_page_not_found')
+    expect(res.body.totalViews).toBeUndefined()
+    expect(String(fetchSpy.mock.calls[0][0])).toBe(
+      `https://link.test.local/api/integrations/gigbuddy/tenants/${seed.tenantA.id}/stats?days=30&pageId=987654`,
+    )
+  })
+
+  it('refuses a non-member before any call leaves the server', async () => {
+    const fetchSpy = upstreamByTenant()
+    const asOutsider = (req) => req
+      .set('x-test-user-id', String(seed.userB.id))
+      .set('x-test-tenant-id', String(seed.tenantA.id))
+
+    expect((await asOutsider(request(app).get('/api/linkpage/stats?days=30'))).status).toBe(403)
+    expect((await asOutsider(request(app).get('/api/linkpage/pages'))).status).toBe(403)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('refuses a member whose session has no active tenant', async () => {
+    const fetchSpy = upstreamByTenant()
+    const res = await request(app)
+      .get('/api/linkpage/stats?days=30')
+      .set('x-test-user-id', String(seed.userA.id))
+    expect(res.status).toBe(403)
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 })

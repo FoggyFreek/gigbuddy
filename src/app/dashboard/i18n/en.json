@@ -47,6 +47,40 @@
     "summary_one": "{{gigCount}} across {{count}} city",
     "summary_other": "{{gigCount}} across {{count}} cities"
   },
+  "linkpage": {
+    "title": "linkBuddy",
+    "edit": "Open",
+    "openError": "Could not open the link page editor",
+    "noPage": "No link page yet — open the editor to build one",
+    "pageLabel": "Page",
+    "configure": "Choose page",
+    "done": "Done",
+    "collectionDisabled": "Visit statistics are switched off",
+    "chartTitle": "Views and clicks per day",
+    "chartEmpty": "No visits in this period",
+    "range": {
+      "label": "Statistics period",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days"
+    },
+    "stat": {
+      "views": "Views",
+      "uniqueVisitors": "Est. unique visitors",
+      "clicks": "Link clicks",
+      "ctr": "Click-through rate"
+    },
+    "category": {
+      "views": "Views",
+      "platform": "Streaming",
+      "song": "Songs",
+      "link": "Links",
+      "embed": "Previews",
+      "share": "Shares",
+      "social": "Socials",
+      "shop": "Merch shop",
+      "other": "Other"
+    }
+  },
   "memory": {
     "title": "Memory",
     "empty": "Add a photo to celebrate a favourite moment",
