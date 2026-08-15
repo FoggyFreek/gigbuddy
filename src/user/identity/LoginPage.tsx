@@ -11,6 +11,12 @@ import { useTranslation } from 'react-i18next'
 import { createAppTheme } from '../../theme.ts'
 import LanguageSwitcher from '../../components/LanguageSwitcher.tsx'
 import { GoogleIcon, MicrosoftIcon } from '../../components/shared/ProviderIcons.tsx'
+import BackgroundAttribution from '../../components/shared/BackgroundAttribution.tsx'
+import { getBackgroundMeta } from '../../utils/backgroundMeta.ts'
+
+// Fixed to this one image (see the lightTheme note below), so its metadata is
+// looked up once rather than going through pickRandomBackground.
+const LOGIN_BACKGROUND_ID = 'bg_04_light'
 
 const PROVIDER_BUTTON_SX = {
   height: 44,
@@ -54,13 +60,14 @@ export default function LoginPage() {
     <ThemeProvider theme={lightTheme}>
     <Box
       sx={{
+        position: 'relative',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: '100vh',
         bgcolor: '#F4F1FB',
-        backgroundImage: 'url(/backgrounds/bg_04_light.webp)',
+        backgroundImage: `url(/backgrounds/${LOGIN_BACKGROUND_ID}.webp)`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
@@ -139,6 +146,7 @@ export default function LoginPage() {
       <Typography variant="caption" sx={{ color: 'text.disabled', mt: 4 }}>
         © {new Date().getFullYear()} gigbuddy
       </Typography>
+      <BackgroundAttribution meta={getBackgroundMeta(LOGIN_BACKGROUND_ID)} />
     </Box>
     </ThemeProvider>
   )

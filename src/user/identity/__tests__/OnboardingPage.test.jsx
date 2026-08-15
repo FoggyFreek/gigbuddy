@@ -142,7 +142,12 @@ beforeEach(() => {
   let pick = 0
   pickRandomBackground.mockImplementation(() => {
     pick += 1
-    return { image: `url(/backgrounds/bg_0${pick}_light.webp)`, position: '0% 0%' }
+    return {
+      image: `url(/backgrounds/bg_0${pick}_light.webp)`,
+      position: '0% 0%',
+      id: `bg_0${pick}_light`,
+      meta: { description: '', credit: '' },
+    }
   })
   getBillingState.mockResolvedValue({ subscriptions: { band: null, artist: null }, ownedBandCount: 0, hasPersonalWorkspace: false, plans: PLANS })
   getTenantOnboardingStatus.mockResolvedValue({ tenantOnboardingEnabled: true })

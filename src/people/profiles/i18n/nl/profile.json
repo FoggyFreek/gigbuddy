@@ -5,8 +5,8 @@
     "links": "Links"
   },
   "linkpage": {
-    "edit": "Linkpagina bewerken",
-    "error": "Kon de linkpagina-editor niet openen"
+    "edit": "Open linkBuddy",
+    "error": "Kon linkBuddy niet openen"
   },
   "artistRoles": {
     "title": "Mijn rollen",

@@ -245,7 +245,7 @@ describe('PurchasesPage', () => {
     const user = userEvent.setup()
     wrap(<PurchasesPage />)
     await screen.findByText('mi5 Studios')
-    await user.click(screen.getByRole('button', { name: /create purchase/i }))
+    await user.click(screen.getByRole('button', { name: /^create$/i }))
     await waitFor(() => expect(screen.getByText('New purchase')).toBeInTheDocument())
     expect(screen.getByRole('button', { name: /continue/i })).toBeInTheDocument()
   })

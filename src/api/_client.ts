@@ -61,7 +61,15 @@ export async function request<T = unknown>(url: string, options: RequestOptions 
   return data as T
 }
 
-export async function requestBlob(url: string, options: RequestOptions = {}): Promise<Blob> {
+export interface BlobResponse {
+  blob: Blob
+  headers: Headers
+}
+
+export async function requestBlobWithHeaders(
+  url: string,
+  options: RequestOptions = {},
+): Promise<BlobResponse> {
   const method = (options.method || 'POST').toUpperCase()
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) }
   if (!SAFE_METHODS.has(method) && csrfToken) {
@@ -78,7 +86,11 @@ export async function requestBlob(url: string, options: RequestOptions = {}): Pr
     const data = await errorResponse(res)
     throw apiError(data, res.status, `HTTP ${res.status}`)
   }
-  return res.blob()
+  return { blob: await res.blob(), headers: res.headers }
+}
+
+export async function requestBlob(url: string, options: RequestOptions = {}): Promise<Blob> {
+  return (await requestBlobWithHeaders(url, options)).blob
 }
 
 export async function requestForm<T = unknown>(url: string, formData: FormData): Promise<T> {

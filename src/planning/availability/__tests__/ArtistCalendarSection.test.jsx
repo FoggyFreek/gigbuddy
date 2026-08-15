@@ -4,7 +4,7 @@ import { ThemeProvider } from '@mui/material/styles'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
 import { MemoryRouter, Route, Routes } from 'react-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ArtistCalendarSection from '../components/ArtistCalendarSection.tsx'
 import { AuthContext } from '../../../contexts/authContext.ts'
 import { CompactLayoutContext } from '../../../hooks/useCompactLayout.ts'
@@ -93,6 +93,8 @@ const agendaItem = (over = {}) => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-08-13T12:00:00.000Z'))
   listMyAgenda.mockResolvedValue({ items: [agendaItem()], meta: { from: '', to: '', returned: 1 } })
   listMyAvailability.mockResolvedValue({
     items: [{
@@ -113,6 +115,10 @@ beforeEach(() => {
   createGig.mockResolvedValue({ id: 88 })
   // A personal workspace has no band availability; the endpoint would 403 there.
   getAvailabilitySpan.mockRejectedValue(new Error('forbidden'))
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('ArtistCalendarSection', () => {

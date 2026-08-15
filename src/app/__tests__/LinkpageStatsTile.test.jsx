@@ -273,7 +273,7 @@ describe('LinkpageStatsTile', () => {
     wrap(<LinkpageStatsTile />)
     await screen.findByTestId('linkpage-bar-chart')
 
-    await user.click(screen.getByRole('button', { name: 'Edit' }))
+    await user.click(screen.getByRole('button', { name: 'Open' }))
     await waitFor(() => expect(window.open).toHaveBeenCalledWith(
       'https://link.test/edit#gbtoken=abc',
       '_blank',

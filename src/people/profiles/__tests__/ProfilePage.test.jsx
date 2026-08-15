@@ -299,7 +299,7 @@ describe('ProfilePage', () => {
         permissions: ['app.view', 'planning.write'],
       },
     })
-    expect(await screen.findByRole('button', { name: /edit link page/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /open linkbuddy/i })).toBeInTheDocument()
   })
 
   it('omits the link-page editor in a personal workspace — link pages are built for bands', async () => {
@@ -313,7 +313,7 @@ describe('ProfilePage', () => {
     })
     await waitFor(() => expect(getProfile).toHaveBeenCalled())
 
-    expect(screen.queryByRole('button', { name: /edit link page/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /open linkbuddy/i })).not.toBeInTheDocument()
     // Gated before render, so the workspace never even asks for link-page status.
     expect(getLinkpageStatus).not.toHaveBeenCalled()
   })

@@ -79,7 +79,7 @@ describe('InvoicesPage', () => {
   it('renders the Invoices heading and Create Invoice button', async () => {
     wrap(<InvoicesPage />)
     expect(screen.getByRole('heading', { name: /^invoices$/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^create invoice$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^create$/i })).toBeInTheDocument()
     await waitFor(() => expect(listInvoices).toHaveBeenCalledTimes(1))
     expect(listInvoices).toHaveBeenCalledWith({ mode: 'fiscal_year', year: 2026 })
   })
@@ -325,7 +325,7 @@ describe('InvoicesPage', () => {
     wrap(<InvoicesPage />)
 
     expect(screen.getByRole('heading', { name: 'Facturen' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Factuur aanmaken' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Aanmaken' })).toBeInTheDocument()
     expect((await screen.findAllByText('Alle facturen')).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Achterstallig')).toBeInTheDocument()
     expect(screen.getByPlaceholderText('Zoeken')).toBeInTheDocument()

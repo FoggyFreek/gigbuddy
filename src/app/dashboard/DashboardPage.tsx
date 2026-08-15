@@ -35,6 +35,7 @@ import { useTenantKind } from '../../hooks/useTenantKind.ts'
 import { TENANT_CAPABILITIES } from '../../auth/tenantCapabilities.ts'
 import { useSetWideContent } from '../../contexts/contentWidthContext.ts'
 import { pickRandomBackground } from '../../utils/randomBackground.ts'
+import BackgroundAttribution from '../../components/shared/BackgroundAttribution.tsx'
 import { useThemeMode } from '../../contexts/themeModeContext.ts'
 import type { ThemeMode } from '../../contexts/themeModeContext.ts'
 import { listAchievements } from '../../user/achievements/achievements.ts'
@@ -234,6 +235,7 @@ export default function DashboardPage() {
   }, [setWideContent])
 
   const backgroundSx = {
+    position: 'relative',
     backgroundImage: background.image,
     backgroundSize: 'cover',
     backgroundPosition: background.position,
@@ -292,6 +294,7 @@ export default function DashboardPage() {
     return (
       <Box sx={{ ...backgroundSx, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <CircularProgress />
+        <BackgroundAttribution meta={background.meta} />
       </Box>
     )
   }
@@ -415,6 +418,7 @@ export default function DashboardPage() {
           background: `linear-gradient(to bottom, ${alpha(theme.palette.background.default, 1)}, ${alpha(theme.palette.background.default, 0)})`,
         }}
       />
+      <BackgroundAttribution meta={background.meta} />
       <Box sx={{ maxWidth: CONTENT_MAX_WIDTH, mx: 'auto', position: 'relative' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
         {profileLoading ? (

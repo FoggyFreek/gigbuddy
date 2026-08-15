@@ -5,8 +5,8 @@
     "links": "Links"
   },
   "linkpage": {
-    "edit": "Edit link page",
-    "error": "Could not open the link page editor"
+    "edit": "Open linkBuddy",
+    "error": "Could not open linkBuddy"
   },
   "artistRoles": {
     "title": "My roles",

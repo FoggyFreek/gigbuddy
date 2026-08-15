@@ -35,7 +35,6 @@ export default function LinkpageEditButton() {
       startIcon={<OpenInNewIcon />}
       onClick={open}
       disabled={opening}
-      sx={{ mr: 2 }}
     >
       {t($ => $.linkpage.edit)}
     </Button>
