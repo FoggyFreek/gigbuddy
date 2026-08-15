@@ -64,6 +64,23 @@ const READER_AUTH_VALUE = {
   user: { id: 1, permissions: ['app.view'], activeTenantRole: 'reader' },
 }
 
+// A writer on a plan without `integrations`: the place lookup is a paid feature,
+// so the button becomes the usual diamond upsell.
+const LOCKED_AUTH_VALUE = {
+  ...AUTH_VALUE,
+  user: {
+    ...AUTH_VALUE.user,
+    entitlements: {
+      planSlug: 'bronze',
+      subscriptionStatus: null,
+      locked: false,
+      financeReadOnly: false,
+      flags: { integrations: false },
+      limits: {},
+    },
+  },
+}
+
 function wrap(authValue = AUTH_VALUE) {
   return render(
     <MemoryRouter initialEntries={['/venues/1']}>
@@ -183,6 +200,22 @@ describe('VenueDetailPage — address enrichment', () => {
 
     await waitFor(() => expect(getVenue).toHaveBeenCalled())
     expect(screen.queryByRole('button', { name: 'Look up address' })).not.toBeInTheDocument()
+  })
+
+  it('turns the lookup into a diamond upsell link when the plan lacks integrations', async () => {
+    wrap(LOCKED_AUTH_VALUE)
+
+    const link = await screen.findByRole('link', { name: 'Look up address' })
+    expect(link).toHaveAttribute('href', '/upgrade/integrations')
+    expect(within(link).getByTestId('DiamondOutlinedIcon')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Look up address' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the upsell link hidden from a reader', async () => {
+    wrap({ ...LOCKED_AUTH_VALUE, user: { ...LOCKED_AUTH_VALUE.user, permissions: ['app.view'], activeTenantRole: 'reader' } })
+
+    await waitFor(() => expect(getVenue).toHaveBeenCalled())
+    expect(screen.queryByRole('link', { name: 'Look up address' })).not.toBeInTheDocument()
   })
 
   it('disables the lookup until the venue has a name to search on', async () => {

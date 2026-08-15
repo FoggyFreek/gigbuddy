@@ -40,7 +40,7 @@
     "title": "Delete song?"
   },
   "table": {
-    "empty": "No songs yet — add one or import from CSV.",
+    "empty": "No songs yet , add one or import your songs.",
     "noResults": "No results."
   },
   "links": {

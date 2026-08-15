@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthContext } from '../../../contexts/authContext.ts'
 import SettingsPage from '../SettingsPage.tsx'
 import theme from '../../../theme.ts'
-import { clearResendKey, setResendKey } from '../../profiles/profile.ts'
+import { clearResendKey, getBandsintownKey, setResendKey } from '../../profiles/profile.ts'
 import { updateActiveTenantSlug } from '../tenants.ts'
 
 vi.mock('../../../commerce/billing/billing.ts', async (importOriginal) => {
@@ -70,6 +70,20 @@ const lockedEntitlements = {
   planSlug: 'free', locked: false, financeReadOnly: false,
   flags: { finance: false, integrations: false, customization: false },
   limits: { storage_mb: 100, members: 5, bands: 1 },
+}
+
+const integrationsEntitlements = {
+  ...lockedEntitlements,
+  planSlug: 'silver',
+  flags: { ...lockedEntitlements.flags, integrations: true },
+}
+
+function planEntitlements(planSlug, finance) {
+  return {
+    ...lockedEntitlements,
+    planSlug,
+    flags: { ...lockedEntitlements.flags, finance },
+  }
 }
 
 function wrap(route, {
@@ -207,6 +221,39 @@ describe('SettingsPage — members and invites', () => {
 })
 
 describe('SettingsPage — plan gating', () => {
+  it.each([
+    ['bronze', 'band'],
+    ['silver', 'band'],
+    ['artist_bronze', 'personal'],
+  ])('hides every finance setting on the %s plan', async (planSlug, activeTenantKind) => {
+    wrap('/settings/chart-of-accounts', {
+      entitlements: planEntitlements(planSlug, false),
+      activeTenantKind,
+    })
+
+    expect(await screen.findAllByText('My preferences')).not.toHaveLength(0)
+    expect(screen.queryByText('Finance and accounting settings')).not.toBeInTheDocument()
+    for (const label of ['Financial profile', 'Accounting profile', 'Accounting Settings', 'Chart of accounts']) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument()
+    }
+    expect(screen.queryByText('Finance setup wizard')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['gold', 'band'],
+    ['artist_gold', 'personal'],
+  ])('shows every finance setting on the %s plan', async (planSlug, activeTenantKind) => {
+    wrap('/settings', {
+      entitlements: planEntitlements(planSlug, true),
+      activeTenantKind,
+    })
+
+    expect(await screen.findByText('Finance and accounting settings')).toBeInTheDocument()
+    for (const label of ['Financial profile', 'Accounting profile', 'Accounting Settings', 'Chart of accounts']) {
+      expect(screen.getByText(label)).toBeInTheDocument()
+    }
+  })
+
   it('marks the accent section with a premium diamond when the plan lacks customization', async () => {
     wrap('/settings/accent', { entitlements: lockedEntitlements })
     const link = await screen.findByRole('link')
@@ -215,8 +262,8 @@ describe('SettingsPage — plan gating', () => {
 
   it('marks the integrations section with a premium diamond when the plan lacks it', async () => {
     wrap('/settings/integrations', { entitlements: lockedEntitlements })
-    const link = await screen.findByRole('link')
-    expect(link).toHaveAttribute('href', '/upgrade/integrations')
+    const links = await screen.findAllByRole('link')
+    for (const link of links) expect(link).toHaveAttribute('href', '/upgrade/integrations')
   })
 
   it('shows the Resend integration with the supplied theme wordmark', async () => {
@@ -230,7 +277,7 @@ describe('SettingsPage — plan gating', () => {
     setResendKey.mockResolvedValue({ isSet: true, changedAt: '2026-08-04T12:00:00.000Z' })
     clearResendKey.mockResolvedValue({ isSet: false, changedAt: '2026-08-04T12:01:00.000Z' })
     const user = userEvent.setup()
-    wrap('/settings/integrations', { entitlements: lockedEntitlements })
+    wrap('/settings/integrations', { entitlements: integrationsEntitlements })
 
     const logo = await screen.findByAltText('Resend')
     let card = logo.closest('.MuiPaper-outlined')
@@ -244,6 +291,44 @@ describe('SettingsPage — plan gating', () => {
     expect(within(card).queryByDisplayValue(`re_${'a'.repeat(32)}`)).not.toBeInTheDocument()
     await user.click(within(card).getByRole('button', { name: 'Remove key' }))
     expect(clearResendKey).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    ['bronze', 'band', ['Resend', 'Mollie', 'Shopify', 'Bandsintown']],
+    ['artist_bronze', 'personal', ['Resend', 'Mollie']],
+  ])('replaces every integration action with the upgrade diamond on %s', async (planSlug, activeTenantKind, logos) => {
+    wrap('/settings/integrations', {
+      entitlements: { ...lockedEntitlements, planSlug },
+      activeTenantKind,
+    })
+
+    await screen.findByAltText('Resend')
+    for (const alt of logos) {
+      const card = screen.getByAltText(alt).closest('.MuiPaper-outlined')
+      expect(within(card).getByRole('link')).toHaveAttribute('href', '/upgrade/integrations')
+    }
+    expect(screen.queryByRole('button', { name: 'Add integration' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Configure' })).not.toBeInTheDocument()
+  })
+
+  it('lets an entitled plan configure every integration without a diamond', async () => {
+    wrap('/settings/integrations', { entitlements: integrationsEntitlements })
+    expect(await screen.findAllByRole('button', { name: 'Add integration' })).toHaveLength(4)
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  // Downgrading purges credentials, but a retained or not-yet-purged key must
+  // still be visible and erasable — only replacing it is a paid action.
+  it('keeps a stored key removable on bronze while locking the replace action', async () => {
+    getBandsintownKey.mockResolvedValueOnce({ isSet: true, changedAt: '2026-08-04T12:00:00.000Z' })
+    wrap('/settings/integrations', { entitlements: lockedEntitlements })
+
+    const card = (await screen.findByAltText('Bandsintown')).closest('.MuiPaper-outlined')
+    expect(await within(card).findByText('Configured')).toBeInTheDocument()
+    expect(within(card).getByTestId('DeleteOutlinedIcon').closest('button')).toBeEnabled()
+    expect(within(card).queryByRole('button', { name: 'Replace key' })).not.toBeInTheDocument()
+    expect(within(card).getByRole('textbox')).toBeDisabled()
+    expect(within(card).getAllByRole('link')[0]).toHaveAttribute('href', '/upgrade/integrations')
   })
 
   it('shows no premium diamond when the tenant is unenforced (ownerless)', async () => {

@@ -316,7 +316,7 @@ describe('PerformancePage', () => {
 
   it('offers a way out of an empty setlist', async () => {
     wrap(show([]))
-    expect(await screen.findByText('This setlist is empty — add some songs first.')).toBeInTheDocument()
+    expect(await screen.findByText('This setlist is empty, add some songs first.')).toBeInTheDocument()
   })
 
   it('reports a failed load', async () => {

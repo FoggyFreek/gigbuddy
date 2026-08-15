@@ -8,7 +8,7 @@
     "heading": "Producten",
     "new": "Nieuw product",
     "recordSale": "Verkoop registreren",
-    "empty": "Nog geen producten — maak er een aan om voorraad bij te houden.",
+    "empty": "Nog geen producten. Voeg je eerste product toe om voorraad bij te houden.",
     "archived": "Gearchiveerd",
     "priceLine": "{{price}} incl. {{rate}}% btw · inkoop {{cost}}",
     "onHand": "{{qty}} op voorraad",

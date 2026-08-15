@@ -11,15 +11,15 @@ export interface BackgroundMeta {
 // both fields blank renders no overlay at all.
 export const BACKGROUND_META: Record<string, BackgroundMeta> = {
   bg_01_light: { description: 'Heideroosjes at PinkPop', credit: 'Erik Luyten' },
-  bg_02_light: { description: '', credit: '' },
-  bg_03_light: { description: '', credit: '' },
+  bg_02_light: { description: 'MIKA at Coachella', credit: '' },
+  bg_03_light: { description: 'Unknown artist at Parkpop', credit: '' },
   bg_04_light: { description: 'The Killers at Rock Werchter', credit: '@robloud' },
   bg_05_light: { description: '', credit: '' },
   bg_01_dark: { description: '', credit: '' },
   bg_02_dark: { description: '', credit: '' },
   bg_03_dark: { description: '', credit: '' },
   bg_04_dark: { description: '', credit: '' },
-  bg_05_dark: { description: '', credit: '' },
+  bg_05_dark: { description: 'The Killers', credit: '' },
 }
 
 const EMPTY_META: BackgroundMeta = { description: '', credit: '' }

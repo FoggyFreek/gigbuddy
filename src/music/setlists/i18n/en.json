@@ -1,7 +1,7 @@
 {
   "title": "Setlists",
   "list": {
-    "empty": "No setlists yet — create one to start building.",
+    "empty": "No setlists yet, create one to start building.",
     "setCount_one": "{{count}} set",
     "setCount_other": "{{count}} sets",
     "songCount_one": "{{count}} song",
@@ -87,7 +87,7 @@
   },
   "perform": {
     "loadFailed": "Failed to load this setlist",
-    "empty": "This setlist is empty — add some songs first.",
+    "empty": "This setlist is empty, add some songs first.",
     "exit": "Exit",
     "counter": "{{current}} of {{total}}",
     "noSource": "No chart or sheet music assigned",

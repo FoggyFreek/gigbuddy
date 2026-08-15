@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { MemoryRouter } from 'react-router'
@@ -30,6 +30,7 @@ vi.mock('../../../hooks/usePermissions.ts', () => ({
 
 import VenueFormModal from '../components/VenueFormModal.tsx'
 import { createVenue } from '../venues.ts'
+import { AuthContext } from '../../../contexts/authContext.ts'
 import i18n from '../../../i18n/index.ts'
 import theme from '../../../theme.ts'
 
@@ -49,12 +50,45 @@ const PARADISO = {
   categories: [],
 }
 
+// No AuthContext.Provider by default: the context default carries no user, so
+// entitlements resolve to null (ownerless tenant) and everything is allowed.
 function ui(props = {}) {
   return (
     <MemoryRouter>
       <ThemeProvider theme={theme}>
         <VenueFormModal mode="create" onClose={() => {}} {...props} />
       </ThemeProvider>
+    </MemoryRouter>
+  )
+}
+
+// A plan without `integrations`: place lookup is paid, manual entry is not.
+const LOCKED_AUTH_VALUE = {
+  user: {
+    id: 1,
+    entitlements: {
+      planSlug: 'bronze',
+      subscriptionStatus: null,
+      locked: false,
+      financeReadOnly: false,
+      flags: { integrations: false },
+      limits: {},
+    },
+  },
+  setUser: () => {},
+  logout: async () => {},
+  switchTenant: async () => undefined,
+  refreshUser: async () => undefined,
+}
+
+function lockedUi(props = {}) {
+  return (
+    <MemoryRouter>
+      <AuthContext.Provider value={LOCKED_AUTH_VALUE}>
+        <ThemeProvider theme={theme}>
+          <VenueFormModal mode="create" onClose={() => {}} {...props} />
+        </ThemeProvider>
+      </AuthContext.Provider>
     </MemoryRouter>
   )
 }
@@ -69,6 +103,25 @@ describe('VenueFormModal — create mode place lookup', () => {
     render(ui())
     expect(screen.getByLabelText('place search')).toBeInTheDocument()
     expect(screen.queryByLabelText(/^Venue name/)).not.toBeInTheDocument()
+  })
+
+  it('falls back to a plain name field with a diamond upsell when the plan lacks integrations', async () => {
+    const user = userEvent.setup()
+    render(lockedUi())
+
+    expect(screen.queryByLabelText('place search')).not.toBeInTheDocument()
+    const nameField = screen.getByLabelText(/^Venue name/)
+    const upsell = screen.getByRole('link', { name: /upgrade/i })
+    expect(upsell).toHaveAttribute('href', '/upgrade/integrations')
+    expect(within(upsell).getByTestId('DiamondOutlinedIcon')).toBeInTheDocument()
+
+    // Creating a venue by hand still works — only the lookup is paid.
+    await user.type(nameField, 'Jansens Schuur')
+    await user.click(screen.getByRole('button', { name: 'Add venue' }))
+
+    await waitFor(() => expect(createVenue).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Jansens Schuur',
+    })))
   })
 
   it('fills the empty address fields from the picked place', async () => {

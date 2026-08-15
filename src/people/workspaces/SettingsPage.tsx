@@ -51,6 +51,8 @@ import TenantDeletionSection from './components/settings/TenantDeletionSection.t
 import TenantSlugSection from './components/settings/TenantSlugSection.tsx'
 import InvitesSection from '../memberships/components/InvitesSection.tsx'
 import { useTenantKind } from '../../hooks/useTenantKind.ts'
+import { useEntitlements } from '../../hooks/useEntitlements.ts'
+import { FEATURES } from '../../auth/entitlements.ts'
 import { TENANT_CAPABILITIES, type TenantCapability } from '../../auth/tenantCapabilities.ts'
 
 // A single settings surface that merges the former per-user account settings,
@@ -115,6 +117,7 @@ export default function SettingsPage() {
   const { can, isSuperAdmin, role } = usePermissions()
   const { user } = useAuth()
   const { supports, isPersonal } = useTenantKind()
+  const { has } = useEntitlements()
 
   const visible = (items: NavItemDef[]) =>
     items.filter((i) => (!i.permission || can(i.permission)) && (!i.capability || supports(i.capability)))
@@ -124,7 +127,8 @@ export default function SettingsPage() {
     ...visible(BAND_ITEMS),
     ...(!isPersonal && role === 'tenant_admin' ? MANAGE_ACCOUNT_ITEMS : []),
   ]
-  const financeItems = visible(FINANCE_ITEMS)
+  const canUseFinance = has(FEATURES.FINANCE)
+  const financeItems = canUseFinance ? visible(FINANCE_ITEMS) : []
   const accessible = [...ACCOUNT_ITEMS, ...bandItems, ...financeItems]
 
   // A section param the caller can't access falls back to the first account
@@ -237,7 +241,7 @@ export default function SettingsPage() {
     <Box>
       <Typography variant="h5" sx={{ mb: 2 }}>{t($ => $.title)}</Typography>
       <SubscriptionSummaryCard />
-      {can(PERMISSIONS.FINANCE_MANAGE) && <FinanceWizardCard />}
+      {canUseFinance && can(PERMISSIONS.FINANCE_MANAGE) && <FinanceWizardCard />}
       <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', md: 'row' } }}>
         {navCard}
         {!isMobile && <Box sx={{ flexGrow: 1, minWidth: 0 }}>{renderDetail(activeSection)}</Box>}

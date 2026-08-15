@@ -8,7 +8,7 @@
     "heading": "Products",
     "new": "New product",
     "recordSale": "Record sale",
-    "empty": "No products yet — create one to start tracking inventory.",
+    "empty": "No products yet. Create a product to start tracking inventory.",
     "archived": "Archived",
     "priceLine": "{{price}} incl. {{rate}}% VAT · cost {{cost}}",
     "onHand": "{{qty}} on hand",

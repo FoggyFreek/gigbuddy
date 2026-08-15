@@ -17,7 +17,9 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import PremiumDiamond from '../../../../components/PremiumDiamond.tsx'
 import { useThemeMode } from '../../../../contexts/themeModeContext.ts'
 import { useCompactLayout } from '../../../../hooks/useCompactLayout.ts'
+import { useEntitlements } from '../../../../hooks/useEntitlements.ts'
 import { useTenantKind } from '../../../../hooks/useTenantKind.ts'
+import { FEATURES } from '../../../../auth/entitlements.ts'
 import { clearMollieKey, getMollieKey, setMollieKey, clearResendKey, getResendKey, setResendKey, clearBandsintownKey, getBandsintownKey, setBandsintownKey, clearBandsintownArtistId, getBandsintownArtistId, setBandsintownArtistId, clearShopifySecret, getShopifySecret, setShopifySecret, getShopifyClientId, setShopifyClientId, clearShopifyClientId, getShopifyDomain, setShopifyDomain } from '../../../profiles/profile.ts'
 import type { IntegrationSecretStatus } from '../../../profiles/profile.ts'
 import Divider from '@mui/material/Divider'
@@ -30,6 +32,16 @@ import { TENANT_CAPABILITIES } from '../../../../auth/tenantCapabilities.ts'
 function shortenClientId(value: string): string {
   if (value.length <= 14) return value
   return `${value.slice(0, 6)}…${value.slice(-4)}`
+}
+
+// Swaps a configure/save affordance for the premium diamond when the plan lacks
+// `integrations` (bronze on either ladder). Reading a stored credential's status
+// and removing it stay available on every plan — the backend deliberately leaves
+// those endpoints ungated so a downgraded admin can still erase their secrets.
+function EntitledAction({ children }: Readonly<{ children: React.ReactNode }>) {
+  const entitled = useEntitlements().has(FEATURES.INTEGRATIONS)
+  if (!entitled) return <PremiumDiamond feature={FEATURES.INTEGRATIONS} />
+  return <>{children}</>
 }
 
 // Renders the Integrations heading (with premium diamond) plus every
@@ -49,7 +61,7 @@ export default function IntegrationsSection() {
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
           {t($ => $.integrations.title)}
         </Typography>
-        <PremiumDiamond feature="integrations" />
+        <PremiumDiamond feature={FEATURES.INTEGRATIONS} />
       </Stack>
       <ResendKeySection />
       <MollieKeySection />
@@ -99,9 +111,11 @@ function IntegrationCard({ logoLight, logoDark, alt, title, description, configu
       <Paper variant="outlined" sx={{ p: compact ? 1.5 : 3, mt }}>
         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
           <Box sx={{ flex: 1, display: 'flex' }}>{logo}</Box>
-          <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => setManuallyExpanded(true)}>
-            {t($ => $.integrations.add)}
-          </Button>
+          <EntitledAction>
+            <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={() => setManuallyExpanded(true)}>
+              {t($ => $.integrations.add)}
+            </Button>
+          </EntitledAction>
         </Stack>
       </Paper>
     )
@@ -186,9 +200,11 @@ function ShopifyClientIdBlock({ clientId, savedClientId, editing, saving, error,
               <Typography variant="body2" color="text.disabled">{t($ => $.integrations.notConfigured)}</Typography>
             )}
           </Box>
-          <Button size="small" variant="outlined" onClick={onStartEdit} disabled={saving}>
-            {savedClientId ? t($ => $.shopify.clientId.replace) : t($ => $.integrations.configure)}
-          </Button>
+          <EntitledAction>
+            <Button size="small" variant="outlined" onClick={onStartEdit} disabled={saving}>
+              {savedClientId ? t($ => $.shopify.clientId.replace) : t($ => $.integrations.configure)}
+            </Button>
+          </EntitledAction>
           {savedClientId && (
             <Tooltip title={t($ => $.shopify.clientId.remove)}>
               <span>
@@ -277,9 +293,11 @@ function ShopifySecretBlock({ status, inputKey, editing, showKey, saving, error,
           <Box sx={{ flex: 1 }}>
             <KeyStatusDisplay status={status} />
           </Box>
-          <Button size="small" variant="outlined" onClick={onStartEdit} disabled={saving}>
-            {status?.isSet ? t($ => $.shopify.secret.replace) : t($ => $.integrations.configure)}
-          </Button>
+          <EntitledAction>
+            <Button size="small" variant="outlined" onClick={onStartEdit} disabled={saving}>
+              {status?.isSet ? t($ => $.shopify.secret.replace) : t($ => $.integrations.configure)}
+            </Button>
+          </EntitledAction>
           {status?.isSet && (
             <Tooltip title={t($ => $.shopify.secret.remove)}>
               <span>
@@ -306,6 +324,7 @@ interface ShopifyDomainBlockProps {
 
 function ShopifyDomainBlock({ domain, savedDomain, saving, error, onChange, onSave }: Readonly<ShopifyDomainBlockProps>) {
   const { t } = useTranslation(['settings', 'common'])
+  const entitled = useEntitlements().has(FEATURES.INTEGRATIONS)
   return (
     <Box sx={{ mt: 3 }}>
       <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
@@ -324,17 +343,20 @@ function ShopifyDomainBlock({ domain, savedDomain, saving, error, onChange, onSa
           error={!!error}
           helperText={error || undefined}
           autoComplete="off"
+          disabled={!entitled}
           slotProps={{ htmlInput: { spellCheck: false, autoCapitalize: 'none' } }}
         />
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={onSave}
-          disabled={saving || !domain.trim() || domain.trim() === savedDomain}
-          startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
-        >
-          {t($ => $.actions.save, { ns: 'common' })}
-        </Button>
+        <EntitledAction>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={onSave}
+            disabled={saving || !domain.trim() || domain.trim() === savedDomain}
+            startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
+          >
+            {t($ => $.actions.save, { ns: 'common' })}
+          </Button>
+        </EntitledAction>
       </Stack>
     </Box>
   )
@@ -726,9 +748,11 @@ function SecretKeySection({ integration, api, invalidCode, logoLight, logoDark, 
           <Box sx={{ flex: 1 }}>
             <KeyStatusDisplay status={status} />
           </Box>
-          <Button size="small" variant="outlined" onClick={startEditing} disabled={saving}>
-            {status?.isSet ? copy.replace : t($ => $.integrations.configure)}
-          </Button>
+          <EntitledAction>
+            <Button size="small" variant="outlined" onClick={startEditing} disabled={saving}>
+              {status?.isSet ? copy.replace : t($ => $.integrations.configure)}
+            </Button>
+          </EntitledAction>
           {status?.isSet && (
             <Tooltip title={copy.remove}>
               <span>
@@ -808,6 +832,7 @@ interface BandsintownArtistIdBlockProps {
 
 function BandsintownArtistIdBlock({ artistId, savedArtistId, saving, error, onChange, onSave, onClear }: Readonly<BandsintownArtistIdBlockProps>) {
   const { t } = useTranslation(['settings', 'common'])
+  const entitled = useEntitlements().has(FEATURES.INTEGRATIONS)
   return (
     <Box sx={{ mt: 3 }}>
       <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
@@ -826,17 +851,20 @@ function BandsintownArtistIdBlock({ artistId, savedArtistId, saving, error, onCh
           error={!!error}
           helperText={error || t($ => $.bandsintown.artistId.helper)}
           autoComplete="off"
+          disabled={!entitled}
           slotProps={{ htmlInput: { spellCheck: false, inputMode: 'numeric' } }}
         />
-        <Button
-          variant="outlined"
-          size="small"
-          onClick={onSave}
-          disabled={saving || !artistId.trim() || artistId.trim() === savedArtistId}
-          startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
-        >
-          {t($ => $.actions.save, { ns: 'common' })}
-        </Button>
+        <EntitledAction>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={onSave}
+            disabled={saving || !artistId.trim() || artistId.trim() === savedArtistId}
+            startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}
+          >
+            {t($ => $.actions.save, { ns: 'common' })}
+          </Button>
+        </EntitledAction>
         {savedArtistId && (
           <Tooltip title={t($ => $.bandsintown.artistId.remove)}>
             <span>
@@ -1012,9 +1040,11 @@ function BandsintownKeySection() {
           <Box sx={{ flex: 1 }}>
             <KeyStatusDisplay status={status} />
           </Box>
-          <Button size="small" variant="outlined" onClick={startEditing} disabled={saving}>
-            {status?.isSet ? t($ => $.bandsintown.replace) : t($ => $.integrations.configure)}
-          </Button>
+          <EntitledAction>
+            <Button size="small" variant="outlined" onClick={startEditing} disabled={saving}>
+              {status?.isSet ? t($ => $.bandsintown.replace) : t($ => $.integrations.configure)}
+            </Button>
+          </EntitledAction>
           {status?.isSet && (
             <Tooltip title={t($ => $.bandsintown.remove)}>
               <span>

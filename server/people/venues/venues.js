@@ -2,6 +2,8 @@ import { Router } from 'express'
 import pool from '../../db/index.js'
 import { requirePermission } from '../../middleware/permissions.js'
 import { PERMISSIONS } from '../../auth/permissions.js'
+import { requireEntitlement } from '../../middleware/entitlements.js'
+import { FEATURES } from '../../auth/entitlements.js'
 import { parseId } from './venueValidators.js'
 import { requireParam, sendError } from '../../platform/http/routeHelpers.js'
 import {
@@ -68,8 +70,10 @@ router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, 
   res.json(result.venue)
 })
 
-// Fill empty fields from a place-lookup suggestion; never overwrites.
-router.post('/:id/enrich', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+// Fill empty fields from a place-lookup suggestion; never overwrites. Fed by the
+// metered TomTom lookup, so it carries the same entitlement gate as /api/places —
+// editing the same fields by hand stays open on every plan.
+router.post('/:id/enrich', requirePermission(PERMISSIONS.PLANNING_WRITE), requireEntitlement(FEATURES.INTEGRATIONS), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const result = await enrichVenue(req.tenantId, id, req.body?.suggestion)
   if (result.error) return sendError(res, result.error)

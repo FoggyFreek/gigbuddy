@@ -11,12 +11,17 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid'
+import InputAdornment from '@mui/material/InputAdornment'
 import Link from '@mui/material/Link'
+import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { checkVenueDuplicates, createVenue, getVenueCategoryImpact, getVenue, updateVenue } from '../venues.ts'
 import useDebouncedSave from '../../../hooks/useDebouncedSave.ts'
 import { usePermissions } from '../../../hooks/usePermissions.ts'
+import { useEntitlements } from '../../../hooks/useEntitlements.ts'
+import { FEATURES } from '../../../auth/entitlements.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../../../utils/requiredFields.ts'
+import PremiumDiamond from '../../../components/PremiumDiamond.tsx'
 import SaveStatusLabel from '../../../components/SaveStatusLabel.tsx'
 import PlaceSearchField from '../../../components/shared/PlaceSearchField.tsx'
 import { pickFillableUpdates } from '../placeFill.ts'
@@ -81,6 +86,8 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
   const [categorySaving, setCategorySaving] = useState(false)
   const [duplicateMatches, setDuplicateMatches] = useState<DuplicateEntityMatch[]>([])
   const { canWritePlanning: canWrite } = usePermissions()
+  // The place lookup is metered and paid; the form itself stays fully editable.
+  const hasPlaceLookup = useEntitlements().has(FEATURES.INTEGRATIONS)
 
   const saveFn = useCallback(
     async (patch: Record<string, unknown>) => {
@@ -249,6 +256,50 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
     onClose()
   }
 
+  // Create mode swaps the plain name input for the place lookup. Without the
+  // entitlement the field stays plain — manual entry is never gated — and picks
+  // up the usual diamond upsell instead.
+  function nameField() {
+    if (mode !== 'create') return undefined
+    if (!hasPlaceLookup) {
+      return (
+        <TextField
+          label={form.category === 'festival' ? t($ => $.fields.festivalName) : t($ => $.fields.venueName)}
+          fullWidth
+          required
+          value={form.name ?? ''}
+          onChange={(e) => handleChange('name', e.target.value)}
+          error={!!errors.name}
+          helperText={errors.name}
+          slotProps={{
+            input: {
+              endAdornment: (
+                <InputAdornment position="end">
+                  <PremiumDiamond feature={FEATURES.INTEGRATIONS} />
+                </InputAdornment>
+              ),
+            },
+          }}
+        />
+      )
+    }
+    return (
+      <PlaceSearchField
+        value={form.name ?? ''}
+        onValueChange={(value) => handleChange('name', value)}
+        onPlaceSelect={handlePlaceSelect}
+        label={form.category === 'festival'
+          ? t($ => $.fields.searchFestivalName)
+          : t($ => $.fields.searchVenueName)}
+        required
+        error={!!errors.name}
+        helperText={errors.name}
+        country={form.country ?? null}
+        city={form.city ?? null}
+      />
+    )
+  }
+
   return (
     <>
     <Dialog open fullWidth maxWidth="sm" onClose={mode === 'edit' ? handleClose : undefined}>
@@ -267,21 +318,7 @@ export default function VenueFormModal({ mode, venueId, onClose, onDelete, initi
               errors={mode === 'edit' ? { ...getRequiredErrors(form, REQUIRED_FIELDS), ...errors } : errors}
               lockedCategory={lockedCategory}
               disabled={mode === 'edit' && !canWrite}
-              nameField={mode === 'create' ? (
-                <PlaceSearchField
-                  value={form.name ?? ''}
-                  onValueChange={(value) => handleChange('name', value)}
-                  onPlaceSelect={handlePlaceSelect}
-                  label={form.category === 'festival'
-                    ? t($ => $.fields.searchFestivalName)
-                    : t($ => $.fields.searchVenueName)}
-                  required
-                  error={!!errors.name}
-                  helperText={errors.name}
-                  country={form.country ?? null}
-                  city={form.city ?? null}
-                />
-              ) : undefined}
+              nameField={nameField()}
             />
           </Grid>
           {duplicateMatches.map((match) => (

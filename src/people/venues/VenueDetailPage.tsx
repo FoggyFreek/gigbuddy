@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
-import { useNavigate, useOutletContext, useParams } from 'react-router'
+import { Link as RouterLink, useNavigate, useOutletContext, useParams } from 'react-router'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -19,6 +19,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 import CloseIcon from '@mui/icons-material/Close'
 import DeleteIcon from '@mui/icons-material/Delete'
+import DiamondOutlined from '@mui/icons-material/DiamondOutlined'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import StarIcon from '@mui/icons-material/Star'
 import StarBorderIcon from '@mui/icons-material/StarBorder'
@@ -35,6 +36,8 @@ import {
 } from './venues.ts'
 import useDebouncedSave from '../../hooks/useDebouncedSave.ts'
 import { usePermissions } from '../../hooks/usePermissions.ts'
+import { useEntitlements } from '../../hooks/useEntitlements.ts'
+import { FEATURES } from '../../auth/entitlements.ts'
 import PlanningReadOnlyAlert from '../../components/PlanningReadOnlyAlert.tsx'
 import { getRequiredErrors, hasRequiredErrors } from '../../utils/requiredFields.ts'
 import ContactPicker from '../contacts/components/ContactPicker.tsx'
@@ -68,6 +71,8 @@ export default function VenueDetailPage() {
   const venueId = Number(id)
   const navigate = useNavigate()
   const { canWritePlanning: canWrite } = usePermissions()
+  // The place lookup is metered and paid; manual editing below is not gated.
+  const hasPlaceLookup = useEntitlements().has(FEATURES.INTEGRATIONS)
   const outletCtx = (useOutletContext<VenueDetailOutletContext>() || {}) as VenueDetailOutletContext
   const insideSplitView = !!outletCtx.insideSplitView
 
@@ -257,7 +262,20 @@ export default function VenueDetailPage() {
         )}
         <Typography variant="h5" sx={{ fontWeight: 600 }}>{t($ => $.detailTitle)}</Typography>
         <Box sx={{ flexGrow: 1 }} />
-        {canWrite && !loading && (
+        {canWrite && !loading && !hasPlaceLookup && (
+          <Tooltip title={t($ => $.common.premium.tooltip)} describeChild>
+            <Button
+              size="small"
+              color="secondary"
+              component={RouterLink}
+              to={`/upgrade/${FEATURES.INTEGRATIONS}`}
+              startIcon={<DiamondOutlined />}
+            >
+              {t($ => $.detail.enrichButton)}
+            </Button>
+          </Tooltip>
+        )}
+        {canWrite && !loading && hasPlaceLookup && (
           <Tooltip title={form.name?.trim() ? t($ => $.detail.enrichTooltip) : t($ => $.detail.enrichNeedsName)}>
             <span>
               <Button

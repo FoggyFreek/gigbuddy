@@ -1,7 +1,7 @@
 {
   "title": "Setlijsten",
   "list": {
-    "empty": "Nog geen setlijsten — maak er een om te beginnen.",
+    "empty": "Nog geen setlijsten, maak er een om te beginnen.",
     "setCount_one": "{{count}} set",
     "setCount_other": "{{count}} sets",
     "songCount_one": "{{count}} song",

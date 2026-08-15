@@ -2,7 +2,7 @@
   "title": "Venues",
   "detailTitle": "Venue",
   "importTooltip": "Import",
-  "empty": "No venues yet — add one or import from CSV.",
+  "empty": "No venues yet, add one or import from CSV.",
   "category": {
     "venue": "Venue",
     "festival": "Festival",

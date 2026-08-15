@@ -154,6 +154,34 @@ describe('integrations gates', () => {
     expect(finance.status).not.toBe(403)
   })
 
+  it('blocks the TomTom place lookup and venue enrichment, leaving manual entry open', async () => {
+    await lockTenantA()
+    expectEntitlementDenied(
+      await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso' })),
+      'integrations',
+    )
+    expectEntitlementDenied(
+      await asUserA(request(app).get('/api/places/details/poi-paradiso')),
+      'integrations',
+    )
+
+    const { rows: [venue] } = await pool.query(
+      "INSERT INTO venues (tenant_id, category, name) VALUES ($1, 'venue', 'Paradiso') RETURNING id",
+      [seed.tenantA.id],
+    )
+    expectEntitlementDenied(
+      await asUserA(
+        request(app).post(`/api/venues/${venue.id}/enrich`).send({ suggestion: { id: 'poi-1', name: 'Paradiso' } }),
+      ),
+      'integrations',
+    )
+    // Typing an address by hand is not a paid feature — reads and manual edits
+    // must survive the lost entitlement.
+    await asUserA(request(app).get(`/api/venues/${venue.id}`)).expect(200)
+    await asUserA(request(app).patch(`/api/venues/${venue.id}`).send({ city: 'Amsterdam' })).expect(200)
+    await asUserA(request(app).post('/api/venues').send({ name: 'Melkweg' })).expect(201)
+  })
+
   it('passes with an active gold subscription', async () => {
     await goldTenantA()
     const feed = await asUserA(request(app).post('/api/calendar-feed/regenerate'))
@@ -162,6 +190,8 @@ describe('integrations gates', () => {
     expect(key.status).toBe(200)
     const orders = await asUserA(request(app).get('/api/merch/shopify/orders'))
     expect(orders.status).not.toBe(403) // gate cleared; missing credentials is the next error
+    const places = await asUserA(request(app).get('/api/places/search').query({ q: 'Paradiso' }))
+    expect(places.status).not.toBe(403) // gate cleared; TOMTOM_API_KEY is the next error
   })
 })
 

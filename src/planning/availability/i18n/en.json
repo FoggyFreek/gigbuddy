@@ -50,7 +50,7 @@
   },
   "mine": {
     "title": "My availability",
-    "help": "Your calendar belongs to you, not to any band. Each band you play in sees only what you allow here.",
+    "help": "Each band you play in sees only what you allow here.",
     "travelMargin": "Time / travel margin (hours)",
     "travelMarginHelp": "Required total gap between consecutive events. Availability inside this gap is shown in orange.",
     "detailVisible": "Let my bands see why I'm unavailable",

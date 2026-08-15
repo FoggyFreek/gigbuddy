@@ -5,7 +5,7 @@
     "subject": "Subject",
     "noSubject": "(no subject)",
     "created": "Created {{date}}",
-    "empty": "No templates yet — create one to get started."
+    "empty": "No templates yet, create one to get started."
   },
   "form": {
     "createTitle": "New email template",

@@ -266,7 +266,10 @@ router.use(
 )
 router.use('/gigs', tenantMember, myBandField, gigsRouter)
 router.use('/geocode', tenantMember, geocodeRouter)
-router.use('/places', tenantMember, placeSearchLimiter, placesRouter)
+// The TomTom-backed lookup is a paid convenience: typing an address by hand is
+// always free, so the gate sits on the lookup itself, not on the venue routes.
+// Behind the rate limiter, which keeps protecting the metered upstream first.
+router.use('/places', tenantMember, placeSearchLimiter, integrations, placesRouter)
 router.use('/bandsintown', tenantMember, bandPromotion, integrations, bandsintownRouter)
 router.use('/tasks', tenantMember, tasksRouter)
 router.use('/profile', tenantMember, profileRouter)
