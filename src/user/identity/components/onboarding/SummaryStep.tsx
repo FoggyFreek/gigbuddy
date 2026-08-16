@@ -18,6 +18,7 @@ interface SummaryStepProps {
   resumedSlug: string | null
   resumedBandName: string | null
   logoFileName: string | null
+  trialEndsAt: Date | null
 }
 
 export default function SummaryStep({
@@ -28,6 +29,7 @@ export default function SummaryStep({
   resumedSlug,
   resumedBandName,
   logoFileName,
+  trialEndsAt,
 }: Readonly<SummaryStepProps>) {
   const { t } = useTranslation(['onboarding', 'billing'])
   const price = priceForInterval(plan, interval)
@@ -64,11 +66,15 @@ export default function SummaryStep({
       )}
 
       <Stack spacing={1}>
-        {row(t($ => $.summary.plan), `${plan.name} — ${priceLabel}`)}
-        {row(
-          t($ => $.summary.interval),
-          interval === 'year' ? t($ => $.summary.yearly) : t($ => $.summary.monthly),
-        )}
+        {row(t($ => $.summary.plan), trialEndsAt
+          ? t($ => $.summary.goldTrial, { plan: plan.name })
+          : `${plan.name} — ${priceLabel}`)}
+        {trialEndsAt
+          ? row(t($ => $.summary.trialEnds), t($ => $.summary.date, { date: trialEndsAt }))
+          : row(
+            t($ => $.summary.interval),
+            interval === 'year' ? t($ => $.summary.yearly) : t($ => $.summary.monthly),
+          )}
         {row(t($ => $.workspace[kind].summaryLabel), bandName)}
         {row(t($ => $.summary.slug), slug)}
         {row(t($ => $.summary.logo), logoFileName ?? t($ => $.summary.noLogo))}
@@ -81,7 +87,9 @@ export default function SummaryStep({
       )}
 
       <Alert severity="info">
-        {plan.is_fallback ? t($ => $.summary.freeNote) : t($ => $.summary.paymentNote)}
+        {trialEndsAt
+          ? t($ => $.summary.trialNote, { date: trialEndsAt })
+          : (plan.is_fallback ? t($ => $.summary.freeNote) : t($ => $.summary.paymentNote))}
       </Alert>
     </Stack>
   )

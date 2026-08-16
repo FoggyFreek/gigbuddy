@@ -8,7 +8,7 @@ import { createMollieClient } from '@mollie/api-client'
 import { formatMollieAmountFromCents } from '../../../utils/mollieClient.js'
 import { PaymentProvider } from './PaymentProvider.js'
 import { PaymentProviderError } from './PaymentProviderError.js'
-import { PAYMENT_STATUS, SUBSCRIPTION_STATUS } from './statuses.js'
+import { PAYMENT_STATUS, REFUND_STATUS, SUBSCRIPTION_STATUS } from './statuses.js'
 
 const MOLLIE_INTERVAL = { month: '1 month', year: '12 months' }
 
@@ -74,6 +74,26 @@ function normalizePayment(payment) {
     sequenceType: payment.sequenceType ?? null,
     // Present only while an open payment awaits checkout; null once settled.
     checkoutUrl: payment.getCheckoutUrl?.() ?? payment._links?.checkout?.href ?? null,
+  }
+}
+
+// Mollie refund.status is queued/pending/processing/refunded/failed/canceled —
+// already one-to-one with the canonical vocabulary, but mapped explicitly so a
+// value Mollie adds later cannot leak through unrecognized.
+const MOLLIE_REFUND_STATUS = {
+  queued: REFUND_STATUS.QUEUED,
+  pending: REFUND_STATUS.PENDING,
+  processing: REFUND_STATUS.PROCESSING,
+  refunded: REFUND_STATUS.REFUNDED,
+  failed: REFUND_STATUS.FAILED,
+  canceled: REFUND_STATUS.CANCELED,
+}
+
+function normalizeRefund(refund) {
+  return {
+    refundId: refund.id,
+    status: MOLLIE_REFUND_STATUS[refund.status] ?? REFUND_STATUS.PENDING,
+    amountCents: amountToCents(refund.amount),
   }
 }
 
@@ -244,6 +264,28 @@ export class MollieProvider extends PaymentProvider {
       // Already gone / already canceled — cancellation is idempotent.
       if (status === 404 || status === 410) return
       throw wrapMollieError(err, 'customerSubscriptions.cancel')
+    }
+  }
+
+  async refundPayment({ paymentId, amountCents, description, idempotencyKey }) {
+    try {
+      const refund = await this.client.paymentRefunds.create({
+        paymentId,
+        amount: { currency: 'EUR', value: formatMollieAmountFromCents(amountCents) },
+        ...(description ? { description } : {}),
+        idempotencyKey,
+      })
+      return normalizeRefund(refund)
+    } catch (err) {
+      throw wrapMollieError(err, 'paymentRefunds.create')
+    }
+  }
+
+  async getRefund({ paymentId, refundId }) {
+    try {
+      return normalizeRefund(await this.client.paymentRefunds.get(refundId, { paymentId }))
+    } catch (err) {
+      throw wrapMollieError(err, 'paymentRefunds.get')
     }
   }
 }

@@ -27,8 +27,12 @@
  * @property {string} status                      a SUBSCRIPTION_STATUS value
  * @property {Date|null} nextPaymentDate
  * @property {object|null} metadata               the metadata stamped at creation, echoed
- *                                                back by the provider (attribution, e.g.
- *                                                recognizing a downgrade replacement)
+ *                                                back by the provider (attribution)
+ *
+ * @typedef {object} NormalizedRefund
+ * @property {string} refundId
+ * @property {string} status                      a REFUND_STATUS value
+ * @property {number} amountCents
  */
 
 const NOT_IMPLEMENTED = 'PaymentProvider subclass must implement this method'
@@ -49,8 +53,10 @@ export class PaymentProvider {
   }
 
   /**
-   * Create the mandate-establishing first payment (the €0.01 charge) and return
-   * its id plus the hosted checkout URL. No payment-method restriction by design.
+   * Create the mandate-establishing FIRST payment and return its id plus the
+   * hosted checkout URL. Depending on the calling flow, the amount is either a
+   * disclosed mandate-verification cent or a direct-signup conversion charge.
+   * No payment-method restriction by design.
    * @param {{ customerId: string, amountCents: number, description: string,
    *   idempotencyKey: string, redirectUrl: string, webhookUrl?: string|null,
    *   metadata?: object }} _args
@@ -108,6 +114,26 @@ export class PaymentProvider {
    * @returns {Promise<void>}
    */
   async cancelSubscription(_args) {
+    throw new Error(NOT_IMPLEMENTED)
+  }
+
+  /**
+   * Refund part or all of a settled payment. Asynchronous everywhere worth
+   * supporting, so the returned status is a REFUND_STATUS the caller tracks to
+   * a terminal value rather than a completion signal.
+   * @param {{ paymentId: string, amountCents: number, description?: string,
+   *   idempotencyKey: string }} _args
+   * @returns {Promise<NormalizedRefund>}
+   */
+  async refundPayment(_args) {
+    throw new Error(NOT_IMPLEMENTED)
+  }
+
+  /**
+   * @param {{ paymentId: string, refundId: string }} _args
+   * @returns {Promise<NormalizedRefund>}
+   */
+  async getRefund(_args) {
     throw new Error(NOT_IMPLEMENTED)
   }
 }

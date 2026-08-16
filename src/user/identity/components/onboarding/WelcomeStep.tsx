@@ -15,6 +15,8 @@ interface WelcomeStepProps {
   kind: TenantKind
   onKindChange: (kind: TenantKind) => void
   showKindChoice: boolean
+  /** Trial-first onboarding hides paid subscription choices until access starts. */
+  trialFirst: boolean
   /** Already filtered to the ladder the chosen kind is billed on. */
   plans: SubscriptionPlan[]
   interval: BillingInterval
@@ -33,6 +35,7 @@ export default function WelcomeStep({
   kind,
   onKindChange,
   showKindChoice,
+  trialFirst,
   plans,
   interval,
   onIntervalChange,
@@ -55,32 +58,40 @@ export default function WelcomeStep({
 
       {showKindChoice && <WorkspaceKindChoice value={kind} onChange={onKindChange} />}
 
-      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-        <Typography variant="h6">{t($ => $.welcome.choosePlan)}</Typography>
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={interval}
-          onChange={(_e, value: BillingInterval | null) => {
-            if (value) onIntervalChange(value)
-          }}
-        >
-          <ToggleButton value="month">{t($ => $.billing.plans.monthly)}</ToggleButton>
-          <ToggleButton value="year">{t($ => $.billing.plans.yearly)}</ToggleButton>
-        </ToggleButtonGroup>
-      </Stack>
+      {trialFirst ? (
+        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+          {t($ => $.welcome.trialFirst)}
+        </Typography>
+      ) : (
+        <>
+          <Stack direction="row" spacing={2} sx={{ alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+            <Typography variant="h6">{t($ => $.welcome.choosePlan)}</Typography>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={interval}
+              onChange={(_e, value: BillingInterval | null) => {
+                if (value) onIntervalChange(value)
+              }}
+            >
+              <ToggleButton value="month">{t($ => $.billing.plans.monthly)}</ToggleButton>
+              <ToggleButton value="year">{t($ => $.billing.plans.yearly)}</ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
 
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'stretch' }}>
-        {plans.map((plan) => (
-          <OnboardingPlanCard
-            key={plan.id}
-            plan={plan}
-            interval={interval}
-            selected={plan.id === selectedPlanId}
-            onSelect={onSelectPlan}
-          />
-        ))}
-      </Stack>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: 'stretch' }}>
+            {plans.map((plan) => (
+              <OnboardingPlanCard
+                key={plan.id}
+                plan={plan}
+                interval={interval}
+                selected={plan.id === selectedPlanId}
+                onSelect={onSelectPlan}
+              />
+            ))}
+          </Stack>
+        </>
+      )}
 
       <FormControlLabel
         control={

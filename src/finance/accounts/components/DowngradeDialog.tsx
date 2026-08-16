@@ -15,14 +15,19 @@ import ListItemText from '@mui/material/ListItemText'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { downgradePreview } from '../../../commerce/billing/billing.ts'
-import type { BillingInterval, DowngradeBlocker, DowngradePreview, SubscriptionPlan } from '../../../commerce/billing/billing.ts'
+import type {
+  DowngradeBlocker, DowngradePreview, DowngradeTarget, SubscriptionPlan,
+} from '../../../commerce/billing/billing.ts'
+import type { PlanAudience } from '../../../auth/planAudiences.ts'
 import { planFeatureKey } from '../../../commerce/billing/planFeatureKey.ts'
+import { formatEur } from '../../invoices/invoiceTotals.ts'
 
 interface DowngradeDialogProps {
   open: boolean
+  audience: PlanAudience
+  /** null when the module is being removed altogether. */
   plan: SubscriptionPlan | null
-  interval: BillingInterval
-  isFreeFallback: boolean
+  isTrial: boolean
   onClose: () => void
   onConfirm: (confirmation: string) => Promise<void>
 }
@@ -33,41 +38,51 @@ const LIMIT_LABEL_KEYS = {
   bands: 'bands',
 } as const
 
-// Type-to-confirm downgrade. On open it fetches the server-side preview: the
-// exact features whose data would be purged, the limit snapshot that will
-// bind immediately, and any capacity blockers (which disable confirming — the
-// server re-checks under locks anyway). The two target kinds behave
-// differently at period end, and the copy makes that explicit before the user
-// commits:
-//   - free fallback: the subscription cancels and the removed features' data is
-//     purged at period end.
-//   - paid lower tier: access fallback-locks until the first lower-tier charge
-//     settles (SEPA can take days), then the tier switches — nothing is purged
-//     until that charge is confirmed paid.
-export default function DowngradeDialog({ open, plan, interval, isFreeFallback, onClose, onConfirm }: Readonly<DowngradeDialogProps>) {
+// Type-to-confirm downgrade or removal. On open it fetches the server-side
+// preview: the exact features whose data would be purged, the limit snapshot
+// that binds immediately, any capacity blockers (which disable confirming — the
+// server re-checks under locks anyway), and what the subscription will cost
+// afterwards.
+//
+// Timing is the thing the copy has to be honest about: on a paid cycle nothing
+// changes and nothing is deleted until the next renewal is paid; on a trial the
+// change is immediate because there is nothing paid for to honour.
+export default function DowngradeDialog({
+  open, audience, plan, isTrial, onClose, onConfirm,
+}: Readonly<DowngradeDialogProps>) {
   const { t } = useTranslation(['billing', 'common'])
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
-  // The preview is keyed by the plan/interval it was fetched for, so a stale
-  // result is simply not current rather than something an effect has to clear.
-  const previewKey = open && plan ? `${plan.id}|${interval}` : null
-  const [previewState, setPreviewState] = useState<{ key: string; preview: DowngradePreview | null; failed: boolean } | null>(null)
+
+  const isRemoval = plan === null
+  const target: DowngradeTarget = isRemoval
+    ? { audience, remove: true }
+    : { audience, planId: plan.id }
+
+  // The preview is keyed by what it was fetched for, so a stale result is
+  // simply not current rather than something an effect has to clear.
+  const previewKey = open ? `${audience}|${plan?.id ?? 'remove'}` : null
+  const [previewState, setPreviewState] = useState<{
+    key: string; preview: DowngradePreview | null; failed: boolean
+  } | null>(null)
   const currentPreview = previewKey != null && previewState?.key === previewKey ? previewState : null
   const preview = currentPreview?.preview ?? null
   const previewFailed = currentPreview?.failed ?? false
-  // The confirmation phrase is a server-side token built from the slug — it is
-  // deliberately not localized.
-  const phrase = plan ? `downgrade to ${plan.slug}` : ''
+
+  // The confirmation phrase is a server-side token — deliberately not localized.
+  const phrase = isRemoval ? `remove ${audience}` : `downgrade to ${plan.slug}`
   const matches = text.trim().toLowerCase() === phrase
 
   useEffect(() => {
-    if (previewKey == null || !plan) return
+    if (previewKey == null) return
     let cancelled = false
-    downgradePreview(plan.id, interval)
+    downgradePreview(target)
       .then((p) => { if (!cancelled) setPreviewState({ key: previewKey, preview: p, failed: false }) })
       .catch(() => { if (!cancelled) setPreviewState({ key: previewKey, preview: null, failed: true }) })
     return () => { cancelled = true }
-  }, [previewKey, plan, interval])
+    // `target` is rebuilt each render; previewKey is its stable identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewKey])
 
   const blockers = preview?.blockers ?? []
   const purgedFeatures = preview?.features ?? []
@@ -106,16 +121,20 @@ export default function DowngradeDialog({ open, plan, interval, isFreeFallback, 
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{t($ => $.downgrade.title, { plan: plan?.name })}</DialogTitle>
+      <DialogTitle>
+        {isRemoval
+          ? t($ => $.downgrade.removeTitle, { module: t($ => $.modules[audience]) })
+          : t($ => $.downgrade.title, { plan: plan.name })}
+      </DialogTitle>
       <DialogContent>
-        {isFreeFallback ? (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            {t($ => $.downgrade.freeFallbackWarning)}
-          </Alert>
+        {isTrial ? (
+          <Alert severity="warning" sx={{ mb: 2 }}>{t($ => $.downgrade.trialInfo)}</Alert>
         ) : (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            {t($ => $.downgrade.paidLowerInfo, { plan: plan?.name })}
-          </Alert>
+          preview?.effectiveAt != null && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {t($ => $.downgrade.scheduledInfo, { date: new Date(preview.effectiveAt) })}
+            </Alert>
+          )
         )}
 
         {previewLoading && (
@@ -144,6 +163,12 @@ export default function DowngradeDialog({ open, plan, interval, isFreeFallback, 
           </Typography>
         ))}
 
+        {preview?.nextSnapshot != null && (
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            {t($ => $.downgrade.newPrice, { price: formatEur(preview.nextSnapshot.totalCents) })}
+          </Typography>
+        )}
+
         {blocked && (
           <Alert severity="warning" sx={{ mb: 2 }}>
             <AlertTitle>{t($ => $.downgrade.blockersTitle)}</AlertTitle>
@@ -169,7 +194,7 @@ export default function DowngradeDialog({ open, plan, interval, isFreeFallback, 
           <Trans
             t={t}
             i18nKey={($) => $.downgrade.confirmPrompt}
-            values={{ plan: plan?.name, phrase }}
+            values={{ phrase }}
             components={{
               mono: <Typography component="span" sx={{ fontFamily: 'monospace', fontWeight: 600 }} />,
             }}
@@ -187,7 +212,7 @@ export default function DowngradeDialog({ open, plan, interval, isFreeFallback, 
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose} disabled={busy}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
-        {/* !preview: never allow confirming a destructive downgrade without the
+        {/* !preview: never allow confirming a destructive change without the
             loaded purge preview — informed consent is the point of this dialog. */}
         <Button onClick={() => { void handleConfirm() }} color="error" variant="contained" disabled={!matches || busy || blocked || !preview}>
           {t($ => $.downgrade.confirm)}

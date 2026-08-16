@@ -7,7 +7,8 @@
   "welcome": {
     "title": "Welkom bij GigBuddy",
     "subtitle": "Alles wat je band nodig heeft op één plek: optredens, repetities, setlists en financiën.",
-    "trialPitch": "Probeer elk betaald abonnement 7 dagen gratis. Zeg je op tijdens de proefperiode, dan betaal je niets.",
+    "trialPitch": "Probeer het goud abonnement 30 dagen gratis. Geen creditcard vereist.",
+    "trialFirst": "Je Gold-proefperiode van 30 dagen start eerst. Daarna kun je Gold Artiest, Gold Band of beide kiezen en de betaling inplannen.",
     "choosePlan": "Kies je abonnement",
     "haveInvite": "Sluit je aan bij een bestaande band? Verzilver je uitnodigingscode",
     "startTrial": "Start proefperiode",
@@ -36,9 +37,14 @@
     "slug": "Webadresnaam",
     "logo": "Logo",
     "noLogo": "Geen logo",
-    "paymentNote": "Je kiest je betaalmethode op de beveiligde pagina van onze betaalprovider. Een eenmalige verificatiebetaling van € 0,01 start je proefperiode.",
+    "goldTrial": "{{plan}} - gratis proefperiode van 30 dagen",
+    "trialEnds": "Proefperiode eindigt",
+    "date": "{{date, datetime}}",
+    "trialNote": "Je hebt geen betaalgegevens nodig om te starten. Je Gold-proefperiode loopt tot {{date, datetime}}; daarna tonen we de abonnementskeuzes en de exacte toekomstige betaaldatum.",
+    "paymentNote": "Je kiest je betaalmethode op de beveiligde pagina van onze betaalprovider. Je betaalde abonnement start zodra die betaling is bevestigd.",
     "freeNote": "Voor het gratis abonnement zijn geen betaalgegevens nodig.",
-    "confirmPaid": "Doorgaan naar betaling"
+    "confirmPaid": "Doorgaan naar betaling",
+    "confirmTrial": "Werkruimte maken en proefperiode starten"
   },
   "checkout": {
     "processing": "Je betaling wordt bevestigd…",

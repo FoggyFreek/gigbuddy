@@ -35,6 +35,7 @@ vi.mock('../setlists.ts', () => ({ getSetlistPerformance: vi.fn() }))
 
 import PerformancePage from '../PerformancePage.tsx'
 import { getSetlistPerformance } from '../setlists.ts'
+import { CompactLayoutContext } from '../../../hooks/useCompactLayout.ts'
 import theme from '../../../theme.ts'
 
 const slide = (overrides) => ({
@@ -57,16 +58,18 @@ const PDF = slide({
   document_object_key: 'tenants/1/song_documents/closer.pdf',
 })
 
-function wrap(perf, search = '') {
+function wrap(perf, search = '', isCompact = false) {
   getSetlistPerformance.mockResolvedValue(perf)
   return render(
     <ThemeProvider theme={theme}>
-      <MemoryRouter initialEntries={[`/setlists/5/perform${search}`]}>
-        <Routes>
-          <Route path="/setlists/:id/perform" element={<PerformancePage />} />
-          <Route path="/setlists/:id" element={<div>editor</div>} />
-        </Routes>
-      </MemoryRouter>
+      <CompactLayoutContext.Provider value={isCompact}>
+        <MemoryRouter initialEntries={[`/setlists/5/perform${search}`]}>
+          <Routes>
+            <Route path="/setlists/:id/perform" element={<PerformancePage />} />
+            <Route path="/setlists/:id" element={<div>editor</div>} />
+          </Routes>
+        </MemoryRouter>
+      </CompactLayoutContext.Provider>
     </ThemeProvider>,
   )
 }
@@ -88,7 +91,16 @@ beforeEach(() => {
 describe('PerformancePage', () => {
   it('opens on the first slide and renders its chart', async () => {
     wrap(show([CHART, BARE, PDF]))
-    expect(await screen.findByText('Hallelujah')).toBeInTheDocument()
+    const lyric = await screen.findByText('Hallelujah')
+    expect(lyric).toBeInTheDocument()
+    expect(lyric.closest('.performance-chart-content')).toHaveStyle({ fontSize: '26px' })
+  })
+
+  it('uses smaller chart text in compact performance mode', async () => {
+    wrap(show([CHART]), '', true)
+    const lyric = await screen.findByText('Hallelujah')
+
+    expect(lyric.closest('.performance-chart-content')).toHaveStyle({ fontSize: '18px' })
   })
 
   it('names the set currently playing, and updates it across a set boundary', async () => {

@@ -9,7 +9,10 @@ import {
   listSubscriptions,
   grantComplimentary,
   revokeComplimentary,
+  refundSubscription,
+  listSubscriptionRefunds,
 } from './adminSubscriptionService.js'
+import { requireParam } from '../../platform/http/routeHelpers.js'
 
 const router = Router()
 
@@ -28,8 +31,27 @@ router.post('/complimentary', async (req, res) => {
   res.status(201).json(result.subscription)
 })
 
-// The body names the subscription: a user may hold a complimentary grant on
-// each ladder, so the user id alone no longer identifies one.
+// Partial refunds for support cases agreed out of band (email, support desk).
+// The subscription itself is left running.
+router.get('/:id/refunds', async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await listSubscriptionRefunds(pool, id)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.post('/:id/refunds', async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await refundSubscription(pool, id, req.body ?? {}, req.user.id)
+  if (result.error) return sendError(res, result.error)
+  auditLog(req, 'billing.admin_refund', {
+    subscriptionId: id, amountCents: Number(req.body?.amountCents),
+  })
+  res.status(201).json(result)
+})
+
+// The body names the subscription so an id from another account cannot be
+// revoked through the wrong URL.
 router.post('/:userId/revoke-complimentary', async (req, res) => {
   const userId = Number(req.params.userId)
   if (!Number.isInteger(userId) || userId <= 0) return res.status(400).json({ error: 'Invalid userId' })

@@ -40,6 +40,24 @@ export const SUBSCRIPTION_STATUS = Object.freeze({
   COMPLETED: 'completed',
 })
 
+// Refund lifecycle. A refund is asynchronous at every provider worth using, so
+// the local subscription_refunds row tracks it to a terminal state rather than
+// assuming the create call settled it.
+export const REFUND_STATUS = Object.freeze({
+  QUEUED: 'queued',
+  PENDING: 'pending',
+  PROCESSING: 'processing',
+  REFUNDED: 'refunded',
+  FAILED: 'failed',
+  CANCELED: 'canceled',
+})
+
+export const NONTERMINAL_REFUND_STATUSES = Object.freeze([
+  REFUND_STATUS.QUEUED,
+  REFUND_STATUS.PENDING,
+  REFUND_STATUS.PROCESSING,
+])
+
 // Canonical billing intervals. Adapters translate to their own API's notation.
 export const BILLING_INTERVAL = Object.freeze({
   MONTH: 'month',

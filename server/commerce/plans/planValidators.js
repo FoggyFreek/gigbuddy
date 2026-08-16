@@ -30,8 +30,8 @@ export function isValidPriceCents(value) {
 // before this runs.
 //
 // `audience` is deliberately absent: it is create-only. Moving a plan between
-// ladders would desync subscriptions.audience on every live row bound to it
-// (the DB trigger refuses it too).
+// ladders would desync subscription_modules.audience on every module bound to
+// it (the DB trigger refuses it too).
 export function buildPlanUpdateFields(body) {
   const allowed = [
     'slug',

@@ -16,26 +16,37 @@ import {
   fetchSubscriptionByIdForUpdate,
   fetchUserMollieCustomerId,
   setMandateLinkage,
-  setStatusGuarded,
   setScheduleStale,
+  applyConversion,
   advanceSubscriptionPeriod,
+  applyModuleChangeActivation,
   markSubscriptionPastDue,
-  applyPlanChangeActivation,
-  applyDowngradeActivation,
   clearPendingChange,
 } from './subscriptionRepository.js'
-import { executeDowngradePurge } from './entitlementPurgeService.js'
-import { upsertPaymentOutcome } from './subscriptionPaymentRepository.js'
+import {
+  fetchInFlightModuleChange,
+  listModuleChangesDueAtPeriodEnd,
+  applyModuleChange,
+  clearModulePendingChange,
+  deleteModule,
+} from './subscriptionModuleRepository.js'
+import { executeModulePurge } from './entitlementPurgeService.js'
+import { upsertPaymentOutcome, fetchPaymentByMollieId } from './subscriptionPaymentRepository.js'
 import { dispatchUserNotification, pushUserNotification } from '../../user/notifications/notificationService.js'
 import { BILLING_NOTIFICATION_TYPES } from '../../domain/notificationTypes.js'
 import { periodEndFrom } from './billingShared.js'
-import { getPaymentProvider, PaymentProviderError, PAYMENT_STATUS } from './paymentProvider/index.js'
+import { getPaymentProvider, PAYMENT_STATUS } from './paymentProvider/index.js'
 import { repairSchedule } from './billingSaga.js'
 import { logger } from '../../utils/logger.js'
+import { clearOnboardingTenant } from '../../user/identity/authRepository.js'
 
 const BILLING_URL = '/billing'
 
 const COPY = {
+  [BILLING_NOTIFICATION_TYPES.ACTIVATED]: {
+    title: 'Subscription active',
+    body: 'Your first payment went through — your GigBuddy subscription is active.',
+  },
   [BILLING_NOTIFICATION_TYPES.RENEWED]: {
     title: 'Subscription renewed',
     body: 'Your GigBuddy subscription has renewed.',
@@ -54,9 +65,15 @@ function dateKey(date) {
   return new Date(date).toISOString().slice(0, 10)
 }
 
-function classifyKind(sub, payment) {
-  if (payment.id === sub.mollie_first_payment_id) return 'mandate_verification'
-  if (payment.id === sub.pending_payment_id) return 'plan_change'
+// 'conversion' is the first combined charge, which also established the
+// mandate; 'proration' is the on-demand difference for a mid-cycle module
+// change; everything else is the recurring schedule doing its job.
+function classifyKind(sub, payment, existingPayment) {
+  if (existingPayment?.kind) return existingPayment.kind
+  if (payment.id === sub.mollie_first_payment_id) {
+    return sub.status === 'trialing' ? 'mandate_verification' : 'conversion'
+  }
+  if (payment.id === sub.pending_payment_id) return 'proration'
   return 'recurring'
 }
 
@@ -77,112 +94,125 @@ async function notify(client, userId, type, dedupeKey, pushes) {
   if (inserted) pushes.push({ userId, type, title, body, url: BILLING_URL })
 }
 
+// Scheduled downgrades and removals land at the period boundary, which is
+// exactly when a renewal charge settles. A removal's purge manifest is copied
+// out before the row goes, because the purge runs after the commit.
+async function applyBoundaryModuleChanges(client, sub, ctx) {
+  for (const module of await listModuleChangesDueAtPeriodEnd(client, sub.id)) {
+    if (module.pending_change_kind === 'remove') {
+      if (module.pending_purge_manifest) {
+        ctx.purges.push({ manifest: module.pending_purge_manifest, audience: module.audience })
+      }
+      await deleteModule(client, module.id)
+    } else {
+      await applyModuleChange(client, module.id)
+      // The manifest survives the change; the post-commit purge consumes it.
+      if (module.pending_purge_manifest) ctx.purgeModuleIds.push(module.id)
+    }
+  }
+}
+
 async function handlePaid(client, sub, payment, kind, ctx) {
   if (kind === 'mandate_verification') {
-    // Mandate established. Trial → trialing now; re-subscribe/trial-used →
-    // stay pending_activation (no access) until the first real charge is paid.
-    const trial = sub.trial_ends_at && new Date(sub.trial_ends_at) > new Date()
-    await setStatusGuarded(client, sub.id, trial ? 'trialing' : 'pending_activation', 'pending_mandate')
-    await setScheduleStale(client, sub.id, true)
+    // The cent authorized future payments; trial access and dates do not move.
+    // The post-commit saga creates the first real charge at trial_ends_at.
     ctx.sagaHints.add('repair_schedule')
     return
   }
-  if (kind === 'plan_change') {
-    // Activate-first stage 0: the customer has paid, switch entitlements now.
-    // The purchased interval derives from paidAt + pending_billing_interval —
-    // never the old subscription's nextPaymentDate.
+
+  if (kind === 'conversion') {
+    // The trial (or a fresh signup) has paid its first full combined amount.
+    // That payment also established the mandate, so the recurring schedule can
+    // now be created — deferred to the saga, after the commit.
     const periodStart = payment.paidAt ?? new Date()
-    const periodEnd = periodEndFrom(periodStart, sub.pending_billing_interval)
-    await applyPlanChangeActivation(client, sub.id, {
-      planId: sub.pending_plan_id,
-      interval: sub.pending_billing_interval,
-      priceCents: sub.pending_price_cents,
-      periodStart,
-      periodEnd,
+    const periodEnd = ctx.periodEndHint ?? periodEndFrom(periodStart, sub.billing_interval)
+    const converted = await applyConversion(client, sub.id, {
+      periodStart, periodEnd, paymentId: payment.id,
     })
-    ctx.sagaHints.add('repair_schedule')
+    if (!converted) return
+    // The first paid charge is the authoritative completion point for a paid
+    // onboarding. Clear the resume pointer in this transaction so webhook,
+    // polling and manual-sync settlement all self-heal a checkout timeout.
+    await clearOnboardingTenant(client, sub.user_id)
+    // Reprice before the schedule is built: the recurring amount is the NEXT
+    // period's price, which a discount window can already have changed.
+    ctx.sagaHints.add('reprice')
+    await notify(client, sub.user_id, BILLING_NOTIFICATION_TYPES.ACTIVATED,
+      `billing-activated:${sub.id}`, ctx.pushes)
+    return
+  }
+
+  if (kind === 'proration') {
+    // Activate-first: the customer has paid the difference, so the module
+    // change lands now. current_period_end is deliberately NOT touched — they
+    // paid only for the remainder of the period they already have.
+    const module = await fetchInFlightModuleChange(client, sub.id)
+    if (module) await applyModuleChange(client, module.id)
+    await applyModuleChangeActivation(client, sub.id)
+    ctx.sagaHints.add('reprice')
     await notify(client, sub.user_id, BILLING_NOTIFICATION_TYPES.PLAN_CHANGED,
       `billing-plan-changed:${sub.id}:${payment.id}`, ctx.pushes)
     return
   }
-  if (sub.pending_change_kind === 'downgrade') {
-    // Provenance guard: ONLY the replacement subscription's charge activates
-    // a pending downgrade. The superseded (old-schedule) id is always
-    // rejected. The replacement is recognized either by the local repoint
-    // (mollie_subscription_id) or — when its first charge beats the repoint —
-    // by the downgrade metadata the saga stamped at creation, verified
-    // against the provider (ctx.replacementSubscriptionId). Anything else is
-    // recorded only — it must not extend current_period_end or delay the
-    // fallback lock.
-    const fromReplacement = Boolean(payment.subscriptionId)
-      && payment.subscriptionId !== sub.superseded_mollie_subscription_id
-      && (payment.subscriptionId === sub.mollie_subscription_id
-        || payment.subscriptionId === ctx.replacementSubscriptionId)
-    if (!fromReplacement) return
 
-    // Activate the downgrade: the customer has paid the lower tier — switch
-    // now, keep the manifest for the post-commit purge, leave the schedule
-    // alone (the replacement subscription IS the schedule). Passing the
-    // charge's provider subscription id repoints a row the saga hasn't
-    // repointed yet (and is a no-op after the repoint).
-    const periodStart = payment.paidAt ?? new Date()
-    const periodEnd = ctx.periodEndHint ?? periodEndFrom(periodStart, sub.pending_billing_interval)
-    const activated = await applyDowngradeActivation(client, sub.id, {
-      planId: sub.pending_plan_id,
-      interval: sub.pending_billing_interval,
-      priceCents: sub.pending_price_cents,
-      periodStart,
-      periodEnd,
-      providerSubscriptionId: payment.subscriptionId,
-    })
-    if (activated) {
-      ctx.sagaHints.add('execute_purge')
-      await notify(client, sub.user_id, BILLING_NOTIFICATION_TYPES.PLAN_CHANGED,
-        `billing-plan-changed:${sub.id}:${payment.id}`, ctx.pushes)
-    }
-    return
-  }
   // recurring: absolute period from paidAt; end from the provider hint (a
   // subscription-generated charge) or the interval fallback.
   const wasActive = sub.status === 'active'
   const periodStart = payment.paidAt ?? new Date()
   const periodEnd = ctx.periodEndHint ?? periodEndFrom(periodStart, sub.billing_interval)
-  const advanced = await advanceSubscriptionPeriod(client, sub.id, periodStart, periodEnd)
+  const advanced = await advanceSubscriptionPeriod(client, sub.id, periodStart, periodEnd, {
+    paymentId: payment.id,
+  })
+  if (!advanced) return
+  // The new period is paid for, so anything scheduled for the boundary is now
+  // real — and only now may its purge run.
+  await applyBoundaryModuleChanges(client, sub, ctx)
+  ctx.sagaHints.add('reprice')
   // Notify only on a genuine renewal (already active), keyed per covered period.
-  if (advanced && wasActive) {
+  if (wasActive) {
     await notify(client, sub.user_id, BILLING_NOTIFICATION_TYPES.RENEWED,
       `billing-renewed:${sub.id}:${dateKey(periodStart)}`, ctx.pushes)
+  } else {
+    await notify(client, sub.user_id, BILLING_NOTIFICATION_TYPES.ACTIVATED,
+      `billing-activated:${sub.id}`, ctx.pushes)
   }
 }
 
 async function handleUnpaid(client, sub, payment, kind, status, ctx) {
   const failedTerminal = status === PAYMENT_STATUS.FAILED || status === PAYMENT_STATUS.EXPIRED
-  if (failedTerminal && kind === 'plan_change') {
-    // The on-demand plan-change charge failed: drop the pending change, keep the
-    // old plan, tell the user.
+
+  if (failedTerminal && kind === 'proration') {
+    // The on-demand difference failed: drop the module change, keep what the
+    // customer already had, tell them. Nothing was purged and nothing granted.
+    const module = await fetchInFlightModuleChange(client, sub.id)
+    if (module?.status === 'pending') await deleteModule(client, module.id)
+    else if (module) await clearModulePendingChange(client, module.id)
     await clearPendingChange(client, sub.id)
     await notify(client, sub.user_id, BILLING_NOTIFICATION_TYPES.PAYMENT_FAILED,
       `billing-payment-failed:${payment.id}`, ctx.pushes)
     return
   }
-  if (failedTerminal && kind === 'mandate_verification') {
-    // Mandate never established — signup abandonment is the scheduler's job
-    // (task 1 cancels stale pending_mandate). Nothing to flip here.
-    return
-  }
-  if (failedTerminal && kind === 'recurring' && sub.pending_change_kind === 'downgrade') {
-    // A failed replacement charge is NOT terminal for the downgrade: Mollie
-    // retries eligible subscription payments (~daily, up to 5 attempts) and a
-    // later attempt may pay. Record + notify only — keep the status
-    // (pending_activation stays fallback-locked by the resolver) and the
-    // manifest; the scheduler decides terminal when the retry window is
-    // exhausted or the provider reports the replacement canceled.
+
+  if (failedTerminal && kind === 'conversion') {
+    // Never converted. The subscription simply never becomes active; the
+    // stale-activation sweep cancels it. Nothing to flip here.
     await notify(client, sub.user_id, BILLING_NOTIFICATION_TYPES.PAYMENT_FAILED,
       `billing-payment-failed:${payment.id}`, ctx.pushes)
     return
   }
+
+  if (failedTerminal && kind === 'mandate_verification') {
+    // The free trial continues. The customer can start a fresh verification
+    // checkout; no subscription charge was scheduled from this failed attempt.
+    await notify(client, sub.user_id, BILLING_NOTIFICATION_TYPES.PAYMENT_FAILED,
+      `billing-payment-failed:${payment.id}`, ctx.pushes)
+    return
+  }
+
   // Recurring failure, or a chargeback/refund on any kind: an unpaid current
-  // period drops to past_due; an older reversal is recorded only.
+  // period drops to past_due; an older reversal is recorded only. A canceled
+  // subscription is terminal — markSubscriptionPastDue will not revive it,
+  // which is what keeps a post-cancellation refund from resurrecting the row.
   if (isCurrentPeriodCharge(sub, payment)) {
     await markSubscriptionPastDue(client, sub.id, new Date())
   }
@@ -193,16 +223,17 @@ async function handleUnpaid(client, sub, payment, kind, status, ctx) {
 // The one ingestion entry point. `periodEndHint` is the provider's authoritative
 // nextPaymentDate for a subscription-generated recurring charge, fetched by the
 // caller BEFORE this transaction (never a remote call inside the txn). Returns
-// { pushes, sagaHints } for the caller to execute post-commit.
-export async function applyPaymentOutcome(subId, payment, { periodEndHint = null, replacementSubscriptionId = null } = {}) {
-  const ctx = { periodEndHint, replacementSubscriptionId, pushes: [], sagaHints: new Set() }
+// { pushes, sagaHints, purges, purgeModuleIds } for the caller to execute
+// post-commit.
+export async function applyPaymentOutcome(subId, payment, { periodEndHint = null } = {}) {
+  const ctx = { periodEndHint, pushes: [], sagaHints: new Set(), purges: [], purgeModuleIds: [] }
+  const empty = { pushes: [], sagaHints: [], purges: [], purgeModuleIds: [] }
   return withTransaction(async (client) => {
     const sub = await fetchSubscriptionByIdForUpdate(client, subId)
-    if (!sub || sub.is_complimentary) {
-      abortTransaction({ pushes: [], sagaHints: [] })
-    }
+    if (!sub || sub.is_complimentary) abortTransaction(empty)
 
-    const kind = classifyKind(sub, payment)
+    const existingPayment = await fetchPaymentByMollieId(client, payment.id)
+    const kind = classifyKind(sub, payment, existingPayment)
     const row = await upsertPaymentOutcome(client, {
       subscriptionId: subId,
       molliePaymentId: payment.id,
@@ -211,15 +242,20 @@ export async function applyPaymentOutcome(subId, payment, { periodEndHint = null
       status: payment.status,
       paidAt: payment.paidAt,
       mollieCreatedAt: payment.createdAt,
+      priceSnapshot: kind === 'proration'
+        ? sub.pending_price_snapshot
+        : (kind === 'recurring' ? (sub.next_price_snapshot ?? sub.price_snapshot) : sub.price_snapshot),
     })
     if (!row) {
       // Inert transition (illegal/regressive/duplicate) — commit (no effect).
-      return { pushes: [], sagaHints: [] }
+      return empty
     }
 
-    // Capture the mandate id the first time a paid mandate payment reveals it.
-    if (kind === 'mandate_verification' && payment.mandateId && !sub.mollie_mandate_id) {
+    // Capture the mandate id the first time the conversion payment reveals it.
+    if ((kind === 'conversion' || kind === 'mandate_verification')
+      && payment.mandateId && !sub.mollie_mandate_id) {
       await setMandateLinkage(client, subId, { mandateId: payment.mandateId })
+      await setScheduleStale(client, subId, true)
     }
 
     if (row.status === PAYMENT_STATUS.PAID) {
@@ -228,23 +264,38 @@ export async function applyPaymentOutcome(subId, payment, { periodEndHint = null
       await handleUnpaid(client, sub, payment, kind, row.status, ctx)
     }
 
-    return { pushes: ctx.pushes, sagaHints: [...ctx.sagaHints] }
+    return {
+      pushes: ctx.pushes,
+      sagaHints: [...ctx.sagaHints],
+      purges: ctx.purges,
+      purgeModuleIds: ctx.purgeModuleIds,
+    }
   })
 }
 
 // Post-commit side effects: best-effort push for freshly-inserted notifications,
-// then any deferred remote saga repair.
-async function runPostCommit(subId, { pushes, sagaHints }) {
+// the purges whose target plan has just become real, then any deferred remote
+// saga repair.
+async function runPostCommit(subId, { pushes, sagaHints, purges, purgeModuleIds }) {
   for (const p of pushes) pushUserNotification(p.userId, p)
-  if (sagaHints.includes('repair_schedule')) {
+
+  for (const moduleId of purgeModuleIds) {
+    await executeModulePurge(pool, { moduleId }).catch((err) =>
+      logger.error('billing.purge_failed', { err, subscriptionId: subId }))
+  }
+  for (const removed of purges) {
+    await executeModulePurge(pool, { subscriptionId: subId, ...removed }).catch((err) =>
+      logger.error('billing.purge_failed', { err, subscriptionId: subId }))
+  }
+
+  if (sagaHints.includes('reprice')) {
+    const { repriceSubscription } = await import('./subscriptionPricingService.js')
+    await repriceSubscription(pool, subId).catch((err) =>
+      logger.error('billing.reprice_failed', { err, subscriptionId: subId }))
+  }
+  if (sagaHints.includes('repair_schedule') || sagaHints.includes('reprice')) {
     await repairSchedule(pool, subId).catch((err) =>
       logger.error('billing.repair_schedule_failed', { err, subscriptionId: subId }))
-  }
-  if (sagaHints.includes('execute_purge')) {
-    // Downgrade activated: the target plan is real now, run the frozen
-    // manifest. Best-effort — the scheduler safety net retries a failed run.
-    await executeDowngradePurge(pool, subId).catch((err) =>
-      logger.error('billing.purge_failed', { err, subscriptionId: subId }))
   }
 }
 
@@ -258,45 +309,25 @@ async function runPostCommit(subId, { pushes, sagaHints }) {
 export async function ingestProviderPayment(subId, providerPaymentId) {
   const provider = getPaymentProvider()
   const sub = await fetchSubscriptionById(pool, subId)
-  if (!sub) return { pushes: [], sagaHints: [] }
+  const empty = { pushes: [], sagaHints: [], purges: [], purgeModuleIds: [] }
+  if (!sub) return empty
 
   const payment = await provider.getPayment(providerPaymentId)
   const customerId = await fetchUserMollieCustomerId(pool, sub.user_id)
   if (customerId && payment.customerId && payment.customerId !== customerId) {
     logger.warn('billing.webhook_customer_mismatch', { subscriptionId: subId })
-    return { pushes: [], sagaHints: [] }
+    return empty
   }
 
   let periodEndHint = null
-  let replacementSubscriptionId = null
   if (payment.subscriptionId && customerId) {
     const remote = await provider
       .getSubscription({ customerId, subscriptionId: payment.subscriptionId })
       .catch(() => null)
     periodEndHint = remote?.nextPaymentDate ?? null
-    // Downgrade-replacement recognition: the saga stamps the replacement's
-    // metadata at creation, so its first charge is attributable even when it
-    // beats the local repoint (the provider echoes create-time metadata back).
-    if (remote?.metadata?.purpose === 'downgrade'
-        && remote.metadata.subscriptionId === String(subId)) {
-      replacementSubscriptionId = payment.subscriptionId
-    }
-    // A PAID charge of unknown provenance during a pending downgrade must not
-    // be recorded while the lookup that could attribute it has failed: once
-    // recorded, the transition predicate makes every replay of the paid
-    // outcome inert, permanently losing the activation. Fail the ingestion
-    // instead — nothing is persisted yet, so a later ingest starts fresh.
-    if (!remote && payment.status === PAYMENT_STATUS.PAID
-        && sub.pending_change_kind === 'downgrade'
-        && payment.subscriptionId !== sub.mollie_subscription_id
-        && payment.subscriptionId !== sub.superseded_mollie_subscription_id) {
-      throw new PaymentProviderError('subscription lookup failed while attributing a pending-downgrade charge', {
-        code: 'replacement_lookup_failed', retryable: true,
-      })
-    }
   }
 
-  const outcome = await applyPaymentOutcome(subId, payment, { periodEndHint, replacementSubscriptionId })
+  const outcome = await applyPaymentOutcome(subId, payment, { periodEndHint })
   await runPostCommit(subId, outcome)
   return outcome
 }

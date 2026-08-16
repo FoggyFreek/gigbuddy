@@ -40,14 +40,24 @@ const PLANS = [
   },
 ]
 
-function subscription(over) {
+function moduleRow(over) {
   return {
-    id: 1, planId: 2, planSlug: 'gold', audience: 'band', status: 'active',
-    billingInterval: 'month', priceCents: 1999, cancelAtPeriodEnd: false,
-    currentPeriodEnd: null, trialEndsAt: null, isComplimentary: false,
-    complimentaryExpiresAt: null, pendingChange: null, downgradeScheduled: false,
-    pendingLimitsSnapshot: null, scheduleStale: false, repairNeeded: false,
+    audience: "band", planId: 2, planSlug: "gold", status: "active",
+    priceCents: 2000, isStarter: true,
+    pendingPlanId: null, pendingPlanSlug: null, pendingChangeKind: null,
+    pendingLimitsSnapshot: null,
     ...over,
+  }
+}
+
+function subscription(modules) {
+  return {
+    id: 1, status: "active", billingInterval: "month", cancelAtPeriodEnd: false,
+    currentPeriodStart: null, currentPeriodEnd: null, trialEndsAt: null,
+    convertedAt: null, isComplimentary: false, complimentaryExpiresAt: null,
+    priceSnapshot: null, totalCents: 3000, nextPriceSnapshot: null,
+    nextTotalCents: null, pendingTotalCents: null, refundEligibleUntil: null,
+    scheduleStale: false, repairNeeded: false, modules,
   }
 }
 
@@ -71,12 +81,14 @@ function wrap(activeTenantKind) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // Both ladders live at once — the card must pick, not merge.
+  // Both modules live on ONE subscription — the card must pick, not merge.
   api.getBillingState.mockResolvedValue({
-    subscriptions: {
-      band: subscription(),
-      artist: subscription({ id: 2, planId: 4, planSlug: 'artist_gold', audience: 'artist' }),
-    },
+    subscription: subscription([
+      moduleRow(),
+      moduleRow({ audience: "artist", planId: 4, planSlug: "artist_gold" }),
+    ]),
+    trialAvailable: false,
+    trialDays: 30,
     ownedBandCount: 1,
     hasPersonalWorkspace: true,
     plans: PLANS,
@@ -86,21 +98,23 @@ beforeEach(() => {
 // The card sits on every settings page, so it must describe the workspace the
 // user is actually looking at — matching useEntitlements().planSlug elsewhere.
 describe('SubscriptionSummaryCard — follows the active tenant', () => {
-  it('summarises the band subscription in a band workspace', async () => {
+  it('summarises the band MODULE in a band workspace', async () => {
     wrap('band')
     expect(await screen.findByText('Gold')).toBeInTheDocument()
     expect(screen.queryByText('Artist Gold')).not.toBeInTheDocument()
   })
 
-  it('summarises the artist subscription in a personal workspace', async () => {
+  it('summarises the artist MODULE in a personal workspace', async () => {
     wrap('personal')
     expect(await screen.findByText('Artist Gold')).toBeInTheDocument()
     expect(screen.queryByText('Gold')).not.toBeInTheDocument()
   })
 
-  it('falls back to that ladder’s free floor when it has no subscription', async () => {
+  it('falls back to that ladder’s free floor when it has no module', async () => {
     api.getBillingState.mockResolvedValue({
-      subscriptions: { band: subscription(), artist: null },
+      subscription: subscription([moduleRow()]),
+      trialAvailable: false,
+      trialDays: 30,
       ownedBandCount: 1,
       hasPersonalWorkspace: true,
       plans: PLANS,

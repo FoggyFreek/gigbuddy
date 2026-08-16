@@ -30,6 +30,7 @@ import { listAllUsers } from '../users/adminUsers.ts'
 import type { AdminUser } from '../users/adminUsers.ts'
 import type { SubscriptionPlan } from '../../commerce/billing/billing.ts'
 import PlanCatalogSection from '../components/PlanCatalogSection.tsx'
+import PricingRulesSection from '../pricing/PricingRulesSection.tsx'
 import DateEntryField from '../../components/DateEntryField.tsx'
 import MoneyCells, { MoneyHeaderCells } from '../../components/shared/MoneyCells.tsx'
 
@@ -146,6 +147,8 @@ export default function SubscriptionsPage() {
 
       <PlanCatalogSection plans={plans} onChanged={refreshPlans} />
 
+      <PricingRulesSection />
+
       <Paper elevation={0} sx={{ p: 2, mb: 2 }}>
         <Typography variant="h6" sx={{ mb: 1 }}>Grant complimentary access</Typography>
         <Stack
@@ -192,7 +195,7 @@ export default function SubscriptionsPage() {
             <TableHead>
               <TableRow>
                 <TableCell>User</TableCell>
-                <TableCell>Plan</TableCell>
+                <TableCell>Modules</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Interval</TableCell>
                 <MoneyHeaderCells label="Price" />
@@ -208,7 +211,20 @@ export default function SubscriptionsPage() {
                     <Typography variant="body2">{r.userName}</Typography>
                     <Typography variant="caption" sx={{ color: 'text.secondary' }}>{r.userEmail}</Typography>
                   </TableCell>
-                  <TableCell>{r.planSlug}</TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                      {r.modules.length === 0
+                        ? <Typography variant="caption" sx={{ color: 'text.secondary' }}>—</Typography>
+                        : r.modules.map((m) => (
+                          <Chip
+                            key={m.audience}
+                            size="small"
+                            variant={m.status === 'active' ? 'filled' : 'outlined'}
+                            label={`${m.audience}: ${m.planSlug}`}
+                          />
+                        ))}
+                    </Stack>
+                  </TableCell>
                   <TableCell>
                     <Chip size="small" label={r.status} />
                     {r.isComplimentary && <Chip size="small" color="secondary" label="comp" sx={{ ml: 0.5 }} />}
@@ -220,7 +236,7 @@ export default function SubscriptionsPage() {
                       <TableCell align="right">—</TableCell>
                     </>
                   ) : (
-                    <MoneyCells cents={r.priceCents} />
+                    <MoneyCells cents={r.totalCents ?? 0} />
                   )}
                   <TableCell>{periodEnd(r)}</TableCell>
                   <TableCell>

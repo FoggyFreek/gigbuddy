@@ -66,7 +66,7 @@ One Node process in production: Express serves `/api`, the built `dist/` assets,
 | `tenant-model` | band vs personal tenants, capabilities, the cross-tenant `/api/me/*` hub, global band profiles, `my_bands` |
 | `availability` | user-level slots, the redacted band projection, delegated writes |
 | `finance-ledger` | double-entry ledger, accounting profile/regime, VAT treatment, bank import |
-| `subscription-billing` | plans and the two audiences, entitlements, limits, Mollie lifecycle, gating UI |
+| `subscription-billing` | plans, subscription modules, pricing rules & snapshots, entitlements, limits, Mollie lifecycle, refunds, gating UI |
 | `test-harness` | backend test database internals |
 | `react-frontend` / `i18n` / `material-ui-theming` | frontend rules, translations, theming |
 | `detail-component-permissions` | gating editing affordances in detail/editor components |
@@ -146,10 +146,13 @@ Two separate concerns, each with its own skill. **Load the skill before touching
 
 **Platform billing** (Mollie, user-level subscriptions; tenants inherit from `tenants.owner_user_id`) → the **subscription-billing** skill:
 
-- `shared/entitlements.js` is the single source of truth for features and limits.
+- `shared/entitlements.js` is the single source of truth for features and limits; **`shared/pricing.js` is the single source of truth for money** — the server charges and the frontend quotes from the same pure engine, so a quote and an invoice cannot drift.
 - **Never call the payment provider inside a DB transaction**, and never import a concrete adapter — use `getPaymentProvider()`. Remote mutations go through the `billing_operations` outbox saga.
-- Plans are **two independent products** (`subscription_plans.audience` = `band` | `artist`, `shared/planAudiences.js`), not one ladder; tenant kind selects which. Keep `server/db/defaultPlans.js` and the seeding migration in step.
+- **One subscription per user, composed of band/artist MODULES** on one shared cycle (`subscription_modules`, migration `181`). Band and artist stay two independent products (`subscription_plans.audience`, `shared/planAudiences.js`) and tenant kind selects the module; what they share is the cycle, the price and the renewal payment. **Absence of a module IS that ladder's free plan** — a fallback plan can never be stored as one. Keep `server/db/defaultPlans.js` and the seeding migration in step.
+- Per-product state (`entitlement_overrides`, purge manifest, limits snapshot, a scheduled plan change) lives on the **module row**, never the subscription — an artist downgrade's `bands: 0` snapshot must not zero the owner's band cap.
+- **Pricing-rule terms are never edited in place** — a price snapshot pins `{ code, version }`, so changing a discount supersedes it with a new version.
 - Customer-invoice Mollie payments and platform subscription billing are separate flows.
+- Product-level docs: `docs/subscriptionmodel/`.
 
 ## Cross-cutting services
 

@@ -4,7 +4,11 @@ import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
 import { seedDefaultPlans } from '../../../server/db/defaultPlans.js'
 import { FakeProvider } from './_fakeProvider.js'
 
-let pool, runMigrations, truncateAll, seedTwoTenants, billingHelpers
+// The reconciliation tasks, called directly. Every one of them is REPAIR-ONLY:
+// access is enforced by the resolver on read, so these only flip durable status,
+// finish sagas and clean up. The renewal notice is the single exception — it is
+// a message, not a state change.
+let pool, runMigrations, truncateAll, seedTwoTenants, billing
 let tasks, adminSvc, providerFactory
 let seed, fake
 
@@ -14,7 +18,7 @@ beforeAll(async () => {
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
-  billingHelpers = await import('./_billing.js')
+  billing = await import('./_billing.js')
   tasks = await import('../../../server/commerce/billing/jobs/billingTasks.js')
   adminSvc = await import('../../../server/admin/subscriptions/adminSubscriptionService.js')
   providerFactory = await import('../../../server/commerce/billing/paymentProvider/index.js')
@@ -26,6 +30,8 @@ beforeEach(async () => {
   seed = await seedTwoTenants()
   await pool.query('DELETE FROM subscription_plans')
   await seedDefaultPlans(pool)
+  await pool.query("UPDATE subscription_plans SET monthly_price_cents = 2000, yearly_price_cents = 20000 WHERE slug = 'gold'")
+  await pool.query("UPDATE subscription_plans SET monthly_price_cents = 1000, yearly_price_cents = 10000 WHERE slug = 'artist_gold'")
   fake = new FakeProvider()
   providerFactory.setPaymentProviderForTests(fake)
 })
@@ -46,223 +52,282 @@ async function notifCount(userId, type) {
     'SELECT COUNT(*)::int n FROM notifications WHERE user_id = $1 AND type = $2', [userId, type])
   return rows[0].n
 }
+async function notifBodies(userId, type) {
+  const { rows } = await pool.query(
+    'SELECT body FROM notifications WHERE user_id = $1 AND type = $2 ORDER BY id', [userId, type])
+  return rows.map((r) => r.body)
+}
 
 describe('reconcileStaleSignups', () => {
-  it('cancels a pending_mandate older than 24h', async () => {
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'silver', status: 'pending_mandate',
-      price_cents: 999, current_period_start: null, current_period_end: null,
-      created_at: daysFromNow(-2),
+  it('cancels a pending_activation whose first charge never settled', async () => {
+    const sub = await billing.createSubscription({
+      userId: seed.userA.id,
+      status: 'pending_activation',
+      pending_activation_at: daysFromNow(-8),
     })
     await tasks.reconcileStaleSignups(pool)
-    const row = await status(s.id)
+    const row = await status(sub.id)
     expect(row.status).toBe('canceled')
-    expect(row.cancel_reason).toBe('trial_abandoned')
+    expect(row.cancel_reason).toBe('payment_failed')
   })
 
-  it('cancels a pending_activation older than 7d with nothing in flight', async () => {
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'silver', status: 'pending_activation',
-      price_cents: 999, current_period_start: null, current_period_end: null,
-      created_at: daysFromNow(-8),
+  it('leaves one alone while a charge is still in flight (SEPA)', async () => {
+    const sub = await billing.createSubscription({
+      userId: seed.userA.id,
+      status: 'pending_activation',
+      pending_activation_at: daysFromNow(-8),
     })
+    await billing.createSubscriptionPayment(sub.id, { status: 'pending', kind: 'conversion' })
     await tasks.reconcileStaleSignups(pool)
-    expect((await status(s.id)).status).toBe('canceled')
-  })
-
-  it('leaves a pending_activation with an in-flight payment alone', async () => {
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'silver', status: 'pending_activation',
-      price_cents: 999, current_period_start: null, current_period_end: null,
-      created_at: daysFromNow(-8),
-    })
-    await billingHelpers.createSubscriptionPayment(s.id, { status: 'pending', kind: 'recurring' })
-    await tasks.reconcileStaleSignups(pool)
-    expect((await status(s.id)).status).toBe('pending_activation')
+    expect((await status(sub.id)).status).toBe('pending_activation')
   })
 })
 
-describe('downgrade scheduler tasks (phase 6)', () => {
-  async function planIdOf(slug) {
-    const { rows } = await pool.query('SELECT id FROM subscription_plans WHERE slug = $1', [slug])
-    return rows[0].id
+describe('reconcileExpiredTrials', () => {
+  it('cancels a trial that ran out without converting, past the grace', async () => {
+    const sub = await billing.createSubscription({
+      userId: seed.userA.id,
+      status: 'trialing',
+      trial_ends_at: daysFromNow(-3),
+      current_period_start: null,
+      current_period_end: null,
+    })
+    await tasks.reconcileExpiredTrials(pool)
+    const row = await status(sub.id)
+    expect(row.status).toBe('canceled')
+    expect(row.cancel_reason).toBe('trial_abandoned')
+    // The canceled row is what keeps the once-per-user trial spent.
+    const repo = await import('../../../server/commerce/billing/subscriptionRepository.js')
+    expect(await repo.hasUsedTrial(pool, seed.userA.id)).toBe(true)
+  })
+
+  it('leaves a trial inside the grace window alone', async () => {
+    const sub = await billing.createSubscription({
+      userId: seed.userA.id,
+      status: 'trialing',
+      trial_ends_at: daysFromNow(-1),
+      current_period_start: null,
+      current_period_end: null,
+    })
+    await tasks.reconcileExpiredTrials(pool)
+    expect((await status(sub.id)).status).toBe('trialing')
+  })
+})
+
+describe('reconcileRenewalNotices', () => {
+  async function renewingIn(days, { totalCents = 2000 } = {}) {
+    return billing.createSubscription({
+      userId: seed.userA.id,
+      current_period_start: daysFromNow(-30 + days),
+      current_period_end: daysFromNow(days),
+      total_cents: totalCents,
+      next_total_cents: totalCents,
+    })
   }
 
-  it('stale pending_activation ages from pending_activation_at, not created_at', async () => {
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'silver', status: 'pending_activation',
-      price_cents: 999, current_period_start: null, current_period_end: null,
-      created_at: daysFromNow(-30), pending_activation_at: daysFromNow(-1),
-    })
-    await tasks.reconcileStaleSignups(pool)
-    expect((await status(s.id)).status).toBe('pending_activation') // flipped only yesterday
+  it('notifies at T-7 with the date and the amount', async () => {
+    const sub = await renewingIn(5)
+    await tasks.reconcileRenewalNotices(pool)
+
+    expect(await notifCount(seed.userA.id, 'billing-renewal-upcoming')).toBe(1)
+    const [body] = await notifBodies(seed.userA.id, 'billing-renewal-upcoming')
+    const expectedDate = new Date((await status(sub.id)).current_period_end).toISOString().slice(0, 10)
+    expect(body).toContain(expectedDate)
+    expect(body).toContain('€20.00')
+    // Deliberately date-based, never "in 7 days": the sweep window is wide, so a
+    // relative number would simply be wrong for most of the rows it catches.
+    expect(body).not.toMatch(/in \d+ days/)
   })
 
-  it('reconcileDowngradeSchedules resumes the cancel-old/create-replacement saga', async () => {
-    fake.subscriptions.set('sub_old', { id: 'sub_old', status: 'active', nextPaymentDate: null })
-    await pool.query('UPDATE users SET mollie_customer_id = $2 WHERE id = $1', [seed.userA.id, 'cst_1'])
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'gold', status: 'active', price_cents: 1999,
-      mollie_mandate_id: 'mdt_1', mollie_subscription_id: 'sub_old',
-      pending_plan_id: await planIdOf('silver'), pending_change_kind: 'downgrade',
-      pending_billing_interval: 'month', pending_price_cents: 999,
-      downgrade_schedule_pending: true, superseded_mollie_subscription_id: 'sub_old',
-      pending_purge_manifest: { features: ['chordpro'] }, pending_limits_snapshot: { storage_mb: 150 },
-    })
-    await tasks.reconcileDowngradeSchedules(pool)
-    const row = await status(s.id)
-    expect(fake.subscriptions.get('sub_old').status).toBe('canceled')
-    expect(row.downgrade_schedule_pending).toBe(false)
-    expect(row.superseded_mollie_subscription_id).toBeNull()
-    expect(row.mollie_subscription_id).not.toBe('sub_old')
-    expect(fake.subscriptions.get(row.mollie_subscription_id).status).toBe('active')
+  it('sends the T-7 notice once, however often the tick runs', async () => {
+    await renewingIn(5)
+    await tasks.reconcileRenewalNotices(pool)
+    await tasks.reconcileRenewalNotices(pool)
+    await tasks.reconcileRenewalNotices(pool)
+    expect(await notifCount(seed.userA.id, 'billing-renewal-upcoming')).toBe(1)
   })
 
-  it('a provider-canceled replacement finalizes the downgrade without purging', async () => {
-    fake.subscriptions.set('sub_repl', { id: 'sub_repl', status: 'canceled', nextPaymentDate: null })
-    await pool.query('UPDATE users SET mollie_customer_id = $2 WHERE id = $1', [seed.userA.id, 'cst_1'])
-    await pool.query('UPDATE tenants SET owner_user_id = $1 WHERE id = $2', [seed.userA.id, seed.tenantA.id])
-    const { rows: [song] } = await pool.query(
-      'INSERT INTO songs (tenant_id, title) VALUES ($1, $2) RETURNING id', [seed.tenantA.id, 'S'])
+  it('sends a SECOND, distinct notice inside the last day', async () => {
+    const sub = await renewingIn(5)
+    await tasks.reconcileRenewalNotices(pool)
+    await pool.query('UPDATE subscriptions SET current_period_end = $2 WHERE id = $1',
+      [sub.id, daysFromNow(0.5)])
+    await tasks.reconcileRenewalNotices(pool)
+    expect(await notifCount(seed.userA.id, 'billing-renewal-upcoming')).toBe(2)
+  })
+
+  it('quotes the NEXT period price, not the current one', async () => {
+    await renewingIn(3, { totalCents: 2000 })
+    await pool.query('UPDATE subscriptions SET next_total_cents = 2700 WHERE user_id = $1', [seed.userA.id])
+    await tasks.reconcileRenewalNotices(pool)
+    const [body] = await notifBodies(seed.userA.id, 'billing-renewal-upcoming')
+    expect(body).toContain('€27.00')
+  })
+
+  it('says nothing about a subscription that is cancelling', async () => {
+    const sub = await renewingIn(3)
+    await pool.query('UPDATE subscriptions SET cancel_at_period_end = TRUE WHERE id = $1', [sub.id])
+    await tasks.reconcileRenewalNotices(pool)
+    expect(await notifCount(seed.userA.id, 'billing-renewal-upcoming')).toBe(0)
+  })
+
+  it('says nothing about a renewal further out than the window', async () => {
+    await renewingIn(20)
+    await tasks.reconcileRenewalNotices(pool)
+    expect(await notifCount(seed.userA.id, 'billing-renewal-upcoming')).toBe(0)
+  })
+})
+
+describe('reconcileNextPeriodPricing', () => {
+  it('re-prices the next renewal when a temporary discount lapses', async () => {
+    // A promo that ended yesterday. Without this sweep the provider schedule
+    // would keep charging the promotional amount forever.
     await pool.query(
-      "INSERT INTO song_chordpro_charts (song_id, tenant_id, name, source) VALUES ($1, $2, 'C', '{t}')",
-      [song.id, seed.tenantA.id])
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'gold', status: 'pending_activation', price_cents: 1999,
-      mollie_mandate_id: 'mdt_1', mollie_subscription_id: 'sub_repl',
-      pending_plan_id: await planIdOf('silver'), pending_change_kind: 'downgrade',
-      pending_billing_interval: 'month', pending_price_cents: 999,
-      pending_activation_at: daysFromNow(-1),
-      pending_purge_manifest: { features: ['chordpro'] }, pending_limits_snapshot: { storage_mb: 150 },
+      `INSERT INTO pricing_rules (code, version, name, discount_type, percent, effective_to)
+       VALUES ('spring_promo', 1, 'Spring', 'percentage', 25, $1)`,
+      [daysFromNow(-1)],
+    )
+    const sub = await billing.createSubscription({
+      userId: seed.userA.id, total_cents: 1500, next_total_cents: 1500,
+      mollie_mandate_id: 'mdt_x',
     })
-    await tasks.reconcileDowngradeSchedules(pool)
-    const row = await status(s.id)
-    expect(row.status).toBe('canceled')
-    expect(row.cancel_reason).toBe('payment_failed')
-    expect(row.pending_change_kind).toBeNull()
-    expect(row.pending_purge_manifest).toBeNull()
-    const { rows: [{ n }] } = await pool.query(
-      'SELECT COUNT(*)::int n FROM song_chordpro_charts WHERE tenant_id = $1', [seed.tenantA.id])
-    expect(n).toBe(1) // nothing purged
+
+    await tasks.reconcileNextPeriodPricing(pool)
+
+    const row = await status(sub.id)
+    expect(row.next_total_cents).toBe(2000) // full gold price again
+    expect(row.mollie_schedule_stale).toBe(true)
   })
 
-  it('reconcilePendingDowngrades flips an expired pending downgrade without purging', async () => {
-    await pool.query('UPDATE tenants SET owner_user_id = $1 WHERE id = $2', [seed.userA.id, seed.tenantA.id])
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'gold', status: 'active', price_cents: 1999,
-      current_period_start: daysFromNow(-40), current_period_end: daysFromNow(-1),
-      pending_plan_id: await planIdOf('silver'), pending_change_kind: 'downgrade',
-      pending_billing_interval: 'month', pending_price_cents: 999,
-      pending_purge_manifest: { features: ['chordpro'] }, pending_limits_snapshot: { storage_mb: 150 },
-    })
-    await tasks.reconcilePendingDowngrades(pool)
-    const row = await status(s.id)
-    expect(row.status).toBe('pending_activation')
-    expect(row.pending_activation_at).not.toBeNull()
-    expect(row.pending_purge_manifest).not.toBeNull()
-    expect(await notifCount(seed.userA.id, 'billing-downgrade-scheduled')).toBe(1)
-  })
-
-  it('reconcilePendingPurges executes a stranded manifest exactly once', async () => {
-    await pool.query('UPDATE tenants SET owner_user_id = $1 WHERE id = $2', [seed.userA.id, seed.tenantA.id])
-    const { rows: [song] } = await pool.query(
-      'INSERT INTO songs (tenant_id, title) VALUES ($1, $2) RETURNING id', [seed.tenantA.id, 'S'])
+  it('applies a discount that has just STARTED', async () => {
     await pool.query(
-      "INSERT INTO song_chordpro_charts (song_id, tenant_id, name, source) VALUES ($1, $2, 'C', '{t}')",
-      [song.id, seed.tenantA.id])
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'gold', status: 'canceled', price_cents: 1999,
-      canceled_at: new Date(), cancel_reason: 'user_requested',
-      pending_purge_manifest: { features: ['chordpro'] }, pending_limits_snapshot: { storage_mb: 50 },
+      `INSERT INTO pricing_rules (code, version, name, discount_type, percent, effective_from)
+       VALUES ('now_on', 1, 'Now on', 'percentage', 25, $1)`,
+      [daysFromNow(-1)],
+    )
+    const sub = await billing.createSubscription({
+      userId: seed.userA.id, total_cents: 2000, next_total_cents: 2000,
     })
-    await tasks.reconcilePendingPurges(pool)
-    await tasks.reconcilePendingPurges(pool) // idempotent — manifest consumed
-    const row = await status(s.id)
-    expect(row.pending_purge_manifest).toBeNull()
-    const { rows: [{ n }] } = await pool.query(
-      'SELECT COUNT(*)::int n FROM song_chordpro_charts WHERE tenant_id = $1', [seed.tenantA.id])
-    expect(n).toBe(0)
+    await tasks.reconcileNextPeriodPricing(pool)
+    expect((await status(sub.id)).next_total_cents).toBe(1500)
+  })
+
+  it('is a no-op when the price has not moved', async () => {
+    const sub = await billing.createSubscription({
+      userId: seed.userA.id, total_cents: 2000, next_total_cents: 2000,
+    })
+    await tasks.reconcileNextPeriodPricing(pool)
+    const row = await status(sub.id)
+    expect(row.next_total_cents).toBe(2000)
+    expect(row.mollie_schedule_stale).toBe(false)
+  })
+
+  it('prices the next period on the plan a scheduled downgrade lands on', async () => {
+    await pool.query("UPDATE subscription_plans SET monthly_price_cents = 900 WHERE slug = 'silver'")
+    const sub = await billing.createSubscription({ userId: seed.userA.id, total_cents: 2000 })
+    const silver = await pool.query("SELECT id FROM subscription_plans WHERE slug = 'silver'")
+    await pool.query(
+      `UPDATE subscription_modules
+          SET pending_plan_id = $2, pending_change_kind = 'downgrade', pending_price_cents = 900
+        WHERE subscription_id = $1`,
+      [sub.id, silver.rows[0].id],
+    )
+    await tasks.reconcileNextPeriodPricing(pool)
+    expect((await status(sub.id)).next_total_cents).toBe(900)
+  })
+
+  it('prices a scheduled removal out of the next period entirely', async () => {
+    const sub = await billing.createSubscription({
+      userId: seed.userA.id,
+      modules: [
+        { planSlug: 'gold' },
+        { planSlug: 'artist_gold', status: 'pending_removal', pending_change_kind: 'remove' },
+      ],
+      total_cents: 3000,
+    })
+    await tasks.reconcileNextPeriodPricing(pool)
+    expect((await status(sub.id)).next_total_cents).toBe(2000)
   })
 })
 
 describe('reconcileCancelAtPeriodEnd', () => {
-  it('finalizes a cancel-at-period-end whose period has passed', async () => {
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'silver', status: 'active',
-      cancel_at_period_end: true, cancel_reason: 'user_requested',
-      current_period_start: daysFromNow(-40), current_period_end: daysFromNow(-1),
+  it('finalizes a cancel whose period has passed', async () => {
+    const sub = await billing.createSubscription({
+      userId: seed.userA.id,
+      cancel_at_period_end: true,
+      cancel_reason: 'user_requested',
+      current_period_end: daysFromNow(-1),
     })
     await tasks.reconcileCancelAtPeriodEnd(pool)
-    const row = await status(s.id)
-    expect(row.status).toBe('canceled')
+    expect((await status(sub.id)).status).toBe('canceled')
     expect(await notifCount(seed.userA.id, 'billing-canceled')).toBe(1)
   })
 
-  it('leaves a cancel-at-period-end still within its period', async () => {
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'silver', status: 'active',
-      cancel_at_period_end: true, cancel_reason: 'user_requested',
-      current_period_end: daysFromNow(5),
+  it('leaves a cancel whose period is still running', async () => {
+    const sub = await billing.createSubscription({
+      userId: seed.userA.id, cancel_at_period_end: true, current_period_end: daysFromNow(5),
     })
     await tasks.reconcileCancelAtPeriodEnd(pool)
-    expect((await status(s.id)).status).toBe('active')
+    expect((await status(sub.id)).status).toBe('active')
+  })
+})
+
+describe('reconcilePastDue', () => {
+  it('force-cancels past the retry grace', async () => {
+    const sub = await billing.createSubscription({
+      userId: seed.userA.id, status: 'past_due', past_due_since: daysFromNow(-15),
+    })
+    await tasks.reconcilePastDue(pool)
+    expect((await status(sub.id)).status).toBe('canceled')
+    expect(await notifCount(seed.userA.id, 'billing-canceled')).toBe(1)
+  })
+
+  it('waits inside the grace — Mollie is still retrying', async () => {
+    const sub = await billing.createSubscription({
+      userId: seed.userA.id, status: 'past_due', past_due_since: daysFromNow(-3),
+    })
+    await tasks.reconcilePastDue(pool)
+    expect((await status(sub.id)).status).toBe('past_due')
   })
 })
 
 describe('reconcileTrialReminders', () => {
   it('sends one T-2d reminder and stamps it', async () => {
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'silver', status: 'trialing',
-      trial_ends_at: daysFromNow(1), current_period_start: null, current_period_end: null,
+    const sub = await billing.createSubscription({
+      userId: seed.userA.id, status: 'trialing', trial_ends_at: daysFromNow(1),
     })
     await tasks.reconcileTrialReminders(pool)
-    await tasks.reconcileTrialReminders(pool) // must not double-fire
+    await tasks.reconcileTrialReminders(pool)
     expect(await notifCount(seed.userA.id, 'billing-trial-ending')).toBe(1)
-    expect((await status(s.id)).trial_reminder_sent_at).not.toBeNull()
+    expect((await status(sub.id)).trial_reminder_sent_at).not.toBeNull()
   })
 })
 
-describe('reconcilePastDue', () => {
-  it('force-cancels a past_due beyond the 14d grace and cancels the schedule', async () => {
-    fake.subscriptions.set('sub_x', { id: 'sub_x', status: 'active' })
-    await pool.query('UPDATE users SET mollie_customer_id = $2 WHERE id = $1', [seed.userA.id, 'cst_1'])
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'silver', status: 'past_due',
-      past_due_since: daysFromNow(-15), mollie_subscription_id: 'sub_x',
+describe('complimentary subscriptions', () => {
+  it('grants, then revokes on expiry', async () => {
+    const { rows } = await pool.query("SELECT id FROM subscription_plans WHERE slug = 'gold'")
+    const grant = await adminSvc.grantComplimentary(pool, {
+      userId: seed.userB.id, planId: rows[0].id, expiresAt: daysFromNow(-1).toISOString(),
     })
-    await tasks.reconcilePastDue(pool)
-    expect((await status(s.id)).status).toBe('canceled')
-    expect(fake.subscriptions.get('sub_x').status).toBe('canceled')
-    expect(await notifCount(seed.userA.id, 'billing-canceled')).toBe(1)
-  })
-})
+    expect(grant.error).toBeUndefined()
 
-describe('complimentary (admin)', () => {
-  it('grants, blocks self-management implicitly, and revokes', async () => {
-    const { rows: [plan] } = await pool.query("SELECT id FROM subscription_plans WHERE slug = 'gold'")
-    const grant = await adminSvc.grantComplimentary(pool, { userId: seed.userB.id, planId: plan.id })
-    expect(grant.subscription.isComplimentary).toBe(true)
-    expect(grant.subscription.status).toBe('active')
-    expect(await notifCount(seed.userB.id, 'billing-complimentary-granted')).toBe(1)
-
-    const revoke = await adminSvc.revokeComplimentary(pool, seed.userB.id, grant.subscription.id)
-    expect(revoke.revoked).toBe(true)
-    const { rows } = await pool.query(
-      "SELECT status, cancel_reason FROM subscriptions WHERE user_id = $1", [seed.userB.id])
-    expect(rows[0].status).toBe('canceled')
-    expect(rows[0].cancel_reason).toBe('admin_revoked')
-  })
-
-  it('expires a complimentary subscription past its expiry', async () => {
-    const { rows: [plan] } = await pool.query("SELECT id FROM subscription_plans WHERE slug = 'gold'")
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'gold', status: 'active',
-      is_complimentary: true, price_cents: 0,
-      complimentary_expires_at: daysFromNow(-1),
-      current_period_start: null, current_period_end: null, plan_id: plan.id,
-    })
     await tasks.reconcileExpiredComplimentary(pool)
-    expect((await status(s.id)).status).toBe('canceled')
-    expect(await notifCount(seed.userA.id, 'billing-canceled')).toBe(1)
+    expect((await status(grant.subscription.id)).status).toBe('canceled')
+    expect(await notifCount(seed.userB.id, 'billing-canceled')).toBe(1)
+  })
+
+  it('is excluded from re-pricing — it has no price to keep in step', async () => {
+    const { rows } = await pool.query("SELECT id FROM subscription_plans WHERE slug = 'gold'")
+    const grant = await adminSvc.grantComplimentary(pool, { userId: seed.userB.id, planId: rows[0].id })
+    await tasks.reconcileNextPeriodPricing(pool)
+    expect((await status(grant.subscription.id)).next_total_cents).toBeNull()
+  })
+})
+
+describe('the task registry', () => {
+  it('runs every task without throwing on an empty database', async () => {
+    for (const [name, task] of tasks.BILLING_TASKS) {
+      await expect(task(pool), `task ${name} threw`).resolves.not.toThrow()
+    }
   })
 })

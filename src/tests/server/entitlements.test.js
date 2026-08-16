@@ -66,11 +66,12 @@ describe('fallback-lock states', () => {
     })
   })
 
-  it('pending_mandate and pending_activation grant nothing', async () => {
+  // 'pending_mandate' is gone with the €0.01 verification payment: conversion's
+  // first charge takes the real amount AND establishes the mandate, so a
+  // subscription awaiting its first settled charge is simply pending_activation.
+  it('pending_activation grants nothing', async () => {
     const { tenantId, userId } = await ownTenantA()
-    const sub = await billing.createSubscription({ userId, status: 'pending_mandate' })
-    expect((await resolve(tenantId)).locked).toBe(true)
-    await pool.query(`UPDATE subscriptions SET status = 'pending_activation' WHERE id = $1`, [sub.id])
+    await billing.createSubscription({ userId, status: 'pending_activation' })
     const resolved = await resolve(tenantId)
     expect(resolved.locked).toBe(true)
     expect(resolved.planSlug).toBe('bronze')
@@ -221,7 +222,7 @@ describe('complimentary subscriptions', () => {
     const { tenantId, userId } = await ownTenantA()
     const sub = await billing.createSubscription({
       userId,
-      price_cents: 0,
+      total_cents: 0,
       is_complimentary: true,
       current_period_start: null,
       current_period_end: null,
@@ -237,13 +238,17 @@ describe('complimentary subscriptions', () => {
 describe('entitlement overrides', () => {
   it('valid overrides merge over the plan; invalid values are ignored', async () => {
     const { tenantId, userId } = await ownTenantA()
+    // Overrides live on the MODULE, not the subscription: they belong to one
+    // ladder's entitlements and must not leak into the other's.
     await billing.createSubscription({
       userId,
-      planSlug: 'silver',
-      entitlement_overrides: {
-        features: { finance: true, teleport: true },
-        limits: { storage_mb: 1000, members: -5 },
-      },
+      modules: [{
+        planSlug: 'silver',
+        entitlement_overrides: {
+          features: { finance: true, teleport: true },
+          limits: { storage_mb: 1000, members: -5 },
+        },
+      }],
     })
     const resolved = await resolve(tenantId)
     expect(resolved.entitlements.features.finance).toBe(true)
@@ -258,8 +263,7 @@ describe('pending-downgrade limits snapshot', () => {
     const { tenantId, userId } = await ownTenantA()
     await billing.createSubscription({
       userId,
-      planSlug: 'gold',
-      pending_limits_snapshot: { storage_mb: 50, members: 5, bands: 1 },
+      modules: [{ planSlug: 'gold', pending_limits_snapshot: { storage_mb: 50, members: 5, bands: 1 } }],
     })
     const resolved = await resolve(tenantId)
     expect(resolved.locked).toBe(false)
@@ -276,8 +280,8 @@ describe('pending-downgrade limits snapshot', () => {
     const { tenantId, userId } = await ownTenantA()
     await billing.createSubscription({
       userId,
-      planSlug: 'silver', // 150 / null / 3
-      pending_limits_snapshot: { storage_mb: 500, members: null },
+      // silver: 150 / null / 3
+      modules: [{ planSlug: 'silver', pending_limits_snapshot: { storage_mb: 500, members: null } }],
     })
     const resolved = await resolve(tenantId)
     expect(resolved.entitlements.limits).toEqual({

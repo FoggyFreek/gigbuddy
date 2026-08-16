@@ -1,14 +1,18 @@
 // In-memory PaymentProvider fake for billing tests. Because billing depends only
 // on the provider port, tests inject this via setPaymentProviderForTests — no
 // Mollie, no HTTP. Tests drive outcomes with settlePayment()/suspendSubscription().
+import { PaymentProviderError } from '../../../server/commerce/billing/paymentProvider/PaymentProviderError.js'
+
 export class FakeProvider {
   constructor() {
     this.payments = new Map()
     this.subscriptions = new Map()
+    this.refunds = new Map()
     this.calls = []
     this.custSeq = 0
     this.paySeq = 0
     this.subSeq = 0
+    this.refundSeq = 0
     this.failNextWith = null // { retryable } to force the next provider call to throw
   }
 
@@ -21,11 +25,14 @@ export class FakeProvider {
     if (this.failNextWith) {
       const cfg = this.failNextWith
       this.failNextWith = null
-      const err = new Error(`forced ${op} failure`)
-      err.name = 'PaymentProviderError'
-      err.code = 'forced'
-      err.retryable = cfg.retryable
-      throw err
+      // A REAL PaymentProviderError, because that is what the port promises an
+      // adapter throws. A duck-typed lookalike fails every `instanceof` check
+      // in the saga and refund paths, so `retryable: false` would be silently
+      // downgraded to "retry forever" and terminal-failure handling would never
+      // be exercised.
+      throw new PaymentProviderError(`forced ${op} failure`, {
+        code: 'forced', retryable: cfg.retryable,
+      })
     }
   }
 
@@ -63,11 +70,11 @@ export class FakeProvider {
     return { ...p }
   }
 
-  async createSubscription({ customerId, amountCents, interval, metadata }) {
+  async createSubscription({ customerId, amountCents, interval, startDate, metadata }) {
     this._maybeFail('createSubscription')
     const id = `sub_${++this.subSeq}`
     this.subscriptions.set(id, {
-      id, status: 'active', nextPaymentDate: null, customerId, amountCents, interval,
+      id, status: 'active', nextPaymentDate: null, customerId, amountCents, interval, startDate,
       metadata: metadata ?? null,
     })
     return { id, status: 'active', nextPaymentDate: null, metadata: metadata ?? null }
@@ -85,6 +92,20 @@ export class FakeProvider {
     this._maybeFail('cancelSubscription')
     const s = this.subscriptions.get(subscriptionId)
     if (s) s.status = 'canceled'
+  }
+
+  async refundPayment({ paymentId, amountCents, description }) {
+    this._maybeFail('refundPayment')
+    const id = `re_${++this.refundSeq}`
+    this.refunds.set(id, { refundId: id, paymentId, amountCents, description, status: 'pending' })
+    return { refundId: id, status: 'pending', amountCents }
+  }
+
+  async getRefund({ refundId }) {
+    this._maybeFail('getRefund')
+    const r = this.refunds.get(refundId)
+    if (!r) throw Object.assign(new Error('not found'), { statusCode: 404 })
+    return { refundId: r.refundId, status: r.status, amountCents: r.amountCents }
   }
 
   // ---- test controls ----

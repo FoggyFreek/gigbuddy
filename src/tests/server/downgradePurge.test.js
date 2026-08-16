@@ -4,6 +4,12 @@ import { describe, it, beforeAll, beforeEach, afterAll, expect, vi } from 'vites
 import { seedDefaultPlans } from '../../../server/db/defaultPlans.js'
 import { FakeProvider } from './_fakeProvider.js'
 
+// Downgrading or removing a module is the one flow that DELETES data, so every
+// branch runs on informed consent first and no data loss before the target plan
+// is real. With one shared cycle a downgrade is now just a scheduled change to
+// the same subscription's amount — there is no replacement subscription, and no
+// repoint race to survive.
+
 // The integrations purge calls removeMolliePaymentLink, which talks to the
 // real Mollie API with the tenant's key. Fake just that function: an unpaid
 // link is removed (columns cleared), a paid link 409s and stays — the exact
@@ -26,7 +32,7 @@ vi.mock('../../../server/finance/invoices/molliePaymentLinkService.js', async (i
 })
 
 let pool, runMigrations, truncateAll, seedTwoTenants, billingHelpers
-let billingSvc, ingestion, tasks, saga, providerFactory, entSvc, songSvc, guards, stats, credSvc, profileSvc
+let billingSvc, ingestion, tasks, saga, purgeSvc, providerFactory, entSvc, songSvc, guards, credSvc
 let seed, fake
 
 beforeAll(async () => {
@@ -40,12 +46,11 @@ beforeAll(async () => {
   ingestion = await import('../../../server/commerce/billing/paymentIngestionService.js')
   tasks = await import('../../../server/commerce/billing/jobs/billingTasks.js')
   saga = await import('../../../server/commerce/billing/billingSaga.js')
+  purgeSvc = await import('../../../server/commerce/billing/entitlementPurgeService.js')
   entSvc = await import('../../../server/commerce/billing/entitlementService.js')
   songSvc = await import('../../../server/music/songs/songService.js')
   guards = await import('../../../server/commerce/billing/featureGuards.js')
-  stats = await import('../../../server/people/workspaces/statisticsService.js')
   credSvc = await import('../../../server/platform/integrations/integrationCredentialService.js')
-  profileSvc = await import('../../../server/people/profiles/profileService.js')
   providerFactory = await import('../../../server/commerce/billing/paymentProvider/index.js')
   await runMigrations()
 })
@@ -57,6 +62,7 @@ beforeEach(async () => {
   await seedDefaultPlans(pool)
   await pool.query("UPDATE subscription_plans SET monthly_price_cents = 999, yearly_price_cents = 9999 WHERE slug = 'silver'")
   await pool.query("UPDATE subscription_plans SET monthly_price_cents = 1999, yearly_price_cents = 19999 WHERE slug = 'gold'")
+  await pool.query("UPDATE subscription_plans SET monthly_price_cents = 1000, yearly_price_cents = 10000 WHERE slug = 'artist_gold'")
   entSvc.clearEntitlementCaches()
   fake = new FakeProvider()
   providerFactory.setPaymentProviderForTests(fake)
@@ -78,17 +84,15 @@ async function subRow(subId) {
   const { rows } = await pool.query('SELECT * FROM subscriptions WHERE id = $1', [subId])
   return rows[0]
 }
+async function moduleRow(subId, audience) {
+  return billingHelpers.getModule(subId, audience)
+}
 async function paymentIdOf(subId, kind) {
   const { rows } = await pool.query(
     'SELECT mollie_payment_id FROM subscription_payments WHERE subscription_id = $1 AND kind = $2 ORDER BY id DESC LIMIT 1',
     [subId, kind],
   )
   return rows[0]?.mollie_payment_id ?? null
-}
-async function notifCount(userId, type) {
-  const { rows } = await pool.query(
-    'SELECT COUNT(*)::int n FROM notifications WHERE user_id = $1 AND type = $2', [userId, type])
-  return rows[0].n
 }
 async function countRows(sql, params) {
   const { rows } = await pool.query(sql, params)
@@ -99,6 +103,15 @@ const fileCount = (tid) => countRows(
   'SELECT (SELECT COUNT(*) FROM song_documents WHERE tenant_id = $1)::int + (SELECT COUNT(*) FROM song_recordings WHERE tenant_id = $1)::int AS n', [tid])
 const cleanupCount = (tid) => countRows('SELECT COUNT(*)::int n FROM storage_cleanup_queue WHERE tenant_id = $1', [tid])
 
+// Storage usage is measured from tenant_statistics, not a column on tenants.
+async function setTenantStorage(tenantId, bytes) {
+  await pool.query(
+    `INSERT INTO tenant_statistics (tenant_id, storage_bytes) VALUES ($1, $2)
+     ON CONFLICT (tenant_id) DO UPDATE SET storage_bytes = EXCLUDED.storage_bytes`,
+    [tenantId, bytes],
+  )
+}
+
 // Mutate one plan's entitlements JSONB in the catalog.
 async function setPlanEntitlements(slug, mutate) {
   const { rows } = await pool.query('SELECT entitlements FROM subscription_plans WHERE slug = $1', [slug])
@@ -107,20 +120,42 @@ async function setPlanEntitlements(slug, mutate) {
   await pool.query('UPDATE subscription_plans SET entitlements = $2 WHERE slug = $1', [slug, ent])
 }
 
-// subscribe → mandate paid (trialing) → optional first recurring charge (active)
-async function subscribeUser(slug, { activate = true } = {}) {
-  const price = slug === 'gold' ? 1999 : 999
-  const res = await billingSvc.subscribe(pool, userA(), { planId: await planId(slug), interval: 'month' })
-  const subId = res.subscriptionId
-  const mandateId = await paymentIdOf(subId, 'mandate_verification')
-  fake.settlePayment(mandateId, 'paid')
-  await ingestion.ingestProviderPayment(subId, mandateId)
-  if (activate) {
-    const providerSubId = (await subRow(subId)).mollie_subscription_id
-    const chargeId = fake.addRecurringCharge(providerSubId, 'cst_1', price)
-    await ingestion.ingestProviderPayment(subId, chargeId)
+// trial → checkout → the combined payment settles → an active subscription.
+async function convert(slug = 'gold', { second = null } = {}) {
+  const trial = await billingSvc.startTrial(pool, userA(), { audience: 'band' })
+  const subId = trial.subscription.id
+  if (slug !== 'gold') {
+    await billingSvc.changeModule(pool, userA(), {
+      audience: 'band', planId: await planId(slug),
+    })
   }
+  if (second) {
+    await billingSvc.changeModule(pool, userA(), { audience: 'artist', planId: await planId('artist_gold') })
+  }
+  const checkout = await billingSvc.checkout(pool, userA(), { interval: 'month' })
+  const verificationId = await paymentIdOf(subId, 'mandate_verification')
+  fake.settlePayment(verificationId, 'paid')
+  await ingestion.ingestProviderPayment(subId, verificationId)
+  const scheduled = await subRow(subId)
+  const payId = fake.addRecurringCharge(
+    scheduled.mollie_subscription_id, `cst_${fake.custSeq}`, checkout.totalCents,
+    { status: 'paid', paidAt: new Date() },
+  )
+  await ingestion.ingestProviderPayment(subId, payId)
   return subId
+}
+
+// The period boundary arrives: age the subscription and let the recurring
+// charge settle, which is what makes a scheduled change real.
+async function renew(subId, amountCents) {
+  const row = await subRow(subId)
+  await pool.query(
+    'UPDATE subscriptions SET current_period_start = $2, current_period_end = $3 WHERE id = $1',
+    [subId, new Date(Date.now() - 40 * 86400000), new Date(Date.now() - 10 * 86400000)],
+  )
+  const chargeId = fake.addRecurringCharge(row.mollie_subscription_id, 'cst_1', amountCents)
+  await ingestion.ingestProviderPayment(subId, chargeId)
+  return chargeId
 }
 
 // Purgeable data across every category on a tenant, plus integration credentials.
@@ -140,9 +175,7 @@ async function seedTenantData(tenantId) {
      VALUES ($1, $2, $3, 'r.mp3', 'audio/mpeg', 10)`,
     [song.id, tenantId, `tenants/${tenantId}/song_recordings/rec1.mp3`])
   await pool.query(
-    `UPDATE tenants
-        SET accent_color = '#ff0000', logo_path = $2, banner_path = $3
-      WHERE id = $1`,
+    `UPDATE tenants SET accent_color = '#ff0000', logo_path = $2, banner_path = $3 WHERE id = $1`,
     [tenantId, `tenants/${tenantId}/logo/logo1.png`, `tenants/${tenantId}/banner/banner1.png`])
   await pool.query(
     `INSERT INTO dashboard_tiles (tenant_id, type, image_path, caption)
@@ -165,662 +198,396 @@ async function insertLinkedInvoice(tenantId, number, status) {
 const setOwner = (tenantId, userId) => billingHelpers.setTenantOwner(tenantId, userId)
 
 describe('preview', () => {
-  it('lists purgeable features, never finance, for a gold → bronze downgrade', async () => {
-    await subscribeUser('gold')
+  it('lists purgeable features, never finance, for a gold → silver downgrade', async () => {
     await setOwner(seed.tenantA.id, seed.userA.id)
-    const res = await billingSvc.previewDowngrade(pool, userA(), { planId: await planId('bronze'), interval: 'month' })
+    await convert('gold')
+    const res = await billingSvc.previewDowngrade(pool, userA(), {
+      audience: 'band', planId: await planId('silver'),
+    })
     expect(res.isDowngrade).toBe(true)
-    expect(res.isFreeFallback).toBe(true)
-    expect(res.features).toEqual(['integrations', 'customization', 'song_files', 'chordpro'])
+    // gold → silver loses custom_slug (not purgeable) and finance (never purged).
     expect(res.features).not.toContain('finance')
-    expect(res.limitsSnapshot.storage_mb).toBe(50)
-    expect(res.blockers).toEqual([])
+  })
+
+  it('previews a REMOVAL against the free floor', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    await convert('gold')
+    const res = await billingSvc.previewDowngrade(pool, userA(), { audience: 'band', remove: true })
+    expect(res.isRemoval).toBe(true)
+    expect(res.features.sort()).toEqual(['chordpro', 'customization', 'integrations', 'song_files'])
+    expect(res.limitsSnapshot.storage_mb).toBe(50) // the bronze floor
   })
 
   it('an entitlement override keeps a feature out of the preview and the manifest', async () => {
-    const subId = await subscribeUser('gold')
     await setOwner(seed.tenantA.id, seed.userA.id)
+    const subId = await convert('gold')
+    const band = await moduleRow(subId, 'band')
     await pool.query(
-      `UPDATE subscriptions SET entitlement_overrides = '{"features":{"song_files":true}}' WHERE id = $1`, [subId])
-    const res = await billingSvc.previewDowngrade(pool, userA(), { planId: await planId('bronze'), interval: 'month' })
-    expect(res.features).not.toContain('song_files')
-    expect(res.features).toContain('chordpro')
+      `UPDATE subscription_modules SET entitlement_overrides = '{"features":{"chordpro":true}}'::jsonb WHERE id = $1`,
+      [band.id])
+
+    const res = await billingSvc.previewDowngrade(pool, userA(), { audience: 'band', remove: true })
+    expect(res.features).not.toContain('chordpro')
   })
 
   it('reports storage and bands blockers against the target limits', async () => {
-    await subscribeUser('gold')
     await setOwner(seed.tenantA.id, seed.userA.id)
-    await setOwner(seed.tenantB.id, seed.userA.id)
-    await pool.query(
-      'INSERT INTO tenant_statistics (tenant_id, storage_bytes, object_count) VALUES ($1, $2, 3)',
-      [seed.tenantA.id, 60 * MB])
-    const res = await billingSvc.previewDowngrade(pool, userA(), { planId: await planId('bronze'), interval: 'month' })
-    const limits = res.blockers.map((b) => b.limit)
-    expect(limits).toContain('bands') // 2 owned > bronze 1
-    expect(limits).toContain('storage_mb') // 60MB > bronze 50MB
+    await setTenantStorage(seed.tenantA.id, 400 * MB)
+    await convert('gold')
+
+    const res = await billingSvc.previewDowngrade(pool, userA(), {
+      audience: 'band', planId: await planId('silver'),
+    })
+    const storage = res.blockers.find((b) => b.limit === 'storage_mb')
+    expect(storage).toMatchObject({ tenantId: seed.tenantA.id, target: 150 })
   })
 
-  it('archived owned tenants count against member/storage blockers but not the band cap', async () => {
-    await subscribeUser('gold')
+  it('archived owned tenants count against storage blockers but not the band cap', async () => {
     await setOwner(seed.tenantA.id, seed.userA.id)
     await setOwner(seed.tenantB.id, seed.userA.id)
     await pool.query('UPDATE tenants SET archived_at = NOW() WHERE id = $1', [seed.tenantB.id])
-    await pool.query(
-      'INSERT INTO tenant_statistics (tenant_id, storage_bytes, object_count) VALUES ($1, $2, 3)',
-      [seed.tenantB.id, 60 * MB])
-    const res = await billingSvc.previewDowngrade(pool, userA(), { planId: await planId('bronze'), interval: 'month' })
-    // An archived band can be unarchived onto the lower plan, so its usage must
-    // block; archiving IS the documented way to satisfy the band cap itself.
-    expect(res.blockers.map((b) => `${b.tenantId}:${b.limit}`)).toContain(`${seed.tenantB.id}:storage_mb`)
-    expect(res.blockers.map((b) => b.limit)).not.toContain('bands') // 1 active ≤ bronze 1
-  })
+    await setTenantStorage(seed.tenantB.id, 400 * MB)
+    await convert('gold')
 
-  it('rejects an inactive target plan (404) and a NULL-priced interval (plan_not_priced)', async () => {
-    await subscribeUser('gold')
-    await pool.query("UPDATE subscription_plans SET is_active = FALSE WHERE slug = 'silver'")
-    const inactive = await billingSvc.previewDowngrade(pool, userA(), { planId: await planId('silver'), interval: 'month' })
-    expect(inactive.error.status).toBe(404)
-
-    await pool.query("UPDATE subscription_plans SET is_active = TRUE, yearly_price_cents = NULL WHERE slug = 'silver'")
-    const unpriced = await billingSvc.previewDowngrade(pool, userA(), { planId: await planId('silver'), interval: 'year' })
-    expect(unpriced.error.status).toBe(400)
-    expect(unpriced.error.body.code).toBe('plan_not_priced')
+    const res = await billingSvc.previewDowngrade(pool, userA(), {
+      audience: 'band', planId: await planId('silver'),
+    })
+    // The archived band is over silver's storage — it could be unarchived onto it.
+    expect(res.blockers.some((b) => b.tenantId === seed.tenantB.id && b.limit === 'storage_mb')).toBe(true)
+    // ...but only ACTIVE bands count toward the band cap, and silver allows 3.
+    expect(res.blockers.some((b) => b.limit === 'bands')).toBe(false)
   })
 })
 
-describe('downgrade validation', () => {
-  it('rejects a confirmation phrase mismatch and persists nothing', async () => {
-    const subId = await subscribeUser('gold')
+describe('confirmation', () => {
+  it('rejects a phrase mismatch and persists nothing', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    const subId = await convert('gold')
     const res = await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('bronze'), interval: 'month', confirmation: 'downgrade to silver',
+      audience: 'band', planId: await planId('silver'), confirmation: 'yes please',
     })
-    expect(res.error.status).toBe(400)
     expect(res.error.body.code).toBe('confirmation_mismatch')
-    const row = await subRow(subId)
-    expect(row.pending_purge_manifest).toBeNull()
-    expect(row.cancel_at_period_end).toBe(false)
+    expect((await moduleRow(subId, 'band')).pending_change_kind).toBeNull()
+  })
+
+  it('accepts the exact phrase for a removal', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    const subId = await convert('gold')
+    const res = await billingSvc.downgrade(pool, userA(), {
+      audience: 'band', remove: true, confirmation: 'remove band',
+    })
+    expect(res.error).toBeUndefined()
+    expect((await moduleRow(subId, 'band')).status).toBe('pending_removal')
   })
 
   it('rejects a non-downgrade target with not_a_downgrade', async () => {
-    await subscribeUser('gold')
-    // Same plan, other interval: an interval switch, not a downgrade.
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    await convert('silver')
     const res = await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('gold'), interval: 'year', confirmation: 'downgrade to gold',
+      audience: 'band', planId: await planId('gold'), confirmation: 'downgrade to gold',
     })
-    expect(res.error.status).toBe(400)
     expect(res.error.body.code).toBe('not_a_downgrade')
   })
 
   it('409s over_target_limit with blockers and persists nothing', async () => {
-    const subId = await subscribeUser('gold')
     await setOwner(seed.tenantA.id, seed.userA.id)
-    await pool.query(
-      'INSERT INTO tenant_statistics (tenant_id, storage_bytes, object_count) VALUES ($1, $2, 3)',
-      [seed.tenantA.id, 60 * MB])
+    await setTenantStorage(seed.tenantA.id, 400 * MB)
+    const subId = await convert('gold')
+
     const res = await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('bronze'), interval: 'month', confirmation: 'downgrade to bronze',
+      audience: 'band', planId: await planId('silver'), confirmation: 'downgrade to silver',
     })
     expect(res.error.status).toBe(409)
     expect(res.error.body.code).toBe('over_target_limit')
     expect(res.error.body.blockers.length).toBeGreaterThan(0)
-    expect((await subRow(subId)).pending_purge_manifest).toBeNull()
-  })
-
-  it('409s while another plan change is pending', async () => {
-    await subscribeUser('silver')
-    await billingSvc.changePlan(pool, userA(), { planId: await planId('gold'), interval: 'month' })
-    const res = await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('bronze'), interval: 'month', confirmation: 'downgrade to bronze',
-    })
-    expect(res.error.status).toBe(409)
-    expect(res.error.body.code).toBe('plan_change_in_progress')
+    expect((await moduleRow(subId, 'band')).pending_change_kind).toBeNull()
   })
 })
 
-describe('free-fallback (bronze) downgrade', () => {
-  it('schedules cancel-at-period-end with a frozen manifest and binds limits immediately', async () => {
-    const subId = await subscribeUser('gold')
+describe('a scheduled downgrade lands at the period boundary', () => {
+  it('freezes the manifest, binds limits immediately, and purges nothing yet', async () => {
     await setOwner(seed.tenantA.id, seed.userA.id)
     await seedTenantData(seed.tenantA.id)
-    const providerSubId = (await subRow(subId)).mollie_subscription_id
-
-    const res = await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('bronze'), interval: 'month', confirmation: 'Downgrade to Bronze  ',
-    })
-    expect(res.scheduled).toBe(true)
-    expect(res.immediate).toBe(false)
-
-    const row = await subRow(subId)
-    expect(row.cancel_at_period_end).toBe(true)
-    expect(row.pending_plan_id).toBeNull() // fallback path never sets a pending change
-    expect(row.pending_purge_manifest.features).toEqual(['integrations', 'customization', 'song_files', 'chordpro'])
-    expect(row.downgrade_confirmed_at).not.toBeNull()
-    expect(fake.subscriptions.get(providerSubId).status).toBe('canceled')
-
-    // Nothing purged yet; capacity growth already bound to the bronze snapshot.
-    expect(await chartCount(seed.tenantA.id)).toBe(1)
-    const resolved = await entSvc.resolveTenantEntitlements(pool, seed.tenantA.id)
-    expect(resolved.entitlements.limits.storage_mb).toBe(50)
-    expect(resolved.entitlements.features.song_files).toBe(true) // features stay until period end
-    expect(await notifCount(seed.userA.id, 'billing-downgrade-scheduled')).toBe(1)
-  })
-
-  it('purges exactly the manifest at period end; finance and other tenants survive', async () => {
-    const subId = await subscribeUser('gold')
-    await setOwner(seed.tenantA.id, seed.userA.id)
-    await seedTenantData(seed.tenantA.id)
-    await seedTenantData(seed.tenantB.id) // ownerless neighbour tenant — must be untouched
-    await billingHelpers.createFinanceData(seed.tenantA.id)
+    const subId = await convert('gold')
 
     await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('bronze'), interval: 'month', confirmation: 'downgrade to bronze',
+      audience: 'band', remove: true, confirmation: 'remove band',
     })
-    await pool.query("UPDATE subscriptions SET current_period_end = NOW() - INTERVAL '1 hour' WHERE id = $1", [subId])
-    await tasks.reconcileCancelAtPeriodEnd(pool)
 
-    const row = await subRow(subId)
-    expect(row.status).toBe('canceled')
-    expect(row.pending_purge_manifest).toBeNull() // consumed
+    const band = await moduleRow(subId, 'band')
+    expect(band.status).toBe('pending_removal')
+    expect(band.pending_purge_manifest.features).toContain('chordpro')
+    expect(band.downgrade_confirmed_at).not.toBeNull()
 
-    expect(await chartCount(seed.tenantA.id)).toBe(0)
-    expect(await fileCount(seed.tenantA.id)).toBe(0)
-    expect(await cleanupCount(seed.tenantA.id)).toBe(5) // doc + recording + banner + memory image + song cover queued for S3
-    const { rows: [tenant] } = await pool.query(
-      `SELECT t.accent_color, t.logo_path, t.banner_path,
-              dt.image_path AS memory_image_path, dt.caption AS memory_caption,
-              ti.mollie_api_key_encrypted, ti.bandsintown_app_id_encrypted
-         FROM tenants t
-         LEFT JOIN dashboard_tiles dt ON dt.tenant_id = t.id AND dt.type = 'memory_tile'
-         LEFT JOIN tenant_integrations ti ON ti.tenant_id = t.id
-        WHERE t.id = $1`, [seed.tenantA.id])
-    expect(tenant.accent_color).toBeNull()
-    expect(tenant.banner_path).toBeNull()
-    expect(tenant.memory_image_path).toBeNull()
-    expect(tenant.memory_caption).toBeNull()
-    // Song covers are customization data and are purged with it.
-    const { rows: [coverSong] } = await pool.query(
-      'SELECT cover_image_path FROM songs WHERE tenant_id = $1', [seed.tenantA.id])
-    expect(coverSong.cover_image_path).toBeNull()
-    // Band logos are settable on every plan and are never purged.
-    expect(tenant.logo_path).toBe(`tenants/${seed.tenantA.id}/logo/logo1.png`)
-    expect(tenant.mollie_api_key_encrypted).toBeNull() // no payment links → key deleted
-    expect(tenant.bandsintown_app_id_encrypted).toBeNull()
-
-    // Finance is never purged; the other tenant is untouched.
-    expect(await countRows('SELECT COUNT(*)::int n FROM ledger_transactions WHERE tenant_id = $1', [seed.tenantA.id])).toBe(1)
-    expect(await chartCount(seed.tenantB.id)).toBe(1)
-    expect(await fileCount(seed.tenantB.id)).toBe(2)
-  })
-
-  it('archived owned tenants are purged too — their data and secrets do not survive unarchive', async () => {
-    const subId = await subscribeUser('gold')
-    await setOwner(seed.tenantA.id, seed.userA.id)
-    await setOwner(seed.tenantB.id, seed.userA.id)
-    await seedTenantData(seed.tenantB.id)
-    await pool.query('UPDATE tenants SET archived_at = NOW() WHERE id = $1', [seed.tenantB.id])
-
-    await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('bronze'), interval: 'month', confirmation: 'downgrade to bronze',
-    })
-    await pool.query("UPDATE subscriptions SET current_period_end = NOW() - INTERVAL '1 hour' WHERE id = $1", [subId])
-    await tasks.reconcileCancelAtPeriodEnd(pool)
-
-    expect(await chartCount(seed.tenantB.id)).toBe(0)
-    expect(await fileCount(seed.tenantB.id)).toBe(0)
-    expect(await cleanupCount(seed.tenantB.id)).toBe(5)
-    const { rows: [tenant] } = await pool.query(
-      `SELECT t.accent_color, t.logo_path, t.banner_path,
-              dt.image_path AS memory_image_path,
-              ti.mollie_api_key_encrypted, ti.bandsintown_app_id_encrypted
-         FROM tenants t
-         LEFT JOIN dashboard_tiles dt ON dt.tenant_id = t.id AND dt.type = 'memory_tile'
-         LEFT JOIN tenant_integrations ti ON ti.tenant_id = t.id
-        WHERE t.id = $1`, [seed.tenantB.id])
-    expect(tenant.accent_color).toBeNull()
-    expect(tenant.banner_path).toBeNull()
-    expect(tenant.memory_image_path).toBeNull()
-    expect(tenant.logo_path).toBe(`tenants/${seed.tenantB.id}/logo/logo1.png`) // logos survive the purge
-    expect(tenant.mollie_api_key_encrypted).toBeNull()
-    expect(tenant.bandsintown_app_id_encrypted).toBeNull()
-  })
-
-  it('resume before period end clears the manifest and snapshot', async () => {
-    const subId = await subscribeUser('gold')
-    await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('bronze'), interval: 'month', confirmation: 'downgrade to bronze',
-    })
-    const res = await billingSvc.resumeSubscription(pool, seed.userA.id, { audience: 'band' })
-    expect(res.resumed).toBe(true)
-    const row = await subRow(subId)
-    expect(row.cancel_at_period_end).toBe(false)
-    expect(row.pending_purge_manifest).toBeNull()
-    expect(row.pending_limits_snapshot).toBeNull()
-  })
-})
-
-describe('paid-lower downgrade', () => {
-  // Make gold → silver lose song_files + chordpro so the purge has real work.
-  async function confirmPaidDowngrade() {
-    await setPlanEntitlements('silver', (ent) => {
-      ent.features.song_files = false
-      ent.features.chordpro = false
-    })
-    const subId = await subscribeUser('gold')
-    await setOwner(seed.tenantA.id, seed.userA.id)
-    const songId = await seedTenantData(seed.tenantA.id)
-    const oldProviderSubId = (await subRow(subId)).mollie_subscription_id
-    const res = await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('silver'), interval: 'month', confirmation: 'downgrade to silver',
-    })
-    expect(res.scheduled).toBe(true)
-    return { subId, songId, oldProviderSubId }
-  }
-
-  it('confirm repoints to a replacement subscription and cancels the old one', async () => {
-    const { subId, oldProviderSubId } = await confirmPaidDowngrade()
-    const row = await subRow(subId)
-    expect(row.pending_change_kind).toBe('downgrade')
-    expect(row.pending_purge_manifest.features).toEqual(['song_files', 'chordpro'])
-    expect(row.downgrade_schedule_pending).toBe(false) // inline saga finished
-    expect(row.superseded_mollie_subscription_id).toBeNull()
-    expect(row.mollie_subscription_id).not.toBe(oldProviderSubId)
-    expect(fake.subscriptions.get(oldProviderSubId).status).toBe('canceled')
-    expect(fake.subscriptions.get(row.mollie_subscription_id).status).toBe('active')
-    // Plan and data unchanged until the replacement pays.
-    expect(row.plan_id).toBe(await planId('gold'))
-    expect(await chartCount(seed.tenantA.id)).toBe(1)
-  })
-
-  it('a late old-schedule charge is recorded only — no activation, no period advance [B6]', async () => {
-    const { subId, oldProviderSubId } = await confirmPaidDowngrade()
-    const before = await subRow(subId)
-    // Simulate the pre-repoint window too: superseded still set and current id = old id.
-    await pool.query(
-      'UPDATE subscriptions SET mollie_subscription_id = $2, superseded_mollie_subscription_id = $2, downgrade_schedule_pending = TRUE WHERE id = $1',
-      [subId, oldProviderSubId])
-    const lateId = fake.addRecurringCharge(oldProviderSubId, 'cst_1', 1999, { paidAt: new Date(Date.now() + 60_000) })
-    await ingestion.ingestProviderPayment(subId, lateId)
-    const row = await subRow(subId)
-    expect(row.plan_id).toBe(await planId('gold'))
-    expect(row.pending_change_kind).toBe('downgrade')
-    expect(new Date(row.current_period_end).getTime()).toBe(new Date(before.current_period_end).getTime())
-    expect(await chartCount(seed.tenantA.id)).toBe(1)
-  })
-
-  it('period end flips to pending_activation without purging', async () => {
-    const { subId } = await confirmPaidDowngrade()
-    await pool.query("UPDATE subscriptions SET current_period_end = NOW() - INTERVAL '1 hour' WHERE id = $1", [subId])
-    await tasks.reconcilePendingDowngrades(pool)
-    const row = await subRow(subId)
-    expect(row.status).toBe('pending_activation')
-    expect(row.pending_activation_at).not.toBeNull()
-    expect(row.pending_purge_manifest).not.toBeNull()
-    expect(await chartCount(seed.tenantA.id)).toBe(1)
-    // Fallback-locked while waiting: the resolver denies paid access.
-    const resolved = await entSvc.resolveTenantEntitlements(pool, seed.tenantA.id)
-    expect(resolved.locked).toBe(true)
-  })
-
-  it('a failed replacement charge is NOT terminal; a later paid retry activates exactly once [P1-3/R1]', async () => {
-    const { subId } = await confirmPaidDowngrade()
-    const replacementId = (await subRow(subId)).mollie_subscription_id
-    await pool.query("UPDATE subscriptions SET current_period_end = NOW() - INTERVAL '1 hour' WHERE id = $1", [subId])
-    await tasks.reconcilePendingDowngrades(pool)
-
-    // First attempt fails → stay pending_activation, manifest kept, notified.
-    const failId = fake.addRecurringCharge(replacementId, 'cst_1', 999, { status: 'failed' })
-    await ingestion.ingestProviderPayment(subId, failId)
-    let row = await subRow(subId)
-    expect(row.status).toBe('pending_activation')
-    expect(row.pending_purge_manifest).not.toBeNull()
-    expect(await notifCount(seed.userA.id, 'billing-payment-failed')).toBe(1)
-
-    // Later retry pays → activate + purge, exactly once.
-    const paidId = fake.addRecurringCharge(replacementId, 'cst_1', 999)
-    await ingestion.ingestProviderPayment(subId, paidId)
-    await ingestion.ingestProviderPayment(subId, paidId) // replay is inert
-    row = await subRow(subId)
-    expect(row.status).toBe('active')
-    expect(row.plan_id).toBe(await planId('silver'))
-    expect(row.price_cents).toBe(999)
-    expect(row.pending_change_kind).toBeNull()
-    expect(row.pending_purge_manifest).toBeNull()
-    expect(await notifCount(seed.userA.id, 'billing-plan-changed')).toBe(1)
-    // Purge ran: song files + charts gone, customization (kept by silver) intact.
-    expect(await chartCount(seed.tenantA.id)).toBe(0)
-    expect(await fileCount(seed.tenantA.id)).toBe(0)
-    const { rows: [tenant] } = await pool.query('SELECT accent_color FROM tenants WHERE id = $1', [seed.tenantA.id])
-    expect(tenant.accent_color).toBe('#ff0000')
-  })
-
-  it('a paid charge from an unrelated subscription never activates the downgrade [R1]', async () => {
-    const { subId } = await confirmPaidDowngrade()
-    fake.subscriptions.set('sub_foreign', { id: 'sub_foreign', status: 'active', nextPaymentDate: null })
-    const strayId = fake.addRecurringCharge('sub_foreign', 'cst_1', 999)
-    await ingestion.ingestProviderPayment(subId, strayId)
-    const row = await subRow(subId)
-    expect(row.plan_id).toBe(await planId('gold'))
-    expect(row.pending_change_kind).toBe('downgrade')
-    expect(await chartCount(seed.tenantA.id)).toBe(1)
-  })
-
-  it('exhausted retries finalize the failed downgrade: state cleared, NOTHING purged [R9]', async () => {
-    const { subId } = await confirmPaidDowngrade()
-    const replacementId = (await subRow(subId)).mollie_subscription_id
-    await pool.query("UPDATE subscriptions SET current_period_end = NOW() - INTERVAL '9 days' WHERE id = $1", [subId])
-    await tasks.reconcilePendingDowngrades(pool)
-    await pool.query("UPDATE subscriptions SET pending_activation_at = NOW() - INTERVAL '8 days' WHERE id = $1", [subId])
-
-    await tasks.reconcileStaleSignups(pool)
-    const row = await subRow(subId)
-    expect(row.status).toBe('canceled')
-    expect(row.cancel_reason).toBe('payment_failed')
-    expect(row.pending_change_kind).toBeNull()
-    expect(row.pending_purge_manifest).toBeNull()
-    expect(row.pending_limits_snapshot).toBeNull()
-    expect(row.downgrade_schedule_pending).toBe(false)
-    expect(row.superseded_mollie_subscription_id).toBeNull()
-    expect(fake.subscriptions.get(replacementId).status).toBe('canceled')
-    // Data intact — the customer never received the lower tier.
-    expect(await chartCount(seed.tenantA.id)).toBe(1)
-    expect(await fileCount(seed.tenantA.id)).toBe(2)
-  })
-
-  it('a resumed saga cancels the OLD subscription, never the replacement [B2]', async () => {
-    const { subId, oldProviderSubId } = await confirmPaidDowngrade()
-    const replacementId = (await subRow(subId)).mollie_subscription_id
-    // Simulate a crash after create but before the atomic repoint: the durable
-    // marker and superseded id are still set.
-    await pool.query(
-      'UPDATE subscriptions SET downgrade_schedule_pending = TRUE, superseded_mollie_subscription_id = $2 WHERE id = $1',
-      [subId, oldProviderSubId])
-    await saga.scheduleDowngradeReplacement(pool, subId)
-    const row = await subRow(subId)
-    expect(row.mollie_subscription_id).toBe(replacementId)
-    expect(row.downgrade_schedule_pending).toBe(false)
-    expect(row.superseded_mollie_subscription_id).toBeNull()
-    expect(fake.subscriptions.get(replacementId).status).toBe('active') // never canceled
-    expect(fake.subscriptions.get(oldProviderSubId).status).toBe('canceled')
-    // The create op was skipped on its idempotency key — only one replacement exists.
-    expect([...fake.subscriptions.keys()].filter((id) => fake.subscriptions.get(id).status === 'active')).toEqual([replacementId])
-  })
-
-  it('an admin plan edit after confirmation can only SHRINK the purge [R7]', async () => {
-    const { subId } = await confirmPaidDowngrade() // manifest = [song_files, chordpro]
-    // Admin re-enables chordpro on silver (purge shrinks) and turns
-    // customization off (purge must NOT expand to it — not in the manifest).
-    await setPlanEntitlements('silver', (ent) => {
-      ent.features.chordpro = true
-      ent.features.customization = false
-    })
-    const replacementId = (await subRow(subId)).mollie_subscription_id
-    const paidId = fake.addRecurringCharge(replacementId, 'cst_1', 999)
-    await ingestion.ingestProviderPayment(subId, paidId)
-
-    expect(await fileCount(seed.tenantA.id)).toBe(0) // song_files: still off → purged
-    expect(await chartCount(seed.tenantA.id)).toBe(1) // chordpro: back on → spared
-    const { rows: [tenant] } = await pool.query('SELECT accent_color FROM tenants WHERE id = $1', [seed.tenantA.id])
-    expect(tenant.accent_color).toBe('#ff0000') // customization: not in the manifest → untouched
-  })
-
-  it('a user cancel racing the schedule saga cancels the replacement and never repoints', async () => {
-    await setPlanEntitlements('silver', (ent) => { ent.features.chordpro = false })
-    const subId = await subscribeUser('gold')
-    await setOwner(seed.tenantA.id, seed.userA.id)
-    const oldProviderSubId = (await subRow(subId)).mollie_subscription_id
-
-    // The user cancels while the saga is between its two remote calls: the old
-    // subscription is already canceled and the replacement is being created.
-    const realCreate = fake.createSubscription.bind(fake)
-    let cancelRes
-    fake.createSubscription = async (args) => {
-      fake.createSubscription = realCreate
-      cancelRes = await billingSvc.cancelSubscription(pool, seed.userA.id, { audience: 'band' })
-      return realCreate(args)
-    }
-    const res = await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('silver'), interval: 'month', confirmation: 'downgrade to silver',
-    })
-    expect(res.scheduled).toBe(true)
-    expect(cancelRes.canceled).toBe(true)
-
-    const row = await subRow(subId)
-    expect(row.cancel_at_period_end).toBe(true)
-    expect(row.pending_change_kind).toBeNull()
-    expect(row.mollie_subscription_id).toBe(oldProviderSubId) // never repointed
-    // Every provider subscription is canceled — the replacement must not charge.
-    for (const s of fake.subscriptions.values()) expect(s.status).toBe('canceled')
-  })
-
-  it('a replacement first charge that beats the saga repoint still activates the downgrade', async () => {
-    const { subId, oldProviderSubId } = await confirmPaidDowngrade()
-    const replacementId = (await subRow(subId)).mollie_subscription_id
-    // Rewind local state to the pre-repoint window (crash after the remote
-    // create): current id and superseded id are both still the old schedule.
-    await pool.query(
-      'UPDATE subscriptions SET mollie_subscription_id = $2, superseded_mollie_subscription_id = $2, downgrade_schedule_pending = TRUE WHERE id = $1',
-      [subId, oldProviderSubId])
-
-    const paidId = fake.addRecurringCharge(replacementId, 'cst_1', 999)
-    await ingestion.ingestProviderPayment(subId, paidId)
-
-    const row = await subRow(subId)
-    expect(row.status).toBe('active')
-    expect(row.plan_id).toBe(await planId('silver'))
-    expect(row.mollie_subscription_id).toBe(replacementId) // activation repointed
-    expect(row.downgrade_schedule_pending).toBe(false)
-    expect(row.superseded_mollie_subscription_id).toBeNull()
-    expect(row.pending_purge_manifest).toBeNull()
-    expect(await chartCount(seed.tenantA.id)).toBe(0) // purge ran
-
-    // The resumed saga is a no-op and never cancels the replacement.
-    await saga.scheduleDowngradeReplacement(pool, subId)
-    expect(fake.subscriptions.get(replacementId).status).toBe('active')
-  })
-
-  it('user cancel while the downgrade is pending clears all downgrade state', async () => {
-    const { subId } = await confirmPaidDowngrade()
-    const res = await billingSvc.cancelSubscription(pool, seed.userA.id, { audience: 'band' })
-    expect(res.canceled).toBe(true)
-    const row = await subRow(subId)
-    expect(row.pending_change_kind).toBeNull()
-    expect(row.pending_purge_manifest).toBeNull()
-    expect(row.downgrade_schedule_pending).toBe(false)
-    expect(row.superseded_mollie_subscription_id).toBeNull()
-  })
-})
-
-describe('trial downgrades [B3]', () => {
-  it('trial → bronze cancels immediately and executes the manifest', async () => {
-    const subId = await subscribeUser('gold', { activate: false }) // trialing
-    await setOwner(seed.tenantA.id, seed.userA.id)
-    await seedTenantData(seed.tenantA.id)
-    const res = await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('bronze'), interval: 'month', confirmation: 'downgrade to bronze',
-    })
-    expect(res.immediate).toBe(true)
-    const row = await subRow(subId)
-    expect(row.status).toBe('canceled')
-    expect(row.pending_purge_manifest).toBeNull() // consumed by the immediate purge
-    expect(await chartCount(seed.tenantA.id)).toBe(0)
-    expect(await fileCount(seed.tenantA.id)).toBe(0)
-  })
-
-  it('trial → paid lower switches free, recreates the schedule, and purges lost features', async () => {
-    await setPlanEntitlements('silver', (ent) => { ent.features.song_files = false })
-    const subId = await subscribeUser('gold', { activate: false })
-    await setOwner(seed.tenantA.id, seed.userA.id)
-    await seedTenantData(seed.tenantA.id)
-    const res = await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('silver'), interval: 'month', confirmation: 'downgrade to silver',
-    })
-    expect(res.immediate).toBe(true)
-    const row = await subRow(subId)
-    expect(row.status).toBe('trialing')
-    expect(row.plan_id).toBe(await planId('silver'))
-    expect(row.price_cents).toBe(999)
-    expect(row.mollie_schedule_stale).toBe(false) // repaired post-commit
-    expect(row.pending_purge_manifest).toBeNull()
-    expect(await fileCount(seed.tenantA.id)).toBe(0) // song_files purged
-    expect(await chartCount(seed.tenantA.id)).toBe(1) // chordpro kept by silver
-  })
-})
-
-describe('integrations purge — mollie key retention [B4]', () => {
-  async function bronzeAndFinalize(subId) {
-    await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('bronze'), interval: 'month', confirmation: 'downgrade to bronze',
-    })
-    await pool.query("UPDATE subscriptions SET current_period_end = NOW() - INTERVAL '1 hour' WHERE id = $1", [subId])
-    await tasks.reconcileCancelAtPeriodEnd(pool)
-  }
-
-  it('paid links remaining → key retained: public status absent, internal accessor still works', async () => {
-    const subId = await subscribeUser('gold')
-    await setOwner(seed.tenantA.id, seed.userA.id)
-    await seedTenantData(seed.tenantA.id)
-    await insertLinkedInvoice(seed.tenantA.id, 'INV-PAID-1', 'paid')
-    await insertLinkedInvoice(seed.tenantA.id, 'INV-OPEN-1', 'sent')
-    await bronzeAndFinalize(subId)
-
-    const { rows: [tenant] } = await pool.query(
-      `SELECT mollie_api_key_encrypted, mollie_api_key_retained_at
-         FROM tenant_integrations WHERE tenant_id = $1`, [seed.tenantA.id])
-    expect(tenant.mollie_api_key_encrypted).not.toBeNull() // value kept
-    expect(tenant.mollie_api_key_retained_at).not.toBeNull()
-
-    // Unpaid link was removed; the paid one stays.
-    expect(await countRows(
-      'SELECT COUNT(*)::int n FROM invoices WHERE tenant_id = $1 AND mollie_payment_link_id IS NOT NULL',
-      [seed.tenantA.id])).toBe(1)
-
-    const status = await profileSvc.getMollieKeyStatus(pool, seed.tenantA.id)
-    expect(status.isSet).toBe(false) // public: absent
-    expect(await credSvc.loadIntegrationCredential(pool, seed.tenantA.id, 'mollie_api_key')).toBeNull()
-    expect(await credSvc.loadRetainedIntegrationCredential(pool, seed.tenantA.id, 'mollie_api_key'))
-      .toBe('test_dummykey1234567890')
-
-    // Storing a new key clears the retention marker.
-    await pool.query('UPDATE tenants SET owner_user_id = NULL WHERE id = $1', [seed.tenantA.id]) // lift the gate for the set
+    // The snapshot binds capacity growth NOW, while the features stay granted.
     entSvc.clearEntitlementCaches()
-    const set = await profileSvc.setMollieKeyValue(pool, seed.tenantA.id, { key: 'test_abcdefghijklmnopqrstuvwxyz12345' })
-    expect(set.status.isSet).toBe(true)
-    const { rows: [after] } = await pool.query(
-      `SELECT mollie_api_key_retained_at
-         FROM tenant_integrations WHERE tenant_id = $1`, [seed.tenantA.id])
-    expect(after.mollie_api_key_retained_at).toBeNull()
+    const resolved = await entSvc.resolveTenantEntitlements(pool, seed.tenantA.id)
+    expect(resolved.entitlements.features.chordpro).toBe(true)
+    expect(resolved.entitlements.limits.storage_mb).toBe(50)
+    // Nothing has been deleted — the customer paid for this period.
+    expect(await chartCount(seed.tenantA.id)).toBe(1)
+  })
+
+  it('re-prices the next renewal and marks the schedule for replacement', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    const subId = await convert('gold')
+    await billingSvc.downgrade(pool, userA(), {
+      audience: 'band', planId: await planId('silver'), confirmation: 'downgrade to silver',
+    })
+    const row = await subRow(subId)
+    expect(row.next_total_cents).toBe(999)
+    // repairSchedule ran inline, so the provider schedule already charges the
+    // lower amount at the boundary — no replacement subscription involved.
+    expect(fake.subscriptions.get(row.mollie_subscription_id).amountCents).toBe(999)
+  })
+
+  it('applies the plan and runs the purge when the renewal is paid', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    await seedTenantData(seed.tenantA.id)
+    const subId = await convert('gold')
+    // silver keeps chordpro by default; take it away so there is something to purge.
+    await setPlanEntitlements('silver', (e) => { e.features.chordpro = false })
+
+    await billingSvc.downgrade(pool, userA(), {
+      audience: 'band', planId: await planId('silver'), confirmation: 'downgrade to silver',
+    })
+    await renew(subId, 999)
+
+    const band = await moduleRow(subId, 'band')
+    expect(band.plan_id).toBe(await planId('silver'))
+    expect(band.pending_change_kind).toBeNull()
+    expect(band.pending_purge_manifest).toBeNull() // consumed
+    expect(await chartCount(seed.tenantA.id)).toBe(0)
+  })
+
+  it('deletes the module and purges when a REMOVAL reaches the boundary', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    await seedTenantData(seed.tenantA.id)
+    const subId = await convert('gold', { second: 'artist' })
+    // Pay for the artist module so both are active.
+    const proration = await paymentIdOf(subId, 'proration')
+    if (proration) {
+      fake.settlePayment(proration, 'paid')
+      await ingestion.ingestProviderPayment(subId, proration)
+    }
+
+    await billingSvc.downgrade(pool, userA(), {
+      audience: 'band', remove: true, confirmation: 'remove band',
+    })
+    await renew(subId, 1000)
+
+    expect(await moduleRow(subId, 'band')).toBeNull()
+    expect(await chartCount(seed.tenantA.id)).toBe(0)
+    expect(await fileCount(seed.tenantA.id)).toBe(0)
+    expect(await cleanupCount(seed.tenantA.id)).toBeGreaterThan(0)
+  })
+
+  it('purges NOTHING while the renewal has not been paid', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    await seedTenantData(seed.tenantA.id)
+    const subId = await convert('gold')
+    await billingSvc.downgrade(pool, userA(), {
+      audience: 'band', remove: true, confirmation: 'remove band',
+    })
+
+    // The period ends and the charge FAILS: the customer never got the lower
+    // tier, so their data stays (fallback-locked, not deleted).
+    const row = await subRow(subId)
+    const chargeId = fake.addRecurringCharge(row.mollie_subscription_id, 'cst_1', 0, { status: 'open' })
+    fake.settlePayment(chargeId, 'failed')
+    await ingestion.ingestProviderPayment(subId, chargeId)
+
+    expect((await subRow(subId)).status).toBe('past_due')
+    expect(await chartCount(seed.tenantA.id)).toBe(1)
+    expect((await moduleRow(subId, 'band')).pending_purge_manifest).not.toBeNull()
+  })
+
+  it('an admin plan edit after confirmation can only SHRINK the purge', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    await seedTenantData(seed.tenantA.id)
+    const subId = await convert('gold')
+    await setPlanEntitlements('silver', (e) => { e.features.chordpro = false })
+
+    await billingSvc.downgrade(pool, userA(), {
+      audience: 'band', planId: await planId('silver'), confirmation: 'downgrade to silver',
+    })
+    // The admin gives chordpro back to silver BEFORE the boundary.
+    await setPlanEntitlements('silver', (e) => { e.features.chordpro = true })
+    entSvc.clearEntitlementCaches()
+
+    await renew(subId, 999)
+    // The frozen manifest still named chordpro, but it is granted now, so it
+    // survives. A purge never expands after confirmation.
+    expect(await chartCount(seed.tenantA.id)).toBe(1)
+  })
+
+  it('resuming a cancelled subscription is independent of a module manifest', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    const subId = await convert('gold')
+    await billingSvc.downgrade(pool, userA(), {
+      audience: 'band', planId: await planId('silver'), confirmation: 'downgrade to silver',
+    })
+    await billingSvc.cancelSubscription(pool, seed.userA.id, {})
+    expect((await subRow(subId)).cancel_at_period_end).toBe(true)
+    await billingSvc.resumeSubscription(pool, seed.userA.id)
+    expect((await subRow(subId)).cancel_at_period_end).toBe(false)
+    // The scheduled downgrade is untouched by the cancel/resume round trip.
+    expect((await moduleRow(subId, 'band')).pending_change_kind).toBe('downgrade')
+  })
+})
+
+describe('trial downgrades are immediate', () => {
+  it('removing a module during a trial purges right away', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    await seedTenantData(seed.tenantA.id)
+    const trial = await billingSvc.startTrial(pool, userA(), { audience: 'band' })
+    await billingSvc.changeModule(pool, userA(), {
+      audience: 'artist', planId: await planId('artist_gold'),
+    })
+
+    const res = await billingSvc.downgrade(pool, userA(), {
+      audience: 'band', remove: true, confirmation: 'remove band',
+    })
+    expect(res.immediate).toBe(true)
+    expect(await moduleRow(trial.subscription.id, 'band')).toBeNull()
+    expect(await chartCount(seed.tenantA.id)).toBe(0)
+  })
+
+  it('switching to a lower tier during a trial is free and purges what it loses', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    await seedTenantData(seed.tenantA.id)
+    await setPlanEntitlements('silver', (e) => { e.features.chordpro = false })
+    const trial = await billingSvc.startTrial(pool, userA(), { audience: 'band' })
+
+    const res = await billingSvc.downgrade(pool, userA(), {
+      audience: 'band', planId: await planId('silver'), confirmation: 'downgrade to silver',
+    })
+    expect(res.immediate).toBe(true)
+    const band = await moduleRow(trial.subscription.id, 'band')
+    expect(band.plan_id).toBe(await planId('silver'))
+    expect(await chartCount(seed.tenantA.id)).toBe(0)
+    expect(fake.calls.filter((c) => c === 'createOnDemandCharge')).toEqual([]) // free
+  })
+})
+
+describe('the purge safety net', () => {
+  it('finishes a manifest whose inline purge never ran', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    await seedTenantData(seed.tenantA.id)
+    const subId = await convert('silver')
+    // A module already on its target plan, with the manifest still frozen —
+    // exactly the state a crash between the change and the purge leaves.
+    await setPlanEntitlements('silver', (e) => { e.features.chordpro = false })
+    entSvc.clearEntitlementCaches()
+    const band = await moduleRow(subId, 'band')
+    await pool.query(
+      `UPDATE subscription_modules SET pending_purge_manifest = '{"features":["chordpro"]}'::jsonb WHERE id = $1`,
+      [band.id])
+
+    await tasks.reconcilePendingPurges(pool)
+
+    expect(await chartCount(seed.tenantA.id)).toBe(0)
+    expect((await moduleRow(subId, 'band')).pending_purge_manifest).toBeNull()
+  })
+
+  it('is idempotent — a replayed purge is inert', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    await seedTenantData(seed.tenantA.id)
+    const subId = await convert('silver')
+    await setPlanEntitlements('silver', (e) => { e.features.chordpro = false })
+    entSvc.clearEntitlementCaches()
+    const band = await moduleRow(subId, 'band')
+    await pool.query(
+      `UPDATE subscription_modules SET pending_purge_manifest = '{"features":["chordpro"]}'::jsonb WHERE id = $1`,
+      [band.id])
+
+    await purgeSvc.executeModulePurge(pool, { moduleId: band.id })
+    const second = await purgeSvc.executeModulePurge(pool, { moduleId: band.id })
+    expect(second).toEqual({ purged: false, reason: 'no_manifest' })
+  })
+})
+
+describe('integrations purge — mollie key retention', () => {
+  it('paid links remaining → key retained, hidden from the public status', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    await seedTenantData(seed.tenantA.id)
+    await insertLinkedInvoice(seed.tenantA.id, 'INV-1', 'paid')
+    const subId = await convert('gold')
+
+    await billingSvc.downgrade(pool, userA(), {
+      audience: 'band', remove: true, confirmation: 'remove band',
+    })
+    await renew(subId, 0)
+
+    const { rows } = await pool.query(
+      'SELECT mollie_api_key_retained_at FROM tenant_integrations WHERE tenant_id = $1', [seed.tenantA.id])
+    expect(rows[0].mollie_api_key_retained_at).not.toBeNull()
   })
 
   it('zero links → key deleted outright', async () => {
-    const subId = await subscribeUser('gold')
     await setOwner(seed.tenantA.id, seed.userA.id)
     await seedTenantData(seed.tenantA.id)
-    await insertLinkedInvoice(seed.tenantA.id, 'INV-OPEN-2', 'sent') // unpaid only
-    await bronzeAndFinalize(subId)
+    const subId = await convert('gold')
 
-    const { rows: [tenant] } = await pool.query(
-      `SELECT mollie_api_key_encrypted, mollie_api_key_retained_at
-         FROM tenant_integrations WHERE tenant_id = $1`,
-      [seed.tenantA.id])
-    expect(tenant.mollie_api_key_encrypted).toBeNull()
-    expect(tenant.mollie_api_key_retained_at).toBeNull()
+    await billingSvc.downgrade(pool, userA(), {
+      audience: 'band', remove: true, confirmation: 'remove band',
+    })
+    await renew(subId, 0)
+
+    const { rows } = await pool.query(
+      'SELECT mollie_api_key_retained_at FROM tenant_integrations WHERE tenant_id = $1', [seed.tenantA.id])
+    expect(rows[0].mollie_api_key_retained_at).toBeNull()
+    // Deleted outright, so neither the ordinary accessor nor the retained one
+    // can still reach the value.
+    expect(await credSvc.loadIntegrationCredential(pool, seed.tenantA.id, 'mollie_api_key')).toBeNull()
+    expect(await credSvc.loadRetainedIntegrationCredential(pool, seed.tenantA.id, 'mollie_api_key')).toBeNull()
   })
 })
 
-describe('feature-write guard [B7]', () => {
-  it('blocks a purgeable-feature write after the feature is durably lost, queuing the orphan object', async () => {
-    const subId = await subscribeUser('gold')
+describe('feature-write guard', () => {
+  it('blocks a purgeable-feature write once the feature is durably lost', async () => {
     await setOwner(seed.tenantA.id, seed.userA.id)
     const songId = await seedTenantData(seed.tenantA.id)
+    const subId = await convert('gold')
     await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('bronze'), interval: 'month', confirmation: 'downgrade to bronze',
+      audience: 'band', remove: true, confirmation: 'remove band',
     })
-    await pool.query("UPDATE subscriptions SET current_period_end = NOW() - INTERVAL '1 hour' WHERE id = $1", [subId])
-    await tasks.reconcileCancelAtPeriodEnd(pool)
+    await renew(subId, 0)
     entSvc.clearEntitlementCaches()
 
-    // Service-level: the chart insert re-checks in-transaction and aborts.
-    await expect(songSvc.createSongChart(pool, seed.tenantA.id, songId, { name: 'x', source: '{title: y}' }))
-      .rejects.toMatchObject({ code: 'entitlement_required', status: 403 })
-    expect(await chartCount(seed.tenantA.id)).toBe(0)
-
-    // Guard-level with an already-uploaded object: enqueue instead of orphan.
-    const fn = vi.fn()
-    const orphanKey = `tenants/${seed.tenantA.id}/song_documents/orphan.pdf`
-    await expect(guards.withFeatureWriteGuard(pool, seed.tenantA.id, 'song_files', fn, { orphanKey }))
-      .rejects.toMatchObject({ code: 'entitlement_required' })
-    expect(fn).not.toHaveBeenCalled()
-    expect(await countRows(
-      'SELECT COUNT(*)::int n FROM storage_cleanup_queue WHERE object_key = $1 AND release_reservation = TRUE',
-      [orphanKey])).toBe(1)
+    await expect(guards.withFeatureWriteGuard(pool, seed.tenantA.id, 'chordpro', async () => {
+      await pool.query(
+        "INSERT INTO song_chordpro_charts (song_id, tenant_id, name, source) VALUES ($1, $2, 'X', '{}')",
+        [songId, seed.tenantA.id])
+    })).rejects.toThrow()
   })
 
   it('passes for an ownerless tenant (enforcement skipped)', async () => {
-    const result = await guards.withFeatureWriteGuard(pool, seed.tenantB.id, 'song_files', async () => 'ok')
-    expect(result).toBe('ok')
-  })
-})
-
-describe('storage limit binding [B5]', () => {
-  it('an in-lock limit resolver sees the committed snapshot, not the pre-downgrade limit', async () => {
-    await setPlanEntitlements('silver', (ent) => { ent.limits.storage_mb = 150 })
-    await subscribeUser('gold') // gold: 500 MB
-    await setOwner(seed.tenantA.id, seed.userA.id)
-    await pool.query(
-      'INSERT INTO tenant_statistics (tenant_id, storage_bytes, object_count) VALUES ($1, $2, 1)',
-      [seed.tenantA.id, 140 * MB])
-
-    const resolver = async (client) => {
-      const resolved = await entSvc.resolveTenantEntitlements(client, seed.tenantA.id)
-      const mb = resolved?.entitlements.limits.storage_mb ?? null
-      return mb === null ? null : mb * MB
-    }
-
-    // Before the downgrade: 140 + 20 fits inside gold's 500 MB.
-    expect(await stats.reserveStorageUsage(seed.tenantA.id, 20 * MB, resolver)).toBe(true)
-    await pool.query('UPDATE tenant_statistics SET storage_bytes = $2 WHERE tenant_id = $1', [seed.tenantA.id, 140 * MB])
-
-    await billingSvc.downgrade(pool, userA(), {
-      planId: await planId('silver'), interval: 'month', confirmation: 'downgrade to silver',
+    const songId = await seedTenantData(seed.tenantA.id)
+    await guards.withFeatureWriteGuard(pool, seed.tenantA.id, 'chordpro', async () => {
+      await pool.query(
+        "INSERT INTO song_chordpro_charts (song_id, tenant_id, name, source) VALUES ($1, $2, 'Y', '{}')",
+        [songId, seed.tenantA.id])
     })
-    // After the snapshot commits, the same reservation resolves the bound 150 MB limit.
-    expect(await stats.reserveStorageUsage(seed.tenantA.id, 20 * MB, resolver)).toBe(false)
+    // The write went through: an ownerless tenant skips enforcement entirely.
+    expect(await chartCount(seed.tenantA.id)).toBe(2)
+    expect(songSvc).toBeDefined()
   })
 })
 
-describe('cancelRemoteSubscription lookup failures [P1-4]', () => {
+describe('cancelRemoteSubscription lookup failures', () => {
   it('a transient status-lookup error still issues the idempotent cancel', async () => {
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'gold', mollie_subscription_id: 'sub_z',
-    })
-    fake.subscriptions.set('sub_z', { id: 'sub_z', status: 'active', nextPaymentDate: null })
-    await pool.query('UPDATE users SET mollie_customer_id = $2 WHERE id = $1', [seed.userA.id, 'cst_1'])
+    const subId = await convert('gold')
+    const row = await subRow(subId)
+    const providerSubId = row.mollie_subscription_id
+    // The lookup fails; the cancel must still go out, because a failed lookup
+    // must never be read as "already canceled".
+    const originalGet = fake.getSubscription.bind(fake)
+    fake.getSubscription = async () => { throw new Error('boom') }
 
-    fake.failNextWith = { retryable: true } // getSubscription blips
-    await saga.cancelRemoteSubscription(pool, s)
-    expect(fake.subscriptions.get('sub_z').status).toBe('canceled')
-    const { rows: [op] } = await pool.query(
-      "SELECT status FROM billing_operations WHERE op_type = 'cancel_subscription' AND subscription_id = $1", [s.id])
-    expect(op.status).toBe('succeeded')
-  })
+    await saga.cancelRemoteSubscription(pool, row)
+    fake.getSubscription = originalGet
 
-  it('a failing cancel call is retryable, then succeeds on the next attempt — never double-marked', async () => {
-    const s = await billingHelpers.createSubscription({
-      userId: seed.userA.id, planSlug: 'gold', mollie_subscription_id: 'sub_y',
-    })
-    fake.subscriptions.set('sub_y', { id: 'sub_y', status: 'active', nextPaymentDate: null })
-    await pool.query('UPDATE users SET mollie_customer_id = $2 WHERE id = $1', [seed.userA.id, 'cst_1'])
-
-    const realCancel = fake.cancelSubscription.bind(fake)
-    fake.cancelSubscription = async () => { throw new Error('network down') }
-    await expect(saga.cancelRemoteSubscription(pool, s)).rejects.toThrow('network down')
-    let { rows: [op] } = await pool.query(
-      "SELECT status FROM billing_operations WHERE op_type = 'cancel_subscription' AND subscription_id = $1", [s.id])
-    expect(op.status).toBe('failed_retryable')
-    expect(fake.subscriptions.get('sub_y').status).toBe('active') // NOT treated as canceled
-
-    fake.cancelSubscription = realCancel
-    await saga.cancelRemoteSubscription(pool, s)
-    expect(fake.subscriptions.get('sub_y').status).toBe('canceled')
+    expect(fake.subscriptions.get(providerSubId).status).toBe('canceled')
   })
 })

@@ -23,6 +23,7 @@ interface ChordProViewProps {
   // editing the chart).
   transposeOffset?: number
   diagramsOpen?: boolean
+  compact?: boolean
 }
 
 // Mirrors CHORDPRO_PRINT_CSS but with theme colors so the screen tracks light/dark.
@@ -562,7 +563,7 @@ function DiagramPlacement({ chords, defaultOpen }: Readonly<{ chords: ResolvedCh
   )
 }
 
-export default function ChordProView({ source, transposeOffset = 0, diagramsOpen = false }: Readonly<ChordProViewProps>) {
+export default function ChordProView({ source, transposeOffset = 0, diagramsOpen = false, compact = false }: Readonly<ChordProViewProps>) {
   const transposed = useMemo(() => applySourceTransposition(source), [source])
   const renderedSource = transposed.source
   const { columns, blocks, warnings } = useMemo(() => parseChordProDocument(renderedSource), [renderedSource])
@@ -578,7 +579,7 @@ export default function ChordProView({ source, transposeOffset = 0, diagramsOpen
   } as CSSProperties
 
   return (
-    <Box className="cp-doc" style={docStyle}>
+    <Box className="cp-doc" style={docStyle} sx={{ fontSize: compact ? 14 : undefined }}>
       <MetaHeader meta={meta} />
       {warnings.length > 0 && (
         <Box className="cp-warnings" sx={{ mb: 2, p: 1, borderRadius: 1, border: '1px solid', borderColor: 'warning.main', color: 'warning.main', fontSize: 13 }}>

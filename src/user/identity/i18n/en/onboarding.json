@@ -7,7 +7,8 @@
   "welcome": {
     "title": "Welcome to GigBuddy",
     "subtitle": "Everything your band needs in one place: gigs, rehearsals, setlists and finances.",
-    "trialPitch": "Try any paid plan free for 7 days. Cancel during the trial and you pay nothing.",
+    "trialPitch": "Try the gold plan free for 30 days. No credit card required.",
+    "trialFirst": "Your 30-day Gold trial starts first. You can choose Gold Artist, Gold Band, or both and schedule payment after the trial has started.",
     "choosePlan": "Choose your plan",
     "haveInvite": "Joining an existing band? Redeem your invite code",
     "startTrial": "Start trial",
@@ -36,9 +37,14 @@
     "slug": "Web address name",
     "logo": "Logo",
     "noLogo": "No logo",
-    "paymentNote": "You'll choose your payment method on our payment provider's secure page. A one-time €0.01 verification charge starts your trial.",
+    "goldTrial": "{{plan}} - 30-day free trial",
+    "trialEnds": "Trial ends",
+    "date": "{{date, datetime}}",
+    "trialNote": "No payment details are needed to start. Your Gold trial runs until {{date, datetime}}; subscription choices and the exact future charge date are shown after it starts.",
+    "paymentNote": "You'll choose your payment method on our payment provider's secure page. Your paid subscription starts once that payment is confirmed.",
     "freeNote": "The free plan needs no payment details.",
-    "confirmPaid": "Continue to payment"
+    "confirmPaid": "Continue to payment",
+    "confirmTrial": "Create workspace and start trial"
   },
   "checkout": {
     "processing": "Confirming your payment…",

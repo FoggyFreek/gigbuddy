@@ -6,15 +6,21 @@ import ChordProView from '../components/chordpro/ChordProView.tsx'
 import { CHORDPRO_PRINT_CSS } from '../chordpro.ts'
 import theme from '../../../theme.ts'
 
-function wrap(source) {
+function wrap(source, props = {}) {
   return render(
     <ThemeProvider theme={theme}>
-      <ChordProView source={source} />
+      <ChordProView source={source} {...props} />
     </ThemeProvider>,
   )
 }
 
 describe('ChordProView', () => {
+  it('uses smaller chart text in compact layouts', () => {
+    const { container } = wrap('[C]Hello', { compact: true })
+
+    expect(container.querySelector('.cp-doc')).toHaveStyle({ fontSize: '14px' })
+  })
+
   it('suppresses chord diagrams on screen and in print when diagrams are off', () => {
     const { container } = wrap('{diagrams: off}\n[C]Hello [G]world')
 

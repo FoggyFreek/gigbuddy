@@ -31,6 +31,7 @@ import ChordProSourceEditor from './ChordProSourceEditor.tsx'
 import ChordAnalyzerPanel from './ChordAnalyzerPanel.tsx'
 import SaveStatusLabel from '../../../../components/SaveStatusLabel.tsx'
 import useDebouncedSave from '../../../../hooks/useDebouncedSave.ts'
+import { useCompactLayout } from '../../../../hooks/useCompactLayout.ts'
 import { useToast } from '../../../../contexts/toastContext.ts'
 import { printChordPro } from '../../chordpro.ts'
 import { updateSongChart } from '../../songs.ts'
@@ -68,6 +69,7 @@ export default function ChordProViewerDialog({
   const showToast = useToast()
   const theme = useTheme()
   const stacked = useMediaQuery(theme.breakpoints.down('md'))
+  const isCompact = useCompactLayout()
   const chartId = chart.id as Id
 
   const [name, setName] = useState(chart.name ?? '')
@@ -133,6 +135,7 @@ export default function ChordProViewerDialog({
         label={t($ => $.viewer.source)}
         value={source}
         onChange={handleSource}
+        compact={isCompact}
       />
     </Paper>
   )
@@ -140,7 +143,7 @@ export default function ChordProViewerDialog({
   const preview = (
     <Paper elevation={2} sx={{ p: 3, height: '100%', overflow: 'auto' }}>
       <Box ref={viewRef}>
-        <ChordProView source={source} transposeOffset={transposeOffset} />
+        <ChordProView source={source} transposeOffset={transposeOffset} compact={isCompact} />
       </Box>
     </Paper>
   )
@@ -274,7 +277,7 @@ export default function ChordProViewerDialog({
           <Box sx={{ maxWidth: 800, mx: 'auto' }}>
             <Paper elevation={2} sx={{ p: { xs: 2, md: 4 } }}>
               <Box ref={viewRef}>
-                <ChordProView source={source} transposeOffset={transposeOffset} />
+                <ChordProView source={source} transposeOffset={transposeOffset} compact={isCompact} />
               </Box>
             </Paper>
           </Box>

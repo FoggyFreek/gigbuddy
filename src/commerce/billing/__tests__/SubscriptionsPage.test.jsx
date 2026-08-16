@@ -77,11 +77,12 @@ describe('SubscriptionsPage complimentary grant', () => {
     listSubscriptions.mockResolvedValue({
       subscriptions: [{
         id: 5, userId: 11, userName: 'Member Mia', userEmail: 'mia@test.local',
-        planId: 1, planSlug: 'pro', status: 'active', billingInterval: null,
-        priceCents: 0, cancelAtPeriodEnd: false, currentPeriodEnd: null,
+        modules: [{ audience: 'band', planSlug: 'pro', status: 'active', priceCents: 0 }],
+        status: 'active', billingInterval: null,
+        totalCents: 0, cancelAtPeriodEnd: false, currentPeriodEnd: null,
         trialEndsAt: null, isComplimentary: true,
         complimentaryExpiresAt: '2026-08-01T00:00:00.000Z',
-        pendingChange: null, scheduleStale: false, repairNeeded: false,
+        scheduleStale: false, repairNeeded: false,
         createdAt: '2026-07-01T00:00:00.000Z',
       }],
     })
@@ -117,10 +118,11 @@ describe('SubscriptionsPage complimentary grant', () => {
     const initialRequest = new Promise((resolve) => { resolveInitial = resolve })
     const attentionSubscription = {
       id: 6, userId: 11, userName: 'Member Mia', userEmail: 'mia@test.local',
-      planId: 1, planSlug: 'pro', status: 'active', billingInterval: 'month',
-      priceCents: 500, cancelAtPeriodEnd: false, currentPeriodEnd: null,
+      modules: [{ audience: 'band', planSlug: 'pro', status: 'active', priceCents: 500 }],
+      status: 'active', billingInterval: 'month',
+      totalCents: 500, cancelAtPeriodEnd: false, currentPeriodEnd: null,
       trialEndsAt: null, isComplimentary: false, complimentaryExpiresAt: null,
-      pendingChange: null, scheduleStale: true, repairNeeded: false,
+      scheduleStale: true, repairNeeded: false,
       createdAt: '2026-07-01T00:00:00.000Z',
     }
     const regularSubscription = {

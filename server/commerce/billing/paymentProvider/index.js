@@ -4,7 +4,10 @@
 // BILLING_PROVIDER env var (default 'mollie').
 import { MollieProvider } from './mollieProvider.js'
 
-export { PAYMENT_STATUS, SUBSCRIPTION_STATUS, BILLING_INTERVAL, NONTERMINAL_PAYMENT_STATUSES } from './statuses.js'
+export {
+  PAYMENT_STATUS, SUBSCRIPTION_STATUS, BILLING_INTERVAL,
+  NONTERMINAL_PAYMENT_STATUSES, REFUND_STATUS, NONTERMINAL_REFUND_STATUSES,
+} from './statuses.js'
 export { PaymentProviderError, BillingNotConfiguredError } from './PaymentProviderError.js'
 export { PaymentProvider } from './PaymentProvider.js'
 

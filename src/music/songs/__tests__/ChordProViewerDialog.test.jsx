@@ -12,7 +12,7 @@ vi.mock('@mui/material/useMediaQuery', () => ({
 }))
 
 vi.mock('../components/chordpro/ChordProView.tsx', () => ({
-  default: ({ source }) => <div>Rendered chart: {source}</div>,
+  default: ({ source, compact }) => <div data-compact={compact ? 'true' : 'false'}>Rendered chart: {source}</div>,
 }))
 
 vi.mock('../songs.ts', () => ({
@@ -79,6 +79,18 @@ describe('ChordProViewerDialog', () => {
 
     expect(screen.getByText('Rendered chart: [C]Hello')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^edit$/i })).toBeInTheDocument()
+  })
+
+  it('uses smaller chart and editor text in compact layouts', async () => {
+    mockStacked = true
+    const user = userEvent.setup()
+    wrap()
+
+    expect(screen.getByLabelText(/chordpro source/i)).toHaveStyle({ fontSize: '12px' })
+
+    await user.click(screen.getByRole('button', { name: /^preview$/i }))
+
+    expect(screen.getByText('Rendered chart: [C]Hello')).toHaveAttribute('data-compact', 'true')
   })
 
   it('opens the read-only chord finder without touching the chart', async () => {

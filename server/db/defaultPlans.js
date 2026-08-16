@@ -38,9 +38,9 @@ export const DEFAULT_PLANS = Object.freeze([
     slug: 'silver',
     name: 'Silver',
     audience: PLAN_AUDIENCES.BAND,
-    // NULL price = interval unavailable until an admin sets a real price.
-    monthly_price_cents: null,
-    yearly_price_cents: null,
+    // A priced interval is selectable in the customer-facing plan catalog.
+    monthly_price_cents: 999,
+    yearly_price_cents: 9999,
     is_active: true,
     is_fallback: false,
     sort_order: 2,
@@ -67,6 +67,9 @@ export const DEFAULT_PLANS = Object.freeze([
     yearly_price_cents: null,
     is_active: true,
     is_fallback: false,
+    // The free trial is Gold-only, one tier per ladder. Resolved by this flag
+    // and never by slug — slugs are admin-editable and have drifted before.
+    is_trial_tier: true,
     sort_order: 3,
     entitlements: {
       features: {
@@ -126,6 +129,7 @@ export const DEFAULT_PLANS = Object.freeze([
     yearly_price_cents: null,
     is_active: true,
     is_fallback: false,
+    is_trial_tier: true,
     sort_order: 2,
     entitlements: {
       features: {
@@ -155,8 +159,8 @@ export async function seedDefaultPlans(executor) {
     await executor.query(
       `INSERT INTO subscription_plans
          (slug, name, audience, monthly_price_cents, yearly_price_cents, entitlements,
-          is_active, is_fallback, sort_order)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          is_active, is_fallback, is_trial_tier, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (slug) DO NOTHING`,
       [
         plan.slug,
@@ -167,6 +171,7 @@ export async function seedDefaultPlans(executor) {
         plan.entitlements,
         plan.is_active,
         plan.is_fallback,
+        plan.is_trial_tier ?? false,
         plan.sort_order,
       ],
     )

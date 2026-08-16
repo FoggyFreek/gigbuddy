@@ -43,16 +43,42 @@ export async function createPersonalTenant(userId, name = 'Solo Artist') {
   return tenant
 }
 
-// Inserts a subscription row. Defaults: an active monthly gold subscription in
-// the middle of its period. Any subscriptions column can be overridden.
-export async function createSubscription({ userId, planSlug = 'gold', ...overrides }) {
-  const plan = await getPlanBySlug(planSlug)
+// Inserts a subscription row plus its modules. Defaults: an active monthly
+// subscription with a single gold (band) module, in the middle of its period.
+//
+// `planSlug` is the shorthand for a one-module subscription; `modules` takes
+// full control — [{ planSlug, status?, priceCents?, ...moduleColumns }] — for
+// the dual-module cases the bundle pricing exists for. Any subscriptions column
+// can be overridden alongside.
+// Columns that USED to live on the subscription and now belong to the module.
+// Accepted at the top level for the common one-module case and forwarded, so a
+// test that only cares about "a subscriber with this override" stays readable.
+const MODULE_LEVEL_COLUMNS = [
+  'entitlement_overrides',
+  'pending_limits_snapshot',
+  'pending_purge_manifest',
+  'pending_plan_id',
+  'pending_change_kind',
+  'pending_price_cents',
+  'downgrade_confirmed_at',
+]
+
+export async function createSubscription({
+  userId, planSlug = 'gold', modules = null, ...overrides
+}) {
+  const forwarded = {}
+  for (const col of MODULE_LEVEL_COLUMNS) {
+    if (col in overrides) {
+      forwarded[col] = overrides[col]
+      delete overrides[col]
+    }
+  }
+  const specs = modules ?? [{ planSlug, ...forwarded }]
   const row = {
     user_id: userId,
-    plan_id: plan.id,
     status: 'active',
     billing_interval: 'month',
-    price_cents: 999,
+    total_cents: 999,
     current_period_start: daysFromNow(-15),
     current_period_end: daysFromNow(15),
     ...overrides,
@@ -63,7 +89,40 @@ export async function createSubscription({ userId, planSlug = 'gold', ...overrid
     `INSERT INTO subscriptions (${cols.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`,
     cols.map((c) => row[c]),
   )
+  const sub = rows[0]
+  for (const spec of specs) await createSubscriptionModule(sub.id, spec)
+  return sub
+}
+
+// One module of a subscription. `audience` is derived from the plan by a DB
+// trigger, so it is deliberately not settable here.
+export async function createSubscriptionModule(
+  subscriptionId, { planSlug = 'gold', priceCents = 999, ...overrides } = {},
+) {
+  const plan = await getPlanBySlug(planSlug)
+  const row = {
+    subscription_id: subscriptionId,
+    plan_id: plan.id,
+    status: 'active',
+    price_cents: priceCents,
+    ...overrides,
+  }
+  const cols = Object.keys(row)
+  const placeholders = cols.map((_, i) => `$${i + 1}`)
+  const { rows } = await pool.query(
+    `INSERT INTO subscription_modules (${cols.join(', ')})
+     VALUES (${placeholders.join(', ')}) RETURNING *`,
+    cols.map((c) => row[c]),
+  )
   return rows[0]
+}
+
+export async function getModule(subscriptionId, audience) {
+  const { rows } = await pool.query(
+    'SELECT * FROM subscription_modules WHERE subscription_id = $1 AND audience = $2',
+    [subscriptionId, audience],
+  )
+  return rows[0] ?? null
 }
 
 let paymentSeq = 0

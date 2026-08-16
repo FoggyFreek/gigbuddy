@@ -1,7 +1,13 @@
 // Entitlement resolution: what a tenant is allowed to do, derived from its
 // owner's subscription. The resolver enforces ALL time bounds itself — the
-// billing scheduler (later phase) only repairs durable status; access never
-// depends on it running.
+// billing scheduler only repairs durable status; access never depends on it
+// running.
+//
+// A user holds ONE subscription made of modules, one per audience. Tenant kind
+// selects the module: a band tenant resolves through the band module, a
+// personal workspace through the artist module. A missing module is not an
+// error — it resolves to that ladder's free fallback plan, which is exactly
+// what "this customer did not buy that product" means.
 //
 // Contract: resolveTenantEntitlements(db, tenantId) →
 //   null                                  — tenant has no owner: enforcement
@@ -10,9 +16,9 @@
 //     planSlug, subscriptionStatus,
 //     locked, financeReadOnly }           — resolved state
 //
-// "Locked" means the owner has no usable subscription right now; the tenant
-// falls back to the fallback plan's entitlements (fallback-lock) — data is
-// never deleted by a lapse.
+// "Locked" means the owner has no usable module on that ladder right now; the
+// tenant falls back to the fallback plan's entitlements (fallback-lock) — data
+// is never deleted by a lapse.
 import {
   FEATURES,
   LIMIT_KEYS,
@@ -20,10 +26,8 @@ import {
 } from '../../auth/entitlements.js'
 import { PLAN_AUDIENCES, audienceForTenantKind } from '../../../shared/planAudiences.js'
 import { fetchFallbackPlan } from '../plans/planRepository.js'
-import {
-  fetchLiveSubscriptionForUser,
-  hasNonterminalRecurringPayment,
-} from './subscriptionRepository.js'
+import { hasNonterminalRecurringPayment } from './subscriptionRepository.js'
+import { fetchLiveModuleForUser } from './subscriptionModuleRepository.js'
 import {
   fetchTenantOwnership,
   tenantHasFinanceData,
@@ -62,7 +66,7 @@ async function getFallbackPlan(db, audience) {
   if (cached && cached.expiresAt > now) return cached.plan
   const plan = await fetchFallbackPlan(db, audience)
   if (!plan) {
-    // Migration 166 seeds a fallback per ladder and the service/DB rules keep
+    // The catalog seeds a fallback per ladder and the service/DB rules keep
     // them — missing means the catalog is broken; fail loudly rather than guess
     // (falling back to the other ladder would grant the wrong product).
     throw new Error(`No fallback subscription plan configured for audience ${audience}`)
@@ -84,8 +88,10 @@ function ms(value) {
   return value === null || value === undefined ? null : new Date(value).getTime()
 }
 
-// Whether the subscription grants access right now. All bounds are evaluated
-// here, on read — an expired state locks even if no scheduler ever flipped it.
+// Whether the SUBSCRIPTION is inside a period that grants access right now. All
+// bounds are evaluated here, on read — an expired state locks even if no
+// scheduler ever flipped it. Whether a particular ladder gets anything is a
+// separate question, answered by the module.
 async function isUnlocked(db, sub, nowMs) {
   if (!sub) return false
   switch (sub.status) {
@@ -113,7 +119,7 @@ async function isUnlocked(db, sub, nowMs) {
       const since = ms(sub.past_due_since)
       return since !== null && nowMs < since + PAST_DUE_GRACE_MS
     }
-    // pending_mandate / pending_activation grant nothing until paid.
+    // pending_activation grants nothing until an authoritatively-paid charge.
     default:
       return false
   }
@@ -133,38 +139,41 @@ function applyLimitsSnapshot(limits, snapshot) {
   return result
 }
 
-// The owner-side view: the effective entitlements the user's subscription in
-// ONE audience grants, independent of any tenant. Fallback entitlements when
-// locked or without a subscription on that ladder; plan + overrides merged and
-// snapshot-bound otherwise.
+// The owner-side view: the effective entitlements the user's module on ONE
+// ladder grants, independent of any tenant. Fallback entitlements when the
+// subscription is locked or the module is missing or not yet paid for; plan +
+// overrides merged and snapshot-bound otherwise.
 async function resolveOwnerEntitlements(db, userId, audience) {
-  const sub = await fetchLiveSubscriptionForUser(db, userId, audience)
-  const unlocked = await isUnlocked(db, sub, Date.now())
+  const row = await fetchLiveModuleForUser(db, userId, audience)
+  // A module that exists but has not been paid for yet grants nothing; one
+  // awaiting removal still grants, because the customer paid for this period.
+  const moduleGrants = row?.module_id != null && row.module_status !== 'pending'
+  const unlocked = moduleGrants && (await isUnlocked(db, row, Date.now()))
 
   let planSlug
   let entitlements
   if (unlocked) {
-    planSlug = sub.plan_slug
-    entitlements = mergeEntitlements(sub.plan_entitlements, sub.entitlement_overrides)
+    planSlug = row.plan_slug
+    entitlements = mergeEntitlements(row.plan_entitlements, row.entitlement_overrides)
     // A confirmed pending downgrade binds capacity growth immediately: numeric
     // limits become min(current, confirmed target) while features stay current.
     //
-    // The snapshot stays in its own ladder only because this function is
-    // audience-scoped. An artist downgrade's snapshot carries `bands: 0`;
-    // collapsing this back to one per-user lookup would let it zero the owner's
-    // band cap. Guarded by the band-cap case in planAudiences.test.js.
-    if (sub.pending_limits_snapshot) {
-      entitlements.limits = applyLimitsSnapshot(entitlements.limits, sub.pending_limits_snapshot)
+    // The snapshot is per MODULE, which is what keeps it on its own ladder. An
+    // artist downgrade's snapshot carries `bands: 0`; reading it from the
+    // subscription instead would zero the owner's band cap.
+    if (row.pending_limits_snapshot) {
+      entitlements.limits = applyLimitsSnapshot(entitlements.limits, row.pending_limits_snapshot)
     }
   } else {
     const fallback = await getFallbackPlan(db, audience)
     planSlug = fallback.slug
     entitlements = mergeEntitlements(fallback.entitlements, null)
-    // Checkout grants no paid features, but the target capacity binds now.
-    if (sub?.status === 'pending_mandate' || sub?.status === 'pending_activation') {
+    // A module bought but not yet activated grants no features, but its target
+    // capacity binds now — the same rule a pending downgrade follows.
+    if (row?.module_id != null && row.module_status === 'pending') {
       entitlements.limits = applyLimitsSnapshot(
         entitlements.limits,
-        sub.plan_entitlements?.limits ?? {},
+        row.plan_entitlements?.limits ?? {},
       )
     }
   }
@@ -172,15 +181,15 @@ async function resolveOwnerEntitlements(db, userId, audience) {
   return {
     entitlements,
     planSlug,
-    subscriptionStatus: sub?.status ?? null,
+    subscriptionStatus: row?.status ?? null,
     locked: !unlocked,
   }
 }
 
 // The numeric limits a user's own subscription grants — used for user-level
 // caps (bands), where there is no tenant to resolve through. Every user has
-// limits (fallback plan when no subscription); only tenant-side enforcement
-// has the ownerless bypass.
+// limits (fallback plan when no module); only tenant-side enforcement has the
+// ownerless bypass.
 //
 // Defaults to the band ladder: the only user-level cap is the band cap, which
 // is a band-product entitlement. An artist plan's `bands` limit is vestigial

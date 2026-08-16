@@ -43,6 +43,7 @@ import adminBandProfileClaimsRouter from '../admin/band-profile-claims/adminBand
 import platformSettingsRouter from '../admin/platform-settings/platformSettings.js'
 import adminUsersRouter from '../admin/users/adminUsers.js'
 import adminPlansRouter from '../admin/plans/adminPlans.js'
+import adminPricingRulesRouter from '../admin/pricing/adminPricingRules.js'
 import adminSubscriptionsRouter from '../admin/subscriptions/adminSubscriptions.js'
 import adminStorageRouter from '../admin/storage/adminStorage.js'
 import billingRouter from '../commerce/billing/billing.js'
@@ -250,6 +251,7 @@ router.use('/admin/tenants', superAdmin, tenantsRouter)
 router.use('/admin/platform-settings', superAdmin, platformSettingsRouter)
 router.use('/admin/users', superAdmin, adminUsersRouter)
 router.use('/admin/plans', superAdmin, adminPlansRouter)
+router.use('/admin/pricing-rules', superAdmin, adminPricingRulesRouter)
 router.use('/admin/subscriptions', superAdmin, adminSubscriptionsRouter)
 router.use('/admin/statistics', superAdmin, adminStatisticsRouter)
 router.use('/admin/storage', superAdmin, adminStorageRouter)
