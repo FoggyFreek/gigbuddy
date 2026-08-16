@@ -10,10 +10,10 @@
 import {
   listOwnedTenants,
   fetchTenantCapacityUsage,
-  advisoryLockTenant,
   lockUserForCapCheck,
   lockTenantForCapCheck,
 } from './limitRepository.js'
+import { lockTenantUsage } from '../../db/tenantLock.js'
 import { LIMITS } from '../../auth/entitlements.js'
 import { PLAN_AUDIENCES, tenantKindsForAudience } from '../../../shared/planAudiences.js'
 
@@ -60,7 +60,7 @@ export async function computeModuleBlockers(executor, userId, targetLimits, { au
   if (lock) {
     for (const tenant of tenants) {
       await lockTenantForCapCheck(executor, tenant.id)
-      await advisoryLockTenant(executor, tenant.id)
+      await lockTenantUsage(executor, tenant.id)
     }
   }
 

@@ -1,6 +1,5 @@
-export async function lockTenantStatistics(executor, tenantId) {
-  await executor.query('SELECT pg_advisory_xact_lock($1)', [tenantId])
-}
+// The per-tenant advisory lock this repository's writes serialize under lives
+// in server/db/tenantLock.js — it is shared with the billing capacity checks.
 
 export async function upsertTenantStatistics(executor, tenantId, storageBytes, objectCount) {
   await executor.query(

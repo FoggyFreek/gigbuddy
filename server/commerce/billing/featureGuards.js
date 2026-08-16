@@ -23,6 +23,7 @@
 import { resolveTenantEntitlements } from './entitlementService.js'
 import { enqueueCleanup } from '../../platform/files/storageCleanupRepository.js'
 import { withTransaction } from '../../db/withTransaction.js'
+import { lockTenantUsage } from '../../db/tenantLock.js'
 
 // Matches the requireEntitlement middleware denial; the global error handler
 // surfaces status/code/feature.
@@ -40,7 +41,7 @@ export class EntitlementRequiredError extends Error {
 // commit on success, rollback on throw.
 export async function withTenantFeatureLock(db, tenantId, fn) {
   return withTransaction(async (client) => {
-    await client.query('SELECT pg_advisory_xact_lock($1)', [tenantId])
+    await lockTenantUsage(client, tenantId)
     return fn(client)
   }, { db })
 }
@@ -56,7 +57,7 @@ export async function withFeatureWriteGuard(db, tenantId, feature, fn, { orphanK
   // then raise EntitlementRequiredError AFTER the transaction. Aborting here
   // would roll the cleanup back, so the deny marker rides out on the result.
   const { denied, result } = await withTransaction(async (client) => {
-    await client.query('SELECT pg_advisory_xact_lock($1)', [tenantId])
+    await lockTenantUsage(client, tenantId)
     const resolved = await resolveTenantEntitlements(client, tenantId)
     const isDenied = resolved !== null && resolved.entitlements.features[feature] !== true
     if (isDenied && orphanKey) await enqueueCleanup(client, tenantId, orphanKey, true)

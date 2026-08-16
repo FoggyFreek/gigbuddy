@@ -14,13 +14,9 @@ export async function lockTenantForCapCheck(executor, tenantId) {
   return rows.length ? { ownerUserId: rows[0].owner_user_id, kind: rows[0].kind } : undefined
 }
 
-// The tenant-wide advisory lock every capacity-growing write takes (uploads via
-// tenant statistics, purgeable-feature writes via withFeatureWriteGuard). The
-// downgrade precheck must take the SAME key, or a member add or upload could
-// slip past a check that is about to lower the limit.
-export async function advisoryLockTenant(executor, tenantId) {
-  await executor.query('SELECT pg_advisory_xact_lock($1)', [tenantId])
-}
+// The tenant-wide advisory lock the capacity precheck also takes is
+// lockTenantUsage in server/db/tenantLock.js — shared with storage quota and
+// the gated-write guard, which is what makes the check race-proof.
 
 // Locks the user row (serializes that user's tenant create/unarchive).
 export async function lockUserForCapCheck(executor, userId) {
