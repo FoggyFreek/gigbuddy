@@ -31,7 +31,8 @@ import { cancelRemoteSubscription, refundSubscriptionPayment } from './billingSa
 import { dispatchUserNotification, pushUserNotification } from '../../user/notifications/notificationService.js'
 import { BILLING_NOTIFICATION_TYPES } from '../../domain/notificationTypes.js'
 import { refundWindowEndsAt, REFUND_WINDOW_DAYS } from './billingShared.js'
-import { PaymentProviderError, PAYMENT_STATUS } from './paymentProvider/index.js'
+import { ProviderError } from './paymentProvider/ProviderError.js'
+import { PAYMENT_STATUS } from './paymentProvider/statuses.js'
 import { logger } from '../../utils/logger.js'
 import { badRequest, conflict, notFound } from '../../platform/http/serviceErrors.js'
 
@@ -60,7 +61,7 @@ async function executeRefund(sub, refund, providerPaymentId, description) {
     // A terminal provider rejection is a real failure the operator must see; a
     // retryable one stays 'pending' for the scheduler to resume, so it is NOT
     // marked failed here.
-    if (err instanceof PaymentProviderError && !err.retryable) {
+    if (err instanceof ProviderError && !err.retryable) {
       await markRefundFailed(pool, refund.id).catch(() => {})
     }
     logger.error('billing.refund_failed', { err, subscriptionId: sub.id })

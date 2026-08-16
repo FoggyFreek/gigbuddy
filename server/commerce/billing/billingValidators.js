@@ -1,6 +1,6 @@
 // Input validation for the billing routes. Pure functions returning either a
 // parsed value object or { error: '<message>' }; the service maps errors to 400.
-import { BILLING_INTERVAL } from './paymentProvider/index.js'
+import { BILLING_INTERVAL } from './paymentProvider/statuses.js'
 import { isPlanAudience } from '../../../shared/planAudiences.js'
 
 const INTERVALS = [BILLING_INTERVAL.MONTH, BILLING_INTERVAL.YEAR]

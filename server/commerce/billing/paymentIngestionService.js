@@ -35,7 +35,8 @@ import { upsertPaymentOutcome, fetchPaymentByMollieId } from './subscriptionPaym
 import { dispatchUserNotification, pushUserNotification } from '../../user/notifications/notificationService.js'
 import { BILLING_NOTIFICATION_TYPES } from '../../domain/notificationTypes.js'
 import { periodEndFrom } from './billingShared.js'
-import { getPaymentProvider, PAYMENT_STATUS } from './paymentProvider/index.js'
+import { getPaymentProvider } from './paymentProvider/providerFactory.js'
+import { PAYMENT_STATUS } from './paymentProvider/statuses.js'
 import { repairSchedule } from './billingSaga.js'
 import { logger } from '../../utils/logger.js'
 import { clearOnboardingTenant } from '../../user/identity/authRepository.js'
@@ -220,7 +221,7 @@ async function handleUnpaid(client, sub, payment, kind, status, ctx) {
 }
 
 // The one ingestion entry point. `periodEndHint` is the provider's authoritative
-// nextPaymentDate for a subscription-generated recurring charge, fetched by the
+// next payment timestamp for a schedule-generated recurring charge, fetched by the
 // caller BEFORE this transaction (never a remote call inside the txn). Returns
 // { pushes, sagaHints, purges, purgeModuleIds } for the caller to execute
 // post-commit.
@@ -237,7 +238,7 @@ export async function applyPaymentOutcome(subId, payment, { periodEndHint = null
       subscriptionId: subId,
       molliePaymentId: payment.id,
       kind,
-      amountCents: payment.amountCents,
+      amountCents: payment.amount.cents,
       status: payment.status,
       paidAt: payment.paidAt,
       mollieCreatedAt: payment.createdAt,
@@ -303,7 +304,7 @@ async function runPostCommit(subId, { pushes, sagaHints, purges, purgeModuleIds 
 // authoritatively from the provider — the caller-supplied id is only a routing
 // hint. Verifies the payment belongs to the subscription owner's customer
 // before applying any effect (a guessed subscription id can't drive someone
-// else's payment). The subscription's nextPaymentDate is fetched here, before
+// else's payment). The schedule's next-payment timestamp is fetched here, before
 // the ingestion transaction, so no remote call happens inside the txn.
 export async function ingestProviderPayment(subId, providerPaymentId) {
   const provider = getPaymentProvider()
@@ -311,7 +312,7 @@ export async function ingestProviderPayment(subId, providerPaymentId) {
   const empty = { pushes: [], sagaHints: [], purges: [], purgeModuleIds: [] }
   if (!sub) return empty
 
-  const payment = await provider.getPayment(providerPaymentId)
+  const payment = await provider.getPayment({ paymentId: providerPaymentId })
   const customerId = await fetchUserMollieCustomerId(pool, sub.user_id)
   if (customerId && payment.customerId && payment.customerId !== customerId) {
     logger.warn('billing.webhook_customer_mismatch', { subscriptionId: subId })
@@ -319,11 +320,11 @@ export async function ingestProviderPayment(subId, providerPaymentId) {
   }
 
   let periodEndHint = null
-  if (payment.subscriptionId && customerId) {
+  if (payment.scheduleId && customerId) {
     const remote = await provider
-      .getSubscription({ customerId, subscriptionId: payment.subscriptionId })
+      .getSchedule({ customerId, scheduleId: payment.scheduleId })
       .catch(() => null)
-    periodEndHint = remote?.nextPaymentDate ?? null
+    periodEndHint = remote?.nextPaymentAt ?? null
   }
 
   const outcome = await applyPaymentOutcome(subId, payment, { periodEndHint })

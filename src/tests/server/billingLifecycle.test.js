@@ -19,7 +19,7 @@ beforeAll(async () => {
   seedTwoTenants = dbMod.seedTwoTenants
   billingSvc = await import('../../../server/commerce/billing/billingService.js')
   ingestion = await import('../../../server/commerce/billing/paymentIngestionService.js')
-  providerFactory = await import('../../../server/commerce/billing/paymentProvider/index.js')
+  providerFactory = await import('../../../server/commerce/billing/paymentProvider/providerFactory.js')
   entitlementSvc = await import('../../../server/commerce/billing/entitlementService.js')
   billing = await import('./_billing.js')
   await runMigrations()
@@ -253,7 +253,7 @@ describe('trial conversion', () => {
     expect(row.status).toBe('trialing')
     const schedule = fake.subscriptions.get(row.mollie_subscription_id)
     expect(schedule.amountCents).toBe(2000)
-    expect(schedule.startDate.toISOString()).toBe(new Date(row.trial_ends_at).toISOString())
+    expect(schedule.startAt.toISOString()).toBe(new Date(row.trial_ends_at).toISOString())
   })
 
   it('reuses an open mandate-verification checkout instead of creating a second charge', async () => {
@@ -263,7 +263,7 @@ describe('trial conversion', () => {
     const second = await billingSvc.checkout(pool, userA(), { interval: 'month' })
 
     expect(second.checkoutUrl).toBe(first.checkoutUrl)
-    expect(fake.calls.filter((call) => call === 'createMandatePayment')).toHaveLength(1)
+    expect(fake.calls.filter((call) => call === 'createCheckoutPayment')).toHaveLength(1)
   })
 
   it('creates the recurring schedule at the combined amount, starting at period end', async () => {

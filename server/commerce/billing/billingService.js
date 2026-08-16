@@ -94,11 +94,9 @@ import {
   TRIAL_DAYS,
   MANDATE_VERIFICATION_CENTS,
 } from './billingShared.js'
-import {
-  isPlatformBillingConfigured,
-  PaymentProviderError,
-  PAYMENT_STATUS,
-} from './paymentProvider/index.js'
+import { isPlatformBillingConfigured } from './paymentProvider/providerFactory.js'
+import { ProviderError } from './paymentProvider/ProviderError.js'
+import { PAYMENT_STATUS } from './paymentProvider/statuses.js'
 import {
   FEATURE_KEYS,
   LIMIT_KEYS,
@@ -377,7 +375,7 @@ async function chargePendingModuleChange({ sub, audience, planId, amountCents, m
   } catch (err) {
     // The charge could not be created — roll the pending change back.
     await rollbackPendingModuleChange(sub.id).catch(() => {})
-    if (err instanceof PaymentProviderError) return PROVIDER_ERROR
+    if (err instanceof ProviderError) return PROVIDER_ERROR
     throw err
   }
 }
@@ -636,7 +634,7 @@ export async function checkout(db, user, body) {
     })
     return { checkoutUrl, subscriptionId: outcome.sub.id, totalCents: outcome.snapshot.totalCents }
   } catch (err) {
-    if (err instanceof PaymentProviderError) return PROVIDER_ERROR
+    if (err instanceof ProviderError) return PROVIDER_ERROR
     throw err
   }
 }

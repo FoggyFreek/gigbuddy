@@ -1,11 +1,11 @@
-// In-memory PaymentProvider fake for billing tests. Because billing depends only
-// on the provider port, tests inject this via setPaymentProviderForTests — no
-// Mollie, no HTTP. Tests drive outcomes with settlePayment()/suspendSubscription().
-import { PaymentProviderError } from '../../../server/commerce/billing/paymentProvider/PaymentProviderError.js'
+import { ProviderError } from '../../../server/commerce/billing/paymentProvider/ProviderError.js'
+
+const eur = (cents) => ({ currency: 'EUR', cents })
 
 export class FakeProvider {
   constructor() {
     this.payments = new Map()
+    this.customers = new Map()
     this.subscriptions = new Map()
     this.refunds = new Map()
     this.calls = []
@@ -13,123 +13,135 @@ export class FakeProvider {
     this.paySeq = 0
     this.subSeq = 0
     this.refundSeq = 0
-    this.failNextWith = null // { retryable } to force the next provider call to throw
+    this.failNextWith = null
   }
 
-  isConfigured() {
-    return true
+  _maybeFail(operation) {
+    this.calls.push(operation)
+    if (!this.failNextWith) return
+    const failure = this.failNextWith
+    this.failNextWith = null
+    throw new ProviderError(`forced ${operation} failure`, {
+      code: 'forced', retryable: failure.retryable,
+    })
   }
 
-  _maybeFail(op) {
-    this.calls.push(op)
-    if (this.failNextWith) {
-      const cfg = this.failNextWith
-      this.failNextWith = null
-      // A REAL PaymentProviderError, because that is what the port promises an
-      // adapter throws. A duck-typed lookalike fails every `instanceof` check
-      // in the saga and refund paths, so `retryable: false` would be silently
-      // downgraded to "retry forever" and terminal-failure handling would never
-      // be exercised.
-      throw new PaymentProviderError(`forced ${op} failure`, {
-        code: 'forced', retryable: cfg.retryable,
+  async createCustomer() {
+    this._maybeFail('createCustomer')
+    const customer = { id: `cst_${++this.custSeq}` }
+    this.customers.set(customer.id, customer)
+    return customer
+  }
+
+  async getCustomer({ customerId }) {
+    this._maybeFail('getCustomer')
+    const customer = this.customers.get(customerId)
+    if (!customer) {
+      throw new ProviderError('Customer not found', {
+        code: 'not_found', retryable: false, providerStatus: 404,
       })
     }
+    return { ...customer }
   }
 
-  async ensureCustomer({ existingCustomerId } = {}) {
-    this._maybeFail('ensureCustomer')
-    return existingCustomerId || `cst_${++this.custSeq}`
-  }
-
-  async createMandatePayment({ customerId, amountCents, ...rest }) {
-    this._maybeFail('createMandatePayment')
-    this.lastMandatePaymentArgs = { customerId, amountCents, ...rest }
+  async createCheckoutPayment({ customerId, amount, ...rest }) {
+    this._maybeFail('createCheckoutPayment')
+    this.lastMandatePaymentArgs = { customerId, amountCents: amount.cents, ...rest }
     const id = `tr_${++this.paySeq}`
-    this.payments.set(id, {
-      id, status: 'open', amountCents, paidAt: null, createdAt: new Date(),
-      mandateId: null, subscriptionId: null, customerId, sequenceType: 'first',
+    const payment = {
+      id, status: 'open', amount, paidAt: null, createdAt: new Date(),
+      mandateId: null, scheduleId: null, customerId,
       checkoutUrl: `https://pay.test/${id}`,
-    })
-    return { paymentId: id, checkoutUrl: `https://pay.test/${id}` }
+    }
+    this.payments.set(id, payment)
+    return { ...payment }
   }
 
-  async createOnDemandCharge({ customerId, mandateId, amountCents }) {
-    this._maybeFail('createOnDemandCharge')
+  async createRecurringPayment({ customerId, mandateId, amount }) {
+    this._maybeFail('createRecurringPayment')
     const id = `tr_${++this.paySeq}`
-    this.payments.set(id, {
-      id, status: 'open', amountCents, paidAt: null, createdAt: new Date(),
-      mandateId, subscriptionId: null, customerId, sequenceType: 'recurring', checkoutUrl: null,
-    })
-    return { paymentId: id }
+    const payment = {
+      id, status: 'open', amount, paidAt: null, createdAt: new Date(),
+      mandateId, scheduleId: null, customerId, checkoutUrl: null,
+    }
+    this.payments.set(id, payment)
+    return { ...payment }
   }
 
-  async getPayment(id) {
+  async getPayment({ paymentId }) {
     this._maybeFail('getPayment')
-    const p = this.payments.get(id)
-    if (!p) throw Object.assign(new Error('not found'), { statusCode: 404 })
-    return { ...p }
+    const payment = this.payments.get(paymentId)
+    if (!payment) {
+      throw new ProviderError('Payment not found', {
+        code: 'not_found', retryable: false, providerStatus: 404,
+      })
+    }
+    return { ...payment, amount: { ...payment.amount } }
   }
 
-  async createSubscription({ customerId, amountCents, interval, startDate, metadata }) {
-    this._maybeFail('createSubscription')
+  async createSchedule({ customerId, mandateId, amount, interval, startAt, metadata }) {
+    this._maybeFail('createSchedule')
     const id = `sub_${++this.subSeq}`
-    this.subscriptions.set(id, {
-      id, status: 'active', nextPaymentDate: null, customerId, amountCents, interval, startDate,
-      metadata: metadata ?? null,
-    })
-    return { id, status: 'active', nextPaymentDate: null, metadata: metadata ?? null }
+    const schedule = {
+      id, status: 'active', amount, amountCents: amount.cents, customerId, mandateId,
+      interval, startAt, nextPaymentAt: null, createdAt: new Date(), metadata: metadata ?? null,
+    }
+    this.subscriptions.set(id, schedule)
+    return { ...schedule }
   }
 
-  async getSubscription({ subscriptionId }) {
-    this._maybeFail('getSubscription')
-    const s = this.subscriptions.get(subscriptionId)
-    return s
-      ? { id: s.id, status: s.status, nextPaymentDate: s.nextPaymentDate, metadata: s.metadata ?? null }
-      : { id: subscriptionId, status: 'canceled', nextPaymentDate: null, metadata: null }
+  async getSchedule({ scheduleId }) {
+    this._maybeFail('getSchedule')
+    const schedule = this.subscriptions.get(scheduleId)
+    return schedule
+      ? { ...schedule, amount: { ...schedule.amount } }
+      : {
+          id: scheduleId, status: 'canceled', amount: eur(0), customerId: null,
+          mandateId: null, nextPaymentAt: null, createdAt: null, metadata: null,
+        }
   }
 
-  async cancelSubscription({ subscriptionId }) {
-    this._maybeFail('cancelSubscription')
-    const s = this.subscriptions.get(subscriptionId)
-    if (s) s.status = 'canceled'
+  async cancelSchedule({ scheduleId }) {
+    this._maybeFail('cancelSchedule')
+    const schedule = this.subscriptions.get(scheduleId)
+    if (schedule) schedule.status = 'canceled'
   }
 
-  async refundPayment({ paymentId, amountCents, description }) {
-    this._maybeFail('refundPayment')
+  async createRefund({ paymentId, amount, description }) {
+    this._maybeFail('createRefund')
     const id = `re_${++this.refundSeq}`
-    this.refunds.set(id, { refundId: id, paymentId, amountCents, description, status: 'pending' })
-    return { refundId: id, status: 'pending', amountCents }
+    const refund = { id, paymentId, amount, description, status: 'pending' }
+    this.refunds.set(id, refund)
+    return { id, status: refund.status, amount: { ...amount } }
   }
 
   async getRefund({ refundId }) {
     this._maybeFail('getRefund')
-    const r = this.refunds.get(refundId)
-    if (!r) throw Object.assign(new Error('not found'), { statusCode: 404 })
-    return { refundId: r.refundId, status: r.status, amountCents: r.amountCents }
-  }
-
-  // ---- test controls ----
-
-  // Mark a payment settled. A paid `first` payment yields a mandate id (as
-  // Mollie does). subscriptionId links a recurring charge to a provider sub.
-  settlePayment(id, status, { paidAt = new Date(), subscriptionId = null } = {}) {
-    const p = this.payments.get(id)
-    p.status = status
-    if (status === 'paid') {
-      p.paidAt = paidAt
-      p.checkoutUrl = null
-      if (p.sequenceType === 'first' && !p.mandateId) p.mandateId = `mdt_${id}`
+    const refund = this.refunds.get(refundId)
+    if (!refund) {
+      throw new ProviderError('Refund not found', {
+        code: 'not_found', retryable: false, providerStatus: 404,
+      })
     }
-    if (subscriptionId) p.subscriptionId = subscriptionId
+    return { id: refund.id, status: refund.status, amount: { ...refund.amount } }
   }
 
-  // Inject a provider-generated recurring charge for a subscription (what Mollie
-  // creates each period), returning its payment id.
-  addRecurringCharge(providerSubId, customerId, amountCents, { status = 'paid', paidAt = new Date() } = {}) {
+  settlePayment(id, status, { paidAt = new Date(), subscriptionId = null } = {}) {
+    const payment = this.payments.get(id)
+    payment.status = status
+    if (status === 'paid') {
+      payment.paidAt = paidAt
+      payment.checkoutUrl = null
+      if (!payment.mandateId) payment.mandateId = `mdt_${id}`
+    }
+    if (subscriptionId) payment.scheduleId = subscriptionId
+  }
+
+  addRecurringCharge(scheduleId, customerId, amountCents, { status = 'paid', paidAt = new Date() } = {}) {
     const id = `tr_${++this.paySeq}`
     this.payments.set(id, {
-      id, status, amountCents, paidAt: status === 'paid' ? paidAt : null, createdAt: new Date(),
-      mandateId: `mdt_${id}`, subscriptionId: providerSubId, customerId, sequenceType: 'recurring', checkoutUrl: null,
+      id, status, amount: eur(amountCents), paidAt: status === 'paid' ? paidAt : null,
+      createdAt: new Date(), mandateId: `mdt_${id}`, scheduleId, customerId, checkoutUrl: null,
     })
     return id
   }

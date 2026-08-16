@@ -51,7 +51,7 @@ beforeAll(async () => {
   songSvc = await import('../../../server/music/songs/songService.js')
   guards = await import('../../../server/commerce/billing/featureGuards.js')
   credSvc = await import('../../../server/platform/integrations/integrationCredentialService.js')
-  providerFactory = await import('../../../server/commerce/billing/paymentProvider/index.js')
+  providerFactory = await import('../../../server/commerce/billing/paymentProvider/providerFactory.js')
   await runMigrations()
 })
 
@@ -466,7 +466,7 @@ describe('trial downgrades are immediate', () => {
     const band = await moduleRow(trial.subscription.id, 'band')
     expect(band.plan_id).toBe(await planId('silver'))
     expect(await chartCount(seed.tenantA.id)).toBe(0)
-    expect(fake.calls.filter((c) => c === 'createOnDemandCharge')).toEqual([]) // free
+    expect(fake.calls.filter((c) => c === 'createRecurringPayment')).toEqual([]) // free
   })
 })
 
@@ -582,11 +582,11 @@ describe('cancelRemoteSubscription lookup failures', () => {
     const providerSubId = row.mollie_subscription_id
     // The lookup fails; the cancel must still go out, because a failed lookup
     // must never be read as "already canceled".
-    const originalGet = fake.getSubscription.bind(fake)
-    fake.getSubscription = async () => { throw new Error('boom') }
+    const originalGet = fake.getSchedule.bind(fake)
+    fake.getSchedule = async () => { throw new Error('boom') }
 
     await saga.cancelRemoteSubscription(pool, row)
-    fake.getSubscription = originalGet
+    fake.getSchedule = originalGet
 
     expect(fake.subscriptions.get(providerSubId).status).toBe('canceled')
   })

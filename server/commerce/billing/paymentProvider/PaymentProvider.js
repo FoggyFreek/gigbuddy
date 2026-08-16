@@ -1,139 +1,97 @@
-// The payment-provider PORT: the provider-agnostic contract the billing service
-// and scheduler depend on. Mollie is one adapter behind it (mollieProvider.js);
-// swapping to another processor means writing a new adapter that returns these
-// same normalized shapes and canonical statuses — no caller changes.
-//
-// All monetary values cross this boundary as integer cents; all timestamps as
-// Date | null. Adapters normalize provider statuses to statuses.js constants
-// and throw PaymentProviderError (never their SDK's error type).
-
 /**
- * @typedef {import('./statuses.js').PAYMENT_STATUS[keyof import('./statuses.js').PAYMENT_STATUS]} CanonicalPaymentStatus
- *
- * @typedef {object} NormalizedPayment
- * @property {string} id                          provider payment id
- * @property {string} status                      a PAYMENT_STATUS value
- * @property {number} amountCents
- * @property {Date|null} paidAt
- * @property {Date|null} createdAt
- * @property {string|null} mandateId              mandate established/used (first/recurring)
- * @property {string|null} subscriptionId         provider sub that generated this charge, else null
- * @property {string|null} customerId
- * @property {'first'|'recurring'|'oneoff'|null} sequenceType
- * @property {string|null} checkoutUrl           hosted checkout URL while open, else null
- *
- * @typedef {object} NormalizedSubscription
- * @property {string} id
- * @property {string} status                      a SUBSCRIPTION_STATUS value
- * @property {Date|null} nextPaymentDate
- * @property {object|null} metadata               the metadata stamped at creation, echoed
- *                                                back by the provider (attribution)
- *
- * @typedef {object} NormalizedRefund
- * @property {string} refundId
- * @property {string} status                      a REFUND_STATUS value
- * @property {number} amountCents
+ * @typedef {{ currency: 'EUR', cents: number }} Money
+ * @typedef {{
+ *   id: string,
+ *   status: string,
+ *   amount: Money,
+ *   customerId: string|null,
+ *   mandateId: string|null,
+ *   scheduleId: string|null,
+ *   checkoutUrl: string|null,
+ *   createdAt: Date|null,
+ *   paidAt: Date|null,
+ * }} Payment
+ * @typedef {{ id: string }} Customer
+ * @typedef {{
+ *   id: string,
+ *   status: string,
+ *   amount: Money,
+ *   customerId: string|null,
+ *   mandateId: string|null,
+ *   nextPaymentAt: Date|null,
+ *   createdAt: Date|null,
+ *   metadata: object|null,
+ * }} Schedule
+ * @typedef {{ id: string, status: string, amount: Money }} Refund
  */
 
 const NOT_IMPLEMENTED = 'PaymentProvider subclass must implement this method'
 
 export class PaymentProvider {
-  // Whether credentials are present. Routes 503 before doing any work when false.
-  isConfigured() {
-    return false
-  }
-
   /**
-   * Idempotently ensure a provider-side customer for this user.
-   * @param {{ email?: string|null, name?: string|null, existingCustomerId?: string|null }} _args
-   * @returns {Promise<string>} customerId
+   * @param {{ email?: string|null, name?: string|null, idempotencyKey: string }} _args
+   * @returns {Promise<Customer>}
    */
-  async ensureCustomer(_args) {
-    throw new Error(NOT_IMPLEMENTED)
-  }
+  async createCustomer(_args) { throw new Error(NOT_IMPLEMENTED) }
 
   /**
-   * Create the mandate-establishing FIRST payment and return its id plus the
-   * hosted checkout URL. Depending on the calling flow, the amount is either a
-   * disclosed mandate-verification cent or a direct-signup conversion charge.
-   * No payment-method restriction by design.
-   * @param {{ customerId: string, amountCents: number, description: string,
-   *   idempotencyKey: string, redirectUrl: string, webhookUrl?: string|null,
-   *   metadata?: object }} _args
-   * @returns {Promise<{ paymentId: string, checkoutUrl: string }>}
+   * @param {{ customerId: string }} _args
+   * @returns {Promise<Customer>}
    */
-  async createMandatePayment(_args) {
-    throw new Error(NOT_IMPLEMENTED)
-  }
+  async getCustomer(_args) { throw new Error(NOT_IMPLEMENTED) }
 
   /**
-   * Charge an existing mandate on demand (plan-change / downgrade-activation).
-   * No hosted checkout — settles against the stored mandate.
-   * @param {{ customerId: string, mandateId: string, amountCents: number,
-   *   description: string, idempotencyKey: string, webhookUrl?: string|null,
-   *   metadata?: object }} _args
-   * @returns {Promise<{ paymentId: string }>}
+   * @param {{ customerId: string, amount: Money, description: string,
+   *   redirectUrl: string, webhookUrl?: string|null, metadata?: object|null,
+   *   idempotencyKey: string }} _args
+   * @returns {Promise<Payment>}
    */
-  async createOnDemandCharge(_args) {
-    throw new Error(NOT_IMPLEMENTED)
-  }
+  async createCheckoutPayment(_args) { throw new Error(NOT_IMPLEMENTED) }
 
   /**
-   * Authoritative payment state, normalized. This is the ONLY trusted source of
-   * payment status — never the webhook body.
-   * @param {string} _paymentId
-   * @returns {Promise<NormalizedPayment>}
+   * @param {{ customerId: string, mandateId: string, amount: Money,
+   *   description: string, webhookUrl?: string|null, metadata?: object|null,
+   *   idempotencyKey: string }} _args
+   * @returns {Promise<Payment>}
    */
-  async getPayment(_paymentId) {
-    throw new Error(NOT_IMPLEMENTED)
-  }
+  async createRecurringPayment(_args) { throw new Error(NOT_IMPLEMENTED) }
 
   /**
-   * Create the recurring subscription schedule.
-   * @param {{ customerId: string, mandateId?: string|null, amountCents: number,
-   *   interval: 'month'|'year', description: string, startDate?: Date|null,
-   *   webhookUrl?: string|null, idempotencyKey: string, metadata?: object }} _args
-   * @returns {Promise<NormalizedSubscription>}
+   * @param {{ paymentId: string }} _args
+   * @returns {Promise<Payment>}
    */
-  async createSubscription(_args) {
-    throw new Error(NOT_IMPLEMENTED)
-  }
+  async getPayment(_args) { throw new Error(NOT_IMPLEMENTED) }
 
   /**
-   * @param {{ customerId: string, subscriptionId: string }} _args
-   * @returns {Promise<NormalizedSubscription>}
+   * @param {{ customerId: string, mandateId?: string|null, amount: Money,
+   *   interval: 'month'|'year', description: string, startAt?: Date|null,
+   *   webhookUrl?: string|null, metadata?: object|null, idempotencyKey: string }} _args
+   * @returns {Promise<Schedule>}
    */
-  async getSubscription(_args) {
-    throw new Error(NOT_IMPLEMENTED)
-  }
+  async createSchedule(_args) { throw new Error(NOT_IMPLEMENTED) }
 
   /**
-   * Cancel a subscription schedule. Idempotent: an already-gone subscription
-   * resolves successfully rather than throwing.
-   * @param {{ customerId: string, subscriptionId: string, idempotencyKey?: string }} _args
+   * @param {{ customerId: string, scheduleId: string }} _args
+   * @returns {Promise<Schedule>}
+   */
+  async getSchedule(_args) { throw new Error(NOT_IMPLEMENTED) }
+
+  /**
+   * @param {{ customerId: string, scheduleId: string, idempotencyKey: string }} _args
    * @returns {Promise<void>}
    */
-  async cancelSubscription(_args) {
-    throw new Error(NOT_IMPLEMENTED)
-  }
+  async cancelSchedule(_args) { throw new Error(NOT_IMPLEMENTED) }
 
   /**
-   * Refund part or all of a settled payment. Asynchronous everywhere worth
-   * supporting, so the returned status is a REFUND_STATUS the caller tracks to
-   * a terminal value rather than a completion signal.
-   * @param {{ paymentId: string, amountCents: number, description?: string,
+   * @param {{ paymentId: string, amount: Money, description?: string|null,
    *   idempotencyKey: string }} _args
-   * @returns {Promise<NormalizedRefund>}
+   * @returns {Promise<Refund>}
    */
-  async refundPayment(_args) {
-    throw new Error(NOT_IMPLEMENTED)
-  }
+  async createRefund(_args) { throw new Error(NOT_IMPLEMENTED) }
 
   /**
    * @param {{ paymentId: string, refundId: string }} _args
-   * @returns {Promise<NormalizedRefund>}
+   * @returns {Promise<Refund>}
    */
-  async getRefund(_args) {
-    throw new Error(NOT_IMPLEMENTED)
-  }
+  async getRefund(_args) { throw new Error(NOT_IMPLEMENTED) }
 }
