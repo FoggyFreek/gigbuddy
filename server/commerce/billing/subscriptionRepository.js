@@ -135,9 +135,9 @@ export async function setPendingPaymentId(executor, id, paymentId) {
 
 // ---- lifecycle ----
 
-// Conversion: the trial's (or a fresh signup's) first full combined charge has
-// been paid. Opens the first paid period and stamps the withdrawal-window
-// anchor. Guarded so a replayed webhook cannot re-open the period.
+// Direct-signup conversion: the first full combined charge has been paid. Opens
+// the first paid period and stamps the withdrawal-window anchor. Guarded so a
+// replayed webhook cannot re-open the period.
 export async function applyConversion(executor, id, { periodStart, periodEnd, paymentId }) {
   const { rows } = await executor.query(
     `UPDATE subscriptions

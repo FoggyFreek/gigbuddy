@@ -47,8 +47,8 @@ router.post('/subscribe', requireCurrentTerms, async (req, res) => {
   res.status(201).json(result)
 })
 
-// Conversion: price the module set for the chosen interval and start the one
-// payment that takes the first combined amount and establishes the mandate.
+// Trial continuation: price the module set, verify the mandate for €0.01 now,
+// and schedule the first combined subscription charge at trial_ends_at.
 router.post('/checkout', requireCurrentTerms, async (req, res) => {
   const result = await checkout(pool, req.user, req.body ?? {})
   if (result.error) return sendError(res, result.error)

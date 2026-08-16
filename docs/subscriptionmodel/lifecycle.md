@@ -17,7 +17,7 @@ flowchart TD
   START_TRIAL["POST /api/billing/trial<br/>preferred workspace module starts on Gold"]
   TRIAL_APP["Application<br/>30-day Gold trial"]
   MODULES["Billing settings<br/>select Band and/or Artist<br/>and each paid plan"]
-  VERIFY["Hosted checkout<br/>EUR 0.01 mandate verification"]
+  VERIFY["Hosted checkout<br/>mandate verification"]
   SCHEDULE["Provider subscription scheduled<br/>startDate = trial_ends_at"]
   TRIAL_SPENT["Trial already spent<br/>choose a paid plan"]
   PAID_SETUP["POST /api/billing/subscribe"]
@@ -67,12 +67,10 @@ for payment details. Billing settings then exposes the preferred module set:
 Band, Artist, or both, including Band Silver as a paid-period choice. Trial
 entitlements remain Gold until the first paid period actually begins.
 
-Scheduling is explicit about the two amounts. The customer pays EUR 0.01 now to
-establish the reusable mandate; the combined subscription amount is displayed
-with `trial_ends_at` and is not charged before that date. A paid verification
-creates the provider subscription with that date as `startDate`. The direct
-paid route remains available only for a customer whose trial is already spent;
-its checkout-timeout recovery still clears `onboarding_tenant_id`
+Paid continuation follows
+[ADR 001](../architecture-decisions/001-trial-mandate-verification.md). The
+direct paid route remains available only for a customer whose trial is already
+spent; its checkout-timeout recovery still clears `onboarding_tenant_id`
 transactionally when the delayed payment settles.
 
 ## Billing lifecycle at a glance
@@ -80,9 +78,9 @@ transactionally when the delayed payment settles.
 ```mermaid
 flowchart TD
   FREE["No live subscription<br/>free fallback entitlements"]
-  TRIALING["trialing<br/>30 days; access granted<br/>no provider objects"]
+  TRIALING["trialing<br/>30 days; access granted<br/>no payment setup yet"]
   PERSONAL_JOIN["Personal workspace created during Band Gold trial<br/>attach Artist Gold to same trial<br/>keep trial_ends_at unchanged"]
-  VERIFY_PENDING["trialing<br/>EUR 0.01 verification open or pending"]
+  VERIFY_PENDING["trialing<br/>verification open or pending"]
   SCHEDULED_TRIAL["trialing + verified mandate<br/>real charge scheduled at trial end"]
   FIRST_CHARGE_HOLD["trialing; first real charge pending<br/>access through trial end +2 days<br/>then fallback-locked until paid"]
   PENDING_ACTIVATION["pending_activation<br/>first full charge unsettled<br/>no access"]
@@ -101,7 +99,7 @@ flowchart TD
   TRIALING -- "Select Band and/or Artist paid plans<br/>Gold access and trial end unchanged" --> TRIALING
   TRIALING -- "Create personal workspace" --> PERSONAL_JOIN
   PERSONAL_JOIN --> TRIALING
-  TRIALING -- "EUR 0.01 verification started" --> VERIFY_PENDING
+  TRIALING -- "Mandate verification started" --> VERIFY_PENDING
   VERIFY_PENDING -- "Failed or expired<br/>trial continues; retry allowed" --> TRIALING
   VERIFY_PENDING -- "Paid; mandate captured" --> SCHEDULED_TRIAL
   SCHEDULED_TRIAL -- "Change preferred modules<br/>replace schedule at new combined price" --> SCHEDULED_TRIAL
@@ -211,22 +209,19 @@ Access is granted immediately. The entitlement resolver bounds it at
 
 ## Conversion
 
+Trial continuation follows
+[ADR 001](../architecture-decisions/001-trial-mandate-verification.md), the
+single source of truth for the verification amount, timing and state boundary.
+
 ```
 POST /api/billing/checkout { interval }
 ```
 
-Prices the current module set for the chosen interval and shows that combined
-amount beside the exact trial-end date. Checkout creates a disclosed **EUR 0.01
-mandate-verification payment** with `sequenceType: first`; it is not the
-subscription charge and does not open a paid period.
-
-When verification is authoritatively paid, the provider subscription is created
-at `next_total_cents` with `startDate = trial_ends_at`. The subscription remains
-`trialing`. The first provider-generated recurring charge is the subscription
-charge: when it is paid, ingestion opens the paid period from `paidAt`, anchors
-the withdrawal window, and changes the state to `active`. Open or pending
-settlement remains recoverable; access is bounded by the trial resolver and is
-restored if that charge pays later.
+The resulting scheduled charge follows ordinary recurring-payment ingestion:
+when paid, it opens the paid period from `paidAt`, anchors the withdrawal window
+and changes the state to `active`. Open or pending settlement remains
+recoverable; access is bounded by the trial resolver and is restored if that
+charge pays later.
 
 `POST /api/billing/subscribe` is the direct paid-signup route for a customer
 whose trial is already spent. It creates `pending_activation` and takes the

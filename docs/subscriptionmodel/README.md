@@ -11,6 +11,8 @@ without reading `billingService.js`.
 - [`lifecycle.md`](lifecycle.md) — the state machine, from trial to cancellation.
 - [`pricing.md`](pricing.md) — pricing rules, discounts and the price snapshot.
 - [`refunds.md`](refunds.md) — the five-day withdrawal window and admin refunds.
+- [`../architecture-decisions/001-trial-mandate-verification.md`](../architecture-decisions/001-trial-mandate-verification.md)
+  — the mandate-verification decision for trial continuation.
 
 ## The shape in one page
 
@@ -60,8 +62,8 @@ the subscription would zero the owner's band cap.
 ## Invariants a change here must not break
 
 1. **No paid access before an authoritatively-paid subscription charge.** The
-   free trial is the deliberate exception. Its optional EUR 0.01 verification
-   establishes a mandate only; it never opens or extends a paid period.
+   free trial is the deliberate exception; its payment boundary is defined by
+   [ADR 001](../architecture-decisions/001-trial-mandate-verification.md).
 2. **A lapse never deletes data.** Cancelling, failing a payment or running out
    of trial fallback-locks to the free floor. Only a *confirmed downgrade whose
    target plan became real* deletes anything.

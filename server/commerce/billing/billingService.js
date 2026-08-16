@@ -9,7 +9,8 @@
 //   so an abandoned checkout is just a stale row the scheduler cleans up.
 // - Never a provider call inside a DB transaction.
 // - No paid access before an authoritatively-paid subscription charge. The
-//   trial is free; its optional EUR 0.01 payment establishes only the mandate.
+//   trial is free; its EUR 0.01 continuation verification establishes only the
+//   mandate.
 // - Every remote mutation goes through the saga layer; this service never calls
 //   the provider SDK directly.
 // - Expected failures return { error: { status, body } }; success returns a

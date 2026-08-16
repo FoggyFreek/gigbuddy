@@ -65,9 +65,9 @@ function dateKey(date) {
   return new Date(date).toISOString().slice(0, 10)
 }
 
-// 'conversion' is the first combined charge, which also established the
-// mandate; 'proration' is the on-demand difference for a mid-cycle module
-// change; everything else is the recurring schedule doing its job.
+// The first linked payment is mandate verification for a trial and a full
+// conversion charge for direct signup. 'proration' is an on-demand mid-cycle
+// difference; everything else comes from the recurring schedule.
 function classifyKind(sub, payment, existingPayment) {
   if (existingPayment?.kind) return existingPayment.kind
   if (payment.id === sub.mollie_first_payment_id) {
@@ -121,9 +121,8 @@ async function handlePaid(client, sub, payment, kind, ctx) {
   }
 
   if (kind === 'conversion') {
-    // The trial (or a fresh signup) has paid its first full combined amount.
-    // That payment also established the mandate, so the recurring schedule can
-    // now be created — deferred to the saga, after the commit.
+    // A direct signup has paid its first full combined amount. That payment also
+    // established the mandate, so schedule creation is deferred until commit.
     const periodStart = payment.paidAt ?? new Date()
     const periodEnd = ctx.periodEndHint ?? periodEndFrom(periodStart, sub.billing_interval)
     const converted = await applyConversion(client, sub.id, {

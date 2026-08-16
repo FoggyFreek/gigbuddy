@@ -217,7 +217,7 @@ describe('migration 181 — legacy subscription back-fill', () => {
     expect(await moduleFor(sub.id)).toBeNull()
   })
 
-  it('converts pending_mandate to pending_activation with a non-granting module', async () => {
+  it('maps legacy non-granting pending_mandate to pending_activation', async () => {
     const sub = await legacySubscription({
       planSlug: 'gold',
       status: 'pending_mandate',

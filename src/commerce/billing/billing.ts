@@ -144,7 +144,7 @@ export const subscribe = (
     body: JSON.stringify({ audience, planId, interval, ...(redirect ? { redirect } : {}) }),
   })
 
-/** Verify payment details now and schedule the real trial conversion charge. */
+/** Verify payment details now and schedule the first subscription charge. */
 export const checkout = (interval: BillingInterval, redirect?: CheckoutRedirect) =>
   api<{
     checkoutUrl: string

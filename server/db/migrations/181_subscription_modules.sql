@@ -265,11 +265,11 @@ UPDATE subscriptions s
    AND p.is_fallback
    AND s.status <> 'canceled';
 
--- 'pending_mandate' is dropped from the status CHECK further down. It meant
--- "awaiting the €0.01 mandate-verification payment", which grants nothing —
--- exactly what 'pending_activation' means in the new model, where conversion's
--- first full charge establishes the mandate instead. The in-flight verification
--- payment keeps its row: 'mandate_verification' stays a legal payment kind.
+-- 'pending_mandate' is dropped from the status CHECK further down. A legacy row
+-- in that state grants nothing, so its honest module-model equivalent is
+-- 'pending_activation' with a non-granting module. Current trial verification
+-- does not need a subscription status of its own: the payment row records the
+-- open/pending €0.01 charge while free access remains 'trialing'.
 UPDATE subscriptions
    SET status = 'pending_activation', updated_at = NOW()
  WHERE status = 'pending_mandate';
@@ -434,11 +434,11 @@ ALTER TABLE subscriptions
   DROP COLUMN IF EXISTS downgrade_schedule_pending,
   DROP COLUMN IF EXISTS superseded_mollie_subscription_id;
 
--- 'pending_mandate' existed only for the €0.01 mandate-verification payment.
--- Conversion's first charge is the full combined amount AND establishes the
--- mandate, so a subscription awaiting its first settled charge is simply
--- 'pending_activation'. Removing the value keeps the state machine honest —
--- there are no rows to migrate.
+-- 'pending_mandate' was a non-granting pre-activation state. In the module
+-- model, direct paid signup waits in 'pending_activation', while a trial stays
+-- 'trialing' during its €0.01 mandate verification and until the scheduled
+-- first recurring charge settles. The payment row carries verification state,
+-- so a separate subscription status would duplicate it.
 ALTER TABLE subscriptions DROP CONSTRAINT IF EXISTS subscriptions_status_check;
 ALTER TABLE subscriptions ADD CONSTRAINT subscriptions_status_check CHECK (status IN
   ('pending_activation','trialing','active','past_due','canceled'));
@@ -455,9 +455,10 @@ CREATE INDEX IF NOT EXISTS subscriptions_current_period_end_idx
 
 -- -------------------------------------------------------------- payments ----
 
--- 'conversion' is the trial's first full combined charge, which also
--- establishes the mandate (there is no €0.01 verification payment any more).
--- 'proration' is the positive difference owed for a mid-cycle module change.
+-- 'mandate_verification' is the trial's €0.01 first-sequence payment;
+-- 'conversion' is the full first-sequence payment for direct paid signup;
+-- 'recurring' includes the first scheduled charge at trial end; and 'proration'
+-- is the positive difference owed for a mid-cycle module change.
 ALTER TABLE subscription_payments
   DROP CONSTRAINT IF EXISTS subscription_payments_kind_check;
 ALTER TABLE subscription_payments

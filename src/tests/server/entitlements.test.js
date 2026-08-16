@@ -66,9 +66,9 @@ describe('fallback-lock states', () => {
     })
   })
 
-  // 'pending_mandate' is gone with the €0.01 verification payment: conversion's
-  // first charge takes the real amount AND establishes the mandate, so a
-  // subscription awaiting its first settled charge is simply pending_activation.
+  // Direct paid signup grants nothing until its full first payment settles, so
+  // it uses pending_activation. Trial mandate verification stays trialing and
+  // records its open/pending state on the payment row instead.
   it('pending_activation grants nothing', async () => {
     const { tenantId, userId } = await ownTenantA()
     await billing.createSubscription({ userId, status: 'pending_activation' })

@@ -4,9 +4,9 @@ import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
 import { seedDefaultPlans } from '../../../server/db/defaultPlans.js'
 import { FakeProvider } from './_fakeProvider.js'
 
-// The subscription lifecycle end to end: one trial, one conversion payment for
-// the combined total, prorated mid-cycle changes that preserve the renewal
-// date, and one combined renewal.
+// The subscription lifecycle end to end: one payment-free trial start, a €0.01
+// mandate verification, the combined charge scheduled at trial end, prorated
+// mid-cycle changes that preserve the renewal date, and one combined renewal.
 let pool, runMigrations, truncateAll, seedTwoTenants
 let billingSvc, ingestion, providerFactory, entitlementSvc, billing
 let seed, fake
@@ -112,7 +112,7 @@ describe('the free trial', () => {
     expect(mods).toHaveLength(1)
     expect(mods[0].audience).toBe('band')
     expect(mods[0].is_starter).toBe(true)
-    // The whole point of a no-mandate trial: nothing was asked of the provider.
+    // Starting the trial itself never asks the provider for payment details.
     expect(fake.calls).toEqual([])
   })
 
@@ -308,7 +308,7 @@ describe('trial conversion', () => {
     expect(totalCents).toBe(2000)
   })
 
-  it('keeps trial access while the conversion charge is in flight', async () => {
+  it('keeps trial access while mandate verification is in flight', async () => {
     await billing.setTenantOwner(seed.tenantA.id, seed.userA.id)
     const trial = await billingSvc.startTrial(pool, userA(), { audience: 'band' })
     await billingSvc.checkout(pool, userA(), { interval: 'month' })
