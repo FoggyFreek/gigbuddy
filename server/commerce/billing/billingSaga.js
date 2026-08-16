@@ -17,13 +17,11 @@ import { ProviderError } from './paymentProvider/ProviderError.js'
 import { PAYMENT_STATUS, SCHEDULE_STATUS } from './paymentProvider/statuses.js'
 import {
   claimOperation,
-  markOperation,
 } from './billingOperationRepository.js'
+import { assertOperationCommand, executeBillingOperation } from './billingOperationService.js'
 import {
   fetchSubscriptionById,
   fetchUserMollieCustomerId,
-  setUserMollieCustomerId,
-  setMandateLinkage,
   setScheduleStale,
   setBillingRepairNeeded,
 } from './subscriptionRepository.js'
@@ -39,19 +37,15 @@ import {
 import { logger } from '../../utils/logger.js'
 
 // Run one provider call behind an outbox op. Returns { skipped, resourceId, result }.
-async function runOp(db, { userId, subscriptionId, opType, idempotencyKey }, fn) {
-  const op = await claimOperation(db, { userId, subscriptionId, opType, idempotencyKey })
-  if (op.status === 'succeeded') {
-    return { skipped: true, resourceId: op.mollie_resource_id, result: null }
-  }
+async function runOp(db, { userId, subscriptionId, opType, idempotencyKey }, command) {
+  const durableCommand = JSON.parse(JSON.stringify(command))
+  const op = await claimOperation(db, {
+    userId, subscriptionId, opType, idempotencyKey, commandPayload: durableCommand,
+  })
+  assertOperationCommand(op, durableCommand)
   try {
-    const result = await fn(idempotencyKey)
-    await markOperation(db, op.id, 'succeeded', { mollieResourceId: result?.resourceId ?? null })
-    return { skipped: false, resourceId: result?.resourceId ?? null, result }
+    return await executeBillingOperation(db, op)
   } catch (err) {
-    const retryable = err instanceof ProviderError ? err.retryable : true
-    const code = err instanceof ProviderError ? err.code : 'unknown'
-    await markOperation(db, op.id, retryable ? 'failed_retryable' : 'failed_terminal', { lastErrorCode: code })
     logger.error('billing.op_failed', { err, subscriptionId, opType })
     throw err
   }
@@ -62,24 +56,24 @@ async function runOp(db, { userId, subscriptionId, opType, idempotencyKey }, fn)
 export async function ensureCustomerForUser(db, { userId, email, name }) {
   const existing = await fetchUserMollieCustomerId(db, userId)
   const provider = getPaymentProvider()
+  if (existing) {
+    try {
+      return (await provider.getCustomer({ customerId: existing })).id
+    } catch (err) {
+      if (!(err instanceof ProviderError) || err.code !== 'not_found') throw err
+    }
+  }
   const { resourceId, skipped, result } = await runOp(
     db,
     { userId, subscriptionId: null, opType: 'ensure_customer', idempotencyKey: idemKeys.ensureCustomer(userId) },
-    async (idempotencyKey) => {
-      if (existing) {
-        try {
-          return { resourceId: (await provider.getCustomer({ customerId: existing })).id }
-        } catch (err) {
-          if (!(err instanceof ProviderError) || err.code !== 'not_found') throw err
-        }
-      }
-      const customer = await provider.createCustomer({ email, name, idempotencyKey })
-      return { resourceId: customer.id }
+    {
+      version: 1,
+      method: 'createCustomer',
+      args: { email, name },
+      completion: { kind: 'linkCustomer', userId },
     },
   )
-  const customerId = skipped ? (resourceId ?? existing) : result.resourceId
-  if (customerId && customerId !== existing) await setUserMollieCustomerId(db, userId, customerId)
-  return customerId
+  return skipped ? (resourceId ?? existing) : result.resourceId
 }
 
 // Direct paid-signup checkout: one full combined payment both opens the paid
@@ -88,7 +82,9 @@ export async function ensureCustomerForUser(db, { userId, email, name }) {
 //
 // On a resumed call (op already succeeded) the checkout URL is recovered by
 // re-fetching the still-open payment from the provider.
-export async function createConversionCheckout(db, sub, { email, name, amountCents, redirect = 'billing' }) {
+export async function createConversionCheckout(db, sub, {
+  email, name, amountCents, priceSnapshot = null, redirect = 'billing',
+}) {
   const provider = getPaymentProvider()
   const customerId = await ensureCustomerForUser(db, { userId: sub.user_id, email, name })
   const modules = await listModules(db, sub.id)
@@ -99,25 +95,27 @@ export async function createConversionCheckout(db, sub, { email, name, amountCen
     opType: 'conversion_payment',
     idempotencyKey: idemKeys.conversionPayment(sub.id, amountCents),
   }
-  const { skipped, resourceId, result } = await runOp(db, opCtx, async (idempotencyKey) => {
-    const created = await provider.createCheckoutPayment({
+  const { resourceId, result } = await runOp(db, opCtx, {
+    version: 1,
+    method: 'createCheckoutPayment',
+    args: {
       customerId,
       amount: { currency: 'EUR', cents: amountCents },
       description: subscriptionDescription(modules, sub.billing_interval),
-      idempotencyKey,
       redirectUrl: billingRedirectUrl(redirect),
       webhookUrl: billingWebhookUrl(sub.id),
       metadata: billingMetadata(sub.id, 'conversion'),
-    })
-    return { resourceId: created.id, checkoutUrl: created.checkoutUrl }
+    },
+    completion: {
+      kind: 'linkFirstPayment', subscriptionId: sub.id, paymentKind: 'conversion', amountCents,
+      priceSnapshot,
+    },
   })
 
-  if (!skipped) {
-    await setMandateLinkage(db, sub.id, { firstPaymentId: result.resourceId })
-    return { paymentId: result.resourceId, checkoutUrl: result.checkoutUrl }
-  }
-  const payment = await provider.getPayment({ paymentId: resourceId })
-  return { paymentId: resourceId, checkoutUrl: payment.checkoutUrl }
+  const paymentId = result?.resourceId ?? resourceId
+  if (result?.checkoutUrl) return { paymentId, checkoutUrl: result.checkoutUrl }
+  const payment = await provider.getPayment({ paymentId })
+  return { paymentId, checkoutUrl: payment.checkoutUrl }
 }
 
 // Trial mandate setup: the customer pays only the disclosed verification cent.
@@ -147,23 +145,26 @@ export async function createMandateVerificationCheckout(db, sub, {
       opType: 'mandate_verification_payment',
       idempotencyKey: idemKeys.mandateVerification(sub.id, sub.mollie_first_payment_id),
     },
-    async (idempotencyKey) => {
-      const created = await provider.createCheckoutPayment({
+    {
+      version: 1,
+      method: 'createCheckoutPayment',
+      args: {
         customerId,
         amount: { currency: 'EUR', cents: amountCents },
         description: 'GigBuddy payment-method verification',
-        idempotencyKey,
         redirectUrl: billingRedirectUrl(redirect),
         webhookUrl: billingWebhookUrl(sub.id),
         metadata: billingMetadata(sub.id, 'mandate_verification'),
-      })
-      return { resourceId: created.id, checkoutUrl: created.checkoutUrl }
+      },
+      completion: {
+        kind: 'linkFirstPayment', subscriptionId: sub.id,
+        paymentKind: 'mandate_verification', amountCents,
+      },
     },
   )
 
   const paymentId = skipped ? resourceId : result.resourceId
-  await setMandateLinkage(db, sub.id, { firstPaymentId: paymentId })
-  if (!skipped) return { paymentId, checkoutUrl: result.checkoutUrl }
+  if (result?.checkoutUrl) return { paymentId, checkoutUrl: result.checkoutUrl }
   const payment = await provider.getPayment({ paymentId })
   return { paymentId, checkoutUrl: payment.checkoutUrl }
 }
@@ -172,7 +173,6 @@ export async function createMandateVerificationCheckout(db, sub, {
 // module add or upgrade owes. The amount is part of the idempotency key — the
 // same module change made twice in one period costs different amounts.
 export async function chargeModuleChange(db, sub, { audience, planId, amountCents, periodEndIso, modules }) {
-  const provider = getPaymentProvider()
   const customerId = await fetchUserMollieCustomerId(db, sub.user_id)
   const { skipped, resourceId, result } = await runOp(
     db,
@@ -182,17 +182,18 @@ export async function chargeModuleChange(db, sub, { audience, planId, amountCent
       opType: 'module_change_charge',
       idempotencyKey: idemKeys.moduleChangeCharge(sub.id, audience, planId, amountCents, periodEndIso),
     },
-    async (idempotencyKey) => {
-      const charge = await provider.createRecurringPayment({
+    {
+      version: 1,
+      method: 'createRecurringPayment',
+      args: {
         customerId,
         mandateId: sub.mollie_mandate_id,
         amount: { currency: 'EUR', cents: amountCents },
         description: `${subscriptionDescription(modules, sub.billing_interval)} — prorated change`,
-        idempotencyKey,
         webhookUrl: billingWebhookUrl(sub.id),
         metadata: billingMetadata(sub.id, 'module_change'),
-      })
-      return { resourceId: charge.id }
+      },
+      completion: { kind: 'linkModulePayment', subscriptionId: sub.id, amountCents },
     },
   )
   return { paymentId: skipped ? resourceId : result.resourceId }
@@ -227,7 +228,6 @@ export async function repairSchedule(db, subId) {
   if (!sub || !sub.mollie_schedule_stale || sub.is_complimentary) return
   if (sub.status === 'canceled') { await setScheduleStale(db, subId, false); return }
 
-  const provider = getPaymentProvider()
   const customerId = await fetchUserMollieCustomerId(db, sub.user_id)
   if (!customerId || !sub.mollie_mandate_id) return // not converted yet
 
@@ -246,7 +246,7 @@ export async function repairSchedule(db, subId) {
     if (sub.mollie_subscription_id) {
       await cancelRemoteSubscription(db, sub)
     }
-    const { skipped, resourceId, result } = await runOp(
+    await runOp(
       db,
       {
         userId: sub.user_id,
@@ -254,25 +254,22 @@ export async function repairSchedule(db, subId) {
         opType: 'create_subscription',
         idempotencyKey: idemKeys.createSubscription(sub.id, amountCents, sub.billing_interval, startDate.toISOString()),
       },
-      async (idempotencyKey) => {
-        const created = await provider.createSchedule({
+      {
+        version: 1,
+        method: 'createSchedule',
+        args: {
           customerId,
           mandateId: sub.mollie_mandate_id,
           amount: { currency: 'EUR', cents: amountCents },
           interval: sub.billing_interval,
           description: subscriptionDescription(modules, sub.billing_interval),
-          startAt: startDate,
+          startAt: startDate.toISOString(),
           webhookUrl: billingWebhookUrl(sub.id),
-          idempotencyKey,
           metadata: billingMetadata(sub.id, 'schedule'),
-        })
-        return { resourceId: created.id }
+        },
+        completion: { kind: 'linkSchedule', subscriptionId: sub.id },
       },
     )
-    const providerSubId = skipped ? resourceId : result.resourceId
-    if (providerSubId) await setMandateLinkage(db, sub.id, { subscriptionId: providerSubId })
-    await setScheduleStale(db, sub.id, false)
-    await setBillingRepairNeeded(db, sub.id, false)
   } catch (err) {
     if (err instanceof ProviderError && !err.retryable) {
       await setBillingRepairNeeded(db, subId, true)
@@ -290,23 +287,20 @@ export async function cancelRemoteSubscription(db, sub, providerSubId = null) {
   if (!subscriptionId) return
   const provider = getPaymentProvider()
   const customerId = await fetchUserMollieCustomerId(db, sub.user_id)
+  // Only skip when the provider positively reports cancellation. A lookup
+  // error falls through to the idempotent cancel command.
+  const status = await provider.getSchedule({ customerId, scheduleId: subscriptionId })
+    .then((schedule) => schedule.status)
+    .catch(() => null)
+  if (status === SCHEDULE_STATUS.CANCELED) return
   await runOp(
     db,
     { userId: sub.user_id, subscriptionId: sub.id, opType: 'cancel_subscription', idempotencyKey: idemKeys.cancelSubscription(sub.id, subscriptionId) },
-    async (idempotencyKey) => {
-      // Skip the cancel call ONLY when the provider POSITIVELY reports the
-      // subscription canceled. A lookup failure must NOT read as canceled —
-      // that would mark this op succeeded while the old subscription keeps
-      // charging. On lookup error we proceed to the idempotent cancel: the
-      // adapter treats already-canceled as success, and any other failure
-      // surfaces as a retryable op for the scheduler.
-      const status = await provider.getSchedule({ customerId, scheduleId: subscriptionId })
-        .then((s) => s.status)
-        .catch(() => null)
-      if (status !== SCHEDULE_STATUS.CANCELED) {
-        await provider.cancelSchedule({ customerId, scheduleId: subscriptionId, idempotencyKey })
-      }
-      return { resourceId: subscriptionId }
+    {
+      version: 1,
+      method: 'cancelSchedule',
+      args: { customerId, scheduleId: subscriptionId },
+      completion: { kind: 'cancelSchedule', subscriptionId: sub.id },
     },
   )
 }
@@ -314,24 +308,26 @@ export async function cancelRemoteSubscription(db, sub, providerSubId = null) {
 // Refund a subscription payment through the outbox, so a crash between the
 // local refund row and the provider call resumes instead of silently losing
 // the customer's money.
-export async function refundSubscriptionPayment(db, sub, { providerPaymentId, amountCents, description }) {
-  const provider = getPaymentProvider()
+export async function refundSubscriptionPayment(db, sub, {
+  providerPaymentId, amountCents, description, refundIntentId,
+}) {
   const { skipped, resourceId, result } = await runOp(
     db,
     {
       userId: sub.user_id,
       subscriptionId: sub.id,
       opType: 'refund_payment',
-      idempotencyKey: idemKeys.refundPayment(providerPaymentId, amountCents),
+      idempotencyKey: idemKeys.refundPayment(providerPaymentId, amountCents, refundIntentId),
     },
-    async (idempotencyKey) => {
-      const refund = await provider.createRefund({
+    {
+      version: 1,
+      method: 'createRefund',
+      args: {
         paymentId: providerPaymentId,
         amount: { currency: 'EUR', cents: amountCents },
         description,
-        idempotencyKey,
-      })
-      return { resourceId: refund.id, status: refund.status }
+      },
+      completion: { kind: 'completeRefund', refundId: refundIntentId },
     },
   )
   return { refundId: skipped ? resourceId : result.resourceId, status: result?.status ?? null }

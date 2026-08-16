@@ -15,7 +15,7 @@ const CONTEXT_KEYS = new Set([
   'filename', 'aborted',
   'tenants', 'encrypted', 'corrupt',
   'migrationNeeded', 'reEncryptionNeeded', 'rateMissing', 'ratesFilled',
-  'subscriptionId', 'planId', 'planSlug', 'paymentKind', 'mollieStatus',
+  'subscriptionId', 'refundId', 'planId', 'planSlug', 'paymentKind', 'mollieStatus',
   'audience', 'pendingPlanSlug', 'pendingAudience', 'crossAudiencePending',
   'jobName', 'feature', 'ownerUserId', 'opType', 'revokedTokens',
   'achievementKey', 'shopifyResponseJson',

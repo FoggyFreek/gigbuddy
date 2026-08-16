@@ -1,0 +1,61 @@
+{
+  "dashboard": {
+    "title": "Operationeel dashboard",
+    "intro": "Actuele waarschuwingen voor platformfacturering. Een detailpagina roept Mollie nooit aan; deze leest duurzame lokale herstel- en auditstatus.",
+    "terminal": "Definitief mislukte bewerkingen",
+    "terminalHelp": "Providerbewerkingen die in de afgelopen 24 uur gestopt zijn met opnieuw proberen.",
+    "retrying": "Bewerkingen worden opnieuw geprobeerd",
+    "retryingHelp": "Providerbewerkingen die wachten op een nieuwe duurzame poging.",
+    "pending": "Openstaande bewerkingen",
+    "pendingHelp": "Onvoltooide providerbewerkingen, inclusief nieuwe pogingen.",
+    "oldest": "Oudste openstaande bewerking",
+    "oldestHelp": "Leeftijd van de oudste onvoltooide providerbewerking.",
+    "webhooks": "Webhookfouten",
+    "webhooksHelp": "Fouten zonder latere geslaagde levering voor dezelfde betaling.",
+    "drift": "Statusafwijkingen",
+    "driftHelp": "Abonnementen met herstelmarkeringen, verouderde betalingen of tegenstrijdige lokale statussen.",
+    "none": "Geen",
+    "loadError": "Het operationele overzicht kon niet worden geladen."
+  },
+  "billing": {
+    "title": "Factureringsbewerkingen",
+    "intro": "Definitief mislukte, opnieuw te proberen en openstaande providerbewerkingen, gesorteerd op urgentie.",
+    "empty": "Geen waarschuwingen voor factureringsbewerkingen.",
+    "operation": "Bewerking",
+    "status": "Status",
+    "attempts": "Pogingen",
+    "user": "Gebruiker",
+    "subscription": "Abonnement",
+    "updated": "Bijgewerkt",
+    "error": "Foutcode"
+  },
+  "webhooks": {
+    "title": "Webhookfouten",
+    "intro": "Mislukte webhookleveringen zonder latere geslaagde verwerking voor dezelfde betaling.",
+    "empty": "Geen onopgeloste webhookfouten.",
+    "payment": "Betaling",
+    "subscription": "Abonnement",
+    "user": "Gebruiker",
+    "received": "Ontvangen",
+    "error": "Foutcode"
+  },
+  "drift": {
+    "title": "Statusafwijkingen",
+    "intro": "Lokale factureringsstatus die reconciliatie of controle nodig heeft. De scheduler vernieuwt de providerstatus, niet deze pagina.",
+    "empty": "Geen waarschuwingen voor statusafwijkingen.",
+    "subscription": "Abonnement",
+    "user": "Gebruiker",
+    "subscriptionStatus": "Abonnementstatus",
+    "payment": "Laatste betaling",
+    "signals": "Signalen",
+    "updated": "Betaling bijgewerkt",
+    "scheduleStale": "schema verouderd",
+    "repairNeeded": "herstel nodig",
+    "stalePayment": "betaling verouderd"
+  },
+  "common": {
+    "loadError": "Waarschuwingen konden niet worden geladen.",
+    "unknownUser": "Onbekende gebruiker",
+    "notAvailable": "—"
+  }
+}

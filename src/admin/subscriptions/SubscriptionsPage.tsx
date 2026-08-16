@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import Alert from '@mui/material/Alert'
 import Autocomplete from '@mui/material/Autocomplete'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
-import FormControlLabel from '@mui/material/FormControlLabel'
 import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
-import Switch from '@mui/material/Switch'
 import Table from '@mui/material/Table'
 import TableBody from '@mui/material/TableBody'
 import TableCell from '@mui/material/TableCell'
@@ -29,8 +26,6 @@ import type { AdminSubscription } from './adminSubscriptions.ts'
 import { listAllUsers } from '../users/adminUsers.ts'
 import type { AdminUser } from '../users/adminUsers.ts'
 import type { SubscriptionPlan } from '../../commerce/billing/billing.ts'
-import PlanCatalogSection from '../components/PlanCatalogSection.tsx'
-import PricingRulesSection from '../pricing/PricingRulesSection.tsx'
 import DateEntryField from '../../components/DateEntryField.tsx'
 import MoneyCells, { MoneyHeaderCells } from '../../components/shared/MoneyCells.tsx'
 
@@ -44,13 +39,11 @@ function errMessage(e: unknown): string {
   return x.body?.error || x.message || 'Something went wrong.'
 }
 
-export default function SubscriptionsPage() {
+export default function ComplimentaryAccessPage() {
   const showToast = useToast()
   const [rowsState, setRowsState] = useState<{ key: string; rows: AdminSubscription[] } | null>(null)
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
   const [rowsRevision, setRowsRevision] = useState(0)
-  const [plansRevision, setPlansRevision] = useState(0)
-  const [repairOnly, setRepairOnly] = useState(false)
   const [users, setUsers] = useState<AdminUser[]>([])
   const [grantUser, setGrantUser] = useState<AdminUser | null>(null)
   const [grantPlanId, setGrantPlanId] = useState('')
@@ -58,18 +51,17 @@ export default function SubscriptionsPage() {
   const [busy, setBusy] = useState(false)
 
   const refreshRows = useCallback(() => setRowsRevision((revision) => revision + 1), [])
-  const refreshPlans = useCallback(() => setPlansRevision((revision) => revision + 1), [])
 
   // Rows are tagged with the request they answered, so "still loading" is the
   // derived fact that the newest request hasn't landed yet — no synchronous
   // setLoading(true) and no extra render when a refresh starts.
-  const rowsKey = `${repairOnly}|${rowsRevision}`
-  const rows = rowsState?.rows ?? []
+  const rowsKey = String(rowsRevision)
+  const rows = (rowsState?.rows ?? []).filter((row) => row.isComplimentary)
   const loading = rowsState?.key !== rowsKey
 
   useEffect(() => {
     let cancelled = false
-    listSubscriptions(repairOnly)
+    listSubscriptions()
       .then((data) => { if (!cancelled) setRowsState({ key: rowsKey, rows: data.subscriptions }) })
       .catch((e: unknown) => {
         if (cancelled) return
@@ -78,7 +70,7 @@ export default function SubscriptionsPage() {
         setRowsState((prev) => ({ key: rowsKey, rows: prev?.rows ?? [] }))
       })
     return () => { cancelled = true }
-  }, [repairOnly, rowsKey, showToast])
+  }, [rowsKey, showToast])
 
   useEffect(() => {
     let cancelled = false
@@ -86,7 +78,7 @@ export default function SubscriptionsPage() {
       .then((data) => { if (!cancelled) setPlans(data) })
       .catch((e: unknown) => { if (!cancelled) showToast?.(errMessage(e), 'error') })
     return () => { cancelled = true }
-  }, [plansRevision, showToast])
+  }, [showToast])
 
   useEffect(() => {
     let cancelled = false
@@ -95,8 +87,6 @@ export default function SubscriptionsPage() {
       .catch((e: unknown) => { if (!cancelled) showToast?.(errMessage(e), 'error') })
     return () => { cancelled = true }
   }, [showToast])
-
-  const attentionCount = rows.filter((row) => row.scheduleStale || row.repairNeeded).length
 
   const handleGrant = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -136,18 +126,7 @@ export default function SubscriptionsPage() {
 
   return (
     <Box>
-      <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>Subscriptions</Typography>
-
-      {attentionCount > 0 && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          {attentionCount} subscription{attentionCount > 1 ? 's need' : ' needs'} attention
-          (schedule repair or billing repair in progress).
-        </Alert>
-      )}
-
-      <PlanCatalogSection plans={plans} onChanged={refreshPlans} />
-
-      <PricingRulesSection />
+      <Typography variant="h5" sx={{ fontWeight: 600, mb: 2 }}>Complimentary access</Typography>
 
       <Paper elevation={0} sx={{ p: 2, mb: 2 }}>
         <Typography variant="h6" sx={{ mb: 1 }}>Grant complimentary access</Typography>
@@ -180,12 +159,6 @@ export default function SubscriptionsPage() {
           <Button type="submit" variant="contained" disabled={busy}>Grant</Button>
         </Stack>
       </Paper>
-
-      <FormControlLabel
-        control={<Switch checked={repairOnly} onChange={(e) => setRepairOnly(e.target.checked)} />}
-        label="Only needing attention"
-        sx={{ mb: 1 }}
-      />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}><CircularProgress /></Box>
@@ -258,7 +231,7 @@ export default function SubscriptionsPage() {
               {rows.length === 0 && (
                 <TableRow><TableCell colSpan={9}>
                   <Typography variant="body2" sx={{ color: 'text.secondary', py: 2, textAlign: 'center' }}>
-                    No subscriptions.
+                    No complimentary grants.
                   </Typography>
                 </TableCell></TableRow>
               )}

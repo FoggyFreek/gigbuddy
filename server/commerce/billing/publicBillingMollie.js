@@ -9,6 +9,12 @@
 import { Router, urlencoded } from 'express'
 import { ingestProviderPayment } from './paymentIngestionService.js'
 import { logger } from '../../utils/logger.js'
+import pool from '../../db/index.js'
+import {
+  markWebhookFailed,
+  markWebhookProcessed,
+  recordWebhookReceived,
+} from './billingWebhookEventRepository.js'
 
 const router = Router()
 
@@ -22,9 +28,20 @@ router.post('/mollie/webhook', async (req, res) => {
     return res.status(200).end()
   }
 
+  let event = null
   try {
+    event = await recordWebhookReceived(pool, {
+      subscriptionId: subId,
+      providerPaymentId: String(paymentId),
+    })
     await ingestProviderPayment(subId, String(paymentId))
+    await markWebhookProcessed(pool, event.id)
   } catch (err) {
+    if (event) {
+      const errorCode = String(err?.code ?? err?.name ?? 'unknown').slice(0, 100)
+      await markWebhookFailed(pool, event.id, errorCode).catch((auditErr) =>
+        logger.error('billing.webhook_audit_failed', { err: auditErr, subscriptionId: subId }))
+    }
     logger.error('billing.webhook_failed', { err, subscriptionId: subId })
   }
   res.status(200).end()

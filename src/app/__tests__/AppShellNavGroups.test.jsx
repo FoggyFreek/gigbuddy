@@ -76,6 +76,24 @@ describe('AppShell nav groups', () => {
     }
   })
 
+  it('hides the super-admin menu from regular tenant administrators', () => {
+    renderShell('/')
+    expect(screen.queryByLabelText('open super-admin menu')).not.toBeInTheDocument()
+  })
+
+  it('shows the dedicated super-admin menu to super administrators', async () => {
+    const user = userEvent.setup()
+    useAuth.mockReturnValue({
+      user: { ...USER, isSuperAdmin: true },
+      logout: vi.fn(),
+      switchTenant: vi.fn(),
+    })
+    renderShell('/')
+    await user.click(screen.getByLabelText('open super-admin menu'))
+    expect(await screen.findByRole('menuitem', { name: 'Operations dashboard' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Complimentary access' })).toBeInTheDocument()
+  })
+
   it('auto-expands the group containing the active route and collapses the rest', () => {
     renderShell('/gigs')
     // Planning is open → its child Rehearsals is visible

@@ -59,7 +59,13 @@ const PaymentThanksPage = lazy(() => import('../commerce/billing/PaymentThanksPa
 const LockedFeaturePage = lazy(() => import('../commerce/billing/LockedFeaturePage.tsx'))
 const TenantsPage = lazy(() => import('../admin/tenants/TenantsPage.tsx'))
 const AdminUsersPage = lazy(() => import('../admin/users/AdminUsersPage.tsx'))
-const SubscriptionsPage = lazy(() => import('../admin/subscriptions/SubscriptionsPage.tsx'))
+const ComplimentaryAccessPage = lazy(() => import('../admin/subscriptions/SubscriptionsPage.tsx'))
+const PlanCatalogPage = lazy(() => import('../admin/subscriptions/PlanCatalogPage.tsx'))
+const PricingRulesPage = lazy(() => import('../admin/pricing/PricingRulesPage.tsx'))
+const OperationsDashboardPage = lazy(() => import('../admin/operations/OperationsDashboardPage.tsx'))
+const BillingOperationsPage = lazy(() => import('../admin/operations/BillingOperationsPage.tsx'))
+const WebhookFailuresPage = lazy(() => import('../admin/operations/WebhookFailuresPage.tsx'))
+const StatusDriftPage = lazy(() => import('../admin/operations/StatusDriftPage.tsx'))
 
 export default function App() {
   return (
@@ -164,7 +170,14 @@ export default function App() {
               <Route path="/admin/tenants" element={<TenantsPage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
               <Route path="/admin/band-profile-claims" element={<BandProfileClaimsPage />} />
-              <Route path="/admin/subscriptions" element={<SubscriptionsPage />} />
+              <Route path="/admin/plan-catalog" element={<PlanCatalogPage />} />
+              <Route path="/admin/pricing-rules" element={<PricingRulesPage />} />
+              <Route path="/admin/complimentary-access" element={<ComplimentaryAccessPage />} />
+              <Route path="/admin/subscriptions" element={<Navigate to="/admin/complimentary-access" replace />} />
+              <Route path="/admin/operations" element={<OperationsDashboardPage />} />
+              <Route path="/admin/operations/billing" element={<BillingOperationsPage />} />
+              <Route path="/admin/operations/webhooks" element={<WebhookFailuresPage />} />
+              <Route path="/admin/operations/status" element={<StatusDriftPage />} />
             </Route>
           </Route>
         </Route>

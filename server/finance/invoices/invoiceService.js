@@ -25,7 +25,7 @@ import { buildPeriodWhere } from '../../utils/periodQuery.js'
 import { loadAccountingBehavior, loadAccountingProfile } from '../accounting-profile/accountingProfileService.js'
 import {
   createMolliePaymentLink,
-  getMollieClientForTenant,
+  getMolliePaymentLinksForTenant,
   removeMolliePaymentLink,
   syncInvoicePaymentStatus,
 } from './molliePaymentLinkService.js'
@@ -1106,10 +1106,10 @@ export async function syncInvoicePaymentLink(pool, tenantId, invoiceId) {
 
   // Internal accessor: a retained key (post-integrations-purge, paid links
   // outstanding) must keep sync working for those links.
-  const configured = await getMollieClientForTenant(pool, tenantId, { includeRetained: true })
+  const configured = await getMolliePaymentLinksForTenant(pool, tenantId, { includeRetained: true })
   if (configured.error) return configured
-  const { mollie } = configured
-  const updated = await syncInvoicePaymentStatus(mollie, pool, invoice)
+  const { paymentLinks } = configured
+  const updated = await syncInvoicePaymentStatus(paymentLinks, pool, invoice)
 
   return {
     sync: {

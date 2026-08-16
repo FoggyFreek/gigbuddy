@@ -66,7 +66,7 @@ const TRUNCATE_SQL = `
       push_subscriptions,
       notifications, notification_type_prefs, notification_tenant_prefs,
       subscription_refunds, subscription_payments, subscription_modules,
-      billing_operations, subscriptions, storage_cleanup_queue,
+      billing_webhook_events, billing_operations, subscriptions, storage_cleanup_queue,
       pricing_rules,
       tenant_statistics,
       tenant_achievements,

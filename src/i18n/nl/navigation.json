@@ -36,8 +36,21 @@
   "admin": {
     "tenants": "Organisaties",
     "allUsers": "Alle gebruikers",
+    "bandProfileClaims": "Bandprofielen (claims)",
+    "planCatalog": "Abonnementenaanbod",
+    "pricingRules": "Prijsregels",
+    "complimentaryAccess": "Gratis toegang",
+    "operations": "Operationeel dashboard",
+    "billingOperations": "Factureringsbewerkingen",
+    "webhookFailures": "Webhookfouten",
+    "statusDrift": "Statusafwijkingen",
     "members": "Leden",
     "bandSettings": "Bandinstellingen"
+  },
+  "adminSections": {
+    "operations": "Monitoring",
+    "management": "Beheer",
+    "billing": "Factureringsconfiguratie"
   },
   "headers": {
     "tenantAdmin": "Tenantbeheerder",
@@ -51,6 +64,7 @@
     "openNav": "navigatie openen",
     "openSearch": "zoeken openen",
     "openSettings": "instellingenmenu openen",
+    "openAdmin": "superbeheermenu openen",
     "openUserMenu": "gebruikersmenu openen",
     "search": "Zoeken",
     "searchPlaceholder": "Zoek naar contacten, optredens of bestanden…",

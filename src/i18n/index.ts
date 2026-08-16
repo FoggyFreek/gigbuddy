@@ -42,6 +42,7 @@ import enBilling from '../commerce/billing/i18n/en.json'
 import enOnboarding from '../user/identity/i18n/en/onboarding.json'
 import enFinanceOnboarding from '../finance/onboarding/i18n/en.json'
 import enTutorials from '../user/tutorials/i18n/en.json'
+import enAdminOperations from '../admin/operations/i18n/en.json'
 
 import nlAchievements from '../user/achievements/i18n/nl.json'
 import nlCommon from './nl/common.json'
@@ -79,6 +80,7 @@ import nlBilling from '../commerce/billing/i18n/nl.json'
 import nlOnboarding from '../user/identity/i18n/nl/onboarding.json'
 import nlFinanceOnboarding from '../finance/onboarding/i18n/nl.json'
 import nlTutorials from '../user/tutorials/i18n/nl.json'
+import nlAdminOperations from '../admin/operations/i18n/nl.json'
 
 export const defaultNS = 'common'
 
@@ -119,6 +121,7 @@ const en = {
   onboarding: enOnboarding,
   financeOnboarding: enFinanceOnboarding,
   tutorials: enTutorials,
+  adminOperations: enAdminOperations,
 } as const
 
 // Compile-time Dutch parity guard. `DeepKeyShape` turns the canonical English
@@ -166,6 +169,7 @@ const nl = {
   onboarding: nlOnboarding,
   financeOnboarding: nlFinanceOnboarding,
   tutorials: nlTutorials,
+  adminOperations: nlAdminOperations,
 } satisfies DeepKeyShape<typeof en>
 
 export const resources = { en, nl } as const

@@ -261,6 +261,11 @@ describe('analyzeChords', () => {
     expect(analyzeChords('{diagrams: off}\n[C]x').placement).toBe('off')
   })
 
+  it('reads the side placements {diagrams: right} and {diagrams: left}', () => {
+    expect(analyzeChords('{diagrams: right}\n[C]x').placement).toBe('right')
+    expect(analyzeChords('{diagrams: left}\n[C]x').placement).toBe('left')
+  })
+
   it('ignores annotations [*..] and dedupes', () => {
     const { chords } = analyzeChords('[C]a [*Coda] [C]b [G]c')
     expect(chords.map((c) => c.name)).toEqual(['C', 'G'])

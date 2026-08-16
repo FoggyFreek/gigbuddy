@@ -1,7 +1,9 @@
 import { expect, it, vi } from 'vitest'
 import { PaymentProvider } from '../../../server/commerce/billing/paymentProvider/PaymentProvider.js'
-import { MollieLegacyProvider } from '../../../server/commerce/billing/paymentProvider/adapters/mollieLegacy/MollieLegacyProvider.js'
+import { MollieTypescriptProvider } from '../../../server/commerce/billing/paymentProvider/adapters/mollieTypescript/MollieTypescriptProvider.js'
 import { providerContractTests } from '../../../server/commerce/billing/paymentProvider/providerContractTests.js'
+import { createPaymentProvider } from '../../../server/commerce/billing/paymentProvider/providerFactory.js'
+import { toProviderError as toTypescriptProviderError } from '../../../server/commerce/billing/paymentProvider/adapters/mollieTypescript/mollieErrors.js'
 
 it('freezes the application-owned provider method surface', () => {
   expect(Object.getOwnPropertyNames(PaymentProvider.prototype)).toEqual([
@@ -19,7 +21,18 @@ it('freezes the application-owned provider method surface', () => {
   ])
 })
 
-function createHarness() {
+it('creates the Mollie adapter without exposing the SDK to callers', () => {
+  expect(createPaymentProvider('test_key')).toBeInstanceOf(MollieTypescriptProvider)
+})
+
+it('keeps response-validation failures replayable because the remote outcome is unknown', () => {
+  const error = Object.assign(new Error('invalid SDK response'), {
+    name: 'ResponseValidationError', statusCode: 200,
+  })
+  expect(toTypescriptProviderError(error, 'payment creation')).toMatchObject({ retryable: true })
+})
+
+function createTypescriptHarness() {
   const queues = { customer: [], payment: [], schedule: [], refund: [] }
   let nextError = null
   let cancellationError = null
@@ -37,7 +50,6 @@ function createHarness() {
     lastMutation = { kind, ...args }
     return take(kind)
   }
-
   const client = {
     customers: {
       create: vi.fn((args) => mutation('customer', args)),
@@ -47,15 +59,15 @@ function createHarness() {
       create: vi.fn((args) => mutation('payment', args)),
       get: vi.fn(() => take('payment')),
     },
-    customerSubscriptions: {
+    subscriptions: {
       create: vi.fn((args) => mutation('schedule', args)),
       get: vi.fn(() => take('schedule')),
-      cancel: vi.fn((_id, args) => {
+      cancel: vi.fn((args) => {
         lastMutation = { kind: 'cancelSchedule', ...args }
         if (cancellationError) throw cancellationError
       }),
     },
-    paymentRefunds: {
+    refunds: {
       create: vi.fn((args) => mutation('refund', args)),
       get: vi.fn(() => take('refund')),
     },
@@ -73,7 +85,7 @@ function createHarness() {
     paidAt: value.paidAt,
     ...(value.status === 'refunded' ? { amountRefunded: { currency: 'EUR', value: '1.00' } } : {}),
     ...(value.status === 'charged_back' ? { amountChargedBack: { currency: 'EUR', value: '1.00' } } : {}),
-    _links: value.checkoutUrl ? { checkout: { href: value.checkoutUrl } } : {},
+    links: value.checkoutUrl ? { checkout: { href: value.checkoutUrl } } : {},
   })
   const schedule = (value, rawStatus = value.status) => ({
     id: value.id,
@@ -87,7 +99,7 @@ function createHarness() {
   })
 
   return {
-    provider: new MollieLegacyProvider(client),
+    provider: new MollieTypescriptProvider(client),
     givenCustomer: (value) => queues.customer.push(value),
     givenPayment: (value) => queues.payment.push(payment(value)),
     givenSchedule: (value) => queues.schedule.push(schedule(value)),
@@ -117,4 +129,4 @@ function createHarness() {
   }
 }
 
-providerContractTests({ name: 'Mollie legacy', createHarness })
+providerContractTests({ name: 'Mollie TypeScript', createHarness: createTypescriptHarness })

@@ -46,6 +46,7 @@ import adminPlansRouter from '../admin/plans/adminPlans.js'
 import adminPricingRulesRouter from '../admin/pricing/adminPricingRules.js'
 import adminSubscriptionsRouter from '../admin/subscriptions/adminSubscriptions.js'
 import adminStorageRouter from '../admin/storage/adminStorage.js'
+import adminOperationsRouter from '../admin/operations/adminOperations.js'
 import billingRouter from '../commerce/billing/billing.js'
 import publicBillingMollieRouter from '../commerce/billing/publicBillingMollie.js'
 import sharePhotosRouter from '../promotion/sharing/sharePhotos.js'
@@ -255,6 +256,7 @@ router.use('/admin/pricing-rules', superAdmin, adminPricingRulesRouter)
 router.use('/admin/subscriptions', superAdmin, adminSubscriptionsRouter)
 router.use('/admin/statistics', superAdmin, adminStatisticsRouter)
 router.use('/admin/storage', superAdmin, adminStorageRouter)
+router.use('/admin/operations', superAdmin, adminOperationsRouter)
 router.use('/admin/band-profile-claims', superAdmin, adminBandProfileClaimsRouter)
 router.use('/invites', membersManage, bandMembershipAdmin, invitesAdminRouter)
 router.use('/users', membersManage, bandMembershipAdmin, usersRouter)

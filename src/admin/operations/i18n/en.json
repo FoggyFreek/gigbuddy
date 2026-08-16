@@ -1,0 +1,61 @@
+{
+  "dashboard": {
+    "title": "Operations dashboard",
+    "intro": "Current platform-billing alerts. Opening a detail page never calls Mollie; it reads durable local recovery and audit state.",
+    "terminal": "Terminal operations",
+    "terminalHelp": "Provider mutations that stopped retrying in the last 24 hours.",
+    "retrying": "Retrying operations",
+    "retryingHelp": "Provider mutations waiting for another durable retry.",
+    "pending": "Pending operations",
+    "pendingHelp": "Incomplete provider mutations, including retrying work.",
+    "oldest": "Oldest pending operation",
+    "oldestHelp": "Age of the oldest incomplete provider mutation.",
+    "webhooks": "Webhook failures",
+    "webhooksHelp": "Failures without a later successful delivery for the same payment.",
+    "drift": "Status drift",
+    "driftHelp": "Subscriptions with repair flags, stale payments, or contradictory local states.",
+    "none": "None",
+    "loadError": "The operations summary could not be loaded."
+  },
+  "billing": {
+    "title": "Billing operations",
+    "intro": "Terminal, retrying, and pending payment-provider operations, ordered by urgency.",
+    "empty": "No billing-operation alerts.",
+    "operation": "Operation",
+    "status": "Status",
+    "attempts": "Attempts",
+    "user": "User",
+    "subscription": "Subscription",
+    "updated": "Updated",
+    "error": "Error code"
+  },
+  "webhooks": {
+    "title": "Webhook failures",
+    "intro": "Failed webhook deliveries that have no later successful processing event for the same payment.",
+    "empty": "No unresolved webhook failures.",
+    "payment": "Payment",
+    "subscription": "Subscription",
+    "user": "User",
+    "received": "Received",
+    "error": "Error code"
+  },
+  "drift": {
+    "title": "Status drift",
+    "intro": "Local billing state that needs reconciliation or operator review. Provider status is refreshed by the scheduler, not by this page.",
+    "empty": "No status-drift alerts.",
+    "subscription": "Subscription",
+    "user": "User",
+    "subscriptionStatus": "Subscription status",
+    "payment": "Latest payment",
+    "signals": "Signals",
+    "updated": "Payment updated",
+    "scheduleStale": "schedule stale",
+    "repairNeeded": "repair needed",
+    "stalePayment": "payment stale"
+  },
+  "common": {
+    "loadError": "Alerts could not be loaded.",
+    "unknownUser": "Unknown user",
+    "notAvailable": "—"
+  }
+}

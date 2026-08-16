@@ -69,6 +69,26 @@ export function featuresToPurge(current, target) {
   )
 }
 
+// A target with any feature removed or any numeric limit reduced (null =
+// unlimited = largest) relative to the current plan is a downgrade. Deliberately
+// entitlement-shaped, not price-shaped: a bundle discount can make ADDING a
+// module cheaper than the current total, and that is not a downgrade.
+//
+// Both sides must be EFFECTIVE entitlements, for the same reason as
+// featuresToPurge above.
+export function isDowngrade(currentEnt, targetEnt) {
+  for (const f of FEATURE_KEYS) {
+    if (currentEnt.features[f] && !targetEnt.features[f]) return true
+  }
+  for (const l of LIMIT_KEYS) {
+    const cur = currentEnt.limits[l]
+    const tgt = targetEnt.limits[l]
+    if (cur === null && tgt !== null) return true
+    if (cur !== null && tgt !== null && tgt < cur) return true
+  }
+  return false
+}
+
 // Limits use `null` as the unlimited sentinel (a real JSONB value, unlike
 // undefined, and unambiguous next to 0 which means "none allowed").
 export const UNLIMITED = null

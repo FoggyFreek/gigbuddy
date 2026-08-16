@@ -22,7 +22,6 @@ import {
 } from './subscriptionPaymentRepository.js'
 import {
   insertRefund,
-  markRefundSucceeded,
   markRefundFailed,
   sumRefundedForPayment,
   listRefundsForSubscription,
@@ -34,12 +33,8 @@ import { refundWindowEndsAt, REFUND_WINDOW_DAYS } from './billingShared.js'
 import { ProviderError } from './paymentProvider/ProviderError.js'
 import { PAYMENT_STATUS } from './paymentProvider/statuses.js'
 import { logger } from '../../utils/logger.js'
+import { COMPLIMENTARY, NO_SUBSCRIPTION } from './billingErrors.js'
 import { badRequest, conflict, notFound } from '../../platform/http/serviceErrors.js'
-
-const NO_SUBSCRIPTION = notFound('No subscription')
-const COMPLIMENTARY = conflict('This subscription is managed by an administrator', {
-  code: 'complimentary_managed_by_admin',
-})
 
 export { listRefundsForSubscription, REFUND_WINDOW_DAYS }
 
@@ -50,23 +45,31 @@ function withinWindow(sub, now = new Date()) {
 
 // Runs the provider call for a committed refund intent and records the outcome.
 // Never inside a transaction.
-async function executeRefund(sub, refund, providerPaymentId, description) {
+async function executeRefund(db, sub, refund, providerPaymentId, description) {
   try {
-    const { refundId } = await refundSubscriptionPayment(pool, sub, {
-      providerPaymentId, amountCents: refund.amount_cents, description,
+    const { refundId } = await refundSubscriptionPayment(db, sub, {
+      providerPaymentId, amountCents: refund.amount_cents, description, refundIntentId: refund.id,
     })
-    await markRefundSucceeded(pool, refund.id, refundId)
     return { ok: true, refundId }
   } catch (err) {
     // A terminal provider rejection is a real failure the operator must see; a
     // retryable one stays 'pending' for the scheduler to resume, so it is NOT
     // marked failed here.
     if (err instanceof ProviderError && !err.retryable) {
-      await markRefundFailed(pool, refund.id).catch(() => {})
+      await markRefundFailed(db, refund.id).catch(() => {})
     }
     logger.error('billing.refund_failed', { err, subscriptionId: sub.id })
     return { ok: false }
   }
+}
+
+export async function resumePendingRefund(db, refund) {
+  const sub = await fetchSubscriptionById(db, refund.subscription_id)
+  if (!sub) return { ok: false }
+  const description = refund.reason === 'withdrawal_window'
+    ? 'GigBuddy cancellation refund'
+    : 'GigBuddy support refund'
+  return executeRefund(db, sub, refund, refund.mollie_payment_id, description)
 }
 
 async function notifyRefunded(sub, amountCents) {
@@ -128,7 +131,7 @@ export async function cancelWithRefund(db, userId) {
   const { sub, refund, providerPaymentId } = outcome
   await cancelRemoteSubscription(pool, sub).catch((err) =>
     logger.error('billing.cancel_remote_failed', { err, subscriptionId: sub.id }))
-  const result = await executeRefund(sub, refund, providerPaymentId, 'GigBuddy cancellation refund')
+  const result = await executeRefund(pool, sub, refund, providerPaymentId, 'GigBuddy cancellation refund')
   await notifyRefunded(sub, refund.amount_cents)
 
   logger.info('billing.canceled_with_refund', { subscriptionId: sub.id })
@@ -178,7 +181,7 @@ export async function grantAdminRefund(db, subscriptionId, { paymentId, amountCe
   if (outcome.error) return outcome
 
   const { sub, refund, providerPaymentId } = outcome
-  const result = await executeRefund(sub, refund, providerPaymentId, 'GigBuddy support refund')
+  const result = await executeRefund(pool, sub, refund, providerPaymentId, 'GigBuddy support refund')
   logger.info('billing.admin_refund', { subscriptionId: sub.id })
   return { refunded: result.ok, refundId: refund.id, amountCents: refund.amount_cents }
 }

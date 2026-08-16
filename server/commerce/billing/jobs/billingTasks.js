@@ -28,8 +28,10 @@ import {
   listModulesWithPendingPurge,
 } from '../subscriptionModuleRepository.js'
 import { listStaleNonterminalPayments } from '../subscriptionPaymentRepository.js'
-import { listStalePendingOperations } from '../billingOperationRepository.js'
+import { listUnreplayableOperations } from '../billingOperationRepository.js'
 import { listPendingRefunds } from '../subscriptionRefundRepository.js'
+import { recoverBillingOperations } from '../billingOperationService.js'
+import { resumePendingRefund } from '../subscriptionRefundService.js'
 import { ingestProviderPayment } from '../paymentIngestionService.js'
 import { repairSchedule, cancelRemoteSubscription } from '../billingSaga.js'
 import { executeModulePurge } from '../entitlementPurgeService.js'
@@ -201,13 +203,16 @@ export async function reconcileRenewalNotices(db = pool) {
   }
 }
 
-// Task 10: surface billing_operations stuck 'pending' past the grace window (a
-// crash around a remote call). State-based tasks drive the owning saga forward
-// on its idempotency key; this alert makes lingering orphans visible.
+// Legacy rows created before commands were persisted cannot be replayed safely;
+// keep surfacing those for operator repair.
 export async function reconcileOrphanOperations(db = pool) {
-  for (const op of await listStalePendingOperations(db, ORPHAN_OP_STALE_MS)) {
+  for (const op of await listUnreplayableOperations(db, ORPHAN_OP_STALE_MS)) {
     logger.warn('billing.operation_orphaned', { subscriptionId: op.subscription_id, opType: op.op_type })
   }
+}
+
+export async function reconcileBillingOperations(db = pool) {
+  await recoverBillingOperations(db)
 }
 
 // Task 11: a refund intent committed but never confirmed at the provider. The
@@ -215,9 +220,10 @@ export async function reconcileOrphanOperations(db = pool) {
 // rather than refunding twice.
 export async function reconcilePendingRefunds(db = pool) {
   for (const refund of await listPendingRefunds(db, REFUND_RESUME_STALE_MS)) {
-    logger.warn('billing.refund_pending', {
-      subscriptionId: refund.subscription_id, refundId: refund.id,
-    })
+    await resumePendingRefund(db, refund).catch((err) =>
+      logger.error('billing.refund_recovery_failed', {
+        err, subscriptionId: refund.subscription_id, refundId: refund.id,
+      }))
   }
 }
 
@@ -245,6 +251,7 @@ export const BILLING_TASKS = [
   ['trial_reminders', reconcileTrialReminders],
   ['renewal_notices', reconcileRenewalNotices],
   ['pending_refunds', reconcilePendingRefunds],
+  ['billing_operations', reconcileBillingOperations],
   ['orphan_operations', reconcileOrphanOperations],
   ['expired_complimentary', reconcileExpiredComplimentary],
 ]

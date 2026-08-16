@@ -103,5 +103,6 @@ export const idemKeys = {
   // collide on the outbox's unique index and silently skip the second charge.
   moduleChangeCharge: (subId, audience, planId, amountCents, periodEndIso) =>
     `module-charge:${subId}:${audience}:${planId}:${amountCents}:${periodEndIso}`,
-  refundPayment: (paymentId, amountCents) => `refund:${paymentId}:${amountCents}`,
+  refundPayment: (paymentId, amountCents, refundIntentId) =>
+    `refund:${paymentId}:${amountCents}:${refundIntentId}`,
 }

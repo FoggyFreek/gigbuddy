@@ -257,6 +257,30 @@ describe('preview', () => {
     // ...but only ACTIVE bands count toward the band cap, and silver allows 3.
     expect(res.blockers.some((b) => b.limit === 'bands')).toBe(false)
   })
+
+  it('measures each owned tenant separately against the member limit', async () => {
+    await setOwner(seed.tenantA.id, seed.userA.id)
+    await setOwner(seed.tenantB.id, seed.userA.id)
+    // Both bands already carry two approved memberships (the owner and the
+    // super admin), so a limit of 2 fits them as they stand.
+    await setPlanEntitlements('silver', (ent) => { ent.limits.members = 2 })
+    // Only the second band's ROSTER goes over. Roster rows and approved
+    // memberships are independent counters and the larger one must fit, so
+    // this blocks on 3 roster members while the first band stays clear at 2
+    // approved memberships.
+    await pool.query(
+      `INSERT INTO band_members (tenant_id, name, position, sort_order)
+       VALUES ($1, 'Second', 'lead', 1), ($1, 'Third', 'lead', 2)`,
+      [seed.tenantB.id])
+    await convert('gold')
+
+    const res = await billingSvc.previewDowngrade(pool, userA(), {
+      audience: 'band', planId: await planId('silver'),
+    })
+    expect(res.blockers.filter((b) => b.limit === 'members')).toEqual([
+      { tenantId: seed.tenantB.id, tenantName: expect.any(String), limit: 'members', current: 3, target: 2 },
+    ])
+  })
 })
 
 describe('confirmation', () => {

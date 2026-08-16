@@ -3,17 +3,12 @@ import { NavLink } from 'react-router'
 import Divider from '@mui/material/Divider'
 import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
-import ListSubheader from '@mui/material/ListSubheader'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
 import LightModeIcon from '@mui/icons-material/LightMode'
 import TranslateIcon from '@mui/icons-material/Translate'
-import ApartmentIcon from '@mui/icons-material/Apartment'
 import SettingsIcon from '@mui/icons-material/Settings'
-import PeopleAltIcon from '@mui/icons-material/PeopleAlt'
-import CreditCardIcon from '@mui/icons-material/CreditCard'
-import VerifiedOutlinedIcon from '@mui/icons-material/VerifiedOutlined'
 import type { SvgIconComponent } from '@mui/icons-material'
 
 interface NavMenuItemDef {
@@ -40,24 +35,15 @@ interface SettingsMenuProps {
   onClose: () => void
   mode: string
   onToggleTheme: () => void
-  isSuperAdmin?: boolean
 }
 
-export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTheme, isSuperAdmin }: Readonly<SettingsMenuProps>) {
+export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTheme }: Readonly<SettingsMenuProps>) {
   const { t, i18n } = useTranslation(['common', 'navigation'])
   const isDutch = i18n.resolvedLanguage === 'nl'
   const toggleLanguage = () => {
     void i18n.changeLanguage(isDutch ? 'en' : 'nl')
     onClose()
   }
-  const superAdminNavItems: NavMenuItemDef[] = [
-    { to: '/admin/tenants', label: t($ => $.admin.tenants, { ns: 'navigation' }), icon: ApartmentIcon },
-    { to: '/admin/users', label: t($ => $.admin.allUsers, { ns: 'navigation' }), icon: PeopleAltIcon },
-    // Hardcoded English (billing copy is not localized yet, per the rollout plan).
-    { to: '/admin/subscriptions', label: 'Subscriptions', icon: CreditCardIcon },
-    // Likewise hardcoded — the whole /admin surface is English-only.
-    { to: '/admin/band-profile-claims', label: 'Band profile claims', icon: VerifiedOutlinedIcon },
-  ]
   // The unified settings page is reachable by every member; each section gates
   // its own content by role, so this entry is not permission-gated.
   const settingsNavItem: NavMenuItemDef = {
@@ -88,13 +74,6 @@ export default function SettingsMenu({ anchorEl, open, onClose, mode, onToggleTh
       </MenuItem>
       <Divider />
       {renderNavItem(settingsNavItem, onClose)}
-      {isSuperAdmin && [
-        <Divider key="super-admin-divider" />,
-        <ListSubheader key="super-admin-header" component="div" disableSticky>
-          {t($ => $.headers.superAdmin, { ns: 'navigation' })}
-        </ListSubheader>,
-        ...superAdminNavItems.map((item) => renderNavItem(item, onClose)),
-      ]}
     </Menu>
   )
 }

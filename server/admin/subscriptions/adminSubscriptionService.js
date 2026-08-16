@@ -16,7 +16,7 @@ import {
   listModules,
 } from '../../commerce/billing/subscriptionModuleRepository.js'
 import { withTransaction, abortTransaction } from '../../db/withTransaction.js'
-import { serializeSubscription } from '../../commerce/billing/billingService.js'
+import { serializeSubscription } from '../../commerce/billing/billingReadService.js'
 import { grantAdminRefund, listRefundsForSubscription } from '../../commerce/billing/subscriptionRefundService.js'
 import { parseComplimentaryBody, parseAdminRefund } from '../../commerce/billing/billingValidators.js'
 import { dispatchUserNotification, pushUserNotification } from '../../user/notifications/notificationService.js'

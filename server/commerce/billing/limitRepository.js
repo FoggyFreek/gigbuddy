@@ -14,6 +14,14 @@ export async function lockTenantForCapCheck(executor, tenantId) {
   return rows.length ? { ownerUserId: rows[0].owner_user_id, kind: rows[0].kind } : undefined
 }
 
+// The tenant-wide advisory lock every capacity-growing write takes (uploads via
+// tenant statistics, purgeable-feature writes via withFeatureWriteGuard). The
+// downgrade precheck must take the SAME key, or a member add or upload could
+// slip past a check that is about to lower the limit.
+export async function advisoryLockTenant(executor, tenantId) {
+  await executor.query('SELECT pg_advisory_xact_lock($1)', [tenantId])
+}
+
 // Locks the user row (serializes that user's tenant create/unarchive).
 export async function lockUserForCapCheck(executor, userId) {
   const { rowCount } = await executor.query(
@@ -75,11 +83,27 @@ export async function listOwnedTenants(executor, userId, kinds = null) {
   return rows
 }
 
-// Current storage meter reading (0 for a tenant without a stats row yet).
-export async function getTenantStorageBytes(executor, tenantId) {
+// Every counter the downgrade precheck measures, for a whole set of tenants in
+// one round trip — the alternative is three queries per owned tenant inside a
+// locked transaction. Correlated sub-selects (not joins) so a tenant with no
+// members, no memberships or no statistics row still yields a row of zeroes,
+// exactly like the singular helpers above.
+export async function fetchTenantCapacityUsage(executor, tenantIds) {
   const { rows } = await executor.query(
-    'SELECT COALESCE(storage_bytes, 0)::bigint AS storage_bytes FROM tenant_statistics WHERE tenant_id = $1',
-    [tenantId],
+    `SELECT t.id AS tenant_id,
+            (SELECT COUNT(*)::int FROM band_members bm
+              WHERE bm.tenant_id = t.id AND bm.deleted_at IS NULL) AS roster_members,
+            (SELECT COUNT(*)::int FROM memberships m
+              WHERE m.tenant_id = t.id AND m.status = 'approved') AS approved_members,
+            COALESCE(ts.storage_bytes, 0)::bigint AS storage_bytes
+       FROM tenants t
+       LEFT JOIN tenant_statistics ts ON ts.tenant_id = t.id
+      WHERE t.id = ANY($1::int[])`,
+    [tenantIds],
   )
-  return Number(rows[0]?.storage_bytes ?? 0)
+  return new Map(rows.map((r) => [r.tenant_id, {
+    rosterMembers: r.roster_members,
+    approvedMembers: r.approved_members,
+    storageBytes: Number(r.storage_bytes),
+  }]))
 }

@@ -46,8 +46,8 @@ flowchart LR
     RSP3["subscriptionPaymentRepository.listNonterminalPaymentsForSubscription"]
     RSP4["subscriptionPaymentRepository.listStaleNonterminalPayments"]
     RBO1["billingOperationRepository.claimOperation"]
-    RBO2["billingOperationRepository.markOperation"]
-    RBO3["billingOperationRepository.listStalePendingOperations"]
+    RBO2["billingOperationRepository<br/>beginOperationAttempt, markOperationSucceeded/Failed/Completed"]
+    RBO3["billingOperationRepository<br/>listRecoverableOperations, listUnreplayableOperations"]
     RBO4["billingOperationRepository.fetchOperationByKey<br/>no production consumer"]
     RPLAN["planRepository.fetchPlan"]
     RLIMIT["limitRepository<br/>countActiveOwnedTenants, countRosterMembers<br/>countApprovedMemberships, listOwnedTenants<br/>getTenantStorageBytes, lockUserForCapCheck, lockTenantForCapCheck"]
@@ -98,10 +98,11 @@ flowchart LR
   subgraph platformservices["Platform subscription services"]
     BILLINGSVC["billingService<br/>get state, subscribe, change/downgrade plan<br/>cancel, resume and sync"]
     SAGA["billingSaga<br/>durable remote mutations through billing_operations"]
+    OPWORKER["billingOperationService<br/>leased command execution, replay and local completion"]
     INGEST["paymentIngestionService<br/>single transactional outcome funnel"]
     JOBS["billingTasks + billingReconciliation<br/>repair, polling and cleanup"]
     PORT["PaymentProvider port<br/>ensureCustomer, mandate/on-demand charge<br/>getPayment, create/get/cancel subscription"]
-    ADAPTER["MollieProvider adapter<br/>status and error normalization"]
+    ADAPTER["Mollie TypeScript SDK adapter<br/>status and error normalization"]
   end
   RBS --> BILLINGSVC
   RSP1 --> BILLINGSVC
@@ -112,6 +113,7 @@ flowchart LR
   RSG --> SAGA
   RBO1 --> SAGA
   RBO2 --> SAGA
+  RBO2 --> OPWORKER
   RPLAN --> SAGA
   RSI --> INGEST
   RSP1 --> INGEST
@@ -121,8 +123,11 @@ flowchart LR
   BILLINGSVC --> SAGA
   BILLINGSVC --> INGEST
   JOBS --> SAGA
+  JOBS --> OPWORKER
   JOBS --> INGEST
   SAGA --> PORT
+  SAGA --> OPWORKER
+  OPWORKER --> PORT
   INGEST --> PORT
   JOBS --> PORT
   PORT --> ADAPTER
@@ -209,7 +214,7 @@ flowchart LR
   classDef external fill:#ffe9e9,stroke:#a84a4a,color:#431818
   classDef finding fill:#f3f3f3,stroke:#666,color:#222
   class CRECORD,CSTATUS,CSTORE,CCLEAR,CRETAIN,CONFIG,IR1,IR2,IR3,IR4,IR5,RBS,RSG,RSI,RSJ,RSP1,RSP2,RSP3,RSP4,RBO1,RBO2,RBO3,RBO4,RPLAN,RLIMIT repo
-  class CREDENTIALS,ICONFIG,PROFILE,MPL,INVOICESVC,LEDGERSVC,BANKSVC,PURGE,BILLINGSVC,SAGA,INGEST,JOBS,PORT,ADAPTER service
+  class CREDENTIALS,ICONFIG,PROFILE,MPL,INVOICESVC,LEDGERSVC,BANKSVC,PURGE,BILLINGSVC,SAGA,OPWORKER,INGEST,JOBS,PORT,ADAPTER service
   class PROFILEAPI,INVOICEAPI,LINKWEBHOOK,PUBLICLOGO,BILLINGAPI,BILLWEBHOOK,FPROFILE,FINVOICE,FBILLING,FCONTEXT api
   class SETTINGS,INVDETAILS,PANEL,EMAILPDF,THANKS,BILLSETTINGS,ONBOARD,SUMMARY ui
   class LINKS,PLATFORM external

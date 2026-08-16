@@ -53,11 +53,28 @@ export function nextModuleSet(modules) {
     }))
 }
 
+// The current set with one ladder's module replaced by (or added as) `plan` —
+// what a change to that ladder would be priced against.
+export function moduleSetWith(modules, audience, plan) {
+  const others = currentModuleSet(modules).filter((m) => m.audience !== audience)
+  return [...others, { audience, plan }]
+}
+
 // Quote a concrete module set. `modules` is [{ audience, plan }] with plan rows
 // straight from the catalog.
 export async function quote(db, { modules, interval, now = new Date() }) {
   const rules = await listActivePricingRules(db)
   return computePriceSnapshot({ modules, rules, interval, now })
+}
+
+// The same module set priced for several intervals at once — one rules read
+// instead of one per interval, and one `now` so the quotes cannot straddle a
+// discount's effective boundary. Returns { [interval]: snapshot }.
+export async function quoteIntervals(db, { modules, intervals, now = new Date() }) {
+  const rules = await listActivePricingRules(db)
+  return Object.fromEntries(intervals.map((interval) => [
+    interval, computePriceSnapshot({ modules, rules, interval, now }),
+  ]))
 }
 
 export { computeProrationCents }

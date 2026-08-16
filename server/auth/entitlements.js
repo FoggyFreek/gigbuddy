@@ -9,6 +9,7 @@ export {
   UNLIMITED,
   PURGEABLE_FEATURES,
   featuresToPurge,
+  isDowngrade,
   isUnlimited,
   validateEntitlements,
   mergeEntitlements,

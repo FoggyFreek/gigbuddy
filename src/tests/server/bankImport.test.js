@@ -27,16 +27,14 @@ const mockPaymentLinksGet = vi.fn()
 const mockPaymentLinksDelete = vi.fn()
 const mockPaymentLinksUpdate = vi.fn()
 
-vi.mock('../../../server/utils/mollieClient.js', async (importOriginal) => {
+vi.mock('../../../server/finance/invoices/molliePaymentLinkGateway.js', async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,
-    createTenantMollieClient: vi.fn(() => ({
-      paymentLinks: {
-        get: mockPaymentLinksGet,
-        delete: mockPaymentLinksDelete,
-        update: mockPaymentLinksUpdate,
-      },
+    createTenantMolliePaymentLinkGateway: vi.fn(() => ({
+      getPaymentSnapshot: mockPaymentLinksGet,
+      deletePaymentLink: mockPaymentLinksDelete,
+      archivePaymentLink: mockPaymentLinksUpdate,
     })),
   }
 })
@@ -48,11 +46,7 @@ function mollieError(statusCode) {
 function paymentLink(status, payments = []) {
   return {
     status,
-    getPayments: () => ({
-      take: () => ({
-        [Symbol.asyncIterator]: async function* iterator() { yield* payments },
-      }),
-    }),
+    latestPayment: payments[0] ?? null,
   }
 }
 

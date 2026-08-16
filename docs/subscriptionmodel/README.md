@@ -6,9 +6,11 @@ sold as **modules** of a single subscription.
 This directory is the product-level description of that model. The code-level
 map and the invariants live in `.claude/skills/subscription-billing/SKILL.md`;
 this is the "why", written so someone can reason about the commercial behaviour
-without reading `billingService.js`.
+without reading the billing services.
 
 - [`lifecycle.md`](lifecycle.md) — the state machine, from trial to cancellation.
+- [`billing-operations.md`](billing-operations.md) — the services and
+  repositories behind a single provider mutation, and how it is recovered.
 - [`pricing.md`](pricing.md) — pricing rules, discounts and the price snapshot.
 - [`refunds.md`](refunds.md) — the five-day withdrawal window and admin refunds.
 - [`../architecture-decisions/001-trial-mandate-verification.md`](../architecture-decisions/001-trial-mandate-verification.md)

@@ -82,7 +82,7 @@ export function toPayment(value) {
     customerId: value.customerId ?? null,
     mandateId: value.mandateId ?? null,
     scheduleId: value.subscriptionId ?? null,
-    checkoutUrl: value.getCheckoutUrl?.() ?? value._links?.checkout?.href ?? null,
+    checkoutUrl: value.links?.checkout?.href ?? null,
     createdAt: toDate(value.createdAt),
     paidAt: toDate(value.paidAt),
   }

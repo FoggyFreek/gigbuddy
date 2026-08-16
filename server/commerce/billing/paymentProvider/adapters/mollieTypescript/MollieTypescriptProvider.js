@@ -1,6 +1,6 @@
-import { createMollieClient } from '@mollie/api-client'
 import { PaymentProvider } from '../../PaymentProvider.js'
 import { ProviderError } from '../../ProviderError.js'
+import { createMollieTypescriptClient } from './createMollieClient.js'
 import {
   toPayment,
   toProviderAmount,
@@ -11,7 +11,7 @@ import {
 } from './mollieMappers.js'
 import { providerStatusOf, toProviderError } from './mollieErrors.js'
 
-export class MollieLegacyProvider extends PaymentProvider {
+export class MollieTypescriptProvider extends PaymentProvider {
   constructor(client) {
     super()
     this.client = client
@@ -20,9 +20,11 @@ export class MollieLegacyProvider extends PaymentProvider {
   async createCustomer({ email, name, idempotencyKey }) {
     try {
       const customer = await this.client.customers.create({
-        ...(email ? { email } : {}),
-        ...(name ? { name } : {}),
         idempotencyKey,
+        entityCustomer: {
+          ...(email ? { email } : {}),
+          ...(name ? { name } : {}),
+        },
       })
       return { id: customer.id }
     } catch (error) {
@@ -32,7 +34,7 @@ export class MollieLegacyProvider extends PaymentProvider {
 
   async getCustomer({ customerId }) {
     try {
-      const customer = await this.client.customers.get(customerId)
+      const customer = await this.client.customers.get({ customerId })
       return { id: customer.id }
     } catch (error) {
       throw toProviderError(error, 'customer lookup')
@@ -42,14 +44,16 @@ export class MollieLegacyProvider extends PaymentProvider {
   async createCheckoutPayment(args) {
     try {
       const payment = toPayment(await this.client.payments.create({
-        customerId: args.customerId,
-        sequenceType: 'first',
-        amount: toProviderAmount(args.amount),
-        description: args.description,
-        redirectUrl: args.redirectUrl,
-        ...(args.webhookUrl ? { webhookUrl: args.webhookUrl } : {}),
-        ...(args.metadata ? { metadata: args.metadata } : {}),
         idempotencyKey: args.idempotencyKey,
+        paymentRequest: {
+          customerId: args.customerId,
+          sequenceType: 'first',
+          amount: toProviderAmount(args.amount),
+          description: args.description,
+          redirectUrl: args.redirectUrl,
+          ...(args.webhookUrl ? { webhookUrl: args.webhookUrl } : {}),
+          ...(args.metadata ? { metadata: args.metadata } : {}),
+        },
       }))
       if (!payment.checkoutUrl) {
         throw new ProviderError('Payment provider returned no checkout URL', {
@@ -65,14 +69,17 @@ export class MollieLegacyProvider extends PaymentProvider {
   async createRecurringPayment(args) {
     try {
       return toPayment(await this.client.payments.create({
-        customerId: args.customerId,
-        mandateId: args.mandateId,
-        sequenceType: 'recurring',
-        amount: toProviderAmount(args.amount),
-        description: args.description,
-        ...(args.webhookUrl ? { webhookUrl: args.webhookUrl } : {}),
-        ...(args.metadata ? { metadata: args.metadata } : {}),
         idempotencyKey: args.idempotencyKey,
+        paymentRequest: {
+          customerId: args.customerId,
+          mandateId: args.mandateId,
+          sequenceType: 'recurring',
+          amount: toProviderAmount(args.amount),
+          description: args.description,
+          redirectUrl: null,
+          ...(args.webhookUrl ? { webhookUrl: args.webhookUrl } : {}),
+          ...(args.metadata ? { metadata: args.metadata } : {}),
+        },
       }))
     } catch (error) {
       throw toProviderError(error, 'recurring payment creation')
@@ -81,7 +88,7 @@ export class MollieLegacyProvider extends PaymentProvider {
 
   async getPayment({ paymentId }) {
     try {
-      return toPayment(await this.client.payments.get(paymentId))
+      return toPayment(await this.client.payments.get({ paymentId }))
     } catch (error) {
       throw toProviderError(error, 'payment lookup')
     }
@@ -89,16 +96,18 @@ export class MollieLegacyProvider extends PaymentProvider {
 
   async createSchedule(args) {
     try {
-      return toSchedule(await this.client.customerSubscriptions.create({
+      return toSchedule(await this.client.subscriptions.create({
         customerId: args.customerId,
-        amount: toProviderAmount(args.amount),
-        interval: toProviderInterval(args.interval),
-        description: args.description,
-        ...(args.mandateId ? { mandateId: args.mandateId } : {}),
-        ...(args.startAt ? { startDate: toProviderDate(args.startAt) } : {}),
-        ...(args.webhookUrl ? { webhookUrl: args.webhookUrl } : {}),
-        ...(args.metadata ? { metadata: args.metadata } : {}),
         idempotencyKey: args.idempotencyKey,
+        subscriptionRequest: {
+          amount: toProviderAmount(args.amount),
+          interval: toProviderInterval(args.interval),
+          description: args.description,
+          ...(args.mandateId ? { mandateId: args.mandateId } : {}),
+          ...(args.startAt ? { startDate: toProviderDate(args.startAt) } : {}),
+          ...(args.webhookUrl ? { webhookUrl: args.webhookUrl } : {}),
+          ...(args.metadata ? { metadata: args.metadata } : {}),
+        },
       }))
     } catch (error) {
       throw toProviderError(error, 'schedule creation')
@@ -107,7 +116,7 @@ export class MollieLegacyProvider extends PaymentProvider {
 
   async getSchedule({ customerId, scheduleId }) {
     try {
-      return toSchedule(await this.client.customerSubscriptions.get(scheduleId, { customerId }))
+      return toSchedule(await this.client.subscriptions.get({ customerId, subscriptionId: scheduleId }))
     } catch (error) {
       throw toProviderError(error, 'schedule lookup')
     }
@@ -115,7 +124,9 @@ export class MollieLegacyProvider extends PaymentProvider {
 
   async cancelSchedule({ customerId, scheduleId, idempotencyKey }) {
     try {
-      await this.client.customerSubscriptions.cancel(scheduleId, { customerId, idempotencyKey })
+      await this.client.subscriptions.cancel({
+        customerId, subscriptionId: scheduleId, idempotencyKey,
+      })
     } catch (error) {
       if (providerStatusOf(error) === 404 || providerStatusOf(error) === 410) return
       throw toProviderError(error, 'schedule cancellation')
@@ -124,11 +135,14 @@ export class MollieLegacyProvider extends PaymentProvider {
 
   async createRefund(args) {
     try {
-      return toRefund(await this.client.paymentRefunds.create({
+      return toRefund(await this.client.refunds.create({
         paymentId: args.paymentId,
-        amount: toProviderAmount(args.amount),
-        ...(args.description ? { description: args.description } : {}),
         idempotencyKey: args.idempotencyKey,
+        refundRequest: {
+          amount: toProviderAmount(args.amount),
+          description: args.description ?? 'GigBuddy refund',
+          metadata: null,
+        },
       }))
     } catch (error) {
       throw toProviderError(error, 'refund creation')
@@ -137,13 +151,13 @@ export class MollieLegacyProvider extends PaymentProvider {
 
   async getRefund({ paymentId, refundId }) {
     try {
-      return toRefund(await this.client.paymentRefunds.get(refundId, { paymentId }))
+      return toRefund(await this.client.refunds.get({ paymentId, refundId }))
     } catch (error) {
       throw toProviderError(error, 'refund lookup')
     }
   }
 }
 
-export function createMollieLegacyProvider(apiKey) {
-  return new MollieLegacyProvider(apiKey ? createMollieClient({ apiKey }) : null)
+export function createMollieTypescriptProvider(apiKey) {
+  return new MollieTypescriptProvider(createMollieTypescriptClient(apiKey))
 }

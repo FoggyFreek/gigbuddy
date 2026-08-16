@@ -298,3 +298,29 @@ all time bounds itself on read, so access is correct even if the scheduler never
 runs. The tasks flip durable status, settle in-flight charges, finish sagas,
 keep the next-period price in step with the discount catalog, and send the
 renewal notices — which are messages, not state.
+
+## Provider adapters and operation replay
+
+The services and repositories behind this are diagrammed in
+[`billing-operations.md`](billing-operations.md).
+
+Application services only use the `PaymentProvider` port. Its Mollie adapter
+uses `mollie-api-typescript` and `PLATFORM_MOLLIE_API_KEY`. SDK retries are
+disabled so the durable billing-operation retry policy remains the single
+retry owner.
+
+Every provider mutation stores a versioned, provider-neutral command before it
+runs. A short database lease prevents concurrent workers from issuing it, and
+the same idempotency key is passed to the provider on every attempt. Provider
+success and its normalized result are persisted before the idempotent local
+completion step. The scheduler therefore repairs both crash windows: before or
+during the remote request, and after provider success but before local linkage.
+Retryable failures use bounded exponential backoff. Pre-migration rows without
+a command are never guessed at; they remain visible as operator warnings.
+
+The super-admin operations pages are read-only views over this durable local
+state. They surface terminal/retrying operations, the oldest pending operation,
+unresolved webhook failures, and local subscription/payment drift signals.
+Opening a dashboard never calls Mollie. Platform webhook attempts are recorded
+in `billing_webhook_events`; a failed attempt is resolved when a later attempt
+for the same subscription and provider payment is processed.

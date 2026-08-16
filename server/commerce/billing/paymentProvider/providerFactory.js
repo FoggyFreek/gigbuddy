@@ -1,12 +1,14 @@
-import { createMollieLegacyProvider } from './adapters/mollieLegacy/MollieLegacyProvider.js'
+import { createMollieTypescriptProvider } from './adapters/mollieTypescript/MollieTypescriptProvider.js'
 
 let override = null
 let cached = null
 
+export function createPaymentProvider(apiKey) {
+  return createMollieTypescriptProvider(apiKey)
+}
+
 function buildProvider() {
-  const kind = process.env.BILLING_PROVIDER || 'mollie'
-  if (kind === 'mollie') return createMollieLegacyProvider(process.env.PLATFORM_MOLLIE_API_KEY)
-  throw new Error(`Unknown BILLING_PROVIDER: ${kind}`)
+  return createPaymentProvider(process.env.PLATFORM_MOLLIE_API_KEY)
 }
 
 export function getPaymentProvider() {
@@ -17,8 +19,7 @@ export function getPaymentProvider() {
 
 export function isPlatformBillingConfigured() {
   if (override) return true
-  const kind = process.env.BILLING_PROVIDER || 'mollie'
-  return kind === 'mollie' && Boolean(process.env.PLATFORM_MOLLIE_API_KEY)
+  return Boolean(process.env.PLATFORM_MOLLIE_API_KEY)
 }
 
 export function setPaymentProviderForTests(provider) {

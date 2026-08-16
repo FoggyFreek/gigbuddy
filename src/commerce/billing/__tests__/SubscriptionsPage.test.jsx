@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -113,41 +113,17 @@ describe('SubscriptionsPage complimentary grant', () => {
     expect(grantComplimentary).not.toHaveBeenCalled()
   })
 
-  it('does not let an older request overwrite the selected filter', async () => {
-    let resolveInitial
-    const initialRequest = new Promise((resolve) => { resolveInitial = resolve })
-    const attentionSubscription = {
+  it('does not show paid subscriptions in the complimentary grant register', async () => {
+    listSubscriptions.mockResolvedValue({ subscriptions: [{
       id: 6, userId: 11, userName: 'Member Mia', userEmail: 'mia@test.local',
       modules: [{ audience: 'band', planSlug: 'pro', status: 'active', priceCents: 500 }],
-      status: 'active', billingInterval: 'month',
-      totalCents: 500, cancelAtPeriodEnd: false, currentPeriodEnd: null,
-      trialEndsAt: null, isComplimentary: false, complimentaryExpiresAt: null,
-      scheduleStale: true, repairNeeded: false,
-      createdAt: '2026-07-01T00:00:00.000Z',
-    }
-    const regularSubscription = {
-      ...attentionSubscription,
-      id: 7,
-      userId: 10,
-      userName: 'Owner Olly',
-      userEmail: 'olly@test.local',
-      scheduleStale: false,
-    }
-    listSubscriptions
-      .mockImplementationOnce(() => initialRequest)
-      .mockResolvedValueOnce({ subscriptions: [attentionSubscription] })
-
-    const user = userEvent.setup()
+      status: 'active', billingInterval: 'month', totalCents: 500,
+      cancelAtPeriodEnd: false, currentPeriodEnd: null, trialEndsAt: null,
+      isComplimentary: false, complimentaryExpiresAt: null,
+      scheduleStale: false, repairNeeded: false, createdAt: '2026-07-01T00:00:00.000Z',
+    }] })
     wrap()
-    await user.click(screen.getByRole('switch', { name: 'Only needing attention' }))
-
-    expect(await screen.findByText('Member Mia')).toBeInTheDocument()
-    await act(async () => {
-      resolveInitial({ subscriptions: [regularSubscription] })
-      await initialRequest
-    })
-
-    expect(screen.getByText('Member Mia')).toBeInTheDocument()
-    expect(screen.queryByText('Owner Olly')).not.toBeInTheDocument()
+    await screen.findByText('No complimentary grants.')
+    expect(screen.queryByText('Member Mia')).not.toBeInTheDocument()
   })
 })

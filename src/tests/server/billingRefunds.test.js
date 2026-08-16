@@ -262,6 +262,17 @@ describe('super-admin partial refunds', () => {
     expect(await refunds(subId)).toHaveLength(2)
   })
 
+  it('treats equal-sized refund intents as distinct provider mutations', async () => {
+    const subId = await convert()
+    const payment = await paymentRow(subId)
+    const grant = () => adminSvc.refundSubscription(
+      pool, subId, { paymentId: payment.id, amountCents: 1000 }, seed.superUser.id)
+
+    expect((await grant()).refunded).toBe(true)
+    expect((await grant()).refunded).toBe(true)
+    expect((await refunds(subId)).map((refund) => refund.mollie_refund_id)).toEqual(['re_1', 're_2'])
+  })
+
   it('refuses to refund more than the payment', async () => {
     const subId = await convert()
     const payment = await paymentRow(subId)

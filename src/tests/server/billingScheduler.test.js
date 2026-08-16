@@ -324,6 +324,112 @@ describe('complimentary subscriptions', () => {
   })
 })
 
+describe('reconcileBillingOperations', () => {
+  const customerCommand = (userId) => ({
+    version: 1,
+    method: 'createCustomer',
+    args: { email: 'member@example.test', name: 'Member' },
+    completion: { kind: 'linkCustomer', userId },
+  })
+
+  it('replays a retryable provider mutation and completes its local side effect', async () => {
+    await pool.query(
+      `INSERT INTO billing_operations
+         (user_id, op_type, idempotency_key, status, command_payload, next_attempt_at)
+       VALUES ($1, 'ensure_customer', 'customer:recovery', 'failed_retryable', $2, NOW() - INTERVAL '1 minute')`,
+      [seed.userA.id, customerCommand(seed.userA.id)],
+    )
+
+    await tasks.reconcileBillingOperations(pool)
+
+    const { rows: [user] } = await pool.query(
+      'SELECT mollie_customer_id FROM users WHERE id = $1', [seed.userA.id])
+    const { rows: [operation] } = await pool.query(
+      `SELECT status, attempt_count, completed_at IS NOT NULL AS completed
+         FROM billing_operations WHERE idempotency_key = 'customer:recovery'`)
+    expect(user.mollie_customer_id).toBe('cst_1')
+    expect(operation).toEqual({ status: 'succeeded', attempt_count: 1, completed: true })
+  })
+
+  it('finishes local state after a crash that happened after provider success', async () => {
+    await pool.query(
+      `INSERT INTO billing_operations
+         (user_id, op_type, idempotency_key, status, command_payload, result_payload,
+          mollie_resource_id)
+       VALUES ($1, 'ensure_customer', 'customer:completion', 'succeeded', $2, $3, 'cst_recovered')`,
+      [seed.userA.id, customerCommand(seed.userA.id), { resourceId: 'cst_recovered' }],
+    )
+
+    await tasks.reconcileBillingOperations(pool)
+
+    const { rows: [user] } = await pool.query(
+      'SELECT mollie_customer_id FROM users WHERE id = $1', [seed.userA.id])
+    expect(user.mollie_customer_id).toBe('cst_recovered')
+    expect(fake.calls).toEqual([])
+  })
+
+  it('rolls back a pending module change after a replayed terminal rejection', async () => {
+    const gold = await billing.getPlanBySlug('gold')
+    const sub = await billing.createSubscription({
+      userId: seed.userA.id,
+      planSlug: 'silver',
+      pending_total_cents: 2000,
+      pending_price_snapshot: { modules: {}, subtotalCents: 2000, discounts: [], totalCents: 2000 },
+      pending_plan_id: gold.id,
+      pending_change_kind: 'upgrade',
+      pending_price_cents: 2000,
+    })
+    fake.failNextWith = { retryable: false }
+    await pool.query(
+      `INSERT INTO billing_operations
+         (user_id, subscription_id, op_type, idempotency_key, status, command_payload)
+       VALUES ($1, $2, 'module_change_charge', 'module:terminal', 'pending', $3)`,
+      [seed.userA.id, sub.id, {
+        version: 1,
+        method: 'createRecurringPayment',
+        args: {
+          customerId: 'cst_1', mandateId: 'mdt_1', amount: { currency: 'EUR', cents: 500 },
+          description: 'Prorated change',
+        },
+        completion: { kind: 'linkModulePayment', subscriptionId: sub.id, amountCents: 500 },
+      }],
+    )
+
+    await tasks.reconcileBillingOperations(pool)
+
+    const module = await billing.getModule(sub.id, 'band')
+    const { rows: [operation] } = await pool.query(
+      `SELECT status, completed_at IS NOT NULL AS completed
+         FROM billing_operations WHERE idempotency_key = 'module:terminal'`)
+    expect(module.pending_plan_id).toBeNull()
+    expect(operation).toEqual({ status: 'failed_terminal', completed: true })
+  })
+})
+
+describe('reconcilePendingRefunds', () => {
+  it('creates the outbox command when a crash left only the committed refund intent', async () => {
+    const sub = await billing.createSubscription({ userId: seed.userA.id })
+    const payment = await billing.createSubscriptionPayment(sub.id, {
+      status: 'paid', amount_cents: 999,
+    })
+    const { rows: [refund] } = await pool.query(
+      `INSERT INTO subscription_refunds
+         (subscription_id, subscription_payment_id, amount_cents, reason, created_at)
+       VALUES ($1, $2, 400, 'admin_grant', NOW() - INTERVAL '20 minutes')
+       RETURNING *`,
+      [sub.id, payment.id],
+    )
+
+    await tasks.reconcilePendingRefunds(pool)
+
+    const { rows: [recovered] } = await pool.query(
+      'SELECT status, mollie_refund_id FROM subscription_refunds WHERE id = $1', [refund.id])
+    expect(recovered.status).toBe('succeeded')
+    expect(recovered.mollie_refund_id).toBe('re_1')
+    expect(fake.refunds.size).toBe(1)
+  })
+})
+
 describe('the task registry', () => {
   it('runs every task without throwing on an empty database', async () => {
     for (const [name, task] of tasks.BILLING_TASKS) {

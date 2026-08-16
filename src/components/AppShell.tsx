@@ -19,6 +19,7 @@ import type { SvgIconComponent } from '@mui/icons-material'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
+import AdminPanelSettingsOutlined from '@mui/icons-material/AdminPanelSettingsOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
 import SearchIcon from '@mui/icons-material/Search'
 // Group headers use TwoTone icons (slightly larger); children use Outlined.
@@ -68,6 +69,7 @@ import NotificationsBell from './appShell/NotificationsBell.tsx'
 import TutorialHost from '../tutorials/TutorialHost.tsx'
 import SearchPanel from './appShell/SearchPanel.tsx'
 import SettingsMenu from './appShell/SettingsMenu.tsx'
+import AdminMenu from './appShell/AdminMenu.tsx'
 import UserMenu from './appShell/UserMenu.tsx'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
 import { TENANT_CAPABILITIES, type TenantCapability } from '../auth/tenantCapabilities.ts'
@@ -194,6 +196,7 @@ export default function AppShell() {
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
   const [createBandOpen, setCreateBandOpen] = useState(false)
   const [settingsMenuAnchor, setSettingsMenuAnchor] = useState<HTMLElement | null>(null)
+  const [adminMenuAnchor, setAdminMenuAnchor] = useState<HTMLElement | null>(null)
   // When a SplitView opens its master-detail layout it asks for full width;
   // otherwise content stays capped and centered (see CONTENT_MAX_WIDTH).
   const [wideContent, setWideContent] = useState(false)
@@ -440,8 +443,24 @@ export default function AppShell() {
             onClose={() => setSettingsMenuAnchor(null)}
             mode={mode}
             onToggleTheme={() => { toggleTheme(); setSettingsMenuAnchor(null) }}
-            isSuperAdmin={isSuperAdmin}
           />
+          {isSuperAdmin && (
+            <>
+              <Tooltip title={t($ => $.headers.superAdmin)}>
+                <IconButton
+                  onClick={(e) => setAdminMenuAnchor(e.currentTarget)}
+                  aria-label={t($ => $.shell.openAdmin)}
+                >
+                  <AdminPanelSettingsOutlined />
+                </IconButton>
+              </Tooltip>
+              <AdminMenu
+                anchorEl={adminMenuAnchor}
+                open={Boolean(adminMenuAnchor)}
+                onClose={() => setAdminMenuAnchor(null)}
+              />
+            </>
+          )}
           {user && (
             <>
               <Tooltip title={user.name || user.email}>
