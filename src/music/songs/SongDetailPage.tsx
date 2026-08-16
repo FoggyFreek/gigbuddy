@@ -32,6 +32,7 @@ import {
   deleteSongRecording,
   getSong,
   searchSongTags,
+  setSongCoverFromAlbum,
   setSongTags,
   updateSong,
   uploadSongCover,
@@ -46,11 +47,12 @@ import SongLinks from './components/SongLinks.tsx'
 import SongCoverThumb from './components/SongCoverThumb.tsx'
 import SongFileList from './components/SongFileList.tsx'
 import ChordProChartsSection from './components/chordpro/ChordProChartsSection.tsx'
+import AlbumPicker from './components/AlbumPicker.tsx'
 import PremiumDiamond from '../../components/PremiumDiamond.tsx'
 import { usePermissions } from '../../hooks/usePermissions.ts'
 import { useEntitlements } from '../../hooks/useEntitlements.ts'
 import { useToast } from '../../contexts/toastContext.ts'
-import type { Song, SongTag, Id } from '../../types/entities.ts'
+import type { Album, Song, SongTag, Id } from '../../types/entities.ts'
 import type { Feature } from '../../auth/entitlements.ts'
 import PlanningReadOnlyAlert from '../../components/PlanningReadOnlyAlert.tsx'
 
@@ -130,11 +132,13 @@ export default function SongDetailPage() {
 
   const [song, setSong] = useState<Song | null>(null)
   const [form, setForm] = useState<SongForm>({ title: '', artist: '', song_key: '', tempo: '', duration: '', notes: '' })
+  const [album, setAlbum] = useState<Album | null>(null)
   const [tags, setTags] = useState<string[]>([])
   const [tagOptions, setTagOptions] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingSongId, setLoadingSongId] = useState(songId)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [albumArtPrompt, setAlbumArtPrompt] = useState<Album | null>(null)
   const [coverMenuAnchor, setCoverMenuAnchor] = useState<HTMLElement | null>(null)
   const [coverBusy, setCoverBusy] = useState(false)
   const [lyricsExpanded, setLyricsExpanded] = useState(true)
@@ -176,6 +180,7 @@ export default function SongDetailPage() {
           duration: formatDuration(songData.duration_seconds),
           notes: songData.notes || '',
         })
+        setAlbum(songData.album ?? null)
         setTags((songData.tags || []).map((t: SongTag) => t.name || ''))
         // Start collapsed when lyrics exist (the peek shows them); an empty
         // editor ('<p></p>' counts as empty) opens ready for input.
@@ -215,6 +220,28 @@ export default function SongDetailPage() {
     setTags(resolvedNames)
     setTagOptions((prev) => [...new Set([...prev, ...resolvedNames])])
     outletCtx.onSongUpdate?.(songId, { tags: resolved })
+  }
+
+  function handleAlbumChange(nextAlbum: Album | null) {
+    if (!canWritePlanning) return
+    setAlbum(nextAlbum)
+    const patch = { album_id: nextAlbum?.id ?? null, album: nextAlbum }
+    schedule({ album_id: patch.album_id })
+    outletCtx.onSongUpdate?.(songId, patch)
+    if (!song?.cover_image_path && nextAlbum?.album_art_url) setAlbumArtPrompt(nextAlbum)
+  }
+
+  async function handleUseAlbumArt() {
+    const selected = albumArtPrompt
+    setAlbumArtPrompt(null)
+    if (selected?.id === undefined) return
+    try {
+      const result = await setSongCoverFromAlbum(songId, selected.id)
+      setSong((prev) => (prev ? { ...prev, cover_image_path: result.cover_image_path } : prev))
+      outletCtx.onSongUpdate?.(songId, { cover_image_path: result.cover_image_path })
+    } catch {
+      showToast?.(t($ => $.albums.copyArtFailed))
+    }
   }
 
   async function handleCoverFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -346,7 +373,10 @@ export default function SongDetailPage() {
                 slotProps={{ htmlInput: { readOnly: !canWritePlanning } }}
               />
             </Grid>
-            <Grid size={{ xs: 4, sm: 2 }}>
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <AlbumPicker value={album} onChange={handleAlbumChange} readOnly={!canWritePlanning} />
+            </Grid>
+            <Grid size={{ xs: 4 }}>
               <TextField
                 label={t($ => $.fields.key)}
                 fullWidth
@@ -355,7 +385,7 @@ export default function SongDetailPage() {
                 slotProps={{ htmlInput: { readOnly: !canWritePlanning } }}
               />
             </Grid>
-            <Grid size={{ xs: 4, sm: 2 }}>
+            <Grid size={{ xs: 4 }}>
               <TextField
                 label={t($ => $.fields.tempo)}
                 fullWidth
@@ -365,7 +395,7 @@ export default function SongDetailPage() {
                 slotProps={{ htmlInput: { readOnly: !canWritePlanning } }}
               />
             </Grid>
-            <Grid size={{ xs: 4, sm: 2 }}>
+            <Grid size={{ xs: 4 }}>
               <TextField
                 label={t($ => $.fields.duration)}
                 fullWidth
@@ -523,6 +553,16 @@ export default function SongDetailPage() {
         <DialogActions>
           <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
           <Button color="error" variant="contained" onClick={handleDelete}>{t($ => $.common.actions.delete)}</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={albumArtPrompt !== null} onClose={() => setAlbumArtPrompt(null)}>
+        <DialogTitle>{t($ => $.albums.useArtTitle)}</DialogTitle>
+        <DialogContent>
+          <DialogContentText>{t($ => $.albums.useArtBody)}</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAlbumArtPrompt(null)}>{t($ => $.albums.notNow)}</Button>
+          <Button variant="contained" onClick={handleUseAlbumArt}>{t($ => $.albums.useArtAction)}</Button>
         </DialogActions>
       </Dialog>
     </Box>

@@ -7,16 +7,20 @@
 export async function listSongs(executor, tenantId) {
   const { rows } = await executor.query(
     `SELECT s.*,
+       CASE WHEN a.id IS NULL THEN NULL ELSE
+         json_build_object('id', a.id, 'title', a.title, 'release_date', a.release_date, 'album_art_url', a.album_art_url)
+       END AS album,
        COALESCE(
          json_agg(json_build_object('id', t.id, 'name', t.name) ORDER BY t.name)
            FILTER (WHERE t.id IS NOT NULL),
          '[]'
        ) AS tags
      FROM songs s
+     LEFT JOIN albums a ON a.id = s.album_id AND a.tenant_id = s.tenant_id
      LEFT JOIN song_tag_links l ON l.song_id = s.id AND l.tenant_id = s.tenant_id
      LEFT JOIN song_tags t ON t.id = l.tag_id AND t.tenant_id = s.tenant_id
      WHERE s.tenant_id = $1
-     GROUP BY s.id
+     GROUP BY s.id, a.id
      ORDER BY s.title ASC`,
     [tenantId],
   )
@@ -25,7 +29,13 @@ export async function listSongs(executor, tenantId) {
 
 export async function fetchSong(executor, songId, tenantId) {
   const { rows } = await executor.query(
-    'SELECT * FROM songs WHERE id = $1 AND tenant_id = $2',
+    `SELECT s.*,
+       CASE WHEN a.id IS NULL THEN NULL ELSE
+         json_build_object('id', a.id, 'title', a.title, 'release_date', a.release_date, 'album_art_url', a.album_art_url)
+       END AS album
+     FROM songs s
+     LEFT JOIN albums a ON a.id = s.album_id AND a.tenant_id = s.tenant_id
+     WHERE s.id = $1 AND s.tenant_id = $2`,
     [songId, tenantId],
   )
   return rows[0] || null
@@ -55,13 +65,14 @@ export async function searchSongs(executor, tenantId, like) {
 
 export async function insertSong(executor, tenantId, data) {
   const { rows } = await executor.query(
-    `INSERT INTO songs (tenant_id, title, artist, song_key, tempo, duration_seconds, lyrics_html, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO songs (tenant_id, title, artist, album_id, song_key, tempo, duration_seconds, lyrics_html, notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
     [
       tenantId,
       data.title,
       data.artist,
+      data.album_id,
       data.song_key,
       data.tempo,
       data.duration_seconds,
@@ -105,7 +116,7 @@ export async function collectSongObjectKeys(executor, songId, tenantId) {
 
 export async function getSongCoverRow(executor, songId, tenantId) {
   const { rows } = await executor.query(
-    'SELECT cover_image_path FROM songs WHERE id = $1 AND tenant_id = $2',
+    'SELECT cover_image_path, album_id FROM songs WHERE id = $1 AND tenant_id = $2',
     [songId, tenantId],
   )
   return rows[0] ?? null
@@ -118,6 +129,16 @@ export async function setSongCoverPath(executor, songId, tenantId, objectKey) {
     [objectKey, songId, tenantId],
   )
   return rows[0].cover_image_path
+}
+
+export async function setSongCoverPathIfEmpty(executor, songId, tenantId, objectKey) {
+  const { rows } = await executor.query(
+    `UPDATE songs SET cover_image_path = $1, updated_at = NOW()
+      WHERE id = $2 AND tenant_id = $3 AND cover_image_path IS NULL
+      RETURNING cover_image_path`,
+    [objectKey, songId, tenantId],
+  )
+  return rows[0]?.cover_image_path ?? null
 }
 
 export async function clearSongCoverPath(executor, songId, tenantId) {
@@ -409,9 +430,9 @@ export async function loadExistingSongKeys(executor, tenantId) {
 
 export async function insertImportSong(executor, tenantId, row) {
   const { rows } = await executor.query(
-    `INSERT INTO songs (tenant_id, title, artist, song_key, tempo, duration_seconds)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [tenantId, row.title, row.artist || null, row.song_key || null, row.tempo, row.duration_seconds],
+    `INSERT INTO songs (tenant_id, title, artist, album_id, song_key, tempo, duration_seconds)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [tenantId, row.title, row.artist || null, row.album_id, row.song_key || null, row.tempo, row.duration_seconds],
   )
   return rows[0].id
 }

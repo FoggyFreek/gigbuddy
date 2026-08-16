@@ -69,6 +69,18 @@ export function compressAvatar(file: File): Promise<File> {
   return imageCompression(file, AVATAR_OPTIONS)
 }
 
+const ALBUM_ART_OPTIONS: Options = {
+  maxSizeMB: 0.5,
+  maxWidthOrHeight: 640,
+  initialQuality: 0.88,
+  fileType: 'image/webp',
+  ...WEB_WORKER_OPTIONS,
+}
+
+export function compressAlbumArt(file: File): Promise<File> {
+  return imageCompression(file, ALBUM_ART_OPTIONS)
+}
+
 const RECEIPT_OPTIONS: Options = {
   maxSizeMB: 1.5,
   maxWidthOrHeight: 2000,

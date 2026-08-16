@@ -46,6 +46,7 @@ import {
   deleteSongChartsForTenant,
   clearSongCoversForTenant,
 } from '../../music/songs/songRepository.js'
+import { clearAlbumArtForTenant } from '../../music/songs/albumRepository.js'
 import {
   listInvoicesWithPaymentLink,
   countInvoicesWithPaymentLink,
@@ -136,6 +137,7 @@ export async function purgeFeatureData(db, tenantId, features) {
         const keys = [
           ...(await clearTenantCustomization(client, tenantId)),
           ...(await clearSongCoversForTenant(client, tenantId)),
+          ...(await clearAlbumArtForTenant(client, tenantId)),
         ]
         for (const key of keys) await enqueueCleanup(client, tenantId, key, false)
       })

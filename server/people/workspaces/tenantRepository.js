@@ -350,6 +350,7 @@ export async function fetchTenantAssetKeys(executor, tenantId) {
        UNION ALL SELECT custom_logo_path FROM invoices WHERE tenant_id = $1
        UNION ALL SELECT object_key FROM song_documents WHERE tenant_id = $1
        UNION ALL SELECT object_key FROM song_recordings WHERE tenant_id = $1
+       UNION ALL SELECT album_art_url FROM albums WHERE tenant_id = $1
        UNION ALL SELECT object_key FROM purchase_attachments WHERE tenant_id = $1
      ) assets
      WHERE key IS NOT NULL`,

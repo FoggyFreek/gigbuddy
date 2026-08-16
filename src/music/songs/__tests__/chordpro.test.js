@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { renderChordProHtml, parseChordProDocument, safeImageSrc, parseChordDefinition, formatChordDefinition, analyzeChords, getTransposeAmount, extractMetadata, songFieldsFromChordPro, lyricsHtmlFromChordPro, parseGridLine, parseGridShape, isValidGridShape, transposeGridChord, buildGridItems, voltaInfo, buildVoltaSpans, GRID_CELL_W, GRID_BAR_W, printChordPro, SAMPLE_CHART_SOURCE } from '../chordpro.ts'
+import { renderChordProHtml, parseChordProDocument, safeImageSrc, parseChordDefinition, formatChordDefinition, analyzeChords, getTransposeAmount, applySourceTransposition, extractLabelLayout, extractMetadata, songFieldsFromChordPro, lyricsHtmlFromChordPro, parseGridLine, parseGridShape, isValidGridShape, transposeGridChord, buildGridItems, voltaInfo, buildVoltaSpans, GRID_CELL_W, GRID_BAR_W, printChordPro, SAMPLE_CHART_SOURCE } from '../chordpro.ts'
 import { lookupGuitarChord } from '../guitarChords.ts'
 
 afterEach(() => {
@@ -46,6 +46,13 @@ describe('renderChordProHtml', () => {
     const labelled = renderChordProHtml('{start_of_bridge: Bridge 1}\n[C]x\n{end_of_bridge}')
     expect(labelled).toContain('class="label"')
     expect(labelled).toContain('Bridge 1')
+  })
+
+  it('renders a section label when properties use whitespace without a colon', () => {
+    const html = renderChordProHtml('{start_of_verse label="Verse 1"}\n[C]x\n{end_of_verse}')
+    expect(html).toContain('class="label"')
+    expect(html).toContain('>Verse 1</h3>')
+    expect(html).not.toContain('label=&quot;')
   })
 })
 
@@ -124,7 +131,10 @@ describe('parseChordProDocument', () => {
 
   it('parses the image src + page anchor and drops the leaked attributes', () => {
     const img = parseChordProDocument(MOLLY).blocks.find((b) => b.kind === 'image')
-    expect(img).toMatchObject({ src: 'https://example.com/molly.jpg', anchored: true, scale: '80%' })
+    expect(img).toMatchObject({
+      src: 'https://example.com/molly.jpg',
+      options: { anchor: 'page', scale: '80%' },
+    })
   })
 
   it('reads textblock alignment', () => {
@@ -161,12 +171,12 @@ describe('parseChordProDocument — block boundaries & edge cases', () => {
 
   it('captures an unclosed ABC block through end-of-file', () => {
     const { blocks } = parseChordProDocument('{start_of_abc}\nX:1\nK:G')
-    expect(blocks).toEqual([{ kind: 'abc', abc: 'X:1\nK:G' }])
+    expect(blocks).toEqual([{ kind: 'abc', abc: 'X:1\nK:G', spread: false, label: null }])
   })
 
   it('captures an unclosed textblock through end-of-file', () => {
     const tb = parseChordProDocument('{start_of_textblock}\nlast words').blocks.find((b) => b.kind === 'textblock')
-    expect(tb).toEqual({ kind: 'textblock', text: 'last words', align: 'left' })
+    expect(tb).toEqual({ kind: 'textblock', text: 'last words', align: 'left', label: null })
   })
 
   it('drops an {image} with no src and one with a non-http(s) src (no image block)', () => {
@@ -174,10 +184,19 @@ describe('parseChordProDocument — block boundaries & edge cases', () => {
     expect(parseChordProDocument('{image src="javascript:alert(1)"}').blocks.some((b) => b.kind === 'image')).toBe(false)
   })
 
-  it('defaults a bare {columns} to 2 and reads {col N}', () => {
-    expect(parseChordProDocument('{columns}\n[C]x').columns).toBe(2)
+  it('rejects a bare {columns} and reads {col N}', () => {
+    const bare = parseChordProDocument('{columns}\n[C]x')
+    expect(bare.columns).toBe(1)
+    expect(bare.warnings[0]).toContain('Invalid argument for columns directive')
     expect(parseChordProDocument('{col 3}\n[C]x').columns).toBe(3)
     expect(parseChordProDocument('[C]x').columns).toBe(1)
+  })
+
+  it('emits column and page break operations in source order', () => {
+    const { blocks } = parseChordProDocument('[C]one\n{colb}\n[D]two\n{new_page}\n[E]three\n{npp}\n[F]four')
+    expect(blocks.map((block) => block.kind)).toEqual([
+      'chordpro', 'colb', 'chordpro', 'pagebreak', 'chordpro', 'pagebreak', 'chordpro',
+    ])
   })
 
   it('returns empty blocks and no warnings for an empty/whitespace source', () => {
@@ -376,6 +395,11 @@ describe('{start_of_grid}', () => {
     expect(grid.lines).toEqual(['| C . . . |'])
   })
 
+  it('reads optional label text after a legacy grid shape', () => {
+    const grid = parseChordProDocument('{sog: 4x4 Intro\\nBand}\n| C . . . |\n{eog}').blocks[0]
+    expect(grid).toMatchObject({ kind: 'grid', shape: '4x4', label: 'Intro\nBand' })
+  })
+
   it('reads a keyed shape with margins', () => {
     const grid = parseChordProDocument('{start_of_grid shape="1+4x2+4"}\n| C . | G . |\n{end_of_grid}').blocks.find((b) => b.kind === 'grid')
     expect(grid.shape).toBe('1+4x2+4')
@@ -488,6 +512,16 @@ describe('parseGridLine', () => {
 
   it('treats a bar-less line as wholly left margin', () => {
     expect(parseGridLine('Intro only')).toEqual({ marginLeft: 'Intro only', tokens: [], marginRight: '' })
+  })
+
+  it('recognizes upper/lowercase strum rows and their pseudo-chords', () => {
+    const withBars = parseGridLine('| S dn~up d+~u+ |')
+    expect(withBars.strum).toBe('bars')
+    expect(withBars.tokens.filter((token) => token.kind === 'cell').map((token) => token.cell)).toEqual([
+      { kind: 'strum', text: 'dn~up' },
+      { kind: 'strum', text: 'd+~u+' },
+    ])
+    expect(parseGridLine('|s dn up |').strum).toBe('no-bars')
   })
 })
 
@@ -652,11 +686,47 @@ describe('{define … display}', () => {
   })
 })
 
+describe('extended chord definitions', () => {
+  it('preserves letter finger labels and relative keyboard keys', () => {
+    expect(parseChordDefinition('C frets x 3 2 0 1 0 fingers 0 C B 0 A 0')).toMatchObject({
+      shape: { fingers: [0, 'C', 'B', 0, 'A', 0] },
+    })
+    expect(parseChordDefinition('D keys 0 4 7')).toMatchObject({
+      shape: { frets: [], keys: [0, 4, 7] },
+    })
+  })
+})
+
 describe('{transpose}', () => {
-  it('sums {transpose: n} directives', () => {
+  it('tracks nested positional transpose directives and restores them with a bare directive', () => {
     expect(getTransposeAmount('{transpose: 2}\n[C]x')).toBe(2)
     expect(getTransposeAmount('{transpose: 2}\n{transpose: -1}\n[C]x')).toBe(1)
+    expect(getTransposeAmount('{transpose: 2}\n{transpose: 3}\n{transpose}\n[C]x')).toBe(2)
+    expect(getTransposeAmount('{transpose: 2}\n{transpose}\n[C]x')).toBe(0)
     expect(getTransposeAmount('[C]x')).toBe(0)
+  })
+
+  it('applies source transposition only to subsequent chords, grids, and bracketed chord directives', () => {
+    const source = [
+      '[C]before',
+      '{transpose: 2}',
+      '[C]during',
+      '{start_of_grid}',
+      '| C . . . |',
+      '{end_of_grid}',
+      '{chord: [C]}',
+      '{transpose}',
+      '[C]after',
+    ].join('\n')
+
+    const transformed = applySourceTransposition(source)
+    expect(transformed.source).toContain('[C]before')
+    expect(transformed.source).toContain('[D]during')
+    expect(transformed.source).toContain('| D . . . |')
+    expect(transformed.source).toContain('{chord: [D]}')
+    expect(transformed.source).toContain('[C]after')
+    expect(transformed.source).not.toContain('{transpose')
+    expect(transformed.amount).toBe(0)
   })
 
   it('applies transpose to rendered chords (the High-severity bug)', () => {
@@ -681,6 +751,50 @@ describe('{transpose}', () => {
 
     const { chords } = analyzeChords('{transpose: 2}\n[G/B]slash chord')
     expect(chords[0]).toMatchObject({ name: 'A/C#', shape: { baseFret: 1 } })
+  })
+})
+
+describe('section label layout', () => {
+  it('decodes multiline labels and reserves one shared margin based on the longest line', () => {
+    const layout = extractLabelLayout([
+      '{start_of_verse: label="Verse 1\\nAll"}',
+      '[C]x',
+      '{end_of_verse}',
+      '{start_of_tab: Instrumental}',
+      'E|--0--|',
+      '{end_of_tab}',
+    ].join('\n'))
+
+    expect(layout.labels).toEqual(['Verse 1\nAll', 'Instrumental'])
+    expect(layout.widthCh).toBe('Instrumental'.length)
+  })
+})
+
+describe('rendered comments', () => {
+  it('captures plain comments and highlights separately from italic comments', () => {
+    const comments = parseChordProDocument('{comment: Note}\n{c: Again}\n{highlight: Watch}\n{ci: Soft}').blocks
+    expect(comments).toEqual([
+      { kind: 'comment', text: 'Note', variant: 'plain' },
+      { kind: 'comment', text: 'Again', variant: 'plain' },
+      { kind: 'comment', text: 'Watch', variant: 'plain' },
+      { kind: 'comment', text: 'Soft', variant: 'italic' },
+    ])
+  })
+})
+
+describe('{chorus} recall', () => {
+  it('emits a recall marker and parses property/legacy labels', () => {
+    const blocks = parseChordProDocument([
+      '{chorus}',
+      '{chorus: label="Final"}',
+      '{chorus: Encore}',
+    ].join('\n')).blocks
+
+    expect(blocks).toEqual([
+      { kind: 'chorusrecall', label: null },
+      { kind: 'chorusrecall', label: 'Final' },
+      { kind: 'chorusrecall', label: 'Encore' },
+    ])
   })
 })
 

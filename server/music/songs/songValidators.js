@@ -1,5 +1,6 @@
 // Input parsing and validation for song routes. No DB access here.
 import { parsePositiveId as parseId, trimOrNull } from '../../platform/http/requestValidators.js'
+import { isIsoDate } from '../../utils/periodQuery.js'
 
 export { parseId, trimOrNull }
 
@@ -37,6 +38,14 @@ export function buildSongUpdateFields(body) {
       fields.push(`${key} = $${idx++}`)
       values.push(toIntOrNull(body[key]))
     }
+  }
+  if ('album_id' in body) {
+    const albumId = body.album_id === null || body.album_id === '' ? null : parseId(body.album_id)
+    if (albumId === null && body.album_id !== null && body.album_id !== '') {
+      return { error: 'Invalid album_id' }
+    }
+    fields.push(`album_id = $${idx++}`)
+    values.push(albumId)
   }
   return { fields, values }
 }
@@ -114,9 +123,13 @@ export function buildSongChartUpdateFields(body) {
 }
 
 export function normalizeImportRow(row) {
+  const releaseDate = String(row.release_date ?? row.releasedate ?? '').trim()
   return {
     title: String(row.title ?? '').trim(),
     artist: String(row.artist ?? '').trim(),
+    album: String(row.album ?? row.album_title ?? '').trim(),
+    release_date: releaseDate || null,
+    invalid_release_date: Boolean(releaseDate && !isIsoDate(releaseDate)),
     song_key: String(row.song_key ?? row.key ?? '').trim(),
     tempo: toIntOrNull(row.tempo),
     duration_seconds: toIntOrNull(row.duration_seconds ?? row.duration),

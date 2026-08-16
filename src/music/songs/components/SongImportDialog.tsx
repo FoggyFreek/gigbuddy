@@ -7,7 +7,7 @@ import { importSongs } from '../songs.ts'
 
 interface SongField {
   key: string
-  labelKey: 'title' | 'artist' | 'key' | 'tempo' | 'duration' | 'tags'
+  labelKey: 'title' | 'artist' | 'album' | 'releaseDate' | 'key' | 'tempo' | 'duration' | 'tags'
   required?: boolean
   aliases: string[]
 }
@@ -15,6 +15,8 @@ interface SongField {
 const SONG_FIELDS: SongField[] = [
   { key: 'title',    labelKey: 'title',    required: true, aliases: ['title', 'song', 'song title', 'name'] },
   { key: 'artist',   labelKey: 'artist',   aliases: ['artist', 'band', 'performer'] },
+  { key: 'album',    labelKey: 'album',    aliases: ['album', 'album title', 'album_title'] },
+  { key: 'release_date', labelKey: 'releaseDate', aliases: ['release date', 'releasedate', 'release_date', 'album release date'] },
   { key: 'song_key', labelKey: 'key',      aliases: ['key', 'song key', 'song_key'] },
   { key: 'tempo',    labelKey: 'tempo',    aliases: ['tempo', 'bpm'] },
   { key: 'duration', labelKey: 'duration', aliases: ['duration', 'length', 'time', 'duration_seconds'] },
@@ -34,6 +36,8 @@ function durationToSeconds(raw: string): number | null {
 type SongRow = {
   title: string
   artist: string
+  album: string
+  release_date: string
   song_key: string
   tempo: number | null
   duration_seconds: number | null
@@ -44,6 +48,8 @@ function transformRow(values: Record<string, string>): SongRow {
   return {
     title: values.title,
     artist: values.artist,
+    album: values.album,
+    release_date: values.release_date,
     song_key: values.song_key,
     tempo: values.tempo ? Number(values.tempo) : null,
     duration_seconds: durationToSeconds(values.duration),
@@ -61,6 +67,8 @@ export default function SongImportDialog({ onClose }: Readonly<SongImportDialogP
   const previewColumns: CsvPreviewColumn<SongRow>[] = [
     { key: 'title', header: t($ => $.fields.title), strong: true },
     { key: 'artist', header: t($ => $.fields.artist) },
+    { key: 'album', header: t($ => $.fields.album) },
+    { key: 'release_date', header: t($ => $.fields.releaseDate) },
     { key: 'song_key', header: t($ => $.fields.key) },
     { key: 'tempo', header: t($ => $.fields.tempo) },
     { key: 'tags', header: t($ => $.fields.tags) },

@@ -6,6 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../songs.ts', () => ({
   listSongs: vi.fn(),
+  listAlbums: vi.fn().mockResolvedValue([]),
+  createAlbum: vi.fn(),
+  updateAlbum: vi.fn(),
+  uploadAlbumArt: vi.fn(),
+  deleteAlbumArt: vi.fn(),
+  setSongCoverFromAlbum: vi.fn(),
   getSong: vi.fn(),
   createSong: vi.fn(),
   updateSong: vi.fn().mockResolvedValue({}),
@@ -30,7 +36,9 @@ import {
   deleteSong,
   deleteSongCover,
   getSong,
+  listAlbums,
   listSongs,
+  setSongCoverFromAlbum,
   setSongTags,
   updateSong,
   uploadSongCover,
@@ -104,6 +112,9 @@ describe('SongsPage — split-view detail', () => {
     listSongs.mockResolvedValue([SONG])
     getSong.mockReset()
     getSong.mockResolvedValue(SONG)
+    listAlbums.mockReset()
+    listAlbums.mockResolvedValue([])
+    setSongCoverFromAlbum.mockReset()
     updateSong.mockClear()
     deleteSong.mockClear()
     setSongTags.mockReset()
@@ -124,6 +135,45 @@ describe('SongsPage — split-view detail', () => {
     )
     expect(await screen.findAllByText(/Radiohead/)).not.toHaveLength(0)
     expect(listSongs).toHaveBeenCalledTimes(1) // no full reload
+  })
+
+  it('selects an existing album from the song detail autocomplete', async () => {
+    const album = { id: 9, title: 'OK Computer', release_date: '1997-05-21' }
+    listAlbums.mockResolvedValue([album])
+    const user = userEvent.setup()
+    wrapWithRoutes({ initialEntries: ['/songs/1'] })
+
+    await waitFor(() => expect(screen.getByDisplayValue('Creep')).toBeInTheDocument())
+    await user.click(screen.getByLabelText('Album'))
+    await user.click(await screen.findByRole('option', { name: /OK Computer/i }))
+
+    await waitFor(
+      () => expect(updateSong).toHaveBeenCalledWith(1, { album_id: 9 }),
+      { timeout: 2000 },
+    )
+  })
+
+  it('prompts to copy selected album art when the song has no cover', async () => {
+    const album = {
+      id: 9,
+      title: 'OK Computer',
+      release_date: '1997-05-21',
+      album_art_url: 'tenants/1/album-art/ok.webp',
+    }
+    listAlbums.mockResolvedValue([album])
+    setSongCoverFromAlbum.mockResolvedValue({ cover_image_path: 'tenants/1/song_covers/copied.webp' })
+    const user = userEvent.setup()
+    wrapWithRoutes({ initialEntries: ['/songs/1'] })
+
+    await waitFor(() => expect(screen.getByDisplayValue('Creep')).toBeInTheDocument())
+    await user.click(screen.getByLabelText('Album'))
+    await user.click(await screen.findByRole('option', { name: /OK Computer/i }))
+    const prompt = await screen.findByRole('dialog', { name: 'Use album art?' })
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    await user.click(within(prompt).getByRole('button', { name: 'Use album art' }))
+
+    await waitFor(() => expect(setSongCoverFromAlbum).toHaveBeenCalledWith(1, 9))
+    expect(document.querySelector('img[src="/api/files/tenants/1/song_covers/copied.webp"]')).not.toBeNull()
   })
 
   it('uses the song title as the detail heading', async () => {

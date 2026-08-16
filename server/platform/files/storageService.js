@@ -55,6 +55,9 @@ export const songRecordingKey = (tenantId, uuid, ext) =>
 export const songCoverKey = (tenantId, uuid, ext) =>
   `tenants/${tenantId}/song_covers/${uuid}${ext}`
 
+export const albumArtKey = (tenantId, uuid, ext) =>
+  `tenants/${tenantId}/album-art/${uuid}${ext}`
+
 // ---------- reads ----------
 
 export const statObject = (key) => storageClient.statObject(BUCKET, key)

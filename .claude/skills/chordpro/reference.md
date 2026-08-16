@@ -1,6 +1,6 @@
 # ChordPro reference — directive tables & authoritative link index
 
-Companion to [SKILL.md](./SKILL.md). The tables below are a quick map; **the URL index at the end is the source of truth** — fetch the specific `directives-<name>` page for exact argument syntax, defaults, and version notes. Do not infer behavior not documented here. Spec baseline: ChordPro 6.07 cheat sheet.
+Companion to [SKILL.md](./SKILL.md). This file maps the **upstream ChordPro format**, including features GigBuddy does not implement. Use the support matrix in `SKILL.md` for app behavior. The URL index at the end is the upstream source of truth; fetch the specific `directives-<name>` page for exact argument syntax, defaults, and version notes. Do not infer GigBuddy support from this table.
 
 ## General syntax recap
 
@@ -21,7 +21,7 @@ Companion to [SKILL.md](./SKILL.md). The tables below are a quick map; **the URL
 | `… display` | Override displayed chord properties | 6.02 |
 | `… format` | Format string for chord display | 6.02 |
 | `… diagram` | Override diagram display/colour | 6.03 |
-| `diagrams` | Control whether diagrams print (`on`/`off`); replaces legacy `grid`/`no_grid` | 6.02 |
+| `diagrams` | Control diagram output and placement; replaces legacy `grid`/`no_grid` | 6.02 |
 
 ## Sections / environments
 
@@ -88,6 +88,7 @@ Per element, `*font` / `*size` / `*colour` exist for: `chord` (`cf`/`cs`), `text
 - chord/define — https://www.chordpro.org/chordpro/directives-define/ , https://www.chordpro.org/chordpro/directives-chord/
 - diagrams — https://www.chordpro.org/chordpro/directives-diagrams/
 - sections — https://www.chordpro.org/chordpro/directives-env/ (+ `directives-env_verse/_chorus/_bridge/_tab/_grid`, e.g. https://www.chordpro.org/chordpro/directives-env_chorus/ )
+- chorus recall — https://www.chordpro.org/chordpro/directives-chorus/
 - comment — https://www.chordpro.org/chordpro/directives-comment/
 - meta — https://www.chordpro.org/chordpro/directives-meta/ (+ per-key: `directives-title/-subtitle/-artist/-composer/-lyricist/-album/-copyright/-year/-key/-capo/-tempo/-time/-duration/-sorttitle/-sortartist/-tag`)
 - transpose — https://www.chordpro.org/chordpro/directives-transpose/

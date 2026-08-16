@@ -8,7 +8,7 @@ user-invocable: false
 
 ChordPro is a plain-text lead-sheet format: lyrics with inline `[chords]`, plus `{directives}` for metadata and structure. Extensions: `.pro`, `.cho`, `.chopro`, `.chordpro`, `.crd`, `.chord`. Current spec is ChordPro 6.x.
 
-**This file is a working reference for understanding the format and this app's implementation — not a build plan; the feature already exists.** Read it before touching the ChordPro code so you know the syntax rules and which file owns what. [reference.md](./reference.md) has the complete directive tables and the canonical URL index. Never invent directive behavior; if unsure, fetch the specific `directives-<name>` page from chordpro.org.
+**This file is the support contract for GigBuddy's ChordPro renderer.** Read it before touching the ChordPro code so you know the syntax rules, the directives the app owns, and which file owns what. [reference.md](./reference.md) describes upstream ChordPro syntax; it is not a promise that GigBuddy implements every upstream directive. Never invent directive behavior. Check the implementation and tests first, then consult the matching upstream `directives-<name>` page.
 
 ## Where the feature lives in this codebase
 
@@ -39,12 +39,34 @@ This app does **not** hand the whole file to ChordSheetJS. `parseChordProDocumen
 
 - **`{start_of_tab}`** → own `tab` block rendered as a real `<pre>` (fixed-width, exact whitespace) — ChordSheetJS's flex `.literal` can't guarantee column alignment.
 - **`{start_of_grid}`** (Jazz Grille) → own `grid` block, laid out by *shape* into fixed-width beat cells + bar slots so chords align vertically regardless of source spacing. This is the most involved part: grid shape (`1+4x4+1`), measure-repeats (`%`/`%%`), voltas/endings (`|1`, `:|2`, `:|2>`), bar-line glyphs. See the `parseGridLine` / `buildGridItems` / `buildVoltaSpans` functions and `GridBlock` in `ChordProView.tsx`.
-- **`{start_of_abc}`** → engraved with abcjs in `AbcBlock`.
-- **`{image: …}`**, **`{columns}`/`{colb}`**, **`{comment_box}`/`{comment_italic}`**, **`{chord: …}`** (inline diagram) → own blocks; ChordSheetJS would otherwise emit broken markup or silently drop them.
+- **`{start_of_abc}`** → engraved with abcjs in `AbcBlock`; **`{start_of_textblock}`** preserves plain text and alignment.
+- **Images, columns and breaks, page breaks, comments, inline diagrams, `{diagrams: below}`, and `{chorus}`** → own blocks; ChordSheetJS would otherwise emit broken markup, lose arguments, or silently drop them.
 - **Metadata** (`{title}`, `{artist}`, …) is hoisted to a header (`extractMetadata`) and stripped from the runs so it isn't re-printed.
-- **`{transpose: n}`** is parsed by ChordSheetJS but **not applied** by it — this app reads the amount (`getTransposeAmount`) and calls `song.transpose()` itself, summing source directives with the viewer's interactive ▲/▼ offset.
+- **`{transpose: n}`** is resolved before block splitting by `applySourceTransposition`. It is positional and stack-based: a value pushes a relative transposition for subsequent content, and bare `{transpose}` restores the previous amount. The viewer's interactive ▲/▼ offset is then applied globally.
 
 When ChordSheetJS can't parse a run, the renderer falls back to raw monospace text rather than failing.
+
+## GigBuddy supported directives
+
+Treat this table as the implementation truth. “Partial” means GigBuddy intentionally supports the listed behavior, not every option or output semantic of the reference CLI.
+
+| Family | Supported syntax and behavior | Status |
+| :--- | :--- | :--- |
+| Metadata | `title`/`t`, `subtitle`/`st`, `artist`, `composer`, `lyricist`, `album`, `year`, `copyright`, `key`, `capo`, `tempo`, `time`, `duration`; `{meta: <supported-key> value}` | Full for header display. Title, artist, key, and tempo also seed an imported song record. Repeated non-title values remain separate header items. |
+| Lyric sections | `start_of_verse`/`sov`, `start_of_chorus`/`soc`, `start_of_bridge`/`sob`, matching end directives, and generic `start_of_X`/`end_of_X` | Full through ChordSheetJS. `label="…"`, legacy bare labels, and literal `\n` are normalized into one compact document-wide label lane. |
+| Chorus recall | `{chorus}`, `{chorus: Final}`, `{chorus label="Final"}` | Partial. Emits a visible `Chorus` recall marker with an optional label; it does not duplicate the earlier chorus body. |
+| Rendered comments | `comment`/`c`, `highlight`, `comment_box`/`cb`, `comment_italic`/`ci` | Full. Source lines beginning with `#` remain non-rendered comments. |
+| Columns and breaks | `{columns: N}`, `{column: N}`, `{col: N}`, `{column_break}`/`{colb}`, `{new_page}`/`{np}`, `{new_physical_page}`/`{npp}` | `N` must be a positive integer. Screen layout becomes one column on narrow viewports; print supports up to six columns. |
+| Transposition | `{transpose: N}` and bare `{transpose}` | Full for lyric chords, grid chords, and bracketed names in `{chord: [C]}`. Directives are positional, relative, and stack-based; interactive transposition is global. |
+| Diagram placement | `{diagrams}`, `{diagrams: on|top|bottom|right|below|off}` | Full. `on` and a bare directive mean `bottom`; `below` inserts the grid at that source position; `off` suppresses screen and print grids. |
+| Chord definitions | `{define: NAME base-fret … frets … [fingers …] [keys …] [display …]}`; inline `{chord: …}` | Partial. Guitar string counts are variable; finger labels accept `1`–`9` and `A`–`Z`; `keys` renders a keyboard. `format`, `diagram`, `copy`, and `copyall` are not rendered. |
+| Tablature | `start_of_tab`/`sot` … `end_of_tab`/`eot`, with `label="…"` or a legacy bare label | Full. Body is whitespace-preserving monospace text. |
+| Jazz grid | `start_of_grid`/`sog` … `end_of_grid`/`eog`; `shape="…"`, `label="…"`, legacy shapes | Full for implemented grid grammar: inherited/default shapes, barlines, repeats `%`/`%%`, slash/empty beats, voltas, `~` chord pairs, and `S`/`s` strum rows. |
+| ABC notation | `start_of_abc` … `end_of_abc`; `label="…"`, `spread` | Partial. Body is rendered by abcjs; other upstream delegate options are not interpreted. |
+| Text blocks | `start_of_textblock` … `end_of_textblock`; `label="…"`, `align=`/`flush=` left, center, or right | Full for plain pre-wrapped text. |
+| Images | `{image: https://…}` or `{image: src="https://…" …}` with `scale`, `width`, `height`, `align`/`center`, `border`, `href`, `title`, `anchor`, `x`, `y`, `spread`, `label` | Partial. Only safe HTTP(S) sources and links are accepted. Browser CSS approximates upstream anchors; asset IDs, local files, `bordertrbl`, and repeated `allpages` output are not implemented. |
+
+Do not claim support for upstream-only features such as `new_song`/`ns`, `pagetype`, LilyPond/SVG delegates, conditional selectors, custom `x_…` handlers, legacy font/size/colour directives, or the full Pango markup/configuration system. Preserve unknown syntax where possible, add failing tests first, and update this table whenever support changes.
 
 ## The four lexical elements
 
@@ -91,20 +113,20 @@ In this app `parseChordDefinition` (in `chordpro.ts`) turns a `{define}`/`{chord
 
 **`{chord}` vs `{define}`**: `{define}` **registers** a reusable shape for the diagram grid; `{chord: …}` is **display-only and inline** — it shows a diagram right where it appears and does *not* register. Bracket form `[ ]` is the only form that transposes; a bare name never does. In this app, `{chord}` is matched in `parseChordProDocument` (emits a `chorddef` block); `{define}` is collected in `analyzeChords` for the grid.
 
-**`{diagrams}`** controls the auto-generated grid of all chords used: `on`/`off`/`top`/`bottom`. In `analyzeChords`, placement resolves to `top|bottom|off`; `ChordProView` shows a collapsible diagram grid on screen and a print version.
+**`{diagrams}`** controls the auto-generated grid of used chords: `on`/`top`/`bottom`/`right`/`below`/`off`. Bare/on resolves to `bottom`; `below` emits an inline placement block. `ChordProView` shows a collapsible diagram grid on screen and a print version. Undefined auto-grid chords are omitted, while an inline `{chord}` can still render its name without a shape.
 
 **Built-in library**: common chords (G, Em, Am, D7, …) have shapes in `src/music/songs/guitarChords.ts` (`lookupGuitarChord`), the app's stand-in for ChordPro's instrument config files — a song needs no `{define}` for them. A song's own `{define}`/`{chord}` **overrides** the built-in. A chord with no resolvable shape renders as just its name (matching ChordPro, which still prints the name of an undefined chord).
 
 ## Sections / environments
 
-`{start_of_X}` … `{end_of_X}` where X is `[A-Za-z0-9_]+`. Special handling for **chorus**, **tab**, **grid**; **verse/bridge** are conventional. Short forms: `sov/eov`, `soc/eoc`, `sob/eob`, `sot/eot`, `sog/eog`. Labels: `{start_of_verse: label="Verse 1"}` (legacy: `{soc: Chorus}`); `\n` allowed in labels. `{chorus}` *recalls* (re-prints) a prior chorus. **Unknown environments are treated as plain lyric lines**, never dropped. (Tab/grid/abc/textblock are intercepted before reaching ChordSheetJS — see the architecture section above.)
+`{start_of_X}` … `{end_of_X}` where X is `[A-Za-z0-9_]+`. Special handling exists for **tab**, **grid**, **ABC**, and **textblock**; **verse/chorus/bridge** lyric sections go through ChordSheetJS. Short forms: `sov/eov`, `soc/eoc`, `sob/eob`, `sot/eot`, `sog/eog`. Labels: `{start_of_verse label="Verse 1"}` (legacy: `{soc: Chorus}`); literal `\n` creates a multiline label. Labels render in one shared, capped left lane rather than expanding each section's margin independently. `{chorus}` emits a visible recall marker; GigBuddy does not inline-expand the stored chorus body. Unknown environments remain in the lenient lyric path rather than causing a fatal parse.
 
 ## Directives & conditional selectors
 
 - Args separate by colon and/or whitespace: `{title: X}`. Multi-arg uses attribute syntax with quotes: `{image: src="f.jpg" scale="50%"}` (`'` and `"` equivalent). In `chordpro.ts`, `readAttr`/`readLabel`/`readAlign` parse these arg strings.
-- **Conditional**: append `-selector` → `{define-guitar: ...}`; matches instrument/user/metadata, negate with `!`. Section openers apply the selector to their whole body; closers omit it.
-- **Custom directives** are prefixed `x_…` and must be ignored by apps that don't support them.
-- Full categorized tables (metadata, formatting, legacy font/size/colour, page layout, images, transpose) are in [reference.md](./reference.md).
+- Upstream conditional selectors append `-selector` (for example `{define-guitar: …}`), but GigBuddy does not currently evaluate them.
+- Upstream custom directives use the `x_…` prefix. GigBuddy has no custom directive handlers.
+- Full upstream tables (including unsupported formatting and page-layout directives) are in [reference.md](./reference.md). Check the support table above before relying on them in this app.
 
 ## Recommended data model (for reference / new parsing work)
 
