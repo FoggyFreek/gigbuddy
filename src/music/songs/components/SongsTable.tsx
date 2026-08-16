@@ -2,8 +2,14 @@ import type { Song, Id } from '../../../types/entities.ts'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import Checkbox from '@mui/material/Checkbox'
 import Chip from '@mui/material/Chip'
+import Divider from '@mui/material/Divider'
 import InputAdornment from '@mui/material/InputAdornment'
+import ListItemText from '@mui/material/ListItemText'
+import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Table from '@mui/material/Table'
@@ -16,6 +22,7 @@ import TableRow from '@mui/material/TableRow'
 import TableSortLabel from '@mui/material/TableSortLabel'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
+import FilterListIcon from '@mui/icons-material/FilterList'
 import SearchIcon from '@mui/icons-material/Search'
 import { useCompactLayout } from '../../../hooks/useCompactLayout.ts'
 import { formatDuration } from '../../../utils/formatDuration.ts'
@@ -25,6 +32,7 @@ const PAGE_SIZE = 25
 
 const COLUMNS = [
   { id: 'title',    labelKey: 'title' },
+  { id: 'album',    labelKey: 'album' },
   { id: 'song_key', labelKey: 'key' },
   { id: 'tempo',    labelKey: 'tempo' },
   { id: 'duration', labelKey: 'duration' },
@@ -41,6 +49,7 @@ function sortValue(song: Song, col: string): string | number {
   switch (col) {
     case 'title':    return (song.title || '').toLowerCase()
     case 'artist':   return (song.artist || '').toLowerCase()
+    case 'album':    return (song.album?.title || '').toLowerCase()
     case 'song_key': return (song.song_key || '').toLowerCase()
     case 'tempo':    return song.tempo ?? -1
     case 'duration': return song.duration_seconds ?? -1
@@ -64,7 +73,7 @@ function applySearch(list: Song[], q: string): Song[] {
   if (!q) return list
   const lower = q.toLowerCase()
   return list.filter((s) =>
-    [s.title, s.artist, s.song_key, ...tagNames(s)]
+    [s.title, s.artist, s.album?.title, s.album?.release_date, s.song_key, ...tagNames(s)]
       .some((f) => f && String(f).toLowerCase().includes(lower)),
   )
 }
@@ -82,6 +91,11 @@ function TagChips({ song }: Readonly<{ song: Song }>) {
 }
 
 function SongCard({ song, active, onClick }: Readonly<{ song: Song; active: boolean; onClick: () => void }>) {
+  const albumYear = song.album?.release_date?.slice(0, 4)
+  const albumLabel = song.album?.title
+    ? `${song.album.title}${albumYear ? `(${albumYear})` : ''}`
+    : ''
+  const byline = [song.artist, albumLabel].filter(Boolean).join(' - ')
   return (
     <Box
       onClick={onClick}
@@ -103,7 +117,7 @@ function SongCard({ song, active, onClick }: Readonly<{ song: Song; active: bool
               {song.title}
             </Typography>
             <Typography variant="subtitle2" noWrap sx={{ color: 'text.disabled' }}>
-              {song.artist}
+              {byline}
             </Typography>
           </Stack>
         </Stack>
@@ -126,6 +140,8 @@ interface SongsTableProps {
 export default function SongsTable({ songs, onRowClick, selectedId = null }: Readonly<SongsTableProps>) {
   const { t } = useTranslation('songs')
   const [search, setSearch] = useState('')
+  const [excludedAlbumKeys, setExcludedAlbumKeys] = useState<Set<string>>(new Set())
+  const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null)
   const [sortBy, setSortBy] = useState('title')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [page, setPage] = useState(0)
@@ -147,27 +163,106 @@ export default function SongsTable({ songs, onRowClick, selectedId = null }: Rea
     setPage(0)
   }
 
-  const sorted = applySort(applySearch(songs, search), sortBy, sortDir)
+  const albums = Array.from(
+    new Map(
+      songs
+        .filter((song) => song.album?.id !== undefined)
+        .map((song) => [`album:${String(song.album!.id)}`, song.album!]),
+    ).entries(),
+  ).sort(([, a], [, b]) => (a.title ?? '').localeCompare(b.title ?? '', undefined, { sensitivity: 'base' }))
+  const albumOptions = albums.map(([key, album]) => ({ key, label: album.title ?? '' }))
+  if (songs.some((song) => song.album?.id === undefined || song.album === null)) {
+    albumOptions.push({ key: 'none', label: t($ => $.filters.noAlbum) })
+  }
+  const excludedAlbumCount = albumOptions.filter(({ key }) => excludedAlbumKeys.has(key)).length
+  const selectedAlbumCount = albumOptions.length - excludedAlbumCount
+  const allAlbumsSelected = excludedAlbumCount === 0
+  const someAlbumsSelected = selectedAlbumCount > 0 && !allAlbumsSelected
+  const songAlbumKey = (song: Song) => song.album?.id === undefined || song.album === null
+    ? 'none'
+    : `album:${String(song.album.id)}`
+  const albumFiltered = songs.filter((song) => {
+    if (allAlbumsSelected) return true
+    return !excludedAlbumKeys.has(songAlbumKey(song))
+  })
+  const sorted = applySort(applySearch(albumFiltered, search), sortBy, sortDir)
   const paged = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
   const isEmpty = songs.length === 0
 
   const controls = (
-    <TextField
-      size="small"
-      placeholder={t($ => $.searchSongs)}
-      value={search}
-      onChange={(e) => handleSearch(e.target.value)}
-      sx={{ mb: 1.5, width: '100%' }}
-      slotProps={{
-        input: {
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon fontSize="small" />
-            </InputAdornment>
-          ),
-        },
-      }}
-    />
+    <Box sx={{ display: 'flex', gap: 1.5, mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
+      <TextField
+        size="small"
+        placeholder={t($ => $.searchSongs)}
+        value={search}
+        onChange={(e) => handleSearch(e.target.value)}
+        sx={{ flex: '1 1 200px', minWidth: 160 }}
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          },
+        }}
+      />
+      {albumOptions.length > 1 && (
+        <>
+          <Button
+            size="small"
+            variant={someAlbumsSelected ? 'contained' : 'outlined'}
+            startIcon={<FilterListIcon />}
+            onClick={(event) => setFilterAnchor(event.currentTarget)}
+          >
+            {someAlbumsSelected
+              ? t($ => $.filters.filterCount, { count: selectedAlbumCount })
+              : t($ => $.filters.filter)}
+          </Button>
+          <Menu
+            anchorEl={filterAnchor}
+            open={Boolean(filterAnchor)}
+            onClose={() => setFilterAnchor(null)}
+          >
+            <MenuItem
+              dense
+              onClick={() => {
+                setExcludedAlbumKeys(allAlbumsSelected
+                  ? new Set(albumOptions.map(({ key }) => key))
+                  : new Set())
+                setPage(0)
+              }}
+            >
+              <Checkbox
+                size="small"
+                checked={allAlbumsSelected}
+                indeterminate={someAlbumsSelected}
+              />
+              <ListItemText primary={t($ => $.filters.allAlbums)} />
+            </MenuItem>
+            <Divider />
+            {albumOptions.map(({ key, label }) => (
+              <MenuItem
+                key={key}
+                dense
+                onClick={() => {
+                  setExcludedAlbumKeys((previous) => {
+                    const next = new Set(previous)
+                    if (next.has(key)) next.delete(key)
+                    else next.add(key)
+                    return next
+                  })
+                  setPage(0)
+                }}
+              >
+                <Checkbox size="small" checked={!excludedAlbumKeys.has(key)} />
+                <ListItemText primary={label} />
+              </MenuItem>
+            ))}
+          </Menu>
+        </>
+      )}
+    </Box>
   )
 
   const pagination = sorted.length > rowsPerPage || !isCompact ? (
@@ -275,6 +370,7 @@ export default function SongsTable({ songs, onRowClick, selectedId = null }: Rea
                       </Typography>
                     )}
                   </TableCell>
+                  <TableCell>{s.album?.title || '—'}</TableCell>
                   <TableCell>{s.song_key || '—'}</TableCell>
                   <TableCell>{s.tempo || '—'}</TableCell>
                   <TableCell>{formatDuration(s.duration_seconds) || '—'}</TableCell>

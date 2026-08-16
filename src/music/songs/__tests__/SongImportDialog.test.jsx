@@ -51,7 +51,7 @@ describe('SongImportDialog', () => {
 
   it('maps song aliases and coerces tempo to a number', async () => {
     wrap()
-    await upload('Song,Band,Key,BPM,Genre\nParadise,The Band,Am,120,rock')
+    await upload('Song,Band,Album,Releasedate,Key,BPM,Genre\nParadise,The Band,Blue Sky,2024-05-17,Am,120,rock')
 
     await userEvent.click(await screen.findByRole('button', { name: 'Preview' }))
     await userEvent.click(screen.getByRole('button', { name: 'Import 1 row' }))
@@ -60,6 +60,8 @@ describe('SongImportDialog', () => {
     expect(importSongs).toHaveBeenCalledWith([{
       title: 'Paradise',
       artist: 'The Band',
+      album: 'Blue Sky',
+      release_date: '2024-05-17',
       song_key: 'Am',
       tempo: 120,
       duration_seconds: null,
@@ -77,13 +79,13 @@ describe('SongImportDialog', () => {
 
   it('previews the mapped song columns', async () => {
     wrap()
-    await upload('Title,Artist,Key,Tempo,Tags\nParadise,The Band,Am,120,rock')
+    await upload('Title,Artist,Album,Release date,Key,Tempo,Tags\nParadise,The Band,Blue Sky,2024-05-17,Am,120,rock')
 
     await userEvent.click(await screen.findByRole('button', { name: 'Preview' }))
 
     const headers = screen.getAllByRole('columnheader').map((c) => c.textContent)
-    expect(headers).toEqual(['Title', 'Artist', 'Key', 'Tempo', 'Tags'])
+    expect(headers).toEqual(['Title', 'Artist', 'Album', 'Release date', 'Key', 'Tempo', 'Tags'])
     const cells = screen.getAllByRole('cell').map((c) => c.textContent)
-    expect(cells).toEqual(['Paradise', 'The Band', 'Am', '120', 'rock'])
+    expect(cells).toEqual(['Paradise', 'The Band', 'Blue Sky', '2024-05-17', 'Am', '120', 'rock'])
   })
 })

@@ -1,11 +1,11 @@
-import { Fragment, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { Fragment, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Collapse from '@mui/material/Collapse'
 import ButtonBase from '@mui/material/ButtonBase'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import { parseChordProDocument, renderChordProHtml, analyzeChords, getTransposeAmount, extractMetadata, parseGridLine, parseGridShape, transposeGridChord, buildGridItems, voltaInfo, buildVoltaSpans, GRID_CELL_W, GRID_BAR_W, MONO_FONT } from '../../chordpro.ts'
-import type { DocBlock, GridCell, GridRenderItem, ParsedGridLine, ResolvedChord, SongMeta, VoltaSpan } from '../../chordpro.ts'
+import { parseChordProDocument, renderChordProHtml, analyzeChords, applySourceTransposition, extractLabelLayout, extractMetadata, parseGridLine, parseGridShape, transposeGridChord, buildGridItems, voltaInfo, buildVoltaSpans, GRID_CELL_W, GRID_BAR_W, MONO_FONT } from '../../chordpro.ts'
+import type { DocBlock, GridCell, GridRenderItem, ImageOptions, ParsedGridLine, ResolvedChord, SongMeta, VoltaSpan } from '../../chordpro.ts'
 import AbcBlock from '../../../../components/AbcBlock.tsx'
 import ChordDiagram from './ChordDiagram.tsx'
 import ChordName from './ChordName.tsx'
@@ -25,20 +25,19 @@ interface ChordProViewProps {
   diagramsOpen?: boolean
 }
 
-interface AnchoredImage { src: string; scale: string | null }
-
 // Mirrors CHORDPRO_PRINT_CSS but with theme colors so the screen tracks light/dark.
 const chordSheetSx = {
   '& .title': { fontSize: '1.5rem', fontWeight: 700, m: 0, mb: 0.25 },
   '& .subtitle, & .artist': { fontSize: '1rem', fontWeight: 400, color: 'text.secondary', m: 0, mb: 1 },
   '& .chord-sheet': { lineHeight: 1.15 },
-  '& .paragraph': { mb: 2, breakInside: 'avoid' },
+  '& .paragraph': { mb: 2, breakInside: 'avoid', display: 'grid', gridTemplateColumns: 'var(--cp-label-width) minmax(0, 1fr)', columnGap: 'var(--cp-label-gap)' },
+  '& .paragraph > :not(.label)': { gridColumn: 2 },
   '& .paragraph.chorus': { borderLeft: '3px solid', borderColor: 'divider', pl: 1.5 },
   '& .paragraph.bridge': { borderLeft: '3px dotted', borderColor: 'divider', pl: 1.5 },
   // {start_of_tab}: ChordSheetJS emits .literal lines — keep them in the fixed
   // Consolas stack so the tab columns line up; .label styles section labels.
   '& .literal': { fontFamily: MONO_FONT, whiteSpace: 'pre', lineHeight: 1.3, fontVariantLigatures: 'none' },
-  '& .label': { fontSize: '0.8125rem', fontWeight: 700, m: 0, mb: 0.5, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.03em' },
+  '& .label': { gridColumn: 1, gridRow: '1 / -1', fontSize: '0.875rem', fontWeight: 400, m: 0, color: 'text.secondary', whiteSpace: 'pre-line' },
   '& .row': { display: 'flex', flexWrap: 'wrap' },
   '& .column': { display: 'flex', flexDirection: 'column' },
   '& .chord': { fontWeight: 700, color: 'primary.main', whiteSpace: 'pre', pr: '10px' },
@@ -57,14 +56,6 @@ const chordSheetSx = {
 
 // Apply an {image scale=…} factor as a CSS transform (ChordPro's scale is
 // relative to natural size). Inline style so it carries into the print window.
-function imageScaleStyle(scale: string | null, origin: string): CSSProperties | undefined {
-  if (!scale) return undefined
-  const m = /^(\d+(?:\.\d+)?)\s*%$/.exec(scale.trim())
-  const factor = m ? Number(m[1]) / 100 : Number(scale)
-  if (!Number.isFinite(factor) || factor <= 0 || factor === 1) return undefined
-  return { transform: `scale(${factor})`, transformOrigin: origin }
-}
-
 function ChordProSegment({ source, transpose }: Readonly<{ source: string; transpose: number }>) {
   const html = renderChordProHtml(source, transpose)
   if (html === null) {
@@ -77,51 +68,111 @@ function ChordProSegment({ source, transpose }: Readonly<{ source: string; trans
   return <Box sx={chordSheetSx} dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-function FlowBlock({ block, transpose }: Readonly<{ block: DocBlock; transpose: number }>) {
+function SectionLabel({ children }: Readonly<{ children: string }>) {
+  return <Box className="cp-section-label" sx={{ fontSize: '0.875rem', color: 'text.secondary', whiteSpace: 'pre-line' }}>{children}</Box>
+}
+
+function labelledBlock(label: string | null, content: ReactNode, className: string) {
+  return (
+    <Box className={`cp-labelled-block ${className}`} sx={{ display: 'grid', gridTemplateColumns: 'var(--cp-label-width) minmax(0, 1fr)', columnGap: 'var(--cp-label-gap)', breakInside: 'avoid-column' }}>
+      {label && <SectionLabel>{label}</SectionLabel>}
+      <Box sx={{ gridColumn: 2, minWidth: 0 }}>{content}</Box>
+    </Box>
+  )
+}
+
+function cssLength(value: string | null): string | undefined {
+  if (!value) return undefined
+  const trimmed = value.trim()
+  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return `${trimmed}pt`
+  return /^-?\d+(?:\.\d+)?(?:%|px|pt|em|rem|mm|cm|in)$/.test(trimmed) ? trimmed : undefined
+}
+
+function imageStyle(options: ImageOptions): CSSProperties {
+  const scale = options.scale?.trim()
+  const factors = scale?.split(',').map((value) => {
+    const part = value.trim()
+    const percent = /^(\d+(?:\.\d+)?)\s*%$/.exec(part)
+    return percent ? Number(percent[1]) / 100 : Number(part)
+  }) ?? []
+  const transforms: string[] = []
+  const x = cssLength(options.x)
+  const y = cssLength(options.y)
+  if (x || y) transforms.push(`translate(${x ?? '0'}, ${y ?? '0'})`)
+  if (factors.length > 0 && factors.every((factor) => Number.isFinite(factor) && factor > 0) && factors.some((factor) => factor !== 1)) {
+    transforms.push(factors.length > 1 ? `scale(${factors[0]}, ${factors[1]})` : `scale(${factors[0]})`)
+  }
+  const borderWidth = options.border === null ? undefined : cssLength(options.border || '1')
+  return {
+    width: cssLength(options.width),
+    height: cssLength(options.height),
+    maxWidth: '100%',
+    objectFit: 'contain',
+    transform: transforms.length ? transforms.join(' ') : undefined,
+    transformOrigin: options.align === 'right' ? 'top right' : options.align === 'center' ? 'top center' : 'top left',
+    border: borderWidth ? `${borderWidth} solid currentColor` : undefined,
+  }
+}
+
+function ImageBlock({ block }: Readonly<{ block: Extract<DocBlock, { kind: 'image' }> }>) {
+  const { options } = block
+  const image = <Box component="img" src={block.src} alt={options.title ?? ''} title={options.title ?? undefined} style={imageStyle(options)} />
+  const linked = options.href && /^https?:\/\//i.test(options.href)
+    ? <a href={options.href} target="_blank" rel="noreferrer">{image}</a>
+    : image
+  const content = (
+    <Box
+      className={`cp-image cp-image-${options.anchor} cp-image-align-${options.align}`}
+      sx={{ mb: 2, textAlign: options.align, breakInside: 'avoid-column', columnSpan: options.spread !== null ? 'all' : undefined }}
+    >
+      {linked}
+    </Box>
+  )
+  return labelledBlock(options.label, content, `cp-image-wrap${options.spread !== null ? ' cp-image-spread cp-column-span' : ''}`)
+}
+
+interface FlowBlockProps {
+  block: DocBlock
+  transpose: number
+  chords: ResolvedChord[]
+  diagramsOpen: boolean
+}
+
+function FlowBlock({ block, transpose, chords, diagramsOpen }: Readonly<FlowBlockProps>) {
   if (block.kind === 'chordpro') return <ChordProSegment source={block.source} transpose={transpose} />
+  if (block.kind === 'abc') {
+    return labelledBlock(block.label, <AbcBlock abc={block.abc} />, `cp-abc-wrap${block.spread ? ' cp-column-span' : ''}`)
+  }
   if (block.kind === 'textblock') {
-    return (
+    return labelledBlock(block.label,
       <Box className="cp-textblock" sx={{ whiteSpace: 'pre-wrap', textAlign: block.align, mb: 2 }}>
         {block.text}
-      </Box>
-    )
+      </Box>, 'cp-textblock-wrap')
   }
   if (block.kind === 'image') {
-    return (
-      <Box
-        component="img"
-        src={block.src}
-        alt=""
-        style={imageScaleStyle(block.scale, 'top left')}
-        sx={{ maxWidth: '100%', height: 'auto', mb: 2 }}
-      />
-    )
+    return <ImageBlock block={block} />
   }
   if (block.kind === 'comment') {
     return (
       <Box
         className={`cp-comment ${block.variant}`}
         sx={block.variant === 'box'
-          ? { display: 'inline-block', border: '1px solid', borderColor: 'divider', borderRadius: 1, px: 0.75, py: 0.25, my: 0.5, fontWeight: 600 }
-          : { fontStyle: 'italic', color: 'text.secondary', my: 0.5 }}
+          ? { display: 'inline-block', border: '1px solid', borderColor: 'divider', borderRadius: 1, px: 0.75, py: 0.25, my: 0.5 }
+          : block.variant === 'plain'
+            ? { display: 'inline-block', bgcolor: 'action.hover', borderRadius: 0.5, px: 0.75, py: 0.25, my: 0.5 }
+            : { fontStyle: 'italic', color: 'text.secondary', my: 0.5 }}
       >
         {block.text}
       </Box>
     )
   }
   if (block.kind === 'tab') {
-    return (
+    return labelledBlock(block.label,
       <Box className="cp-tab" sx={{ mb: 2 }}>
-        {block.label && (
-          <Box className="cp-tab-label" sx={{ fontSize: '0.8125rem', fontWeight: 700, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.03em', mb: 0.5 }}>
-            {block.label}
-          </Box>
-        )}
         <Box component="pre" sx={{ m: 0, fontFamily: MONO_FONT, fontSize: 14, lineHeight: 1.3, whiteSpace: 'pre', overflowX: 'auto', fontVariantLigatures: 'none' }}>
           {block.text}
         </Box>
-      </Box>
-    )
+      </Box>, 'cp-tab-wrap')
   }
   if (block.kind === 'chorddef') {
     return (
@@ -131,6 +182,16 @@ function FlowBlock({ block, transpose }: Readonly<{ block: DocBlock; transpose: 
     )
   }
   if (block.kind === 'grid') return <GridBlock lines={block.lines} label={block.label} shape={block.shape} transpose={transpose} />
+  if (block.kind === 'colb') return <Box className="cp-column-break" aria-hidden="true" sx={{ breakAfter: 'column', height: 0 }} />
+  if (block.kind === 'pagebreak') return <Box className={`cp-page-break${block.physical ? ' physical' : ''}`} aria-hidden="true" sx={{ breakBefore: 'page', pageBreakBefore: 'always', columnSpan: 'all', height: 0 }} />
+  if (block.kind === 'diagrams') return <DiagramPlacement chords={chords} defaultOpen={diagramsOpen} />
+  if (block.kind === 'chorusrecall') {
+    return labelledBlock(
+      block.label,
+      <Box className="cp-comment plain cp-chorus-recall" sx={{ display: 'inline-block', bgcolor: 'action.hover', borderRadius: 0.5, px: 0.75, py: 0.25, my: 0.5 }}>Chorus</Box>,
+      'cp-chorus-recall-wrap',
+    )
+  }
   return null
 }
 
@@ -166,6 +227,16 @@ function GridEndBar() {
 // A fixed-width beat-cell. `.` renders blank (it only reserves the column so the
 // next chord lines up); chords are left-aligned at the start of the measure.
 const gridCellStyle = { display: 'inline-flex', alignItems: 'center', width: GRID_CELL_W, flex: 'none' } as const
+
+const STRUM_GLYPHS: Record<string, string> = {
+  up: '↑', u: '↑', 'u+': '⇈', ua: '↟', 'ua+': '↟!', ux: '↑×', 'ux+': '⇈×', us: '↑·', 'us+': '⇈·',
+  dn: '↓', d: '↓', 'd+': '⇊', da: '↡', 'da+': '↡!', dx: '↓×', 'dx+': '⇊×', ds: '↓·', 'ds+': '⇊·', x: '×',
+}
+
+function strumGlyphs(value: string): string {
+  return value.split('~').map((part) => STRUM_GLYPHS[part.toLowerCase()] ?? part).join('')
+}
+
 function GridCellView({ cell, transpose }: Readonly<{ cell: GridCell; transpose: number }>) {
   if (cell.kind === 'chord') {
     // Transpose with the song, and split a multi-chord cell (`C~A`) into two
@@ -183,6 +254,9 @@ function GridCellView({ cell, transpose }: Readonly<{ cell: GridCell; transpose:
   if (cell.kind === 'slash') {
     return <Box component="span" className="cp-gchord" style={gridCellStyle} sx={{ color: 'text.primary' }}>/</Box>
   }
+  if (cell.kind === 'strum') {
+    return <Box component="span" className="cp-gstrum" style={gridCellStyle} sx={{ fontSize: '1.05em', fontWeight: 700 }}>{strumGlyphs(cell.text)}</Box>
+  }
   if (cell.kind === 'text') {
     return <Box component="span" style={gridCellStyle}>{cell.text}</Box>
   }
@@ -198,7 +272,7 @@ const isRepeatBar = (text: string) => /[:.]/.test(text) || /\d/.test(text)
 // number moves to the bracket drawn beneath the row, so the bar shows `|` or `:|`.
 const voltaBarGlyph = (text: string) => (text.startsWith(':') ? ':|' : '|')
 
-const labelPillSx = { bgcolor: 'action.hover', borderRadius: 0.75, px: 0.75, py: '1px', fontWeight: 600, fontSize: '0.9em', whiteSpace: 'nowrap' } as const
+const gridMarginSx = { fontSize: '0.9em', whiteSpace: 'pre-line', color: 'text.secondary' } as const
 
 // The bracket + ending number drawn beneath a row that carries voltas. Each span
 // is positioned by em offset from the body's left edge (already including any
@@ -235,7 +309,6 @@ interface GridRowProps {
   transpose: number
   bodyMinWidth: string
   rightWidth?: string
-  blockLabel?: string | null
 }
 
 // One grid row: the left margin (the grid's `label` on the first row, plus any
@@ -245,9 +318,9 @@ interface GridRowProps {
 // shape defines right cells. An aligned (`:|N>`) ending shifts the whole body
 // right by `shiftEm` so it sits under the previous line's first ending. Volta
 // brackets, when present, are drawn on a thin row beneath.
-function GridRow({ parsed, items, spans, shiftEm, leftWidth, transpose, bodyMinWidth, rightWidth, blockLabel }: Readonly<GridRowProps>) {
+function GridRow({ parsed, items, spans, shiftEm, leftWidth, transpose, bodyMinWidth, rightWidth }: Readonly<GridRowProps>) {
   const { marginLeft, marginRight } = parsed
-  if (items.length === 0 && !marginLeft && !blockLabel) return <Box className="cp-grow" sx={{ minHeight: '1.6em' }} />
+  if (items.length === 0 && !marginLeft) return <Box className="cp-grow" sx={{ minHeight: '1.6em' }} />
   // The closing barline of the line is flush-right so a final `||`/`:|`/`|.` lines
   // up on the right with the single `|` that closes the other rows; every other
   // bar is flush-left so first strokes share a column.
@@ -256,11 +329,8 @@ function GridRow({ parsed, items, spans, shiftEm, leftWidth, transpose, bodyMinW
     <Box className="cp-grow-wrap" sx={{ display: 'flex', flexDirection: 'column' }}>
       <Box className="cp-grow" sx={{ display: 'flex', alignItems: 'center', minHeight: '1.6em' }}>
         <Box className="cp-gmargin" style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: 'none', paddingRight: '8px', width: leftWidth }}>
-          {blockLabel && (
-            <Box component="span" className="cp-glabel cp-glabel-name" sx={labelPillSx}>{blockLabel}</Box>
-          )}
           {marginLeft && (
-            <Box component="span" className="cp-glabel" sx={labelPillSx}>{marginLeft}</Box>
+            <Box component="span" className="cp-glabel" sx={gridMarginSx}>{marginLeft}</Box>
           )}
         </Box>
         <Box className="cp-gbody" style={{ display: 'inline-flex', alignItems: 'center', flex: 'none', minWidth: bodyMinWidth }}>
@@ -271,7 +341,7 @@ function GridRow({ parsed, items, spans, shiftEm, leftWidth, transpose, bodyMinW
               const volta = voltaInfo(it.text)
               const repeat = !isEnd && (isRepeatBar(it.text) || volta !== null)
               const text = volta ? voltaBarGlyph(it.text) : it.text
-              return <Box component="span" key={i} className={`cp-gbar${repeat ? ' cp-gbar-repeat' : ''}${isEnd ? ' cp-gbar-end' : ''}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: i === lastIdx ? 'flex-end' : 'flex-start', width: GRID_BAR_W, flex: 'none' }} sx={{ color: repeat ? 'secondary.main' : 'primary.main', fontWeight: 700 }}>{isEnd ? <GridEndBar /> : text}</Box>
+              return <Box component="span" key={i} className={`cp-gbar${repeat ? ' cp-gbar-repeat' : ''}${isEnd ? ' cp-gbar-end' : ''}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: i === lastIdx ? 'flex-end' : 'flex-start', width: GRID_BAR_W, flex: 'none', visibility: parsed.strum === 'no-bars' ? 'hidden' : undefined }} sx={{ color: repeat ? 'secondary.main' : 'primary.main', fontWeight: 700 }}>{isEnd ? <GridEndBar /> : text}</Box>
             }
             if (it.kind === 'repeat') {
               // A `%`/`%%` glyph centered across its measure(s) — including the
@@ -298,9 +368,9 @@ const barEm = parseFloat(GRID_BAR_W)
 // pill's horizontal padding (~12px), the inter-pill gap (4px), the box's right
 // padding (8px) and a little breathing room. ~8px/char is only used to pick the
 // widest row, not to render it.
-function leftMarginCalc(parsed: ParsedGridLine[], label: string | null): string {
-  const widest = parsed.reduce((best, p, li) => {
-    const parts = [li === 0 ? label : null, p.marginLeft || null].filter(Boolean) as string[]
+function leftMarginCalc(parsed: ParsedGridLine[]): string {
+  const widest = parsed.reduce((best, p) => {
+    const parts = [p.marginLeft || null].filter(Boolean) as string[]
     const chars = parts.reduce((n, s) => n + s.length, 0)
     const padPx = parts.length * 12 + Math.max(0, parts.length - 1) * 4 + (parts.length ? 14 : 0)
     return chars * 8 + padPx > best.chars * 8 + best.padPx ? { chars, padPx } : best
@@ -388,7 +458,7 @@ function GridBlock({ lines, label, shape, transpose }: Readonly<{ lines: string[
   // grid would otherwise overflow onto the body). The grid is monospace, so size
   // by character count in `ch`, plus pill padding/gap/box-padding in px, floored
   // by the shape width. One width for the whole block keeps bodies aligned.
-  const leftWidth = `max(calc(${left} * ${GRID_CELL_W} + 1.5em), ${leftMarginCalc(parsed, label)})`
+  const leftWidth = `max(calc(${left} * ${GRID_CELL_W} + 1.5em), ${leftMarginCalc(parsed)})`
 
   // Reserve a fixed right-margin column only when a row carries right-margin text
   // (per spec: no empty columns unless needed for alignment).
@@ -399,27 +469,28 @@ function GridBlock({ lines, label, shape, transpose }: Readonly<{ lines: string[
 
   const { outerRef, innerRef, scale, height } = useFitScale([bodyMinWidth, leftWidth, rightWidth, rows.length, transpose])
 
-  return (
+  const content = (
     <Box ref={outerRef} className="cp-grid" sx={{ mb: 2, overflowX: 'hidden', height }}>
       <Box ref={innerRef} className="cp-grid-scale" sx={{ display: 'inline-block', fontFamily: MONO_FONT, fontSize: 14, fontVariantLigatures: 'none', transformOrigin: 'top left', transform: scale < 1 ? `scale(${scale})` : 'none' }}>
         {parsed.map((p, li) => (
-          <GridRow key={li} parsed={p} items={rowLayout[li].items} spans={rowLayout[li].spans} shiftEm={rowLayout[li].shiftEm} leftWidth={leftWidth} transpose={transpose} bodyMinWidth={bodyMinWidth} rightWidth={rightWidth} blockLabel={li === 0 ? label : null} />
+          <GridRow key={li} parsed={p} items={rowLayout[li].items} spans={rowLayout[li].spans} shiftEm={rowLayout[li].shiftEm} leftWidth={leftWidth} transpose={transpose} bodyMinWidth={bodyMinWidth} rightWidth={rightWidth} />
         ))}
       </Box>
     </Box>
   )
+  return labelledBlock(label, content, 'cp-grid-wrap')
 }
 
 function MetaHeader({ meta }: Readonly<{ meta: SongMeta }>) {
   if (!meta.title && !meta.subtitle && meta.items.length === 0) return null
   return (
-    <Box className="cp-meta" sx={{ mb: 2 }}>
+    <Box className="cp-meta" sx={{ mb: 2, textAlign: 'center' }}>
       {meta.title && <Box className="cp-meta-title" sx={{ fontSize: '1.5rem', fontWeight: 700, lineHeight: 1.15 }}>{meta.title}</Box>}
       {meta.subtitle && <Box className="cp-meta-subtitle" sx={{ color: 'text.secondary' }}>{meta.subtitle}</Box>}
       {meta.items.length > 0 && (
         <Box className="cp-meta-info" sx={{ mt: 0.5, color: 'text.secondary', fontSize: 14 }}>
           {meta.items.map((it, idx) => (
-            <Box component="span" key={it.key}>
+            <Box component="span" key={`${it.key}-${idx}`}>
               {idx > 0 && ' · '}
               <Box component="b" sx={{ color: 'text.primary' }}>{it.label === '©' ? '©' : `${it.label}:`}</Box> {it.value}
             </Box>
@@ -430,40 +501,14 @@ function MetaHeader({ meta }: Readonly<{ meta: SongMeta }>) {
   )
 }
 
-type Section = { type: 'abc'; abc: string } | { type: 'flow'; columns: DocBlock[][] }
-
-// Group blocks into full-width ABC sections and column-flowed sections (split at
-// {colb}). Page-anchored images are pulled out to render at the end.
-function buildSections(blocks: DocBlock[]): { sections: Section[]; anchoredImages: AnchoredImage[] } {
-  const sections: Section[] = []
-  const anchoredImages: AnchoredImage[] = []
-  let flowColumns: DocBlock[][] = [[]]
-
-  const closeFlow = () => {
-    if (flowColumns.some((c) => c.length > 0)) sections.push({ type: 'flow', columns: flowColumns })
-    flowColumns = [[]]
-  }
-
-  for (const b of blocks) {
-    if (b.kind === 'abc') { closeFlow(); sections.push({ type: 'abc', abc: b.abc }); continue }
-    if (b.kind === 'image' && b.anchored) { anchoredImages.push({ src: b.src, scale: b.scale }); continue }
-    if (b.kind === 'colb') { flowColumns.push([]); continue }
-    flowColumns[flowColumns.length - 1].push(b)
-  }
-  closeFlow()
-  return { sections, anchoredImages }
-}
-
-function FlowSection({ columns, multiColumn, transpose }: Readonly<{ columns: DocBlock[][]; multiColumn: boolean; transpose: number }>) {
-  if (!multiColumn || columns.length < 2) {
-    return <>{columns.flat().map((b, i) => <FlowBlock key={i} block={b} transpose={transpose} />)}</>
-  }
+function FlowContent({ blocks, columns, transpose, chords, diagramsOpen }: Readonly<{ blocks: DocBlock[]; columns: number; transpose: number; chords: ResolvedChord[]; diagramsOpen: boolean }>) {
   return (
-    <Box className="cp-columns" sx={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
-      {columns.map((col, ci) => (
-        <Box key={ci} className="cp-column" sx={{ flex: 1, minWidth: 0 }}>
-          {col.map((b, i) => <FlowBlock key={i} block={b} transpose={transpose} />)}
-        </Box>
+    <Box
+      className={`cp-flow cp-columns-${Math.min(columns, 6)}`}
+      sx={{ columnCount: { xs: 1, sm: columns }, columnWidth: { sm: columns > 1 ? '14rem' : 'auto' }, columnGap: 2.5, columnFill: 'balance' }}
+    >
+      {blocks.map((block, i) => (
+        <FlowBlock key={i} block={block} transpose={transpose} chords={chords} diagramsOpen={diagramsOpen} />
       ))}
     </Box>
   )
@@ -507,36 +552,47 @@ function PrintDiagrams({ chords }: Readonly<{ chords: ResolvedChord[] }>) {
   )
 }
 
+function DiagramPlacement({ chords, defaultOpen }: Readonly<{ chords: ResolvedChord[]; defaultOpen: boolean }>) {
+  if (chords.length === 0) return null
+  return (
+    <Box className="cp-diagram-placement">
+      <CollapsibleDiagrams chords={chords} defaultOpen={defaultOpen} />
+      <PrintDiagrams chords={chords} />
+    </Box>
+  )
+}
+
 export default function ChordProView({ source, transposeOffset = 0, diagramsOpen = false }: Readonly<ChordProViewProps>) {
-  const { columns, blocks, warnings } = parseChordProDocument(source)
-  const { sections, anchoredImages } = buildSections(blocks)
-  const { placement, chords } = analyzeChords(source, transposeOffset)
-  const transpose = getTransposeAmount(source) + transposeOffset
-  const meta = extractMetadata(source)
-  const showGrid = placement !== 'off' && chords.length > 0
+  const transposed = useMemo(() => applySourceTransposition(source), [source])
+  const renderedSource = transposed.source
+  const { columns, blocks, warnings } = useMemo(() => parseChordProDocument(renderedSource), [renderedSource])
+  const { placement, chords } = useMemo(() => analyzeChords(source, transposeOffset), [source, transposeOffset])
+  const meta = useMemo(() => extractMetadata(source), [source])
+  const { widthCh } = useMemo(() => extractLabelLayout(renderedSource, blocks), [renderedSource, blocks])
+  const diagramChords = chords.filter((chord) => chord.shape !== null)
+  const showGrid = placement !== 'off' && diagramChords.length > 0
+  const flow = <FlowContent blocks={blocks} columns={columns} transpose={transposeOffset} chords={diagramChords} diagramsOpen={diagramsOpen} />
+  const docStyle = {
+    '--cp-label-width': widthCh > 0 ? `${Math.min(Math.max(Math.ceil(widthCh * 6), 36), 84)}px` : '0px',
+    '--cp-label-gap': widthCh > 0 ? '8px' : '0px',
+  } as CSSProperties
 
   return (
-    <Box className="cp-doc">
+    <Box className="cp-doc" style={docStyle}>
       <MetaHeader meta={meta} />
       {warnings.length > 0 && (
         <Box className="cp-warnings" sx={{ mb: 2, p: 1, borderRadius: 1, border: '1px solid', borderColor: 'warning.main', color: 'warning.main', fontSize: 13 }}>
           {warnings.map((w, i) => <Box key={i}>⚠ {w}</Box>)}
         </Box>
       )}
-      {showGrid && <CollapsibleDiagrams chords={chords} defaultOpen={diagramsOpen} />}
-      {chords.length > 0 && <PrintDiagrams chords={chords} />}
-      {sections.map((s, i) =>
-        s.type === 'abc'
-          ? <AbcBlock key={i} abc={s.abc} />
-          : <FlowSection key={i} columns={s.columns} multiColumn={columns > 1} transpose={transpose} />,
-      )}
-      {anchoredImages.length > 0 && (
-        <Box className="cp-anchored-images" sx={{ textAlign: 'right', mt: 2, '& img': { maxWidth: '50%', height: 'auto' } }}>
-          {anchoredImages.map((img, i) => (
-            <Box component="img" key={i} src={img.src} alt="" style={imageScaleStyle(img.scale, 'top right')} />
-          ))}
+      {showGrid && placement === 'top' && <DiagramPlacement chords={diagramChords} defaultOpen={diagramsOpen} />}
+      {showGrid && placement === 'right' ? (
+        <Box className="cp-right-layout" sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 2, alignItems: 'start' }}>
+          {flow}
+          <DiagramPlacement chords={diagramChords} defaultOpen={diagramsOpen} />
         </Box>
-      )}
+      ) : flow}
+      {showGrid && placement === 'bottom' && <DiagramPlacement chords={diagramChords} defaultOpen={diagramsOpen} />}
     </Box>
   )
 }

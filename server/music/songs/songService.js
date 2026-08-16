@@ -17,6 +17,7 @@ import {
   songDocumentKey,
   songRecordingKey,
   songCoverKey,
+  getObject,
 } from '../../platform/files/storageService.js'
 import { verifyDocumentContent, verifyAudioContent } from '../../utils/verifyFileContent.js'
 import {
@@ -68,6 +69,7 @@ import {
   loadSongCharts,
   getSongCoverRow,
   setSongCoverPath,
+  setSongCoverPathIfEmpty,
   clearSongCoverPath,
   insertSongChart,
   updateSongChartFields,
@@ -75,7 +77,8 @@ import {
   loadExistingSongKeys,
   insertImportSong,
 } from './songRepository.js'
-import { badRequest, notFound } from '../../platform/http/serviceErrors.js'
+import { badRequest, conflict, notFound } from '../../platform/http/serviceErrors.js'
+import { albumExistsInTenant, getAlbumArtRow, upsertAlbumForImport } from './albumRepository.js'
 
 const NOT_FOUND = notFound('Not found')
 
@@ -117,16 +120,23 @@ export async function getSong(db, tenantId, songId) {
 export async function createSong(db, tenantId, body) {
   const title = trimOrNull(body.title)
   if (!title) return badRequest('title is required')
-  const song = await insertSong(db, tenantId, {
+  const albumId = body.album_id === null || body.album_id === undefined || body.album_id === ''
+    ? null
+    : Number(body.album_id)
+  if (albumId !== null && (!Number.isInteger(albumId) || albumId <= 0)) return badRequest('Invalid album_id')
+  if (albumId !== null && !(await albumExistsInTenant(db, albumId, tenantId))) return NOT_FOUND
+
+  const inserted = await insertSong(db, tenantId, {
     title,
     artist: trimOrNull(body.artist),
+    album_id: albumId,
     song_key: trimOrNull(body.song_key),
     tempo: toIntOrNull(body.tempo),
     duration_seconds: toIntOrNull(body.duration_seconds),
     lyrics_html: body.lyrics_html ?? null,
     notes: trimOrNull(body.notes),
   })
-  return { song }
+  return { song: await fetchSong(db, inserted.id, tenantId) }
 }
 
 export async function patchSong(db, tenantId, songId, body) {
@@ -134,9 +144,14 @@ export async function patchSong(db, tenantId, songId, body) {
   if (built.error) return badRequest(built.error)
   if (!built.fields.length) return badRequest('No valid fields to update')
 
-  const song = await updateSongFields(db, tenantId, songId, built.fields, built.values)
-  if (!song) return NOT_FOUND
-  return { song }
+  if ('album_id' in body && body.album_id !== null && body.album_id !== '') {
+    const albumId = Number(body.album_id)
+    if (!(await albumExistsInTenant(db, albumId, tenantId))) return NOT_FOUND
+  }
+
+  const updated = await updateSongFields(db, tenantId, songId, built.fields, built.values)
+  if (!updated) return NOT_FOUND
+  return { song: await fetchSong(db, songId, tenantId) }
 }
 
 // Collects object keys first, deletes the row (cascade clears child rows), then
@@ -322,6 +337,44 @@ export async function deleteSongCover(db, tenantId, songId) {
   return {}
 }
 
+export async function copyAlbumArtToSong(db, tenantId, songId, albumId) {
+  const song = await getSongCoverRow(db, songId, tenantId)
+  if (!song) return NOT_FOUND
+  if (song.cover_image_path) return conflict('Song already has cover art')
+
+  const album = await getAlbumArtRow(db, albumId, tenantId)
+  if (!album) return NOT_FOUND
+  if (song.album_id !== albumId) return badRequest('Album is not selected for this song')
+  if (!album.album_art_url) return badRequest('Album has no art')
+  if (!album.album_art_url.startsWith(`tenants/${tenantId}/album-art/`)) return NOT_FOUND
+
+  const chunks = []
+  for await (const chunk of await getObject(album.album_art_url)) chunks.push(Buffer.from(chunk))
+  const buffer = Buffer.concat(chunks)
+  const image = await validateAndReencodeImage(buffer, 'image/webp', IMAGE_PROCESSING_PRESETS.songCover)
+  const objectKey = songCoverKey(tenantId, randomUUID(), '.webp')
+  await uploadObjectWithQuota(objectKey, image.buffer, image.size, image.mimetype)
+
+  let coverImagePath
+  try {
+    coverImagePath = await withFeatureWriteGuard(
+      db,
+      tenantId,
+      FEATURES.CUSTOMIZATION,
+      (client) => setSongCoverPathIfEmpty(client, songId, tenantId, objectKey),
+      { orphanKey: objectKey },
+    )
+  } catch (err) {
+    removeObject(objectKey).catch(() => {})
+    throw err
+  }
+  if (!coverImagePath) {
+    safeRemove(objectKey, 'Failed to delete unused copied album art:')
+    return conflict('Song already has cover art')
+  }
+  return { coverImagePath }
+}
+
 // ---------- chordpro charts ----------
 
 // Create a chart from { name, source }. Both routes (JSON body and file upload)
@@ -377,11 +430,14 @@ export async function importSongs(tenantId, body) {
 
     for (const raw of body) {
       const row = normalizeImportRow(raw)
-      if (!row.title) { skipped++; continue }
+      if (!row.title || row.invalid_release_date) { skipped++; continue }
       const key = `${row.title.toLowerCase()} ${row.artist.toLowerCase()}`
       if (existingKeys.has(key) || seenKeys.has(key)) { skipped++; continue }
 
-      const songId = await insertImportSong(client, tenantId, row)
+      const albumId = row.album
+        ? await upsertAlbumForImport(client, tenantId, row.album, row.release_date)
+        : null
+      const songId = await insertImportSong(client, tenantId, { ...row, album_id: albumId })
       for (const name of new Set(row.tags)) {
         const tagId = await upsertTag(client, tenantId, name)
         await insertSongTagLinkIgnore(client, songId, tagId, tenantId)

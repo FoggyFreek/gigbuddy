@@ -10,7 +10,7 @@ import { STANDARD_TUNING, absoluteFretsToChordShape } from './chordIdentify.ts'
 export interface ChordShape {
   baseFret: number
   frets: number[]
-  fingers?: number[]
+  fingers?: Array<number | string>
   keys?: number[]
 }
 

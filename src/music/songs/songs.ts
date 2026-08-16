@@ -1,5 +1,6 @@
 import { request, requestForm } from '../../api/_client.ts'
-import type { Song, SongTag, SongLink, SongFile, SongChart, Id } from '../../types/entities.ts'
+import type { Song, SongTag, SongLink, SongFile, SongChart, Album, Id } from '../../types/entities.ts'
+import type { LimitedCollectionResponse } from '../../types/api.ts'
 
 const api = <T = unknown>(path: string, options?: RequestInit) =>
   request<T>(`/api/songs${path}`, options)
@@ -16,6 +17,29 @@ export const importSongs = (rows: Partial<Song>[]) =>
 
 export const searchSongs = (q: string) =>
   api<Song[]>(`/search?${new URLSearchParams({ q: q ?? '' })}`)
+
+export const listAlbums = async (q: string) => {
+  const response = await api<LimitedCollectionResponse<Album>>(
+    `/albums?${new URLSearchParams({ q: q ?? '', limit: '25' })}`,
+  )
+  return response.items
+}
+export const createAlbum = (body: Partial<Album>) =>
+  api<Album>('/albums', { method: 'POST', body: JSON.stringify(body) })
+export const updateAlbum = (id: Id, body: Partial<Album>) =>
+  api<Album>(`/albums/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
+export const uploadAlbumArt = (id: Id, file: File) => {
+  const fd = new FormData()
+  fd.append('art', file)
+  return requestForm<Album>(`/api/songs/albums/${id}/art`, fd)
+}
+export const deleteAlbumArt = (id: Id) =>
+  api<Album>(`/albums/${id}/art`, { method: 'DELETE' })
+export const setSongCoverFromAlbum = (songId: Id, albumId: Id) =>
+  api<{ cover_image_path: string }>(`/${songId}/cover/from-album`, {
+    method: 'POST',
+    body: JSON.stringify({ album_id: albumId }),
+  })
 
 export const searchSongTags = (q: string) =>
   api<SongTag[]>(`/tags?${new URLSearchParams({ q: q ?? '' })}`)

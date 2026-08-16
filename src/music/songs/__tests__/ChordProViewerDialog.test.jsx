@@ -122,6 +122,84 @@ describe('ChordProViewerDialog', () => {
     await waitFor(() => expect(onChartChange).toHaveBeenCalledWith(updated))
   })
 
+  it('shows five scrollable, caret-anchored suggestions and filters after an opening brace', async () => {
+    wrap({ chart: { ...CHART, source: '' } })
+    const editor = screen.getByLabelText(/chordpro source/i)
+
+    fireEvent.change(editor, { target: { value: '{', selectionStart: 1 } })
+
+    const listbox = screen.getByRole('listbox', { name: /chordpro suggestions/i })
+    expect(listbox).toHaveStyle({ maxHeight: '256px', overflowY: 'auto' })
+    await waitFor(() => expect(screen.getByTestId('chordpro-suggestion-popper')).toHaveAttribute('data-popper-placement', 'bottom-start'))
+    expect(screen.getByRole('option', { name: /\{title: \}/i })).toHaveTextContent('Sets the document title.')
+
+    fireEvent.change(editor, { target: { value: '{start_of_ch', selectionStart: 12 } })
+
+    expect(screen.getByRole('option', { name: /\{start_of_chorus: \}/i })).toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: /\{title: \}/i })).not.toBeInTheDocument()
+
+    fireEvent.change(editor, { target: { value: '{verse', selectionStart: 6 } })
+
+    expect(screen.getByRole('option', { name: /\{start_of_verse: \}/i })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /\{end_of_verse\}/i })).toBeInTheDocument()
+  })
+
+  it('uses arrow keys and Tab to insert an argument directive', async () => {
+    wrap({ chart: { ...CHART, source: '' } })
+    const editor = screen.getByLabelText(/chordpro source/i)
+
+    fireEvent.change(editor, { target: { value: '{comment', selectionStart: 8 } })
+    fireEvent.keyDown(editor, { key: 'ArrowUp' })
+    expect(screen.getByRole('option', { name: /\{comment_italic: \}/i })).toHaveAttribute('aria-selected', 'true')
+    fireEvent.keyDown(editor, { key: 'ArrowDown' })
+    fireEvent.keyDown(editor, { key: 'ArrowDown' })
+    fireEvent.keyDown(editor, { key: 'Tab' })
+
+    expect(editor).toHaveValue('{comment_box: }')
+    await waitFor(() => expect(editor).toHaveFocus())
+    expect(editor.selectionStart).toBe('{comment_box: '.length)
+    expect(editor.selectionEnd).toBe('{comment_box: '.length)
+    expect(screen.queryByRole('listbox', { name: /chordpro suggestions/i })).not.toBeInTheDocument()
+  })
+
+  it('inserts a complete block and moves the caret to its argument', async () => {
+    wrap({ chart: { ...CHART, source: '' } })
+    const editor = screen.getByLabelText(/chordpro source/i)
+
+    fireEvent.change(editor, { target: { value: '{start_of_ch', selectionStart: 12 } })
+    fireEvent.keyDown(editor, { key: 'Tab' })
+
+    expect(editor).toHaveValue('{start_of_chorus: }\n\n{end_of_chorus}')
+    await waitFor(() => expect(editor.selectionStart).toBe('{start_of_chorus: '.length))
+  })
+
+  it.each([
+    [
+      'ABC',
+      '{start_of_abc',
+      '{start_of_abc: }\nX:1\nM:4/4\nL:1/4\nK:C\nC D E F |\n{end_of_abc}',
+    ],
+    [
+      'tablature',
+      '{start_of_tab',
+      '{start_of_tab: }\ne|-----------------|\nB|-----------------|\nG|-----------------|\nD|-----------------|\nA|-----------------|\nE|-----------------|\n{end_of_tab}',
+    ],
+    [
+      'grid',
+      '{start_of_grid',
+      '{start_of_grid: }\n|| C . . . | F . . . | G . . . | C . . . ||\n{end_of_grid}',
+    ],
+  ])('adds a starter snippet inside a new %s block', (_name, source, expected) => {
+    wrap({ chart: { ...CHART, source: '' } })
+    const editor = screen.getByLabelText(/chordpro source/i)
+
+    fireEvent.change(editor, { target: { value: source, selectionStart: source.length } })
+    fireEvent.keyDown(editor, { key: 'Tab' })
+
+    expect(editor).toHaveValue(expected)
+    expect(editor.selectionStart).toBe(`${source}: `.length)
+  })
+
   it('auto-saves the chart name, trimmed', async () => {
     wrap()
 

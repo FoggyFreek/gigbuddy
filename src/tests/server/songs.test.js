@@ -32,11 +32,34 @@ function asUserA(req) {
     .set('x-test-tenant-id', String(seed.tenantA.id))
 }
 
+function asUserB(req) {
+  return req
+    .set('x-test-user-id', String(seed.userB.id))
+    .set('x-test-tenant-id', String(seed.tenantB.id))
+}
+
+async function createAlbum(tenantId, title, releaseDate = null) {
+  const { rows } = await pool.query(
+    `INSERT INTO albums (tenant_id, title, release_date)
+     VALUES ($1, $2, $3) RETURNING *`,
+    [tenantId, title, releaseDate],
+  )
+  return rows[0]
+}
+
 async function createSong(tenantId, title, extra = {}) {
   const { rows } = await pool.query(
-    `INSERT INTO songs (tenant_id, title, artist, song_key, tempo, duration_seconds)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-    [tenantId, title, extra.artist ?? null, extra.song_key ?? null, extra.tempo ?? null, extra.duration_seconds ?? null],
+    `INSERT INTO songs (tenant_id, title, artist, album_id, song_key, tempo, duration_seconds)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [
+      tenantId,
+      title,
+      extra.artist ?? null,
+      extra.album_id ?? null,
+      extra.song_key ?? null,
+      extra.tempo ?? null,
+      extra.duration_seconds ?? null,
+    ],
   )
   return rows[0]
 }
@@ -52,6 +75,74 @@ describe('GET /api/songs', () => {
   })
 })
 
+describe('song albums', () => {
+  it('creates and searches a bounded tenant-scoped album collection', async () => {
+    const created = await asUserA(
+      request(app).post('/api/songs/albums').send({ title: 'OK Computer', release_date: '1997-05-21' }),
+    ).expect(201)
+    await createAlbum(seed.tenantB.id, 'Other Tenant Album', '2001-01-01')
+
+    expect(created.body).toMatchObject({
+      title: 'OK Computer',
+      release_date: '1997-05-21',
+      tenant_id: seed.tenantA.id,
+    })
+
+    const result = await asUserA(request(app).get('/api/songs/albums?q=computer&limit=5')).expect(200)
+    expect(result.body).toEqual({
+      items: [expect.objectContaining({ id: created.body.id, title: 'OK Computer' })],
+      meta: { limit: 5, returned: 1 },
+    })
+  })
+
+  it('rejects malformed album limits and release dates', async () => {
+    await asUserA(request(app).get('/api/songs/albums?limit=nope')).expect(400)
+    await asUserA(
+      request(app).post('/api/songs/albums').send({ title: 'Impossible', release_date: '2026-02-30' }),
+    ).expect(400)
+  })
+
+  it('allows the same album title in different tenants but not twice in one tenant', async () => {
+    await asUserA(request(app).post('/api/songs/albums').send({ title: 'Shared Title' })).expect(201)
+    await asUserA(request(app).post('/api/songs/albums').send({ title: 'shared title' })).expect(409)
+    await asUserB(request(app).post('/api/songs/albums').send({ title: 'Shared Title' })).expect(201)
+  })
+
+  it('edits album metadata only inside the active tenant', async () => {
+    const albumA = await createAlbum(seed.tenantA.id, 'Old title', '2000-01-01')
+    const albumB = await createAlbum(seed.tenantB.id, 'Other title', '2001-01-01')
+
+    const updated = await asUserA(
+      request(app).patch(`/api/songs/albums/${albumA.id}`).send({ title: 'New title', release_date: '2000-02-02' }),
+    ).expect(200)
+    expect(updated.body).toMatchObject({ title: 'New title', release_date: '2000-02-02' })
+
+    await asUserA(
+      request(app).patch(`/api/songs/albums/${albumB.id}`).send({ title: 'Leaked' }),
+    ).expect(404)
+  })
+
+  it('rejects invalid album-art content and conceals a cross-tenant album', async () => {
+    const albumA = await createAlbum(seed.tenantA.id, 'A Album')
+    await asUserA(
+      request(app)
+        .post(`/api/songs/albums/${albumA.id}/art`)
+        .attach('art', Buffer.from('not an image'), { filename: 'art.png', contentType: 'image/png' }),
+    ).expect(400)
+
+    const sharp = (await import('sharp')).default
+    const png = await sharp({
+      create: { width: 4, height: 4, channels: 3, background: { r: 30, g: 20, b: 10 } },
+    }).png().toBuffer()
+    const albumB = await createAlbum(seed.tenantB.id, 'B Album')
+    await asUserA(
+      request(app)
+        .post(`/api/songs/albums/${albumB.id}/art`)
+        .attach('art', png, { filename: 'art.png', contentType: 'image/png' }),
+    ).expect(404)
+  })
+})
+
 describe('POST /api/songs', () => {
   it('creates a song (title required)', async () => {
     const res = await asUserA(
@@ -64,6 +155,23 @@ describe('POST /api/songs', () => {
 
   it('400 on blank title', async () => {
     await asUserA(request(app).post('/api/songs').send({ title: '  ' })).expect(400)
+  })
+
+  it('assigns an album from the active tenant and returns its details', async () => {
+    const album = await createAlbum(seed.tenantA.id, 'Kid A', '2000-10-02')
+    const res = await asUserA(
+      request(app).post('/api/songs').send({ title: 'Everything in Its Right Place', album_id: album.id }),
+    ).expect(201)
+
+    expect(res.body.album_id).toBe(album.id)
+    expect(res.body.album).toMatchObject({ id: album.id, title: 'Kid A', release_date: '2000-10-02' })
+  })
+
+  it('tenant isolation — A cannot assign B album while creating a song (404)', async () => {
+    const albumB = await createAlbum(seed.tenantB.id, 'B Album')
+    await asUserA(
+      request(app).post('/api/songs').send({ title: 'Wrong Album', album_id: albumB.id }),
+    ).expect(404)
   })
 })
 
@@ -97,6 +205,40 @@ describe('PATCH /api/songs/:id', () => {
   it('tenant isolation — A cannot patch B song (404)', async () => {
     const songB = await createSong(seed.tenantB.id, 'B Song')
     await asUserA(request(app).patch(`/api/songs/${songB.id}`).send({ artist: 'x' })).expect(404)
+  })
+
+  it('tenant isolation — A cannot assign B album to A song (404)', async () => {
+    const song = await createSong(seed.tenantA.id, 'A Song')
+    const albumB = await createAlbum(seed.tenantB.id, 'B Album')
+    await asUserA(
+      request(app).patch(`/api/songs/${song.id}`).send({ album_id: albumB.id }),
+    ).expect(404)
+  })
+
+  it('tenant isolation — A cannot copy B album art onto A song (404)', async () => {
+    const song = await createSong(seed.tenantA.id, 'A Song')
+    const albumB = await createAlbum(seed.tenantB.id, 'B Album')
+    await pool.query(
+      'UPDATE albums SET album_art_url = $1 WHERE id = $2',
+      [`tenants/${seed.tenantB.id}/album-art/b.webp`, albumB.id],
+    )
+    await asUserA(
+      request(app).post(`/api/songs/${song.id}/cover/from-album`).send({ album_id: albumB.id }),
+    ).expect(404)
+  })
+
+  it('only copies art from the album currently selected for the song', async () => {
+    const selectedAlbum = await createAlbum(seed.tenantA.id, 'Selected Album')
+    const otherAlbum = await createAlbum(seed.tenantA.id, 'Other Album')
+    const song = await createSong(seed.tenantA.id, 'A Song', { album_id: selectedAlbum.id })
+    await pool.query(
+      'UPDATE albums SET album_art_url = $1 WHERE id = $2',
+      [`tenants/${seed.tenantA.id}/album-art/other.webp`, otherAlbum.id],
+    )
+
+    await asUserA(
+      request(app).post(`/api/songs/${song.id}/cover/from-album`).send({ album_id: otherAlbum.id }),
+    ).expect(400)
   })
 })
 
@@ -379,5 +521,41 @@ describe('POST /api/songs/import', () => {
       [seed.tenantA.id],
     )
     expect(rows.map((r) => r.tag)).toEqual(['live', 'rock'])
+  })
+
+  it('creates or reuses tenant albums from optional CSV album fields', async () => {
+    const existing = await createAlbum(seed.tenantA.id, 'Existing Album')
+    const res = await asUserA(
+      request(app).post('/api/songs/import').send([
+        { title: 'First', album: 'New Album', release_date: '2024-05-17' },
+        { title: 'Second', album: 'new album', release_date: '2024-05-17' },
+        { title: 'Third', album: 'Existing Album', release_date: '2020-01-02' },
+        { title: 'No Album' },
+      ]),
+    ).expect(200)
+    expect(res.body).toEqual({ imported: 4, skipped: 0 })
+
+    const { rows } = await pool.query(
+      `SELECT s.title, a.id AS album_id, a.title AS album_title, a.release_date
+         FROM songs s
+         LEFT JOIN albums a ON a.id = s.album_id AND a.tenant_id = s.tenant_id
+        WHERE s.tenant_id = $1 ORDER BY s.title`,
+      [seed.tenantA.id],
+    )
+    expect(rows).toEqual([
+      expect.objectContaining({ title: 'First', album_title: 'New Album', release_date: '2024-05-17' }),
+      expect.objectContaining({ title: 'No Album', album_id: null, album_title: null }),
+      expect.objectContaining({ title: 'Second', album_title: 'New Album', release_date: '2024-05-17' }),
+      expect.objectContaining({ title: 'Third', album_id: existing.id, album_title: 'Existing Album', release_date: '2020-01-02' }),
+    ])
+  })
+
+  it('skips an import row with an invalid album release date', async () => {
+    const res = await asUserA(
+      request(app).post('/api/songs/import').send([
+        { title: 'Bad Date', album: 'Album', release_date: '17-05-2024' },
+      ]),
+    ).expect(200)
+    expect(res.body).toEqual({ imported: 0, skipped: 1 })
   })
 })

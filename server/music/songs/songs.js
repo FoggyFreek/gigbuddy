@@ -28,8 +28,16 @@ import {
   deleteSongChart,
   replaceSongCover,
   deleteSongCover,
+  copyAlbumArtToSong,
   importSongs,
 } from './songService.js'
+import {
+  createAlbum,
+  deleteAlbumArt,
+  listAlbums,
+  patchAlbum,
+  replaceAlbumArt,
+} from './albumService.js'
 
 const router = Router()
 
@@ -61,6 +69,45 @@ const chartUpload = multer({
 
 // ---------- songs ----------
 
+// Albums are managed only as part of song workflows. Keep these routes before
+// /:id so "albums" is never parsed as a song id.
+router.get('/albums', async (req, res) => {
+  const result = await listAlbums(pool, req.tenantId, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+router.post('/albums', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const result = await createAlbum(pool, req.tenantId, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.album)
+})
+
+router.patch('/albums/:albumId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const albumId = requireParam(req, res, 'albumId'); if (albumId === null) return
+  const result = await patchAlbum(pool, req.tenantId, albumId, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.album)
+})
+
+router.post('/albums/:albumId/art', requirePermission(PERMISSIONS.PLANNING_WRITE), requireEntitlement(FEATURES.CUSTOMIZATION), coverUpload.single('art'), async (req, res) => {
+  const albumId = requireParam(req, res, 'albumId'); if (albumId === null) return
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' })
+  if (!COVER_ALLOWED_TYPES.has(req.file.mimetype)) {
+    return res.status(400).json({ error: 'File type not allowed' })
+  }
+  const result = await replaceAlbumArt(pool, req.tenantId, albumId, req.file)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.album)
+})
+
+router.delete('/albums/:albumId/art', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const albumId = requireParam(req, res, 'albumId'); if (albumId === null) return
+  const result = await deleteAlbumArt(pool, req.tenantId, albumId)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.album)
+})
+
 router.get('/', async (req, res) => {
   res.json(await listSongs(pool, req.tenantId))
 })
@@ -73,6 +120,13 @@ router.get('/tags', async (req, res) => {
 // Must also be registered before GET /:id.
 router.get('/search', async (req, res) => {
   res.json(await searchSongs(pool, req.tenantId, req.query.q))
+})
+
+// Must be registered before /:id so "import" is not parsed as a song id.
+router.post('/import', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const result = await importSongs(req.tenantId, req.body)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.summary)
 })
 
 router.get('/:id', async (req, res) => {
@@ -201,6 +255,15 @@ router.delete('/:id/cover', requirePermission(PERMISSIONS.PLANNING_WRITE), async
   res.status(204).end()
 })
 
+router.post('/:id/cover/from-album', requirePermission(PERMISSIONS.PLANNING_WRITE), requireEntitlement(FEATURES.CUSTOMIZATION), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const albumId = Number(req.body?.album_id)
+  if (!Number.isInteger(albumId) || albumId <= 0) return res.status(400).json({ error: 'Invalid album_id' })
+  const result = await copyAlbumArtToSong(pool, req.tenantId, id, albumId)
+  if (result.error) return sendError(res, result.error)
+  res.json({ cover_image_path: result.coverImagePath })
+})
+
 // ---------- chordpro charts ----------
 
 // Chart DELETEs stay open — losing the chordpro feature must not trap data.
@@ -242,14 +305,6 @@ router.delete('/:id/charts/:chartId', requirePermission(PERMISSIONS.PLANNING_WRI
   const result = await deleteSongChart(pool, req.tenantId, id, chartId)
   if (result.error) return sendError(res, result.error)
   res.status(204).end()
-})
-
-// ---------- import ----------
-
-router.post('/import', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
-  const result = await importSongs(req.tenantId, req.body)
-  if (result.error) return sendError(res, result.error)
-  res.json(result.summary)
 })
 
 export default router

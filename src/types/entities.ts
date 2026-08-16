@@ -608,10 +608,19 @@ export interface SongChart {
   updated_at?: string
 }
 
+export interface Album {
+  id?: Id
+  title?: string
+  release_date?: string | null
+  album_art_url?: string | null
+}
+
 export interface Song {
   id?: Id
   title?: string
   artist?: string | null
+  album_id?: Id | null
+  album?: Album | null
   /** object key of the square cover image (WebP), served via /api/files */
   cover_image_path?: string | null
   song_key?: string | null

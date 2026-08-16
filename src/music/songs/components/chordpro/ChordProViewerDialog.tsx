@@ -27,11 +27,12 @@ import RemoveIcon from '@mui/icons-material/Remove'
 import MusicNoteIcon from '@mui/icons-material/MusicNote'
 import GraphicEqIcon from '@mui/icons-material/GraphicEq'
 import ChordProView from './ChordProView.tsx'
+import ChordProSourceEditor from './ChordProSourceEditor.tsx'
 import ChordAnalyzerPanel from './ChordAnalyzerPanel.tsx'
 import SaveStatusLabel from '../../../../components/SaveStatusLabel.tsx'
 import useDebouncedSave from '../../../../hooks/useDebouncedSave.ts'
 import { useToast } from '../../../../contexts/toastContext.ts'
-import { printChordPro, MONO_FONT } from '../../chordpro.ts'
+import { printChordPro } from '../../chordpro.ts'
 import { updateSongChart } from '../../songs.ts'
 import type { SongChart, Id } from '../../../../types/entities.ts'
 
@@ -128,26 +129,10 @@ export default function ChordProViewerDialog({
 
   const editor = (
     <Paper elevation={2} sx={{ p: 2, height: '100%', minHeight: 0 }}>
-      <TextField
+      <ChordProSourceEditor
         label={t($ => $.viewer.source)}
         value={source}
-        onChange={(e) => handleSource(e.target.value)}
-        multiline
-        fullWidth
-        slotProps={{ htmlInput: { spellCheck: false, style: { fontFamily: MONO_FONT, fontSize: 14, lineHeight: 1.5, resize: 'none', overflow: 'auto' } } }}
-        sx={{
-          height: '100%',
-          minHeight: 0,
-          '& .MuiInputBase-root': { height: '100%', minHeight: 0, alignItems: 'stretch', boxSizing: 'border-box' },
-          // The autosizing textarea grows past the box with overflow:hidden inline;
-          // pin it to the field height and let it scroll instead.
-          '& .MuiInputBase-inputMultiline, & textarea': {
-            height: '100% !important',
-            overflow: 'auto !important',
-            resize: 'none',
-            boxSizing: 'border-box',
-          },
-        }}
+        onChange={handleSource}
       />
     </Paper>
   )

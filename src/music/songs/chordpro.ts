@@ -120,15 +120,33 @@ GABc dedB|A2 G2 G4|
 `
 
 export type DocBlock =
-  | { kind: 'abc'; abc: string }
+  | { kind: 'abc'; abc: string; spread: boolean; label: string | null }
   | { kind: 'chordpro'; source: string }
-  | { kind: 'textblock'; text: string; align: TextAlign }
-  | { kind: 'image'; src: string; anchored: boolean; scale: string | null }
-  | { kind: 'comment'; text: string; variant: 'box' | 'italic' }
+  | { kind: 'textblock'; text: string; align: TextAlign; label: string | null }
+  | { kind: 'image'; src: string; options: ImageOptions }
+  | { kind: 'comment'; text: string; variant: 'plain' | 'box' | 'italic' }
   | { kind: 'chorddef'; name: string; shape: ChordShape | null }
   | { kind: 'tab'; text: string; label: string | null }
   | { kind: 'grid'; lines: string[]; label: string | null; shape: string | null }
   | { kind: 'colb' }
+  | { kind: 'pagebreak'; physical: boolean }
+  | { kind: 'diagrams' }
+  | { kind: 'chorusrecall'; label: string | null }
+
+export interface ImageOptions {
+  scale: string | null
+  width: string | null
+  height: string | null
+  align: TextAlign
+  border: string | null
+  href: string | null
+  title: string | null
+  anchor: 'float' | 'line' | 'column' | 'page' | 'paper' | 'allpages'
+  x: string | null
+  y: string | null
+  spread: string | null
+  label: string | null
+}
 
 export interface ChordProDocument {
   columns: number
@@ -182,14 +200,11 @@ export function extractMetadata(source: string): SongMeta {
   let title: string | null = null
   let subtitle: string | null = null
   const items: MetaItem[] = []
-  const seen = new Set<string>()
   for (const line of (source ?? '').split('\n')) {
     const parsed = parseMetaLine(line.trim())
     if (!parsed) continue
     if (parsed.key === 'title') { title = parsed.value; continue }
     if (parsed.key === 'subtitle') { subtitle = parsed.value; continue }
-    if (seen.has(parsed.key)) continue
-    seen.add(parsed.key)
     items.push(parsed)
   }
   items.sort((a, b) => META_INFO_ORDER.indexOf(a.key) - META_INFO_ORDER.indexOf(b.key))
@@ -268,20 +283,28 @@ export function lyricsHtmlFromChordPro(source: string): string {
   return paragraphs.join('')
 }
 
-const RE_COMMENT_STYLED = /^\{(comment_box|cb|comment_italic|ci)\b[:\s]+(.+)\}$/i
+const RE_COMMENT = /^\{(comment|c|highlight|comment_box|cb|comment_italic|ci)\b[:\s]+(.+)\}$/i
 
-const RE_TRANSPOSE = /^\{transpose[:\s]+(-?\d+)\}/i
+const RE_TRANSPOSE = /^\{transpose(?:[:\s]+(-?\d+))?\}$/i
 
 // Net semitone transposition requested by {transpose: n} directives. ChordSheetJS
 // parses the directive but does NOT apply it, so we read the value and call
-// song.transpose() ourselves. Multiple directives sum (the common case is one).
+// song.transpose() ourselves. Directives push a new relative amount; a bare
+// directive restores the previous amount.
 export function getTransposeAmount(source: string): number {
-  let total = 0
+  let current = 0
+  const stack: number[] = []
   for (const line of (source ?? '').split('\n')) {
     const m = RE_TRANSPOSE.exec(line.trim())
-    if (m) total += Number(m[1])
+    if (!m) continue
+    if (m[1] === undefined) {
+      current = stack.pop() ?? 0
+    } else {
+      stack.push(current)
+      current += Number(m[1])
+    }
   }
-  return total
+  return current
 }
 
 // Rewrite each `.chord` cell so its quality is superscripted (Bb7(b9) ->
@@ -293,6 +316,15 @@ function superscriptChordCells(html: string): string {
   if (typeof document === 'undefined') return html // no DOM (SSR) — leave as-is
   const tpl = document.createElement('template')
   tpl.innerHTML = html
+  for (const el of tpl.content.querySelectorAll('.label')) {
+    el.textContent = (el.textContent ?? '').replace(/\\n/g, '\n')
+    const row = el.parentElement
+    const paragraph = row?.parentElement
+    if (row?.classList.contains('row') && paragraph?.classList.contains('paragraph')) {
+      paragraph.insertBefore(el, row)
+      if (row.children.length === 0 && !(row.textContent ?? '').trim()) row.remove()
+    }
+  }
   for (const el of tpl.content.querySelectorAll('.chord')) {
     const { base, sup, bass } = splitChordSymbol(el.textContent ?? '')
     if (!sup) continue // nothing to raise (bare root, empty cell, non-chord)
@@ -310,7 +342,17 @@ function superscriptChordCells(html: string): string {
 // callers can fall back to raw text.
 export function renderChordProHtml(source: string, transpose = 0): string | null {
   try {
-    let song = new ChordProParser().parse(source ?? '')
+    // ChordPro accepts label="…" properties, but ChordSheetJS treats everything
+    // after the separator as a legacy label value. Convert the property form to
+    // that legacy value so only the quoted text is displayed.
+    const normalized = (source ?? '').replace(
+      /^(\s*)\{((?:start_of_[A-Za-z0-9_]+|so[vcb]))\b([^}]*)\}\s*$/gim,
+      (whole, indent: string, directive: string, args: string) => {
+        const label = readAttr(args, 'label')
+        return label === null ? whole : `${indent}{${directive}: ${label}}`
+      },
+    )
+    let song = new ChordProParser().parse(normalized)
     if (transpose) song = song.transpose(transpose)
     const html = new HtmlDivFormatter().format(song)
     return superscriptChordCells(DOMPurify.sanitize(html))
@@ -320,9 +362,12 @@ export function renderChordProHtml(source: string, transpose = 0): string | null
 }
 
 const RE_COLUMNS = /^\{(?:columns?|col)(?:[:\s]+(\d+))?\}$/i
+const RE_COLUMNS_ANY = /^\{(?:columns?|col)\b[^}]*\}$/i
 const RE_COLB = /^\{(?:colb|column_break)\}$/i
+const RE_PAGE_BREAK = /^\{(new_page|np|new_physical_page|npp)\}$/i
 const RE_DIAGRAMS = /^\{diagrams\b/i
-const RE_ABC_START = /^\{start_of_abc\b/i
+const RE_CHORUS_RECALL = /^\{chorus(?:(?:\s*:\s*|\s+)([^}]*))?\}$/i
+const RE_ABC_START = /^\{start_of_abc\b([^}]*)\}/i
 const RE_ABC_END = /^\{end_of_abc\}$/i
 const RE_TEXTBLOCK_START = /^\{start_of_textblock\b([^}]*)\}/i
 const RE_TEXTBLOCK_END = /^\{end_of_textblock\}$/i
@@ -339,9 +384,39 @@ const RE_CHORD_INLINE = /^\{chord\b[:\s]+(.+)\}$/i
 // Read a section label: `label="X"` or the legacy `: X` form.
 function readLabel(arg: string): string | null {
   const keyed = readAttr(arg, 'label')
-  if (keyed) return keyed
+  if (keyed) return decodeLabel(keyed)
   const legacy = arg.replace(/^[:\s]+/, '').trim()
-  return legacy && !legacy.includes('=') ? legacy : null
+  return legacy && !legacy.includes('=') ? decodeLabel(legacy) : null
+}
+
+function decodeLabel(label: string): string {
+  return label.replace(/\\n/g, '\n')
+}
+
+export interface LabelLayout { labels: string[]; widthCh: number }
+
+// The PDF reference reserves one shared left-margin lane sized from the longest
+// line of every section label. Keep the same document-level invariant in HTML.
+export function extractLabelLayout(source: string, parsedBlocks?: DocBlock[]): LabelLayout {
+  const labels: string[] = []
+  const start = /^\{(?:start_of_[A-Za-z0-9_]+|so[vcbtg])\b([^}]*)\}$/i
+  for (const line of (source ?? '').replace(/\r\n?/g, '\n').split('\n')) {
+    const trimmed = line.trim()
+    if (RE_GRID_START.test(trimmed) || RE_TAB_START.test(trimmed) || RE_ABC_START.test(trimmed) || RE_TEXTBLOCK_START.test(trimmed)) continue
+    const match = start.exec(trimmed)
+    if (!match) continue
+    const label = /^(?:\s*[:]\s*)?(?:\d+(?:\+\d+)?(?:x\d+)?(?:\+\d+)?\s+)?label\s*=/i.test(match[1])
+      ? readAttr(match[1], 'label')
+      : readLabel(match[1])
+    if (label) labels.push(decodeLabel(label))
+  }
+  for (const block of parsedBlocks ?? parseChordProDocument(source).blocks) {
+    if ((block.kind === 'grid' || block.kind === 'tab' || block.kind === 'abc' || block.kind === 'textblock') && block.label) labels.push(block.label)
+    if (block.kind === 'image' && block.options.label) labels.push(block.options.label)
+    if (block.kind === 'chorusrecall' && block.label) labels.push(block.label)
+  }
+  const longest = labels.flatMap((label) => label.split('\n')).reduce((max, line) => Math.max(max, line.length), 0)
+  return { labels, widthCh: longest }
 }
 
 // Read a grid shape: the keyed `shape="…"` form, or the legacy bare arg
@@ -351,7 +426,7 @@ function readGridShape(arg: string): string | null {
   const keyed = readAttr(arg, 'shape')
   if (keyed) return keyed
   const bare = arg.replace(/^[:\s]+/, '').trim()
-  return /^(?:(?:\d+\+)?\d+x\d+(?:\+\d+)?|\d+)$/.test(bare) ? bare : null
+  return /^(?:(?:\d+\+)?\d+x\d+(?:\+\d+)?|\d+)(?=\s|$)/.exec(bare)?.[0] ?? null
 }
 
 // Read an HTML-style attribute (name="v", name='v', or name=bare) from a
@@ -361,9 +436,11 @@ function readAttr(attrs: string, name: string): string | null {
   return m ? (m[1] ?? m[2] ?? m[3] ?? null) : null
 }
 
-function readAlign(attrs: string): TextAlign {
+function readAlign(attrs: string, fallback: TextAlign = 'left'): TextAlign {
   const m = /(?:align|flush)\s*=\s*["']?(left|right|center)/i.exec(attrs)
-  return (m?.[1]?.toLowerCase() as TextAlign) ?? 'left'
+  if (m?.[1]) return m[1].toLowerCase() as TextAlign
+  if (/\bcenter(?:\s*=\s*["']?(?:1|true|yes))?(?=\s|$)/i.test(attrs)) return 'center'
+  return fallback
 }
 
 // Only allow http(s) image sources; anything else (javascript:, data:) is dropped.
@@ -391,7 +468,9 @@ function scanEnvBody(lines: string[], start: number, endRe: RegExp): { body: str
 // legacy bare arg is the shape (`{sog: 4x4}`), captured as `shape`.
 function readGridBlock(lines: string[], start: number, arg: string, lastGridShape: string | null): EnvResult {
   const warnings: string[] = []
-  const gridLabel = readAttr(arg, 'label')
+  const bare = arg.replace(/^[:\s]+/, '').trim()
+  const legacy = /^(?:(?:\d+\+)?\d+x\d+(?:\+\d+)?|\d+)(?:\s+(.+))?$/.exec(bare)
+  const gridLabel = readAttr(arg, 'label') ?? legacy?.[1] ?? null
   // Legacy `{start_of_grid: …}` (colon) form can't carry key=value properties.
   if (/^\s*:/.test(arg) && /=/.test(arg)) {
     warnings.push('Legacy {start_of_grid: …} syntax cannot take properties; use the shape="…"/label="…" form.')
@@ -409,7 +488,7 @@ function readGridBlock(lines: string[], start: number, arg: string, lastGridShap
   const { body, end, closed } = scanEnvBody(lines, start, RE_GRID_END)
   if (!closed) warnings.push('Grid block is missing its {end_of_grid}/{eog}.')
   for (const gl of body) warnings.push(...gridLineWarnings(gl))
-  return { block: { kind: 'grid', lines: body, label: gridLabel, shape }, end, warnings, shape }
+  return { block: { kind: 'grid', lines: body, label: gridLabel ? decodeLabel(gridLabel) : null, shape }, end, warnings, shape }
 }
 
 // Resolve a multi-line block environment starting at `trimmed`, or null when the
@@ -419,12 +498,14 @@ function readGridBlock(lines: string[], start: number, arg: string, lastGridShap
 function readEnvironment(lines: string[], start: number, trimmed: string, lastGridShape: string | null): EnvResult | null {
   if (RE_ABC_START.test(trimmed)) {
     const { body, end } = scanEnvBody(lines, start, RE_ABC_END)
-    return { block: { kind: 'abc', abc: body.join('\n') }, end, warnings: [], shape: lastGridShape }
+    const arg = RE_ABC_START.exec(trimmed)?.[1] ?? ''
+    const label = readAttr(arg, 'label')
+    return { block: { kind: 'abc', abc: body.join('\n'), spread: /\bspread(?:\s*=|\b)/i.test(arg), label: label ? decodeLabel(label) : null }, end, warnings: [], shape: lastGridShape }
   }
   const mTb = RE_TEXTBLOCK_START.exec(trimmed)
   if (mTb) {
     const { body, end } = scanEnvBody(lines, start, RE_TEXTBLOCK_END)
-    return { block: { kind: 'textblock', text: body.join('\n'), align: readAlign(mTb[1]) }, end, warnings: [], shape: lastGridShape }
+    return { block: { kind: 'textblock', text: body.join('\n'), align: readAlign(mTb[1]), label: readLabel(mTb[1]) }, end, warnings: [], shape: lastGridShape }
   }
   const mTab = RE_TAB_START.exec(trimmed)
   if (mTab) {
@@ -447,10 +528,32 @@ function readEnvironment(lines: string[], start: number, trimmed: string, lastGr
 function readInlineDirective(trimmed: string, defs: ChordDefs): { block: DocBlock | null } | null {
   const mImg = RE_IMAGE.exec(trimmed)
   if (mImg) {
-    const raw = readAttr(mImg[1], 'src')
+    const positional = /^\s*:\s*(?:"([^"]+)"|'([^']+)'|([^\s]+))/.exec(mImg[1])
+    const raw = readAttr(mImg[1], 'src') ?? positional?.[1] ?? positional?.[2] ?? positional?.[3] ?? null
     const src = raw ? safeImageSrc(raw) : null
     if (!src) return { block: null }
-    return { block: { kind: 'image', src, anchored: /anchor\s*=\s*["']?page/i.test(mImg[1]), scale: readAttr(mImg[1], 'scale') } }
+    const anchor = (readAttr(mImg[1], 'anchor')?.toLowerCase() ?? 'float') as ImageOptions['anchor']
+    const validAnchor: ImageOptions['anchor'] = ['float', 'line', 'column', 'page', 'paper', 'allpages'].includes(anchor) ? anchor : 'float'
+    return {
+      block: {
+        kind: 'image',
+        src,
+        options: {
+          scale: readAttr(mImg[1], 'scale'),
+          width: readAttr(mImg[1], 'width'),
+          height: readAttr(mImg[1], 'height'),
+          align: readAlign(mImg[1], 'center'),
+          border: readAttr(mImg[1], 'border') ?? (/\bborder(?=\s|$)/i.test(mImg[1]) ? '1' : null),
+          href: readAttr(mImg[1], 'href'),
+          title: readAttr(mImg[1], 'title'),
+          anchor: validAnchor,
+          x: readAttr(mImg[1], 'x'),
+          y: readAttr(mImg[1], 'y'),
+          spread: readAttr(mImg[1], 'spread'),
+          label: (() => { const label = readAttr(mImg[1], 'label'); return label ? decodeLabel(label) : null })(),
+        },
+      },
+    }
   }
   const mChord = RE_CHORD_INLINE.exec(trimmed)
   if (mChord) {
@@ -461,9 +564,11 @@ function readInlineDirective(trimmed: string, defs: ChordDefs): { block: DocBloc
     const shape = parsed.shape ?? defs[nm]?.shape ?? lookupGuitarChord(nm)
     return { block: { kind: 'chorddef', name: nm, shape } }
   }
-  const mComment = RE_COMMENT_STYLED.exec(trimmed)
+  const mComment = RE_COMMENT.exec(trimmed)
   if (mComment) {
-    const variant = /^(comment_box|cb)$/i.test(mComment[1]) ? 'box' : 'italic'
+    const variant = /^(comment_box|cb)$/i.test(mComment[1])
+      ? 'box'
+      : /^(comment_italic|ci)$/i.test(mComment[1]) ? 'italic' : 'plain'
     return { block: { kind: 'comment', text: mComment[2].trim(), variant } }
   }
   return null
@@ -495,9 +600,32 @@ function consumeLine(lines: string[], i: number, state: ParseState): number {
   const trimmed = lines[i].trim()
 
   const mCols = RE_COLUMNS.exec(trimmed)
-  if (mCols) { state.columns = Math.max(1, Number(mCols[1] || 2)); return i + 1 }
-  if (RE_DIAGRAMS.test(trimmed)) return i + 1 // chord-diagram grid not rendered yet
+  if (mCols) {
+    if (!mCols[1] || Number(mCols[1]) < 1) state.warnings.push(`Invalid argument for columns directive: ${mCols[1] ?? ''} (should be a positive number)`)
+    else state.columns = Number(mCols[1])
+    return i + 1
+  }
+  if (RE_COLUMNS_ANY.test(trimmed)) {
+    state.warnings.push(`Invalid argument for columns directive: ${trimmed} (should be a positive number)`)
+    return i + 1
+  }
+  if (RE_DIAGRAMS.test(trimmed)) {
+    if (/\bbelow\b/i.test(trimmed)) { flushBuf(state); state.blocks.push({ kind: 'diagrams' }) }
+    return i + 1
+  }
+  const chorusRecall = RE_CHORUS_RECALL.exec(trimmed)
+  if (chorusRecall) {
+    flushBuf(state)
+    state.blocks.push({ kind: 'chorusrecall', label: chorusRecall[1] ? readLabel(chorusRecall[1]) : null })
+    return i + 1
+  }
   if (RE_COLB.test(trimmed)) { flushBuf(state); state.blocks.push({ kind: 'colb' }); return i + 1 }
+  const pageBreak = RE_PAGE_BREAK.exec(trimmed)
+  if (pageBreak) {
+    flushBuf(state)
+    state.blocks.push({ kind: 'pagebreak', physical: /physical|npp/i.test(pageBreak[1]) })
+    return i + 1
+  }
 
   const env = readEnvironment(lines, i, trimmed, state.lastGridShape)
   if (env) {
@@ -549,12 +677,13 @@ export type GridCell =
   | { kind: 'chord'; text: string }
   | { kind: 'repeat'; measures: 1 | 2 } // % (this measure) / %% (last two measures)
   | { kind: 'slash' }                   // / — beat to be strummed/played
+  | { kind: 'strum'; text: string }
   | { kind: 'empty' }                   // . — blank beat
   | { kind: 'text'; text: string }      // strum pseudo-chords (dn/up/…) and anything else
 export type GridToken =
   | { kind: 'bar'; text: string }
   | { kind: 'cell'; cell: GridCell }
-export interface ParsedGridLine { marginLeft: string; tokens: GridToken[]; marginRight: string }
+export interface ParsedGridLine { marginLeft: string; tokens: GridToken[]; marginRight: string; strum?: 'bars' | 'no-bars' }
 
 export interface GridShape { left: number; measures: number; beats: number; right: number }
 
@@ -621,7 +750,7 @@ function classifyGridCell(token: string): GridCell {
   if (token === '%%') return { kind: 'repeat', measures: 2 }
   if (token === '.') return { kind: 'empty' }
   if (token === '/') return { kind: 'slash' }
-  if (/^[A-G1-7]/.test(token)) return { kind: 'chord', text: token }
+  if (Chord.parse(token) || /^[1-7](?:[#b]?(?:m|maj|dim|aug|sus|add)?\d*)?(?:~.+)?$/i.test(token)) return { kind: 'chord', text: token }
   return { kind: 'text', text: token }
 }
 
@@ -740,18 +869,92 @@ export function buildVoltaSpans(items: GridRenderItem[]): VoltaSpan[] {
 // Split a grid line into left margin / body (bars + cells) / right margin.
 export function parseGridLine(line: string): ParsedGridLine {
   const tokens = line.trim().split(/\s+/).filter(Boolean)
+  const joinedStrum = /^((?::\|:|:\|\d*>?|\|:|\|\||\|\.|\|\d+>?|\|))([Ss])$/.exec(tokens[0] ?? '')
+  if (joinedStrum) tokens.splice(0, 1, joinedStrum[1], joinedStrum[2])
   const barPositions = tokens.flatMap((t, i) => (RE_GRID_BARLINE.test(t) ? [i] : []))
   if (barPositions.length === 0) return { marginLeft: tokens.join(' '), tokens: [], marginRight: '' }
   const first = barPositions[0]
   const last = barPositions[barPositions.length - 1]
-  const body: GridToken[] = tokens.slice(first, last + 1).map((t) =>
-    RE_GRID_BARLINE.test(t) ? { kind: 'bar', text: t } : { kind: 'cell', cell: classifyGridCell(t) })
-  return { marginLeft: tokens.slice(0, first).join(' '), tokens: body, marginRight: tokens.slice(last + 1).join(' ') }
+  const bodyTokens = tokens.slice(first, last + 1)
+  const strumToken = bodyTokens[1]
+  const strum = strumToken === 'S' ? 'bars' : strumToken === 's' ? 'no-bars' : undefined
+  if (strum) bodyTokens.splice(1, 1)
+  const body: GridToken[] = bodyTokens.map((t) => {
+    if (RE_GRID_BARLINE.test(t)) return { kind: 'bar', text: t }
+    const cell = strum && !['.', '/', '%', '%%'].includes(t)
+      ? { kind: 'strum' as const, text: t }
+      : classifyGridCell(t)
+    return { kind: 'cell', cell }
+  })
+  return { marginLeft: tokens.slice(0, first).join(' '), tokens: body, marginRight: tokens.slice(last + 1).join(' '), ...(strum ? { strum } : {}) }
+}
+
+function transposeChordToken(value: string, semitones: number): string {
+  if (!semitones) return value
+  return Chord.parse(value)?.transpose(semitones)?.toString() ?? value
+}
+
+function transposeGridSourceLine(line: string, semitones: number): string {
+  if (!semitones) return line
+  const pieces = line.split(/(\s+)/)
+  const tokenIndexes = pieces.flatMap((piece, index) => piece.trim() ? [index] : [])
+  const barIndexes = tokenIndexes.filter((index) => RE_GRID_BARLINE.test(pieces[index]))
+  if (barIndexes.length < 2) return line
+  const firstBar = barIndexes[0]
+  const lastBar = barIndexes[barIndexes.length - 1]
+  return pieces.map((piece, index) => {
+    if (index <= firstBar || index >= lastBar || !piece.trim() || RE_GRID_BARLINE.test(piece)) return piece
+    if (piece === '.' || piece === '/' || piece === '%' || piece === '%%' || /^[Ss]$/.test(piece)) return piece
+    return transposeGridChord(piece, semitones)
+  }).join('')
+}
+
+export interface SourceTransposition { source: string; amount: number }
+
+// ChordPro transpose directives are positional and stack-based. A value pushes
+// the previous amount and affects subsequent content; a bare directive restores
+// the previous amount. Resolve them before block splitting so section context is
+// preserved while lyric chords, grid chords, and bracketed {chord} names stay in
+// sync. Interactive viewer transposition is applied later and remains global.
+export function applySourceTransposition(source: string): SourceTransposition {
+  const output: string[] = []
+  const stack: number[] = []
+  let current = 0
+  let inGrid = false
+
+  for (const line of (source ?? '').replace(/\r\n?/g, '\n').split('\n')) {
+    const trimmed = line.trim()
+    const directive = RE_TRANSPOSE.exec(trimmed)
+    if (directive) {
+      if (directive[1] === undefined) current = stack.pop() ?? 0
+      else { stack.push(current); current += Number(directive[1]) }
+      continue
+    }
+
+    if (RE_GRID_START.test(trimmed)) inGrid = true
+    if (inGrid && !RE_GRID_START.test(trimmed) && !RE_GRID_END.test(trimmed)) {
+      output.push(transposeGridSourceLine(line, current))
+      continue
+    }
+    if (RE_GRID_END.test(trimmed)) inGrid = false
+
+    if (/^\{chord\b/i.test(trimmed)) {
+      output.push(line.replace(/\[([^*\]][^\]]*)\]/g, (_match, chord: string) => `[${transposeChordToken(chord, current)}]`))
+      continue
+    }
+    if (trimmed.startsWith('{') || trimmed.startsWith('#')) {
+      output.push(line)
+      continue
+    }
+    output.push(line.replace(/\[([^*\]][^\]]*)\]/g, (_match, chord: string) => `[${transposeChordToken(chord, current)}]`))
+  }
+
+  return { source: output.join('\n'), amount: current }
 }
 
 // ---------- chord diagrams ----------
 
-export type DiagramsPlacement = 'top' | 'bottom' | 'off'
+export type DiagramsPlacement = 'top' | 'bottom' | 'right' | 'below' | 'off'
 export interface ResolvedChord { name: string; shape: ChordShape | null }
 export interface ChordAnalysis { placement: DiagramsPlacement; chords: ResolvedChord[] }
 
@@ -767,9 +970,10 @@ function parseFret(tok: string): number {
   return Number.isInteger(n) ? n : -1
 }
 
-function parseFinger(tok: string): number {
+function parseFinger(tok: string): number | string {
   const n = Number(tok)
-  return Number.isInteger(n) && n > 0 ? n : 0 // letters/0 → ignored
+  if (Number.isInteger(n)) return n > 0 ? n : 0
+  return /^[A-Z]$/i.test(tok) ? tok.toUpperCase() : 0
 }
 
 // Parse a {define}/{chord} argument string into a name + shape (or null shape
@@ -782,13 +986,13 @@ export function parseChordDefinition(arg: string): { name: string; shape: ChordS
   const name = tokens[0]
   let baseFret = 1
   let frets: number[] | undefined
-  let fingers: number[] | undefined
+  let fingers: Array<number | string> | undefined
   let keys: number[] | undefined
   let display: string | undefined
 
   let i = 1
-  const collect = (map: (t: string) => number): number[] => {
-    const arr: number[] = []
+  const collect = <T,>(map: (t: string) => T): T[] => {
+    const arr: T[] = []
     while (i < tokens.length && !DEFINE_KEYWORDS.has(tokens[i].toLowerCase())) { arr.push(map(tokens[i])); i++ }
     return arr
   }
@@ -820,8 +1024,8 @@ export function parseChordDefinition(arg: string): { name: string; shape: ChordS
 export function formatChordDefinition(name: string, shape: ChordShape): string {
   const fret = (f: number): string => (f < 0 ? 'x' : String(f))
   const parts = [`{define: ${name}`, `base-fret ${shape.baseFret}`, `frets ${shape.frets.map(fret).join(' ')}`]
-  if (shape.fingers?.some((f) => f > 0)) {
-    parts.push(`fingers ${shape.fingers.map((f) => (f > 0 ? f : 0)).join(' ')}`)
+  if (shape.fingers?.some((f) => typeof f === 'string' || f > 0)) {
+    parts.push(`fingers ${shape.fingers.map((f) => (typeof f === 'string' || f > 0 ? f : 0)).join(' ')}`)
   }
   return `${parts.join(' ')}}`
 }
@@ -841,7 +1045,7 @@ function collectDefsAndPlacement(text: string): { defs: ChordDefs; placement: Di
     const md = RE_DIAGRAMS_VAL.exec(trimmed)
     if (md) {
       const v = (md[1] || 'on').toLowerCase()
-      placement = v === 'off' ? 'off' : v === 'top' ? 'top' : 'bottom'
+      placement = v === 'off' ? 'off' : v === 'top' ? 'top' : v === 'right' ? 'right' : v === 'below' ? 'below' : 'bottom'
       continue
     }
     const mDef = RE_DEFINE.exec(trimmed)
@@ -854,12 +1058,12 @@ function collectDefsAndPlacement(text: string): { defs: ChordDefs; placement: Di
 }
 
 export function analyzeChords(source: string, transposeOffset = 0): ChordAnalysis {
-  const text = source ?? ''
+  const text = applySourceTransposition(source ?? '').source
   const { defs, placement } = collectDefsAndPlacement(text)
 
   // Transpose the grid's chord names by the same amount as the lyrics so the
   // diagrams match what's printed above the words.
-  const transpose = getTransposeAmount(text) + transposeOffset
+  const transpose = transposeOffset
   const transposeName = (name: string): string => {
     const parsed = Chord.parse(name)
     if (!parsed) return name
@@ -898,23 +1102,25 @@ export const CHORDPRO_PRINT_CSS = `
     font-family: "Helvetica Neue", Arial, sans-serif; font-size: 12pt; }
   h1.title { font-size: 20pt; margin: 0 0 0.1em; }
   h2.subtitle, .artist { font-size: 13pt; font-weight: 400; color: #444; margin: 0 0 0.6em; }
-  .cp-meta { margin: 0 0 1em; }
+  .cp-meta { margin: 0 0 1em; text-align: center; }
   .cp-meta-title { font-size: 20pt; font-weight: 700; }
   .cp-meta-subtitle { font-size: 13pt; color: #444; }
   .cp-meta-info { font-size: 10pt; color: #444; margin-top: 0.2em; }
   .cp-meta-info b { color: #000; font-weight: 700; }
   .cp-comment { margin: 0.4em 0; }
+  .cp-comment.plain { background: #eee; border-radius: 2px; padding: 0.2em 0.6em; display: inline-block; }
   .cp-comment.box { border: 1px solid #888; border-radius: 4px; padding: 0.2em 0.6em; display: inline-block; }
   .cp-comment.italic { font-style: italic; color: #555; }
   .cp-tab { margin: 0 0 1em; }
-  .cp-tab-label { font-size: 9pt; font-weight: 700; color: #444; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.3em; }
   .cp-tab pre { margin: 0; font-family: ${MONO_FONT}; white-space: pre; line-height: 1.3; font-variant-ligatures: none; overflow-x: auto; }
   .cp-chorddef { display: inline-block; vertical-align: top; margin: 0 16px 8px 0; }
   .cp-grid { margin: 0 0 1em; font-family: ${MONO_FONT}; font-variant-ligatures: none; }
-  .cp-grid-label { font-size: 9pt; font-weight: 700; color: #444; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.3em; }
+  .cp-labelled-block, .paragraph { display: grid; grid-template-columns: var(--cp-label-width) minmax(0, 1fr); column-gap: var(--cp-label-gap); break-inside: avoid-column; }
+  .cp-labelled-block > :not(.cp-section-label), .paragraph > :not(.label) { grid-column: 2; }
+  .cp-section-label, .label { grid-column: 1; grid-row: 1 / -1; font-size: 9pt; font-weight: 400; color: #444; white-space: pre-line; }
   .cp-grow { display: flex; align-items: center; min-height: 1.6em; }
   .cp-gmargin { flex: none; padding-right: 8px; display: flex; align-items: center; }
-  .cp-glabel { background: #e8e8e8; border-radius: 3px; padding: 1px 6px; font-weight: 600; font-size: 0.9em; white-space: nowrap; }
+  .cp-glabel { color: #444; font-size: 0.9em; white-space: pre-line; }
   .cp-gright { padding-left: 8px; color: #000; white-space: nowrap; }
   .cp-gchord { color: #000; font-weight: 700; }
   .chord sup, .cp-gchord sup { font-size: 0.7em; line-height: 0; vertical-align: super; }
@@ -923,11 +1129,23 @@ export const CHORDPRO_PRINT_CSS = `
   .cp-warnings { border: 1px solid #b26a00; color: #b26a00; border-radius: 4px; padding: 6px 8px; margin: 0 0 1em; font-size: 10pt; }
   .cp-abc { margin: 0 0 1em; }
   .cp-abc svg { max-width: 100%; height: auto; }
-  .cp-columns { display: flex; gap: 24px; align-items: flex-start; }
-  .cp-column { flex: 1; min-width: 0; }
+  .cp-flow { column-fill: balance; column-gap: 20px; }
+  .cp-columns-1 { column-count: 1; }
+  .cp-columns-2 { column-count: 2; }
+  .cp-columns-3 { column-count: 3; }
+  .cp-columns-4 { column-count: 4; }
+  .cp-columns-5 { column-count: 5; }
+  .cp-columns-6 { column-count: 6; }
+  .cp-right-layout { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
+  .cp-column-break { break-after: column; }
+  .cp-page-break { break-before: page; page-break-before: always; column-span: all; }
+  .cp-column-span { column-span: all; }
   .cp-textblock { white-space: pre-wrap; }
-  .cp-anchored-images { text-align: right; margin-top: 1rem; }
-  .cp-anchored-images img { max-width: 50%; height: auto; }
+  .cp-image { break-inside: avoid-column; margin-bottom: 1em; }
+  .cp-image-spread { column-span: all; }
+  .cp-image-align-left { text-align: left; }
+  .cp-image-align-center { text-align: center; }
+  .cp-image-align-right { text-align: right; }
   .cp-diagrams-collapsible { display: none; }
   .cp-diagrams-print { display: block; }
   .cp-diagrams { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin: 0 0 1em; }
@@ -935,11 +1153,10 @@ export const CHORDPRO_PRINT_CSS = `
   .cp-diagram > div:first-child { font-weight: 700; color: #1565c0; }
   .cp-diagram svg { display: block; margin: 0 auto; }
   .chord-sheet { line-height: 1.1; }
-  .paragraph { margin-bottom: 1em; break-inside: avoid; }
+  .paragraph { margin-bottom: 1em; break-inside: avoid-column; }
   .paragraph.chorus { border-left: 3px solid #888; padding-left: 0.75em; }
   .paragraph.bridge { border-left: 3px dotted #888; padding-left: 0.75em; }
   .literal { font-family: ${MONO_FONT}; white-space: pre; line-height: 1.3; font-variant-ligatures: none; }
-  .label { font-size: 9pt; font-weight: 700; color: #444; margin: 0 0 0.3em; text-transform: uppercase; letter-spacing: 0.03em; }
   .row { display: flex; flex-wrap: wrap; }
   .column { display: flex; flex-direction: column; }
   .chord { font-weight: 700; color: #1565c0; white-space: pre; }
@@ -955,7 +1172,7 @@ export const CHORDPRO_PRINT_CSS = `
 // SVGs come along) in an isolated window — which doubles as "Save as PDF". When
 // no rendered HTML is available, fall back to rendering plain source.
 export function printChordPro(renderedHtml: string | null, source: string, title: string): void {
-  const body = renderedHtml || renderChordProHtml(source, getTransposeAmount(source)) || `<pre>${escapeHtml(source ?? '')}</pre>`
+  const body = renderedHtml || renderChordProHtml(applySourceTransposition(source).source) || `<pre>${escapeHtml(source ?? '')}</pre>`
   const win = window.open('', '_blank')
   if (!win) return // popup blocked
   win.opener = null
