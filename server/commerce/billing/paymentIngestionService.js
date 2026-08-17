@@ -34,10 +34,10 @@ import { executeModulePurge } from './entitlementPurgeService.js'
 import { upsertPaymentOutcome, fetchPaymentByMollieId } from './subscriptionPaymentRepository.js'
 import { dispatchUserNotification, pushUserNotification } from '../../user/notifications/notificationService.js'
 import { BILLING_NOTIFICATION_TYPES } from '../../domain/notificationTypes.js'
-import { periodEndFrom } from './billingShared.js'
+import { periodEndFrom, MANDATE_VERIFICATION_CENTS } from './billingShared.js'
 import { getPaymentProvider } from './paymentProvider/providerFactory.js'
 import { PAYMENT_STATUS } from './paymentProvider/statuses.js'
-import { repairSchedule } from './billingSaga.js'
+import { repriceAndRepairSchedule, repairScheduleSafely } from './billingPostCommit.js'
 import { logger } from '../../utils/logger.js'
 import { clearOnboardingTenant } from '../../user/identity/authRepository.js'
 
@@ -76,6 +76,30 @@ function classifyKind(sub, payment, existingPayment) {
   }
   if (payment.id === sub.pending_payment_id) return 'proration'
   return 'recurring'
+}
+
+// What this subscription's own durable state says a charge of this kind may
+// cost. Every payment this system asks the provider for is mirrored locally by
+// the outbox completion BEFORE it can settle, so its recorded amount is the
+// exact expectation; only a schedule-generated recurring charge has no local
+// row yet.
+//
+// The recurring case accepts the period just charged as well as the next one on
+// purpose. reconcileNextPeriodPricing can move next_total_cents (a lapsing
+// discount) before repairSchedule has recreated the remote schedule, so a charge
+// already in flight at the old amount is genuine and must still open its period.
+// The job of this check is that a token amount can never buy a period — not to
+// pin the price to the cent, which the schedule repair already owns.
+//
+// An empty list means "nothing to compare against".
+function allowedAmountsCents(sub, kind, existingPayment) {
+  if (existingPayment) return [existingPayment.amount_cents]
+  switch (kind) {
+    case 'recurring': return [sub.next_total_cents ?? sub.total_cents, sub.total_cents]
+    case 'conversion': return [sub.pending_total_cents ?? sub.total_cents]
+    case 'mandate_verification': return [MANDATE_VERIFICATION_CENTS]
+    default: return []
+  }
 }
 
 // A charge counts against the live (current) period when it was created no
@@ -233,7 +257,28 @@ export async function applyPaymentOutcome(subId, payment, { periodEndHint = null
     if (!sub || sub.is_complimentary) abortTransaction(empty)
 
     const existingPayment = await fetchPaymentByMollieId(client, payment.id)
+    // mollie_payment_id is UNIQUE across all subscriptions, so a local row for
+    // another subscription means this payment is not ours to act on. Nothing is
+    // recorded, so the rightful subscription can still ingest it.
+    if (existingPayment && existingPayment.subscription_id !== subId) {
+      logger.warn('billing.payment_subscription_mismatch', { subscriptionId: subId })
+      return empty
+    }
+
     const kind = classifyKind(sub, payment, existingPayment)
+
+    // Defence in depth behind the ingestion bindings: a paid amount that is not
+    // the one this subscription owes can never buy a period. Recorded and
+    // logged only — the webhook must still answer 200, and the reconcile poll
+    // re-ingests once local state and the charge agree.
+    if (payment.status === PAYMENT_STATUS.PAID) {
+      const allowed = allowedAmountsCents(sub, kind, existingPayment).filter((c) => c != null)
+      if (allowed.length > 0 && !allowed.includes(payment.amount.cents)) {
+        logger.warn('billing.payment_amount_mismatch', { subscriptionId: subId, paymentKind: kind })
+        return empty
+      }
+    }
+
     const row = await upsertPaymentOutcome(client, {
       subscriptionId: subId,
       molliePaymentId: payment.id,
@@ -288,24 +333,29 @@ async function runPostCommit(subId, { pushes, sagaHints, purges, purgeModuleIds 
       logger.error('billing.purge_failed', { err, subscriptionId: subId }))
   }
 
+  // A reprice always implies a schedule repair — the amount it computes is what
+  // the schedule must charge — so the combined helper covers both hints.
   if (sagaHints.includes('reprice')) {
-    const { repriceSubscription } = await import('./subscriptionPricingService.js')
-    await repriceSubscription(pool, subId).catch((err) =>
-      logger.error('billing.reprice_failed', { err, subscriptionId: subId }))
-  }
-  if (sagaHints.includes('repair_schedule') || sagaHints.includes('reprice')) {
-    await repairSchedule(pool, subId).catch((err) =>
-      logger.error('billing.repair_schedule_failed', { err, subscriptionId: subId }))
+    await repriceAndRepairSchedule(subId)
+  } else if (sagaHints.includes('repair_schedule')) {
+    await repairScheduleSafely(subId)
   }
 }
 
 // Ingest a provider payment by (local subscription id, provider payment id).
 // Used by both the webhook and the reconcile poll. Status is ALWAYS re-fetched
 // authoritatively from the provider — the caller-supplied id is only a routing
-// hint. Verifies the payment belongs to the subscription owner's customer
-// before applying any effect (a guessed subscription id can't drive someone
-// else's payment). The schedule's next-payment timestamp is fetched here, before
-// the ingestion transaction, so no remote call happens inside the txn.
+// hint, and on the public webhook it is an unauthenticated query parameter.
+//
+// Two independent bindings must agree with that hint before any effect fires,
+// and BOTH fail closed:
+//   1. the payment's own metadata, which every payment this system creates
+//      carries as billingMetadata(subscriptionId, purpose),
+//   2. the subscription owner's provider customer — a null on either side is a
+//      mismatch, not a pass, because a trialing subscription is exactly the
+//      population an "any null is fine" check would leave undefended.
+// The schedule's next-payment timestamp is fetched here, before the ingestion
+// transaction, so no remote call happens inside the txn.
 export async function ingestProviderPayment(subId, providerPaymentId) {
   const provider = getPaymentProvider()
   const sub = await fetchSubscriptionById(pool, subId)
@@ -313,8 +363,15 @@ export async function ingestProviderPayment(subId, providerPaymentId) {
   if (!sub) return empty
 
   const payment = await provider.getPayment({ paymentId: providerPaymentId })
+
+  const claimed = payment.metadata?.subscriptionId
+  if (claimed != null && String(claimed) !== String(subId)) {
+    logger.warn('billing.webhook_subscription_mismatch', { subscriptionId: subId })
+    return empty
+  }
+
   const customerId = await fetchUserMollieCustomerId(pool, sub.user_id)
-  if (customerId && payment.customerId && payment.customerId !== customerId) {
+  if (payment.customerId !== customerId) {
     logger.warn('billing.webhook_customer_mismatch', { subscriptionId: subId })
     return empty
   }

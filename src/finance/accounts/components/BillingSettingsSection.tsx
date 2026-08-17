@@ -310,8 +310,10 @@ export default function BillingSettingsSection() {
           {sub.pendingTotalCents !== null && (
             <Alert severity="info" sx={{ mb: 2 }}>{t($ => $.current.pendingChange)}</Alert>
           )}
-          {sub.modules.some((m) => m.pendingChangeKind === 'downgrade'
-            || m.pendingChangeKind === 'remove') && (
+          {/* A frozen limits snapshot IS the fact this warns about, so it stays
+              accurate for any change kind that binds capacity — a trial's
+              selected paid plan included. */}
+          {sub.modules.some((m) => m.pendingLimitsSnapshot !== null) && (
             <Alert severity="warning" sx={{ mb: 2 }}>{t($ => $.current.downgradePending)}</Alert>
           )}
 

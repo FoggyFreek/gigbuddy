@@ -19,11 +19,13 @@ import {
   insertModule,
   switchModulePlan,
   setModulePendingChange,
+  setModuleTrialSelection,
   clearModulePendingChange,
 } from './subscriptionModuleRepository.js'
+import { changeInFlight } from './pendingChangeKinds.js'
 import { chargeModuleChange } from './billingSaga.js'
 import { rollbackPendingModuleChange } from './subscriptionModuleChangeRecovery.js'
-import { computeModuleBlockers } from './moduleCapacityService.js'
+import { computeModuleBlockers } from '../../entitlements/capacityService.js'
 import { repriceAndRepairSchedule } from './billingPostCommit.js'
 import {
   quote,
@@ -46,18 +48,14 @@ async function loadModuleChangeContext(client, userId, { audience, planId, requi
   if (sub.cancel_at_period_end) {
     return conflict('Resume the subscription before changing it', { code: 'plan_change_in_progress' })
   }
-  if (sub.pending_payment_id) {
+  // Subscription-wide: this flow can issue a prorated charge, which must be
+  // attributable to exactly one change.
+  const modules = await listModulesForUpdate(client, sub.id)
+  if (changeInFlight(sub, modules)) {
     return conflict('A change is already in progress', { code: 'plan_change_in_progress' })
   }
   if (requireMandate && !sub.mollie_mandate_id) {
     return conflict('No valid payment mandate', { code: 'no_mandate' })
-  }
-
-  const modules = await listModulesForUpdate(client, sub.id)
-  if (modules.some((m) => m.status === 'pending'
-    || (m.pending_change_kind && !(sub.status === 'trialing'
-      && m.pending_change_kind === 'trial_selection')))) {
-    return conflict('A change is already in progress', { code: 'plan_change_in_progress' })
   }
 
   const plan = await fetchPlan(client, planId)
@@ -157,8 +155,14 @@ async function chargePendingModuleChange({ sub, audience, planId, amountCents, m
 // selection: it is priced now but becomes real only when the first scheduled
 // subscription charge settles.
 //
+// `targetLimits` are the limits the selection was just checked against, frozen
+// onto the module so they bind for the rest of the trial. The boundary charge
+// installs the plan unattended — there is no 409 left in that path — so without
+// this the customer could grow to the trial tier's cap over the remaining days
+// and land on the selected plan already over it.
+//
 // Runs inside the caller's transaction; abortTransaction propagates from here.
-async function applyTrialModuleSelection(client, { sub, existing, plan, audience }) {
+async function applyTrialModuleSelection(client, { sub, existing, plan, audience, targetLimits }) {
   const trialPlan = await fetchTrialTierPlan(client, audience)
   if (!trialPlan) {
     abortTransaction(conflict('No trial tier is configured for this product', {
@@ -180,8 +184,8 @@ async function applyTrialModuleSelection(client, { sub, existing, plan, audience
       await clearModulePendingChange(client, trialModule.id)
     }
   } else {
-    await setModulePendingChange(client, trialModule.id, {
-      planId: plan.id, kind: 'trial_selection', priceCents: paidPrice ?? 0,
+    await setModuleTrialSelection(client, trialModule.id, {
+      planId: plan.id, priceCents: paidPrice ?? 0, snapshot: targetLimits,
     })
   }
   return { effect: 'trial', subId: sub.id }
@@ -266,7 +270,7 @@ export async function changeModule(db, user, body) {
     }
 
     return sub.status === 'trialing'
-      ? applyTrialModuleSelection(client, { sub, existing, plan, audience })
+      ? applyTrialModuleSelection(client, { sub, existing, plan, audience, targetLimits })
       : applyPaidModuleChange(client, { sub, modules, existing, plan, audience, planId })
   }, { db })
 

@@ -20,7 +20,7 @@ beforeAll(async () => {
   billingSvc = await import('../../../server/commerce/billing/billingService.js')
   ingestion = await import('../../../server/commerce/billing/paymentIngestionService.js')
   providerFactory = await import('../../../server/commerce/billing/paymentProvider/providerFactory.js')
-  entitlementSvc = await import('../../../server/commerce/billing/entitlementService.js')
+  entitlementSvc = await import('../../../server/entitlements/entitlementResolver.js')
   billing = await import('./_billing.js')
   await runMigrations()
 })
@@ -68,7 +68,13 @@ async function notifCount(userId, type) {
     'SELECT COUNT(*)::int n FROM notifications WHERE user_id = $1 AND type = $2', [userId, type])
   return rows[0].n
 }
+async function paymentRow(molliePaymentId) {
+  const { rows } = await pool.query(
+    'SELECT * FROM subscription_payments WHERE mollie_payment_id = $1', [molliePaymentId])
+  return rows[0] ?? null
+}
 const userA = () => ({ id: seed.userA.id, email: 'a@test.local', name: 'Alpha User' })
+const userB = () => ({ id: seed.userB.id, email: 'b@test.local', name: 'Beta User' })
 
 // trial → €0.01 mandate verification → delayed first recurring charge → active.
 async function convert({ interval = 'month', audience = 'band', second = null } = {}) {
@@ -494,6 +500,96 @@ describe('renewal', () => {
     const after = await sub(subId)
     expect(after.status).toBe('past_due')
     expect(after.past_due_since).not.toBeNull()
+  })
+})
+
+// The subscription id ingestion routes on comes from an UNAUTHENTICATED webhook
+// query parameter, so a real payment id can be posted against someone else's
+// subscription. Each binding below is what stops that from buying a period.
+describe('webhook payment binding', () => {
+  it('refuses a payment whose metadata names another subscription', async () => {
+    const { subId } = await convert()
+    const victim = await sub(subId)
+
+    const attacker = await billing.createSubscription({
+      userId: seed.userB.id, status: 'trialing', total_cents: 2000,
+      trial_ends_at: billing.daysFromNow(20),
+      current_period_start: null, current_period_end: null,
+    })
+    // Isolate the metadata binding by giving the attacker the SAME provider
+    // customer, so the customer check cannot be what rejects the payment.
+    await pool.query('UPDATE users SET mollie_customer_id = $2 WHERE id = $1', [seed.userB.id, 'cst_1'])
+
+    const chargeId = fake.addRecurringCharge(victim.mollie_subscription_id, 'cst_1', 2000, {
+      metadata: { subscriptionId: String(subId), purpose: 'schedule' },
+    })
+    await ingestion.ingestProviderPayment(attacker.id, chargeId)
+
+    const attacked = await sub(attacker.id)
+    expect(attacked.status).toBe('trialing')
+    expect(attacked.current_period_start).toBeNull()
+    const untouched = await sub(subId)
+    expect(untouched.current_period_start).toEqual(victim.current_period_start)
+    expect(untouched.current_period_end).toEqual(victim.current_period_end)
+    expect(await paymentRow(chargeId)).toBeNull()
+  })
+
+  it('refuses a genuine payment routed at a trialing subscription with no provider customer', async () => {
+    const { subId } = await convert()
+    const victim = await sub(subId)
+
+    // The exact population the old `customerId && payment.customerId` guard
+    // skipped: no Mollie customer exists until a trial converts.
+    const trial = await billingSvc.startTrial(pool, userB(), { audience: 'band' })
+    const { rows } = await pool.query(
+      'SELECT mollie_customer_id FROM users WHERE id = $1', [seed.userB.id])
+    expect(rows[0].mollie_customer_id).toBeNull()
+
+    const chargeId = fake.addRecurringCharge(victim.mollie_subscription_id, 'cst_1', 2000)
+    await ingestion.ingestProviderPayment(trial.subscription.id, chargeId)
+
+    const attacked = await sub(trial.subscription.id)
+    expect(attacked.status).toBe('trialing')
+    expect(attacked.current_period_start).toBeNull()
+    expect(attacked.last_charge_at).toBeNull()
+    expect(await paymentRow(chargeId)).toBeNull()
+  })
+
+  // Re-pricing moves next_total_cents before repairSchedule has recreated the
+  // remote schedule, so a charge already in flight at the old amount is genuine.
+  it('still accepts a renewal charged at what the period just ending cost', async () => {
+    const { subId } = await convert()
+    const row = await sub(subId)
+    await pool.query(
+      `UPDATE subscriptions SET current_period_start = $2, current_period_end = $3,
+              next_total_cents = 2500
+        WHERE id = $1`,
+      [subId, new Date(Date.now() - 40 * 86400000), new Date(Date.now() - 10 * 86400000)])
+
+    const chargeId = fake.addRecurringCharge(row.mollie_subscription_id, 'cst_1', 2000)
+    await ingestion.ingestProviderPayment(subId, chargeId)
+
+    const after = await sub(subId)
+    expect(after.status).toBe('active')
+    expect(new Date(after.current_period_end).getTime()).toBeGreaterThan(Date.now())
+    expect(await notifCount(seed.userA.id, 'billing-renewed')).toBe(1)
+  })
+
+  it('refuses a paid recurring charge for an amount the cycle does not owe', async () => {
+    const { subId } = await convert()
+    const row = await sub(subId)
+    await pool.query('UPDATE subscriptions SET current_period_start = $2, current_period_end = $3 WHERE id = $1',
+      [subId, new Date(Date.now() - 40 * 86400000), new Date(Date.now() - 10 * 86400000)])
+    const aged = await sub(subId)
+
+    const chargeId = fake.addRecurringCharge(row.mollie_subscription_id, 'cst_1', 1)
+    await ingestion.ingestProviderPayment(subId, chargeId)
+
+    const after = await sub(subId)
+    expect(after.current_period_start).toEqual(aged.current_period_start)
+    expect(after.current_period_end).toEqual(aged.current_period_end)
+    expect(await paymentRow(chargeId)).toBeNull()
+    expect(await notifCount(seed.userA.id, 'billing-renewed')).toBe(0)
   })
 })
 

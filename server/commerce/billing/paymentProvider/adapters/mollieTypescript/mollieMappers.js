@@ -85,6 +85,9 @@ export function toPayment(value) {
     checkoutUrl: value.links?.checkout?.href ?? null,
     createdAt: toDate(value.createdAt),
     paidAt: toDate(value.paidAt),
+    // Carries billingMetadata(subscriptionId, purpose) for anything this system
+    // created — ingestion uses it to bind a payment to its subscription.
+    metadata: value.metadata ?? null,
   }
 }
 

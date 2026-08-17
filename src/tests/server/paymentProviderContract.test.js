@@ -83,6 +83,7 @@ function createTypescriptHarness() {
     subscriptionId: value.scheduleId,
     createdAt: value.createdAt,
     paidAt: value.paidAt,
+    metadata: value.metadata ?? null,
     ...(value.status === 'refunded' ? { amountRefunded: { currency: 'EUR', value: '1.00' } } : {}),
     ...(value.status === 'charged_back' ? { amountChargedBack: { currency: 'EUR', value: '1.00' } } : {}),
     links: value.checkoutUrl ? { checkout: { href: value.checkoutUrl } } : {},

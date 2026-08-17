@@ -20,10 +20,10 @@
 // must never hold a DB transaction open across the remote call. The purge's
 // integrations phase takes the same lock, so a payment-link create can't race
 // the key retain/delete decision.
-import { resolveTenantEntitlements } from './entitlementService.js'
-import { enqueueCleanup } from '../../platform/files/storageCleanupRepository.js'
-import { withTransaction } from '../../db/withTransaction.js'
-import { lockTenantUsage } from '../../db/tenantLock.js'
+import { resolveTenantEntitlements } from './entitlementResolver.js'
+import { enqueueCleanup } from '../platform/files/storageCleanupRepository.js'
+import { withTransaction } from '../db/withTransaction.js'
+import { lockTenantUsage } from '../db/tenantLock.js'
 
 // Matches the requireEntitlement middleware denial; the global error handler
 // surfaces status/code/feature.

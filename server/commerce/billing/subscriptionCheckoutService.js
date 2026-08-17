@@ -22,7 +22,7 @@ import {
   createConversionCheckout,
   createMandateVerificationCheckout,
 } from './billingSaga.js'
-import { computeModuleBlockers } from './moduleCapacityService.js'
+import { computeModuleBlockers } from '../../entitlements/capacityService.js'
 import { quote, currentModuleSet, nextModuleSet } from './subscriptionPricingService.js'
 import { priceForInterval, MANDATE_VERIFICATION_CENTS } from './billingShared.js'
 import { isPlatformBillingConfigured } from './paymentProvider/providerFactory.js'

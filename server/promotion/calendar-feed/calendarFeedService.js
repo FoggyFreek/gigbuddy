@@ -17,7 +17,7 @@ import {
 import { listGigsWithTaskCounts } from '../../planning/gigs/gigRepository.js'
 import { listRehearsals, loadParticipants } from '../../planning/rehearsals/rehearsalRepository.js'
 import { listBandEvents } from '../../planning/events/bandEventRepository.js'
-import { resolveTenantEntitlements } from '../../commerce/billing/entitlementService.js'
+import { resolveTenantEntitlements } from '../../entitlements/entitlementResolver.js'
 import { FEATURES } from '../../auth/entitlements.js'
 
 const PROD_ID = '-//GigBuddy//EN'

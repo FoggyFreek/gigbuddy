@@ -19,8 +19,8 @@ import {
   clearOnboardingTenant,
 } from './authRepository.js'
 import { permissionsForRole } from '../../auth/permissions.js'
-import { resolveTenantEntitlements, resolveUserLimits } from '../../commerce/billing/entitlementService.js'
-import { countActiveOwnedTenants } from '../../commerce/billing/limitRepository.js'
+import { resolveTenantEntitlements, resolveUserLimits } from '../../entitlements/entitlementResolver.js'
+import { countActiveOwnedTenants } from '../../entitlements/limitRepository.js'
 import { LIMITS } from '../../auth/entitlements.js'
 import { TERMS_VERSION } from '../../../shared/termsVersion.js'
 

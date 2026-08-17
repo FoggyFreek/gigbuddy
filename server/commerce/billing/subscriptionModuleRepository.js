@@ -7,6 +7,8 @@
 // ladder's free fallback plan. A `pending` module (bought, charge not yet
 // settled) grants nothing yet but already binds its target capacity.
 
+import { BOUNDARY_KINDS } from './pendingChangeKinds.js'
+
 // Plan pricing columns come along so the pricing engine can quote a module set
 // from one read — every quote needs both the current plan and the plan a
 // scheduled change lands on.
@@ -60,28 +62,6 @@ export async function fetchModuleById(executor, id) {
   return rows[0] ?? null
 }
 
-// The entitlement resolver's hot path: one round trip from a user and an
-// audience to the subscription row plus that ladder's module. Returns null when
-// the user has no live subscription at all; a live subscription WITHOUT a module
-// for this audience returns the subscription with null module columns, which the
-// resolver reads as "free fallback on this ladder".
-export async function fetchLiveModuleForUser(executor, userId, audience) {
-  const { rows } = await executor.query(
-    `SELECT s.*,
-            m.id AS module_id, m.status AS module_status,
-            m.entitlement_overrides, m.pending_limits_snapshot,
-            m.pending_change_kind, m.pending_plan_id,
-            p.slug AS plan_slug, p.entitlements AS plan_entitlements
-       FROM subscriptions s
-       LEFT JOIN subscription_modules m
-         ON m.subscription_id = s.id AND m.audience = $2
-       LEFT JOIN subscription_plans p ON p.id = m.plan_id
-      WHERE s.user_id = $1 AND s.status <> 'canceled'`,
-    [userId, audience],
-  )
-  return rows[0] ?? null
-}
-
 const INSERTABLE = [
   'subscription_id', 'plan_id', 'status', 'price_cents', 'is_starter',
   'entitlement_overrides',
@@ -122,8 +102,13 @@ export async function switchModulePlan(executor, id, { planId, priceCents }) {
   return rows[0] ?? null
 }
 
-// A scheduled upgrade, downgrade or trial-to-paid selection. `kind = 'remove'` goes through
+// A scheduled change that carries no capacity binding of its own — an upgrade,
+// or a re-price of an existing trial selection. `kind = 'remove'` goes through
 // setModuleRemoval instead, which also moves the status.
+//
+// Deliberately leaves pending_limits_snapshot alone: it is the only writer that
+// runs over a row whose snapshot was frozen elsewhere (the interval switch at
+// checkout re-prices a trial selection without changing its target plan).
 export async function setModulePendingChange(executor, id, { planId, kind, priceCents }) {
   const { rows } = await executor.query(
     `UPDATE subscription_modules
@@ -131,6 +116,26 @@ export async function setModulePendingChange(executor, id, { planId, kind, price
             updated_at = NOW()
       WHERE id = $1 RETURNING *`,
     [id, planId, kind, priceCents],
+  )
+  return rows[0] ?? null
+}
+
+// A trial's selected paid plan, with the target limits frozen at selection.
+// Like a downgrade it binds capacity immediately (PENDING_CHANGE_KINDS
+// declares `bindsCapacity`), but it carries no purge manifest and no
+// downgrade_confirmed_at: the trial tier keeps granting its features until the
+// first charge lands this plan, so nothing is lost and nothing is consented to.
+//
+// The snapshot is always written, never merged — re-selecting a different plan
+// must replace the previous target's binding, not keep the tighter one.
+export async function setModuleTrialSelection(executor, id, { planId, priceCents, snapshot }) {
+  const { rows } = await executor.query(
+    `UPDATE subscription_modules
+        SET pending_plan_id = $2, pending_change_kind = 'trial_selection',
+            pending_price_cents = $3, pending_limits_snapshot = $4,
+            updated_at = NOW()
+      WHERE id = $1 RETURNING *`,
+    [id, planId, priceCents, snapshot],
   )
   return rows[0] ?? null
 }
@@ -201,6 +206,11 @@ export async function clearModulePendingChange(executor, id) {
 // Activation of a paid module change: a pending add becomes active, a
 // scheduled plan change lands. The purge manifest is deliberately KEPT — the
 // post-commit purge consumes it once the target plan is real.
+//
+// The limits snapshot goes, because the plan now carries the target limits
+// itself. Leaving it would outlive the change that froze it: a landed
+// trial_selection has no manifest, so no later clearModulePurgeManifest would
+// ever remove it, and a subsequent upgrade would stay capped at the old target.
 export async function applyModuleChange(executor, id) {
   const { rows } = await executor.query(
     `UPDATE subscription_modules
@@ -208,6 +218,7 @@ export async function applyModuleChange(executor, id) {
             price_cents = COALESCE(pending_price_cents, price_cents),
             status = 'active',
             pending_plan_id = NULL, pending_change_kind = NULL, pending_price_cents = NULL,
+            pending_limits_snapshot = NULL,
             updated_at = NOW()
       WHERE id = $1 AND status <> 'pending_removal' RETURNING *`,
     [id],
@@ -265,14 +276,14 @@ export async function fetchInFlightModuleChange(executor, subscriptionId) {
   return rows[0] ?? null
 }
 
-// Modules whose scheduled downgrade, trial selection or removal is due at the
-// period boundary.
+// Modules whose scheduled change is due at the period boundary. Which kinds
+// those are is derived from PENDING_CHANGE_KINDS rather than restated here.
 export async function listModuleChangesDueAtPeriodEnd(executor, subscriptionId) {
   const { rows } = await executor.query(
     `SELECT ${MODULE_SELECT} ${MODULE_FROM}
       WHERE m.subscription_id = $1
-        AND m.pending_change_kind IN ('downgrade','remove','trial_selection')`,
-    [subscriptionId],
+        AND m.pending_change_kind = ANY($2)`,
+    [subscriptionId, BOUNDARY_KINDS],
   )
   return rows
 }

@@ -5,11 +5,11 @@
 //
 // Error contract: { error: { status: 409, body: { error, code, limit } } } on
 // a hit cap, or null when the write may proceed.
-import { resolveTenantEntitlements, resolveUserLimits } from './entitlementService.js'
-import { LIMITS, isUnlimited } from '../../auth/entitlements.js'
-import { PLAN_AUDIENCES } from '../../../shared/planAudiences.js'
-import { MAX_OPEN_JOIN_REQUESTS } from '../../domain/membership.js'
-import { countOpenJoinRequests } from '../../people/band-directory/bandDirectoryRepository.js'
+import { resolveTenantEntitlements, resolveUserLimits } from './entitlementResolver.js'
+import { LIMITS, isUnlimited } from '../auth/entitlements.js'
+import { PLAN_AUDIENCES } from '../../shared/planAudiences.js'
+import { MAX_OPEN_JOIN_REQUESTS } from '../domain/membership.js'
+import { countOpenJoinRequests } from '../people/band-directory/bandDirectoryRepository.js'
 import {
   lockTenantForCapCheck,
   lockUserForCapCheck,

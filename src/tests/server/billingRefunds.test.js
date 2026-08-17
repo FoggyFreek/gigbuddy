@@ -22,7 +22,7 @@ beforeAll(async () => {
   billingSvc = await import('../../../server/commerce/billing/billingService.js')
   adminSvc = await import('../../../server/admin/subscriptions/adminSubscriptionService.js')
   ingestion = await import('../../../server/commerce/billing/paymentIngestionService.js')
-  entSvc = await import('../../../server/commerce/billing/entitlementService.js')
+  entSvc = await import('../../../server/entitlements/entitlementResolver.js')
   providerFactory = await import('../../../server/commerce/billing/paymentProvider/providerFactory.js')
   await runMigrations()
 })

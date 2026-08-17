@@ -17,7 +17,7 @@ import {
   deletePlan as deletePlanRow,
 } from './planRepository.js'
 import { validateEntitlements } from '../../auth/entitlements.js'
-import { invalidatePlanCache } from '../billing/entitlementService.js'
+import { invalidatePlanCache } from '../../entitlements/entitlementResolver.js'
 import {
   isValidSlug,
   isValidName,

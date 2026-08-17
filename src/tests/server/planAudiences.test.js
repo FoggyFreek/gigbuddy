@@ -23,10 +23,10 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   app = appMod.createTestApp()
-  entitlementSvc = await import('../../../server/commerce/billing/entitlementService.js')
+  entitlementSvc = await import('../../../server/entitlements/entitlementResolver.js')
   billingSvc = await import('../../../server/commerce/billing/billingService.js')
   purgeSvc = await import('../../../server/commerce/billing/entitlementPurgeService.js')
-  limitSvc = await import('../../../server/commerce/billing/limitService.js')
+  limitSvc = await import('../../../server/entitlements/limitService.js')
   adminSvc = await import('../../../server/admin/subscriptions/adminSubscriptionService.js')
   providerFactory = await import('../../../server/commerce/billing/paymentProvider/providerFactory.js')
   billing = await import('./_billing.js')
@@ -448,7 +448,7 @@ describe('tenant isolation', () => {
     // userB owns tenantB, which must be invisible to userA's artist changes.
     await billing.setTenantOwner(seed.tenantB.id, seed.userB.id)
 
-    const limitRepo = await import('../../../server/commerce/billing/limitRepository.js')
+    const limitRepo = await import('../../../server/entitlements/limitRepository.js')
     const scoped = await limitRepo.listOwnedTenants(pool, userId, ['personal'])
     expect(scoped.map((t) => t.id)).toEqual([personalTenantId])
   })

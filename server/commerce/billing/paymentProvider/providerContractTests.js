@@ -48,7 +48,7 @@ export function providerContractTests({ name, createHarness }) {
         id: 'payment-1', status: PAYMENT_STATUS.OPEN, amount: amount(1099),
         customerId: 'customer-1', mandateId: null, scheduleId: null,
         checkoutUrl: 'https://checkout.test/payment-1',
-        createdAt: new Date('2026-08-16T10:00:00.000Z'), paidAt: null,
+        createdAt: new Date('2026-08-16T10:00:00.000Z'), paidAt: null, metadata: null,
       })
       expect(harness.lastMutation()).toMatchObject({ idempotencyKey: 'checkout:1' })
 
@@ -74,6 +74,19 @@ export function providerContractTests({ name, createHarness }) {
         await expect(provider.getPayment({ paymentId: `payment-${status}` }))
           .resolves.toMatchObject({ status, amount: amount(2500), scheduleId: 'schedule-1' })
       }
+    })
+
+    // Ingestion binds a payment to its subscription through this field, so it
+    // must survive the round trip rather than being dropped by the mapper.
+    it('surfaces payment metadata', async () => {
+      harness.givenPayment({
+        id: 'payment-meta', status: PAYMENT_STATUS.PAID, amount: amount(2500),
+        customerId: 'customer-1', mandateId: 'mandate-1', scheduleId: null, checkoutUrl: null,
+        createdAt: null, paidAt: null, metadata: { subscriptionId: '42', purpose: 'conversion' },
+      })
+      await expect(provider.getPayment({ paymentId: 'payment-meta' })).resolves.toMatchObject({
+        metadata: { subscriptionId: '42', purpose: 'conversion' },
+      })
     })
 
     it('does not misclassify unknown payment or schedule statuses', async () => {

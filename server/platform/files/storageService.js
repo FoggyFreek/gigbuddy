@@ -6,7 +6,7 @@ import {
   reserveStorageUsage,
   releaseStorageUsage,
 } from '../../people/workspaces/statisticsService.js'
-import { resolveTenantEntitlements } from '../../commerce/billing/entitlementService.js'
+import { resolveTenantEntitlements } from '../../entitlements/entitlementResolver.js'
 import { LIMITS } from '../../auth/entitlements.js'
 import { enqueueCleanup } from './storageCleanupRepository.js'
 import { logger } from '../../utils/logger.js'

@@ -8,7 +8,7 @@ import {
   hasUsedTrial,
 } from './subscriptionRepository.js'
 import { insertModule } from './subscriptionModuleRepository.js'
-import { computeModuleBlockers } from './moduleCapacityService.js'
+import { computeModuleBlockers } from '../../entitlements/capacityService.js'
 import { mergeEntitlements } from '../../auth/entitlements.js'
 import { parseAudience } from './billingValidators.js'
 import { trialEndFrom, TRIAL_DAYS } from './billingShared.js'

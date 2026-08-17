@@ -1,6 +1,7 @@
-// Purge of entitlement-gated data when a feature is durably lost — the
-// manifest-driven downgrade flow plus the integrations-secret erasure it
-// builds on.
+// Orchestration of the manifest-driven purge of entitlement-gated data when a
+// feature is durably lost. Billing owns WHEN and FOR WHICH TENANTS data is
+// deleted; WHAT to delete belongs to the domain that owns it and is dispatched
+// through purgeRegistry.js — this file knows no feature's schema.
 //
 // GDPR data-processor stance: stored third-party secrets and bearer tokens
 // must not outlive the feature that uses them. The purge is called only when
@@ -19,131 +20,44 @@
 // - Each per-(tenant, feature) delete is one short transaction under the
 //   tenant advisory lock that every purgeable-feature WRITE also takes (with
 //   an in-txn entitlement recheck), so write-vs-purge is safe in either order.
-// - The integrations phase runs under the per-tenant integration-write
-//   session lock instead, because it mixes remote link removal with the local
-//   retain-vs-delete decision.
-import {
-  FEATURES,
-  PURGEABLE_FEATURES,
-  mergeEntitlements,
-} from '../../auth/entitlements.js'
-import {
-  clearBandsintownKeyValue,
-  clearResendKeyValue,
-  clearShopifyClientIdValue,
-  clearShopifySecretValue,
-  clearShopifyDomainValue,
-} from '../../people/profiles/profileService.js'
-import { clearIntegrationCredential } from '../../platform/integrations/integrationCredentialService.js'
-import { CREDENTIAL_TYPES } from '../../security/integrationSecrets.js'
-import { setMollieKeyRetained } from '../../platform/integrations/integrationCredentialRepository.js'
-import { clearTenantCustomization } from '../../people/profiles/profileRepository.js'
-import { clearBandsintownArtist } from '../../promotion/integrations/tenantIntegrationRepository.js'
-import { deleteAllTokensForTenant } from '../../promotion/calendar-feed/calendarFeedRepository.js'
-import {
-  listSongFileKeysForTenant,
-  deleteSongFilesForTenant,
-  deleteSongChartsForTenant,
-  clearSongCoversForTenant,
-} from '../../music/songs/songRepository.js'
-import { clearAlbumArtForTenant } from '../../music/songs/albumRepository.js'
-import {
-  listInvoicesWithPaymentLink,
-  countInvoicesWithPaymentLink,
-} from '../../finance/invoices/invoiceRepository.js'
-import { removeMolliePaymentLink } from '../../finance/invoices/molliePaymentLinkService.js'
-import { enqueueCleanup } from '../../platform/files/storageCleanupRepository.js'
+// - A handler declaring `lock: 'session'` runs under the per-tenant
+//   integration-write session lock instead, with no transaction open, because
+//   it mixes remote provider calls with local persistence.
+import '../../app/registerPurgeHandlers.js'
+import { PURGEABLE_FEATURES, mergeEntitlements } from '../../auth/entitlements.js'
+import { getPurgeHandler } from '../../entitlements/purgeRegistry.js'
 import { fetchSubscriptionById } from './subscriptionRepository.js'
 import {
   fetchModuleById,
   clearModulePurgeManifest,
 } from './subscriptionModuleRepository.js'
 import { fetchFallbackPlan } from '../plans/planRepository.js'
-import { listOwnedTenants } from './limitRepository.js'
+import { listOwnedTenants } from '../../entitlements/limitRepository.js'
 import { tenantKindsForAudience } from '../../../shared/planAudiences.js'
 import {
   withTenantFeatureLock,
   withIntegrationWriteLock,
-} from './featureGuards.js'
+} from '../../entitlements/featureGuards.js'
 import { auditLog } from '../../utils/auditLog.js'
 import { logger } from '../../utils/logger.js'
 
-// Removes every stored integration secret, integration configuration, and
-// calendar-feed bearer token of a tenant. `includeMollie: false` leaves the
-// mollie key columns alone — the integrations purge decides retain-vs-delete
-// itself and must not have that decision overwritten here.
-export async function purgeIntegrationSecrets(db, tenantId, { includeMollie = true } = {}) {
-  if (includeMollie) {
-    await clearIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY)
-  }
-  await clearBandsintownKeyValue(db, tenantId)
-  await clearResendKeyValue(db, tenantId)
-  await clearShopifyClientIdValue(db, tenantId)
-  await clearShopifySecretValue(db, tenantId)
-  await clearShopifyDomainValue(db, tenantId)
-  await clearBandsintownArtist(db, tenantId)
-  const revokedTokens = await deleteAllTokensForTenant(db, tenantId)
-  logger.info('billing.integration_secrets_purged', { tenantId, revokedTokens })
-}
-
-// Integrations purge: remove unpaid Mollie payment links remotely (NO open DB
-// transaction around the remote calls), then decide the key's fate — zero
-// links left → delete the key; paid links remain → retain the value for
-// webhook/sync while the public status reports it absent.
-async function purgeIntegrationsFeature(db, tenantId) {
-  await withIntegrationWriteLock(db, tenantId, async () => {
-    // Remote phase: paid links 409 and stay; transient Mollie errors leave the
-    // link too (fail toward retention, never toward a dead paid link).
-    for (const invoice of await listInvoicesWithPaymentLink(db, tenantId)) {
-      try {
-        const result = await removeMolliePaymentLink({
-          pool: db, tenant: null, invoice, tenantId, invoiceId: invoice.id,
-        })
-        if (result.error && result.error.body?.code !== 'payment_link_paid') {
-          logger.warn('billing.purge_link_remove_failed', { tenantId, invoiceId: invoice.id })
-        }
-      } catch (err) {
-        logger.warn('billing.purge_link_remove_failed', { err, tenantId, invoiceId: invoice.id })
-      }
-    }
-
-    // Local phase.
-    const remaining = await countInvoicesWithPaymentLink(db, tenantId)
-    if (remaining === 0) {
-      await clearIntegrationCredential(db, tenantId, CREDENTIAL_TYPES.MOLLIE_API_KEY)
-    } else {
-      await setMollieKeyRetained(db, tenantId)
-    }
-    await purgeIntegrationSecrets(db, tenantId, { includeMollie: false })
-  })
-}
-
-// Deletes a tenant's data for the given purgeable features — one transaction
-// per (tenant, feature) under the tenant advisory lock; storage object keys
-// are queued for the reconciliation drain in the same transaction as the row
-// deletes.
+// Deletes a tenant's data for the given purgeable features by dispatching to
+// the owning domain's registered handler, under the lock that handler declares.
+//
+// A missing handler THROWS rather than skipping: the caller clears the purge
+// manifest once this resolves, so a silent skip would permanently retain data
+// the downgrade promised to delete. Throwing leaves the manifest in place for
+// the scheduler safety net to retry.
 export async function purgeFeatureData(db, tenantId, features) {
   for (const feature of features) {
-    if (feature === FEATURES.CHORDPRO) {
-      await withTenantFeatureLock(db, tenantId, (client) =>
-        deleteSongChartsForTenant(client, tenantId))
-    } else if (feature === FEATURES.SONG_FILES) {
-      await withTenantFeatureLock(db, tenantId, async (client) => {
-        const keys = await listSongFileKeysForTenant(client, tenantId)
-        await deleteSongFilesForTenant(client, tenantId)
-        for (const key of keys) await enqueueCleanup(client, tenantId, key, false)
-      })
-    } else if (feature === FEATURES.CUSTOMIZATION) {
-      await withTenantFeatureLock(db, tenantId, async (client) => {
-        const keys = [
-          ...(await clearTenantCustomization(client, tenantId)),
-          ...(await clearSongCoversForTenant(client, tenantId)),
-          ...(await clearAlbumArtForTenant(client, tenantId)),
-        ]
-        for (const key of keys) await enqueueCleanup(client, tenantId, key, false)
-      })
-    } else if (feature === FEATURES.INTEGRATIONS) {
-      await purgeIntegrationsFeature(db, tenantId)
+    const handler = getPurgeHandler(feature)
+    if (!handler) {
+      throw new Error(`No purge handler registered for feature ${feature}`)
+    }
+    if (handler.lock === 'session') {
+      await withIntegrationWriteLock(db, tenantId, () => handler.run(db, tenantId))
+    } else {
+      await withTenantFeatureLock(db, tenantId, (client) => handler.run(client, tenantId))
     }
     logger.info('billing.feature_purged', { tenantId, feature })
   }

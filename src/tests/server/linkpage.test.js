@@ -23,7 +23,7 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   app = appMod.createTestApp()
-  const entMod = await import('../../../server/commerce/billing/entitlementService.js')
+  const entMod = await import('../../../server/entitlements/entitlementResolver.js')
   clearEntitlementCaches = entMod.clearEntitlementCaches
   billing = await import('./_billing.js')
   await runMigrations()
@@ -239,7 +239,13 @@ describe('public linkpage export', () => {
       statsRetentionDays: 30,
     })
 
-    await pool.query(`UPDATE subscriptions SET plan_id = (SELECT id FROM subscription_plans WHERE slug = 'gold') WHERE id = $1`, [sub.id])
+    // The plan lives on the module row, not the subscription: alpha is a band
+    // tenant, so it is the BAND module that moves up to gold.
+    await pool.query(
+      `UPDATE subscription_modules SET plan_id = (SELECT id FROM subscription_plans WHERE slug = 'gold')
+        WHERE subscription_id = $1 AND audience = 'band'`,
+      [sub.id],
+    )
     expect(await exportEntitlements()).toEqual({
       enabled: true,
       maxReleasePages: 30,

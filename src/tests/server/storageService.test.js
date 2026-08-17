@@ -38,7 +38,7 @@ vi.mock('../../../server/people/workspaces/statisticsService.js', () => ({
 
 // Quota resolution is covered by storageQuota.test.js against the real DB;
 // here it stays out of the way (null = ownerless, unlimited).
-vi.mock('../../../server/commerce/billing/entitlementService.js', () => ({
+vi.mock('../../../server/entitlements/entitlementResolver.js', () => ({
   resolveTenantEntitlements: vi.fn(async () => null),
 }))
 

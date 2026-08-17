@@ -10,6 +10,7 @@
  *   checkoutUrl: string|null,
  *   createdAt: Date|null,
  *   paidAt: Date|null,
+ *   metadata: object|null,
  * }} Payment
  * @typedef {{ id: string }} Customer
  * @typedef {{

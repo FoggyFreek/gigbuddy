@@ -465,18 +465,3 @@ export async function listExpiredComplimentary(executor) {
   return rows
 }
 
-// True when a recurring charge created after the current period started is
-// still nonterminal at Mollie (open/pending) — the SEPA-in-flight case that
-// extends the resolver's grace window.
-export async function hasNonterminalRecurringPayment(executor, subscriptionId, periodStart) {
-  const { rowCount } = await executor.query(
-    `SELECT 1 FROM subscription_payments
-     WHERE subscription_id = $1
-       AND kind = 'recurring'
-       AND status IN ('open', 'pending')
-       AND mollie_created_at > $2
-     LIMIT 1`,
-    [subscriptionId, periodStart],
-  )
-  return rowCount > 0
-}

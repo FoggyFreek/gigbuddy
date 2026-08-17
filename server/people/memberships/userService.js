@@ -20,7 +20,7 @@ import {
   assignBandMember,
 } from './userRepository.js'
 import { lockTenantRow } from '../workspaces/tenantRepository.js'
-import { enforceMemberCap } from '../../commerce/billing/limitService.js'
+import { enforceMemberCap } from '../../entitlements/limitService.js'
 import { badRequest, conflict, forbidden, notFound } from '../../platform/http/serviceErrors.js'
 
 function updateDenied(targetUserId, reason, extra = {}) {

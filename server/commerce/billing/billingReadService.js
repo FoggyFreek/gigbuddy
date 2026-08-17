@@ -13,7 +13,7 @@ import {
   listNonterminalPaymentsForSubscription,
 } from './subscriptionPaymentRepository.js'
 import { ingestProviderPayment } from './paymentIngestionService.js'
-import { countActiveOwnedTenants } from './limitRepository.js'
+import { countActiveOwnedTenants } from '../../entitlements/limitRepository.js'
 import { repairScheduleSafely } from './billingPostCommit.js'
 import { quoteIntervals, nextModuleSet } from './subscriptionPricingService.js'
 import { priceForInterval, refundWindowEndsAt, TRIAL_DAYS } from './billingShared.js'

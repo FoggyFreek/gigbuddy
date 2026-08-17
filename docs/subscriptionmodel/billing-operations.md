@@ -174,7 +174,7 @@ provider call it already made.
 | `moduleDowngradeService.js` | service | Lowering or removing a module: consent, manifest freeze, boundary scheduling. |
 | `subscriptionCancelService.js` | service | Cancel at period end and resume (the immediate refund path lives in the refund service). |
 | `billingReadService.js` | service | The `/billing` read model, the subscription serializer, and the manual sync. |
-| `moduleCapacityService.js` | service | Capacity blockers: current usage across a ladder's tenants against a target plan's limits, under the growth-write lock set. |
+| `entitlements/capacityService.js` | service | Capacity blockers: current usage across a ladder's tenants against a target plan's limits, under the growth-write lock set. |
 | `billingPostCommit.js` | helper | The post-commit "reprice, then repair the provider schedule" step every billing write ends with. |
 | `billingErrors.js` | helper | The expected-failure constants shared across those services. |
 | `subscriptionRefundService.js` | service | Commits the refund intent locally, then refunds through the outbox; owns the withdrawal window and the over-refund `SUM` guard. |

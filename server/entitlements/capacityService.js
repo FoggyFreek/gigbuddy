@@ -13,9 +13,9 @@ import {
   lockUserForCapCheck,
   lockTenantForCapCheck,
 } from './limitRepository.js'
-import { lockTenantUsage } from '../../db/tenantLock.js'
-import { LIMITS } from '../../auth/entitlements.js'
-import { PLAN_AUDIENCES, tenantKindsForAudience } from '../../../shared/planAudiences.js'
+import { lockTenantUsage } from '../db/tenantLock.js'
+import { LIMITS } from '../auth/entitlements.js'
+import { PLAN_AUDIENCES, tenantKindsForAudience } from '../../shared/planAudiences.js'
 
 const MB = 1024 * 1024
 

@@ -7,7 +7,7 @@ import {
   safeRemove,
   uploadObjectWithQuota,
 } from '../../platform/files/storageService.js'
-import { withFeatureWriteGuard } from '../../commerce/billing/featureGuards.js'
+import { withFeatureWriteGuard } from '../../entitlements/featureGuards.js'
 import { FEATURES } from '../../auth/entitlements.js'
 import {
   extensionForImageMime,

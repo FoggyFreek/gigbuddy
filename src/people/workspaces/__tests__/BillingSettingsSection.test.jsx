@@ -373,6 +373,21 @@ describe('BillingSettingsSection — scheduled change note', () => {
     wrap(<BillingSettingsSection />, ownerUser)
     expect(await screen.findByText(/no longer add data beyond the new limits/)).toBeInTheDocument()
   })
+
+  it("warns during a trial too — the selected paid plan's limits bind at once", async () => {
+    api.getBillingState.mockResolvedValue(state({
+      sub: subscription({
+        status: 'trialing', trialEndsAt: '2026-09-01T00:00:00Z', convertedAt: null,
+        modules: [moduleRow({
+          planId: 5, planSlug: 'gold',
+          pendingPlanId: 2, pendingPlanSlug: 'silver', pendingChangeKind: 'trial_selection',
+          pendingLimitsSnapshot: { storage_mb: 150 },
+        })],
+      }),
+    }))
+    wrap(<BillingSettingsSection />, ownerUser)
+    expect(await screen.findByText(/no longer add data beyond the new limits/)).toBeInTheDocument()
+  })
 })
 
 describe('BillingSettingsSection — empty states per ladder', () => {

@@ -15,8 +15,9 @@ import {
   setModulePurgeManifest,
   deleteModule,
 } from './subscriptionModuleRepository.js'
+import { blocksNewChange } from './pendingChangeKinds.js'
 import { executeModulePurge } from './entitlementPurgeService.js'
-import { computeModuleBlockers } from './moduleCapacityService.js'
+import { computeModuleBlockers } from '../../entitlements/capacityService.js'
 import { repriceAndRepairSchedule } from './billingPostCommit.js'
 import { quote, currentModuleSet, moduleSetWith } from './subscriptionPricingService.js'
 import { priceForInterval } from './billingShared.js'
@@ -116,8 +117,9 @@ export async function downgrade(db, user, body) {
     const modules = await listModulesForUpdate(client, sub.id)
     const module = modules.find((m) => m.audience === audience)
     if (!module) abortTransaction(notFound('No such module'))
-    if (module.pending_change_kind
-      && !(sub.status === 'trialing' && module.pending_change_kind === 'trial_selection')) {
+    // Per MODULE, not per subscription: a boundary change on one ladder says
+    // nothing about the other, and downgrading both is a supported flow.
+    if (blocksNewChange(sub, module)) {
       abortTransaction(conflict('A change is already in progress', { code: 'plan_change_in_progress' }))
     }
 

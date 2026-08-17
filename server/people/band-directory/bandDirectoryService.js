@@ -14,7 +14,7 @@ import { logger } from '../../utils/logger.js'
 import { PERMISSIONS, ROLES } from '../../auth/permissions.js'
 import { MEMBERSHIP_SOURCES } from '../../domain/membership.js'
 import { dispatchNotification } from '../../user/notifications/notificationService.js'
-import { enforceJoinRequestCap } from '../../commerce/billing/limitService.js'
+import { enforceJoinRequestCap } from '../../entitlements/limitService.js'
 import { insertPendingMembership } from '../memberships/inviteRepository.js'
 import {
   searchDiscoverableTenants,

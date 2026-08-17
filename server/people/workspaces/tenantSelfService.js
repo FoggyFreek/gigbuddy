@@ -28,9 +28,9 @@ import {
   fetchTenantDeletionAccess,
   setTenantArchived,
 } from './tenantRepository.js'
-import { lockUserForCapCheck } from '../../commerce/billing/limitRepository.js'
+import { lockUserForCapCheck } from '../../entitlements/limitRepository.js'
 import { setOnboardingTenant } from '../../user/identity/authRepository.js'
-import { enforceBandCap } from '../../commerce/billing/limitService.js'
+import { enforceBandCap } from '../../entitlements/limitService.js'
 import { attachArtistGoldToBandTrial } from '../../commerce/billing/trialModuleService.js'
 import { repriceSubscription } from '../../commerce/billing/subscriptionPricingService.js'
 import { repairSchedule } from '../../commerce/billing/billingSaga.js'

@@ -51,18 +51,18 @@ export class FakeProvider {
     const payment = {
       id, status: 'open', amount, paidAt: null, createdAt: new Date(),
       mandateId: null, scheduleId: null, customerId,
-      checkoutUrl: `https://pay.test/${id}`,
+      checkoutUrl: `https://pay.test/${id}`, metadata: rest.metadata ?? null,
     }
     this.payments.set(id, payment)
     return { ...payment }
   }
 
-  async createRecurringPayment({ customerId, mandateId, amount }) {
+  async createRecurringPayment({ customerId, mandateId, amount, metadata = null }) {
     this._maybeFail('createRecurringPayment')
     const id = `tr_${++this.paySeq}`
     const payment = {
       id, status: 'open', amount, paidAt: null, createdAt: new Date(),
-      mandateId, scheduleId: null, customerId, checkoutUrl: null,
+      mandateId, scheduleId: null, customerId, checkoutUrl: null, metadata,
     }
     this.payments.set(id, payment)
     return { ...payment }
@@ -137,11 +137,15 @@ export class FakeProvider {
     if (subscriptionId) payment.scheduleId = subscriptionId
   }
 
-  addRecurringCharge(scheduleId, customerId, amountCents, { status = 'paid', paidAt = new Date() } = {}) {
+  // A schedule-generated charge. `metadata` defaults to null because we do not
+  // rely on the provider propagating the schedule's metadata onto its payments.
+  addRecurringCharge(scheduleId, customerId, amountCents,
+    { status = 'paid', paidAt = new Date(), metadata = null } = {}) {
     const id = `tr_${++this.paySeq}`
     this.payments.set(id, {
       id, status, amount: eur(amountCents), paidAt: status === 'paid' ? paidAt : null,
-      createdAt: new Date(), mandateId: `mdt_${id}`, scheduleId, customerId, checkoutUrl: null,
+      createdAt: new Date(), mandateId: `mdt_${id}`, scheduleId, customerId,
+      checkoutUrl: null, metadata,
     })
     return id
   }

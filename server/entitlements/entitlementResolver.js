@@ -23,14 +23,14 @@ import {
   FEATURES,
   LIMIT_KEYS,
   mergeEntitlements,
-} from '../../auth/entitlements.js'
-import { PLAN_AUDIENCES, audienceForTenantKind } from '../../../shared/planAudiences.js'
-import { fetchFallbackPlan } from '../plans/planRepository.js'
-import { hasNonterminalRecurringPayment } from './subscriptionRepository.js'
-import { fetchLiveModuleForUser } from './subscriptionModuleRepository.js'
+} from '../auth/entitlements.js'
+import { PLAN_AUDIENCES, audienceForTenantKind } from '../../shared/planAudiences.js'
+import { fetchFallbackPlan } from '../commerce/plans/planRepository.js'
 import {
   fetchTenantOwnership,
   tenantHasFinanceData,
+  fetchLiveModuleForUser,
+  hasNonterminalRecurringPayment,
 } from './entitlementRepository.js'
 
 const DAY_MS = 24 * 60 * 60 * 1000

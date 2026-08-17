@@ -24,7 +24,7 @@ import {
   loadIntegrationCredential,
   loadRetainedIntegrationCredential,
 } from '../../platform/integrations/integrationCredentialService.js'
-import { withIntegrationWriteLock } from '../../commerce/billing/featureGuards.js'
+import { withIntegrationWriteLock } from '../../entitlements/featureGuards.js'
 import { logger } from '../../utils/logger.js'
 
 export function isMollieWebhookDisabled() {
