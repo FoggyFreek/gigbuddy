@@ -23,7 +23,6 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import { useTranslation } from 'react-i18next'
 import { Link as RouterLink, useNavigate } from 'react-router'
 import StatusDot from '../../../../components/StatusDot.tsx'
-import GigEquipmentEditor from './GigEquipmentEditor.tsx'
 import { getGigMerchSummary } from '../../gigs.ts'
 import { draftFromGig, listInvoicesByGig } from '../../../../finance/invoices/invoices.ts'
 import { createInvoiceFromGigDraft } from '../../../../finance/invoices/components/createInvoiceFromGigDraft.ts'
@@ -31,7 +30,7 @@ import { usePermissions } from '../../../../hooks/usePermissions.ts'
 import { formatShortDate } from '../../../../utils/dateFormat.ts'
 import { formatEur } from '../../../../finance/invoices/invoiceTotals.ts'
 import { invoiceStatusColor } from '../../../../finance/invoices/invoiceStatus.ts'
-import type { GigEquipmentEntry, GigMerchSummary, Id, Invoice, InvoiceStatus, Venue } from '../../../../types/entities.ts'
+import type { GigMerchSummary, Id, Invoice, InvoiceStatus, Venue } from '../../../../types/entities.ts'
 import type { GigDetailForm } from './types.ts'
 
 const NO_NUMBER_SPINNER_SX = {
@@ -48,9 +47,7 @@ interface Props {
   form: GigDetailForm
   selectedVenue: Venue | null
   selectedFestival: Venue | null
-  equipment: GigEquipmentEntry[]
   onChange: (field: string, value: unknown) => void
-  onEquipmentChange: (equipment: GigEquipmentEntry[]) => void
 }
 
 export default function GigTerms({
@@ -61,9 +58,7 @@ export default function GigTerms({
   form,
   selectedVenue,
   selectedFestival,
-  equipment,
   onChange,
-  onEquipmentChange,
 }: Readonly<Props>) {
   const { t, i18n } = useTranslation(['gigs', 'common'])
   const { canViewFinance, canManageFinance } = usePermissions()
@@ -243,19 +238,6 @@ export default function GigTerms({
               )}
             </>
           )}
-
-          <Grid size={12}>
-            <Divider sx={{ my: 1 }} />
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              {t($ => $.detail.equipment.title)}
-            </Typography>
-            <GigEquipmentEditor
-              gigId={gigId}
-              equipment={equipment}
-              canWrite={editable}
-              onChange={onEquipmentChange}
-            />
-          </Grid>
 
           {canViewFinance && ((relatedInvoices && relatedInvoices.length > 0) || canCreateInvoice) && (
             <Grid size={12}>

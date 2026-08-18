@@ -4,7 +4,7 @@ Multi-tenant band management app for tracking gigs, rehearsals, band events, tas
 
 ## Features
 
-**Gigs** — Create and manage live performances. Stores venue, date, status (option / confirmed / announced), booking fee, contact details, equipment notes, and a banner image for share cards. Attach a task checklist to any gig. Collect yes/no availability votes from band members.
+**Gigs** — Create and manage live performances. Stores venue, date, status (option / confirmed / announced), booking fee, contact details, and a banner image for share cards. Attach a task checklist to any gig. Collect yes/no availability votes from band members.
 
 **Rehearsals** — Schedule sessions with date, time, and location. Members vote yes/no/maybe.
 

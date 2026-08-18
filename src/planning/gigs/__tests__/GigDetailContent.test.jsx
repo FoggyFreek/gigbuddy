@@ -487,10 +487,7 @@ describe('GigDetailContent — Terms role gating', () => {
     ['contributor', ['app.view', 'task.complete.self', 'rehearsal.respond.self', 'availability.write.self', 'planning.write', 'purchase.create'], true],
   ])('hides financial terms and related invoices for %s', async (role, permissions, canWrite) => {
     const user = userEvent.setup()
-    getGig.mockResolvedValueOnce({
-      ...GIG_PAID,
-      equipment: [{ item: 'pa_system', provider: 'venue' }],
-    })
+    getGig.mockResolvedValueOnce({ ...GIG_PAID })
     wrapAsRole(
       { id: 9, activeTenantRole: role, permissions, bandMemberId: 3 },
       <GigDetailContent gigId={1} canWrite={canWrite} />,
@@ -507,7 +504,6 @@ describe('GigDetailContent — Terms role gating', () => {
     expect(screen.queryByLabelText(/ticket link/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/merchandise sold/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/related invoices/i)).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /equipment/i })).toBeInTheDocument()
     expect(getGigMerchSummary).not.toHaveBeenCalled()
     expect(listInvoicesByGig).not.toHaveBeenCalled()
   })

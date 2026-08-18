@@ -19,7 +19,6 @@ import {
   createGig,
   patchGig,
   setGigTags,
-  setGigEquipment,
   deleteGig,
   addGigTask,
   patchGigTask,
@@ -264,13 +263,6 @@ router.put('/:id/tags', requirePermission(PERMISSIONS.PLANNING_WRITE), async (re
   const result = await setGigTags(pool, req.tenantId, id, req.body)
   if (result.error) return sendError(res, result.error)
   res.json(result.tags)
-})
-
-router.put('/:id/equipment', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
-  const id = requireParam(req, res, 'id'); if (id === null) return
-  const result = await setGigEquipment(pool, req.tenantId, id, req.body)
-  if (result.error) return sendError(res, result.error)
-  res.json(result.equipment)
 })
 
 // --- Gig contacts (mirrors venue_contacts; links are informational) ---

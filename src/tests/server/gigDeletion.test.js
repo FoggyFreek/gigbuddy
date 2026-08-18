@@ -72,18 +72,6 @@ describe('DELETE /api/gigs/:id storage reclamation', () => {
     expect(rowCount).toBe(0)
   })
 
-  it('cascades the gig\'s equipment rows away', async () => {
-    await pool.query(
-      `INSERT INTO gig_equipment (gig_id, tenant_id, item_key, provider) VALUES ($1, $2, 'drumkit', 'band')`,
-      [seed.gigA.id, seed.tenantA.id],
-    )
-
-    await asUserA(request(app).delete(`/api/gigs/${seed.gigA.id}`)).expect(204)
-
-    const { rowCount } = await pool.query('SELECT 1 FROM gig_equipment WHERE gig_id = $1', [seed.gigA.id])
-    expect(rowCount).toBe(0)
-  })
-
   it('removes nothing when the gig owns no objects', async () => {
     await asUserA(request(app).delete(`/api/gigs/${seed.gigA.id}`)).expect(204)
     expect(safeRemove).not.toHaveBeenCalled()

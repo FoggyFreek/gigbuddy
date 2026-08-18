@@ -1,6 +1,5 @@
 import type {
   Gig,
-  GigEquipmentEntry,
   Id,
   Participant,
   PurchaseAttachment,
@@ -18,7 +17,6 @@ export interface GigDetail extends MaybeCrossTenant<Gig> {
   admission?: string
   ticket_link?: string
   notes?: string
-  equipment?: GigEquipmentEntry[]
   tasks?: Task[]
   attachments?: PurchaseAttachment[]
   participants?: Participant[]

@@ -1,11 +1,6 @@
 // Pure request/parameter validation and update-field construction for gig
 // routes. No DB or IO here.
 import { parsePositiveId as parseId, parseSearchLimit } from '../../platform/http/requestValidators.js'
-import {
-  GIG_EQUIPMENT_ITEM_KEYS,
-  GIG_EQUIPMENT_PROVIDERS,
-  MAX_GIG_EQUIPMENT_ITEMS,
-} from '../../../shared/gigEquipment.js'
 import { resolveEventEndDate, timeToMinutes } from '../../../shared/eventTimes.js'
 
 export const VALID_STATUSES = ['option', 'confirmed', 'announced']
@@ -57,33 +52,6 @@ export function normalizeGigTagNames(tags) {
     if (name && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name)
   }
   return [...names.values()]
-}
-
-const VALID_EQUIPMENT_ITEMS = new Set(GIG_EQUIPMENT_ITEM_KEYS)
-const VALID_EQUIPMENT_PROVIDERS = new Set(GIG_EQUIPMENT_PROVIDERS)
-
-// Validates body.equipment — the whole replacement set for a gig. Returns
-// { error } or { items }, deduped by item so the (gig_id, item_key) primary key
-// can't be violated by a client sending the same item twice; the last entry wins.
-export function parseGigEquipmentPayload(body) {
-  const list = body?.equipment
-  if (!Array.isArray(list)) return { error: 'equipment must be an array' }
-  if (list.length > MAX_GIG_EQUIPMENT_ITEMS) {
-    return { error: `Maximum ${MAX_GIG_EQUIPMENT_ITEMS} equipment items per gig` }
-  }
-
-  const byItem = new Map()
-  for (const entry of list) {
-    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
-      return { error: 'Each equipment entry must be an object' }
-    }
-    if (!VALID_EQUIPMENT_ITEMS.has(entry.item)) return { error: `Unknown equipment item: ${entry.item}` }
-    if (!VALID_EQUIPMENT_PROVIDERS.has(entry.provider)) {
-      return { error: `Unknown equipment provider: ${entry.provider}` }
-    }
-    byItem.set(entry.item, { item: entry.item, provider: entry.provider })
-  }
-  return { items: [...byItem.values()] }
 }
 
 // Returns a copy of body with the id references parsed to validated integers

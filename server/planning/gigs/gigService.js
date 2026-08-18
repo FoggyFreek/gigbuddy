@@ -26,7 +26,6 @@ import {
   normalizeGigTagNames,
   MAX_GIG_TAGS,
   MAX_GIG_TAG_LENGTH,
-  parseGigEquipmentPayload,
 } from './gigValidators.js'
 import {
   assertVenueInTenant,
@@ -73,9 +72,6 @@ import {
   upsertGigTag,
   deleteGigTagLinks,
   insertGigTagLink,
-  loadGigEquipment,
-  deleteGigEquipment,
-  insertGigEquipment,
 } from './gigRepository.js'
 import {
   bandMemberExistsInTenant,
@@ -474,24 +470,6 @@ export async function setGigTags(db, tenantId, gigId, body) {
     for (const tagId of tagIds) await insertGigTagLink(client, gigId, tagId, tenantId)
     await touchGig(client, gigId, tenantId)
     return { tags: await loadGigTags(client, gigId, tenantId) }
-  }, { db })
-}
-
-// Replaces a gig's complete equipment set: which catalogue items are involved
-// and, per item, whether the venue provides it or the band brings it.
-export async function setGigEquipment(db, tenantId, gigId, body) {
-  const parsed = parseGigEquipmentPayload(body)
-  if (parsed.error) return { error: { status: 400, body: { error: parsed.error } } }
-
-  return withTransaction(async (client) => {
-    if (!(await gigExistsInTenant(client, gigId, tenantId))) abortTransaction(NOT_FOUND)
-
-    await deleteGigEquipment(client, gigId, tenantId)
-    for (const { item, provider } of parsed.items) {
-      await insertGigEquipment(client, gigId, tenantId, item, provider)
-    }
-    await touchGig(client, gigId, tenantId)
-    return { equipment: await loadGigEquipment(client, gigId, tenantId) }
   }, { db })
 }
 

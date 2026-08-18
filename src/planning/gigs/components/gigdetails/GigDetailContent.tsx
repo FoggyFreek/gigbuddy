@@ -42,7 +42,7 @@ import { listMembers } from '../../../../people/memberships/bandMembers.ts'
 import { compressBanner } from '../../../../utils/compressImage.ts'
 import { toDateInput, toTimeInput } from '../../../events/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../../../../utils/requiredFields.ts'
-import type { AvailabilitySummary, Id, GigEquipmentEntry, GigTag, Member, Venue, Task } from '../../../../types/entities.ts'
+import type { AvailabilitySummary, Id, GigTag, Member, Venue, Task } from '../../../../types/entities.ts'
 import { resolveEventEndDate } from '../../../../../shared/eventTimes.js'
 
 const REQUIRED_FIELDS = ['event_date', 'event_description']
@@ -131,7 +131,6 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   const [members, setMembers] = useState<Member[]>([])
   const [bannerPath, setBannerPath] = useState<string | null>(null)
   const [tags, setTags] = useState<GigTag[]>([])
-  const [equipment, setEquipment] = useState<GigEquipmentEntry[]>([])
   const [bandBannerPath, setBandBannerPath] = useState<string | null>(null)
   const [bannerBusy, setBannerBusy] = useState(false)
   const [bannerError, setBannerError] = useState<string | null>(null)
@@ -157,7 +156,6 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     onGigLoaded?.(g)
     setBannerPath(g.banner_path || null)
     setTags(g.tags || [])
-    setEquipment(g.equipment || [])
     setSelectedVenue(g.venue || null)
     setSelectedFestival(g.festival || null)
     setForm({
@@ -621,9 +619,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           form={form}
           selectedVenue={selectedVenue}
           selectedFestival={selectedFestival}
-          equipment={equipment}
           onChange={handleChange}
-          onEquipmentChange={setEquipment}
         />
       )}
 

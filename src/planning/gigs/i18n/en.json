@@ -203,25 +203,6 @@
       "paid": "Paid",
       "void": "Void"
     },
-    "equipment": {
-      "title": "Equipment",
-      "add": "Add equipment",
-      "empty": "No equipment recorded yet",
-      "remove": "Remove",
-      "saveFailed": "Could not save equipment",
-      "providerLabel": "Who provides {{item}}",
-      "provider": {
-        "event": "At venue",
-        "band": "We bring"
-      },
-      "items": {
-        "pa_system": "PA system",
-        "drumkit": "Drumkit",
-        "bass_amp": "Bass amp",
-        "guitar_amp": "Guitar amp",
-        "stage_lights": "Stage lights"
-      }
-    },
     "memberAvailability": "Member availability",
     "participants": "Participants",
     "contacts": "Contacts",
