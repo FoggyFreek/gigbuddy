@@ -5,6 +5,7 @@ import {
   VENUE_INSERT_FIELDS,
   buildVenueInsertValues,
 } from '../../domain/venue.js'
+import { appendDateCursor } from '../../planning/shared/dateCursorSql.js'
 
 const INSERT_COLUMNS = ['tenant_id', ...VENUE_INSERT_FIELDS]
 const INSERT_SQL = `INSERT INTO venues (${INSERT_COLUMNS.join(', ')})
@@ -172,6 +173,21 @@ export async function getAffectedGigs(executor, venueId, tenantId, currentCatego
       WHERE ${affectedCol} = $1 AND tenant_id = $2
       ORDER BY event_date ASC`,
     [venueId, tenantId],
+  )
+  return rows
+}
+
+export async function listVenueGigs(executor, venueId, tenantId, limit, cursor = null) {
+  const params = [venueId, tenantId]
+  const cursorClause = appendDateCursor(params, cursor, 'g.event_date', 'g.id')
+  params.push(limit)
+  const { rows } = await executor.query(
+    `SELECT g.id, g.event_date, g.event_description, g.status, g.start_time, g.end_time
+       FROM gigs g
+      WHERE (g.venue_id = $1 OR g.festival_id = $1) AND g.tenant_id = $2 ${cursorClause}
+      ORDER BY g.event_date DESC, g.id DESC
+      LIMIT $${params.length}`,
+    params,
   )
   return rows
 }

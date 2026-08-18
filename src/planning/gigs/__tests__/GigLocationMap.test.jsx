@@ -36,14 +36,19 @@ describe('GigLocationMap', () => {
     mapsHref: 'https://www.google.com/maps/search/?api=1&query=Amsterdam',
   }
 
-  it('renders the venue label and an accessible external maps link', () => {
+  // Two ways out to the external map: the marker popup's link, and the overlay
+  // button in the corner. Both must be labelled and safe to open in a new tab.
+  it('renders the venue label and accessible external maps links', () => {
     wrap(<GigLocationMap {...props} />)
 
     expect(screen.getByText('Bimhuis')).toBeInTheDocument()
-    const link = screen.getByRole('link', { name: 'Open in maps' })
-    expect(link).toHaveAttribute('href', props.mapsHref)
-    expect(link).toHaveAttribute('target', '_blank')
-    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
+    const links = screen.getAllByRole('link', { name: 'Open in maps' })
+    expect(links).toHaveLength(2)
+    for (const link of links) {
+      expect(link).toHaveAttribute('href', props.mapsHref)
+      expect(link).toHaveAttribute('target', '_blank')
+      expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
+    }
   })
 
   it('invalidates the map size on mount so it sizes correctly when revealed', () => {

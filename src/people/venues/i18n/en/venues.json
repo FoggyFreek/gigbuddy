@@ -71,7 +71,21 @@
     "deleteTitle": "Delete venue?",
     "enrichButton": "Look up address",
     "enrichTooltip": "Search for this name and fill any empty address fields",
-    "enrichNeedsName": "Enter a name first"
+    "enrichNeedsName": "Enter a name first",
+    "tabs": {
+      "information": "Information",
+      "invoicing": "Invoicing",
+      "contacts": "Contacts",
+      "events": "Events"
+    },
+    "openInGoogleMaps": "Open in Google Maps",
+    "noEvents": "No events at this location yet.",
+    "loadMoreEvents": "Load more",
+    "eventsTable": {
+      "event": "Event",
+      "date": "Date",
+      "time": "Time"
+    }
   },
   "modal": {
     "addTitle": "Add venue",

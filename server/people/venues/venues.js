@@ -12,6 +12,7 @@ import {
   checkVenueDuplicates,
   getVenue,
   getCategoryImpact,
+  listVenueEvents,
   createVenue,
   patchVenue,
   enrichVenue,
@@ -45,6 +46,14 @@ router.get('/:id', async (req, res) => {
   const result = await getVenue(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
   res.json(result.venue)
+})
+
+// This venue's gig history, newest first ("load more" via cursorDate/cursorId)
+router.get('/:id/events', async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await listVenueEvents(pool, req.tenantId, id, req.query)
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
 })
 
 // Gigs affected by a prospective category change

@@ -71,7 +71,21 @@
     "deleteTitle": "Locatie verwijderen?",
     "enrichButton": "Adres opzoeken",
     "enrichTooltip": "Zoek op deze naam en vul lege adresvelden aan",
-    "enrichNeedsName": "Vul eerst een naam in"
+    "enrichNeedsName": "Vul eerst een naam in",
+    "tabs": {
+      "information": "Informatie",
+      "invoicing": "Facturatie",
+      "contacts": "Contacten",
+      "events": "Evenementen"
+    },
+    "openInGoogleMaps": "Openen in Google Maps",
+    "noEvents": "Nog geen evenementen op deze locatie.",
+    "loadMoreEvents": "Meer laden",
+    "eventsTable": {
+      "event": "Evenement",
+      "date": "Datum",
+      "time": "Tijd"
+    }
   },
   "modal": {
     "addTitle": "Locatie toevoegen",

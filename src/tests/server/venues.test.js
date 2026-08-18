@@ -396,3 +396,77 @@ describe('PATCH venue category — server enforces invariant', () => {
     expect(rows[0].festival_id).toBe(v.id)
   })
 })
+
+describe('GET /api/venues/:id/events — the venue event history', () => {
+  async function addGig(venueId, { date, description, column = 'venue_id', tenantId = seed.tenantA.id }) {
+    const { rows: [gig] } = await pool.query(
+      `INSERT INTO gigs (tenant_id, event_date, event_description, ${column})
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [tenantId, date, description, venueId],
+    )
+    return gig
+  }
+
+  it('returns the venue gigs newest first, in the bounded envelope', async () => {
+    const v = venueA()
+    await pool.query('DELETE FROM gigs WHERE tenant_id = $1', [seed.tenantA.id])
+    await addGig(v.id, { date: '2024-08-15', description: 'Older' })
+    await addGig(v.id, { date: '2026-05-01', description: 'Newer' })
+
+    const res = await asUserA(request(app).get(`/api/venues/${v.id}/events`)).expect(200)
+
+    expect(res.body.items.map((g) => g.event_description)).toEqual(['Newer', 'Older'])
+    expect(res.body.meta.returned).toBe(2)
+    expect(res.body.meta.limit).toBe(10)
+    expect(res.body.meta.nextCursor).toBeNull()
+  })
+
+  it('includes gigs linked through festival_id as well as venue_id', async () => {
+    const v = venueA()
+    await pool.query('DELETE FROM gigs WHERE tenant_id = $1', [seed.tenantA.id])
+    await addGig(v.id, { date: '2025-01-02', description: 'As festival', column: 'festival_id' })
+
+    const res = await asUserA(request(app).get(`/api/venues/${v.id}/events`)).expect(200)
+    expect(res.body.items.map((g) => g.event_description)).toEqual(['As festival'])
+  })
+
+  it('pages with the keyset cursor rather than an offset', async () => {
+    const v = venueA()
+    await pool.query('DELETE FROM gigs WHERE tenant_id = $1', [seed.tenantA.id])
+    await addGig(v.id, { date: '2024-01-01', description: 'Third' })
+    await addGig(v.id, { date: '2025-01-01', description: 'Second' })
+    await addGig(v.id, { date: '2026-01-01', description: 'First' })
+
+    const page1 = await asUserA(request(app).get(`/api/venues/${v.id}/events?limit=2`)).expect(200)
+    expect(page1.body.items.map((g) => g.event_description)).toEqual(['First', 'Second'])
+    const { date, id } = page1.body.meta.nextCursor
+
+    const page2 = await asUserA(
+      request(app).get(`/api/venues/${v.id}/events?limit=2&cursorDate=${date.slice(0, 10)}&cursorId=${id}`)
+    ).expect(200)
+    expect(page2.body.items.map((g) => g.event_description)).toEqual(['Third'])
+    expect(page2.body.meta.nextCursor).toBeNull()
+  })
+
+  it('rejects a malformed limit and a half-supplied cursor', async () => {
+    const v = venueA()
+    await asUserA(request(app).get(`/api/venues/${v.id}/events?limit=0`)).expect(400)
+    await asUserA(request(app).get(`/api/venues/${v.id}/events?limit=abc`)).expect(400)
+    await asUserA(request(app).get(`/api/venues/${v.id}/events?cursorId=5`)).expect(400)
+  })
+
+  it('never leaks another tenant\'s gigs at a same-named venue', async () => {
+    const v = venueA()
+    const venueB = seed.venues.find((venue) => venue.tenant_id === seed.tenantB.id)
+    await pool.query('DELETE FROM gigs WHERE tenant_id = ANY($1)', [[seed.tenantA.id, seed.tenantB.id]])
+    await addGig(venueB.id, { date: '2026-02-02', description: 'Bravo only', tenantId: seed.tenantB.id })
+
+    const res = await asUserA(request(app).get(`/api/venues/${v.id}/events`)).expect(200)
+    expect(res.body.items).toEqual([])
+  })
+
+  it('404s for a venue belonging to another tenant', async () => {
+    const venueB = seed.venues.find((venue) => venue.tenant_id === seed.tenantB.id)
+    await asUserA(request(app).get(`/api/venues/${venueB.id}/events`)).expect(404)
+  })
+})

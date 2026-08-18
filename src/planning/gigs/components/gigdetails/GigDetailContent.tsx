@@ -1,10 +1,8 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import Box from '@mui/material/Box'
-import Badge from '@mui/material/Badge'
 import CircularProgress from '@mui/material/CircularProgress'
 import IconButton from '@mui/material/IconButton'
-import Paper from '@mui/material/Paper'
 import Snackbar from '@mui/material/Snackbar'
 import Stack from '@mui/material/Stack'
 import Tooltip from '@mui/material/Tooltip'
@@ -19,6 +17,7 @@ import ImageIcon from '@mui/icons-material/Image'
 import PeopleIcon from '@mui/icons-material/People'
 import type { SvgIconComponent } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
+import FloatingTabs from '../../../../components/FloatingTabs.tsx'
 import GigStatusIcon from '../GigStatusIcon.tsx'
 import GigTagEditor from './GigTagEditor.tsx'
 import ImageCropDialog from '../../../../components/ImageCropDialog.tsx'
@@ -567,50 +566,16 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
 
       {/* ── Floating tab pill: rounded box overlapping the banner by ~50% of
           its own height, splitting the detail body into four sections. ──── */}
-      <Box
-        sx={{
-          position: 'relative',
-          zIndex: 2,
-          display: 'flex',
-          justifyContent: 'center',
-          mt: -3.25,
-          mb: 3,
-        }}
-      >
-        <Paper elevation={6} sx={{ display: 'inline-flex', gap: 0.5, p: 0.75, borderRadius: 999 }}>
-          {visibleTabs.map(({ key, Icon }) => {
-            const selected = shownTab === key
-            const label = t($ => $.detail.tabs[key])
-            return (
-              <Tooltip key={key} title={label}>
-                <IconButton
-                  aria-label={label}
-                  aria-pressed={selected}
-                  onClick={() => setActiveTab(key)}
-                  color={selected ? 'primary' : 'default'}
-                  sx={{
-                    bgcolor: selected ? 'action.selected' : 'transparent',
-                    '&:hover': { bgcolor: selected ? 'action.selected' : 'action.hover' },
-                  }}
-                >
-                  {key === 'tasks' ? (
-                    <Badge
-                      badgeContent={openTaskCount}
-                      color="primary"
-                      invisible={openTaskCount === 0}
-                      anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
-                    >
-                      <Icon />
-                    </Badge>
-                  ) : (
-                    <Icon />
-                  )}
-                </IconButton>
-              </Tooltip>
-            )
-          })}
-        </Paper>
-      </Box>
+      <FloatingTabs
+        tabs={visibleTabs.map(({ key, Icon }) => ({
+          key,
+          Icon,
+          label: t($ => $.detail.tabs[key]),
+          badgeCount: key === 'tasks' ? openTaskCount : 0,
+        }))}
+        value={shownTab}
+        onChange={setActiveTab}
+      />
 
       {/* ── Event ──────────────────────────────────────────────────────── */}
       <PlanningReadOnlyAlert canWrite={editable} />
