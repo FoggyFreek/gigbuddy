@@ -4,11 +4,6 @@ import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
-import Dialog from '@mui/material/Dialog'
-import DialogActions from '@mui/material/DialogActions'
-import DialogContent from '@mui/material/DialogContent'
-import DialogContentText from '@mui/material/DialogContentText'
-import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
@@ -30,6 +25,7 @@ import SaveStatusLabel from '../../components/SaveStatusLabel.tsx'
 import PlanningReadOnlyAlert from '../../components/PlanningReadOnlyAlert.tsx'
 import { useAuth } from '../../contexts/authContext.ts'
 import { useCrossTenantRow } from '../shared/useCrossTenantRow.ts'
+import { useDialog } from '../../contexts/dialogContext.ts'
 import type { Rehearsal, Member, Song, Id } from '../../types/entities.ts'
 import type { MaybeCrossTenant } from '../../types/api.ts'
 import { setMyRehearsalVote } from '../availability/me.ts'
@@ -65,6 +61,7 @@ const REQUIRED_FIELDS = ['proposed_date']
 
 export default function RehearsalDetailPage() {
   const { t } = useTranslation(['rehearsals', 'common'])
+  const { confirmDelete } = useDialog()
   const { id } = useParams()
   const rehearsalId = Number(id)
   const navigate = useNavigate()
@@ -78,7 +75,6 @@ export default function RehearsalDetailPage() {
 
   const [form, setForm] = useState<RehearsalForm>({ proposed_date: '', end_date: '', start_time: '', end_time: '', location: '', notes: '' })
   const [loading, setLoading] = useState(true)
-  const [confirmDelete, setConfirmDelete] = useState(false)
   const [rehearsal, setRehearsal] = useState<RehearsalDetail | null>(null)
   const [members, setMembers] = useState<Member[]>([])
   const { isCrossBand, canWrite: detailCanWrite } = useCrossTenantRow(rehearsal)
@@ -213,6 +209,14 @@ export default function RehearsalDetailPage() {
     else navigate(-1)
   }
 
+  async function handleDelete() {
+    if (!await confirmDelete({ title: t($ => $.page.deleteConfirmTitle) })) return
+    await deleteRehearsal(rehearsalId)
+    outletCtx.onRehearsalDelete?.(rehearsalId)
+    if (outletCtx.onClose) outletCtx.onClose()
+    else navigate(-1)
+  }
+
   return (
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
@@ -313,34 +317,12 @@ export default function RehearsalDetailPage() {
 
       {detailCanWrite && (
         <Box sx={{ mt: 4 }}>
-          <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
+          <Button color="error" variant="contained" onClick={() => { void handleDelete() }}>
             {t($ => $.actions.delete, { ns: 'common' })}
           </Button>
         </Box>
       )}
 
-      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <DialogTitle>{t($ => $.page.deleteConfirmTitle)}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
-          <Button
-            color="error"
-            variant="contained"
-            onClick={async () => {
-              setConfirmDelete(false)
-              await deleteRehearsal(rehearsalId)
-              outletCtx.onRehearsalDelete?.(rehearsalId)
-              if (outletCtx.onClose) outletCtx.onClose()
-              else navigate(-1)
-            }}
-          >
-            {t($ => $.actions.delete, { ns: 'common' })}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 }

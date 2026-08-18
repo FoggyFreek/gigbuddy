@@ -72,6 +72,24 @@ describe('DialogProvider', () => {
     await waitFor(() => expect(onOutcome).toHaveBeenCalledWith(false))
   })
 
+  it('confirmDelete() offers the shared destructive pair and resolves on confirm', async () => {
+    const onOutcome = vi.fn()
+    function Trigger() {
+      const { confirmDelete } = useDialog()
+      return (
+        <button onClick={() => confirmDelete({ title: 'Delete this song?' }).then(onOutcome)}>open</button>
+      )
+    }
+    wrap(<Trigger />)
+
+    await userEvent.click(screen.getByText('open'))
+    expect(await screen.findByText('Delete this song?')).toBeTruthy()
+    expect(screen.getByText('This cannot be undone.')).toBeTruthy()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(onOutcome).toHaveBeenCalledWith(true))
+  })
+
   it('navigates when the clicked action declares a settings target', async () => {
     function Trigger() {
       const { openDialog } = useDialog()

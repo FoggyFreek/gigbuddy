@@ -3,11 +3,6 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import Dialog from '@mui/material/Dialog'
-import DialogActions from '@mui/material/DialogActions'
-import DialogContent from '@mui/material/DialogContent'
-import DialogContentText from '@mui/material/DialogContentText'
-import DialogTitle from '@mui/material/DialogTitle'
 import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
@@ -18,12 +13,14 @@ import PastEventAlert from '../../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../../components/SaveStatusLabel.tsx'
 import { deleteGig } from './gigs.ts'
 import { usePermissions } from '../../hooks/usePermissions.ts'
+import { useDialog } from '../../contexts/dialogContext.ts'
 import type { Gig, Id } from '../../types/entities.ts'
 import type { MaybeCrossTenant } from '../../types/api.ts'
 import { useCrossTenantRow } from '../shared/useCrossTenantRow.ts'
 
 export default function GigDetailPage() {
   const { t } = useTranslation(['gigs', 'common'])
+  const { confirmDelete } = useDialog()
   const { id } = useParams()
   const gigId = Number(id)
   const { canWritePlanning } = usePermissions()
@@ -37,7 +34,6 @@ export default function GigDetailPage() {
 
   const contentRef = useRef<{ saveStatus: string; flush: () => Promise<void> }>(null)
   const [polledStatus, setPolledStatus] = useState('idle')
-  const [confirmDelete, setConfirmDelete] = useState(false)
   const [gig, setGig] = useState<MaybeCrossTenant<Gig> | null>(null)
 
   // The lifted gig lags during async loads / split-view id changes, so a gig
@@ -61,6 +57,14 @@ export default function GigDetailPage() {
     }, 100)
     return () => clearInterval(interval)
   }, [])
+
+  async function handleDelete() {
+    if (!await confirmDelete({ title: t($ => $.page.deleteConfirmTitle) })) return
+    await deleteGig(gigId)
+    if (typeof outletCtx.onGigDelete === 'function') outletCtx.onGigDelete(gigId)
+    if (typeof outletCtx.onClose === 'function') outletCtx.onClose()
+    else navigate(-1)
+  }
 
   async function handleBack() {
     await contentRef.current?.flush()
@@ -111,34 +115,12 @@ export default function GigDetailPage() {
 
       {detailCanWrite && (
         <Box sx={{ mt: 4 }}>
-          <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
+          <Button color="error" variant="contained" onClick={() => { void handleDelete() }}>
             {t($ => $.actions.delete, { ns: 'common' })}
           </Button>
         </Box>
       )}
 
-      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <DialogTitle>{t($ => $.page.deleteConfirmTitle)}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
-          <Button
-            color="error"
-            variant="contained"
-            onClick={async () => {
-              setConfirmDelete(false)
-              await deleteGig(gigId)
-              if (typeof outletCtx.onGigDelete === 'function') outletCtx.onGigDelete(gigId)
-              if (typeof outletCtx.onClose === 'function') outletCtx.onClose()
-              else navigate(-1)
-            }}
-          >
-            {t($ => $.actions.delete, { ns: 'common' })}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 }

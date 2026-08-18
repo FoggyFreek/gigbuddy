@@ -4,11 +4,6 @@ import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
-import Dialog from '@mui/material/Dialog'
-import DialogActions from '@mui/material/DialogActions'
-import DialogContent from '@mui/material/DialogContent'
-import DialogContentText from '@mui/material/DialogContentText'
-import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
@@ -32,6 +27,7 @@ import MyBandSelect from '../../people/my-bands/components/MyBandSelect.tsx'
 import PastEventAlert from '../../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../../components/SaveStatusLabel.tsx'
 import { useCrossTenantRow } from '../shared/useCrossTenantRow.ts'
+import { useDialog } from '../../contexts/dialogContext.ts'
 import PlanningReadOnlyAlert from '../../components/PlanningReadOnlyAlert.tsx'
 import { usePlanningSource } from '../shared/usePlanningSource.ts'
 import { SourceTenantSwitch } from '../../components/SourceTenantIdentity.tsx'
@@ -59,6 +55,7 @@ interface BandEventForm {
 
 export default function BandEventDetailPage() {
   const { t } = useTranslation(['bandEvents', 'common'])
+  const { confirmDelete } = useDialog()
   const { id } = useParams()
   const bandEventId = Number(id)
   const source = usePlanningSource('bandEvents')
@@ -79,7 +76,6 @@ export default function BandEventDetailPage() {
   })
   const [errors, setErrors] = useState<Record<string, string | undefined>>({})
   const [loading, setLoading] = useState(true)
-  const [confirmDelete, setConfirmDelete] = useState(false)
   // Derived server-side from the event's date span, so it is reloaded whenever
   // those dates change. Absent in a personal workspace.
   const [availability, setAvailability] = useState<Pick<BandEvent, 'members_availability' | 'availability_days'>>({})
@@ -195,6 +191,14 @@ export default function BandEventDetailPage() {
   const selectedMemberIds = new Set(availability.members_availability?.map((member) => member.member_id))
   const candidateMembers = members.filter((member) => member.id !== undefined && !selectedMemberIds.has(member.id))
 
+  async function handleDelete() {
+    if (!await confirmDelete({ title: t($ => $.page.deleteConfirmTitle) })) return
+    await deleteBandEvent(bandEventId)
+    if (typeof outletCtx.onBandEventDelete === 'function') outletCtx.onBandEventDelete(bandEventId)
+    if (typeof outletCtx.onClose === 'function') outletCtx.onClose()
+    else navigate(-1)
+  }
+
   return (
     <Box sx={{ maxWidth: insideSplitView ? '100%' : 800, mx: insideSplitView ? 0 : 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
@@ -275,34 +279,12 @@ export default function BandEventDetailPage() {
 
       {detailCanWrite && (
         <Box sx={{ mt: 4 }}>
-          <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
+          <Button color="error" variant="contained" onClick={() => { void handleDelete() }}>
             {t($ => $.actions.delete, { ns: 'common' })}
           </Button>
         </Box>
       )}
 
-      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <DialogTitle>{t($ => $.page.deleteConfirmTitle)}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
-          <Button
-            color="error"
-            variant="contained"
-            onClick={async () => {
-              setConfirmDelete(false)
-              await deleteBandEvent(bandEventId)
-              if (typeof outletCtx.onBandEventDelete === 'function') outletCtx.onBandEventDelete(bandEventId)
-              if (typeof outletCtx.onClose === 'function') outletCtx.onClose()
-              else navigate(-1)
-            }}
-          >
-            {t($ => $.actions.delete, { ns: 'common' })}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 }

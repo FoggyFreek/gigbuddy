@@ -26,7 +26,6 @@ import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined
 import ProductDialog from './components/ProductDialog.tsx'
 import RecordSaleDialog from './components/RecordSaleDialog.tsx'
 import NoStockDialog from './components/NoStockDialog.tsx'
-import ArchiveProductDialog from './components/ArchiveProductDialog.tsx'
 import ShopifyImportDialog from './components/ShopifyImportDialog.tsx'
 import RecordPaymentDialog from './components/RecordPaymentDialog.tsx'
 import { useMerchState } from './components/useMerchState.ts'
@@ -42,6 +41,7 @@ import { useAccountingProfile } from '../../contexts/accountingProfileContext.ts
 import MoneyCells, { MoneyHeaderCells } from '../../components/shared/MoneyCells.tsx'
 import type { Product, MerchSale, MerchSalesSummaryRow, Period, Id } from '../../types/entities.ts'
 import { useProfile } from '../../contexts/profileContext.ts'
+import { useDialog } from '../../contexts/dialogContext.ts'
 
 interface SaleBody {
   product_id: Id
@@ -55,6 +55,7 @@ interface SaleBody {
 
 export default function MerchPage() {
   const { t } = useTranslation('merch')
+  const { confirm } = useDialog()
   const { isIntegrationConfigured } = useProfile()
   const shopifyConfigured = isIntegrationConfigured('shopify')
   const navigate = useNavigate()
@@ -64,7 +65,6 @@ export default function MerchPage() {
   const [productDialog, setProductDialog] = useState<Product | 'new' | null>(null)
   const [saleDialogOpen, setSaleDialogOpen] = useState(false)
   const [noStockOpen, setNoStockOpen] = useState(false)
-  const [archiveTarget, setArchiveTarget] = useState<Product | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [shopifyOpen, setShopifyOpen] = useState(false)
   const [shopifyPayoutOpen, setShopifyPayoutOpen] = useState(false)
@@ -142,12 +142,17 @@ export default function MerchPage() {
     await reload()
   }
 
-  async function handleArchive() {
-    if (!archiveTarget) return
+  async function handleArchive(product: Product) {
+    const confirmed = await confirm({
+      title: t($ => $.products.archiveConfirm.title),
+      body: t($ => $.products.archiveConfirm.body, { name: product.name }),
+      confirmLabel: t($ => $.products.archiveConfirm.confirm),
+      destructive: true,
+    })
+    if (!confirmed) return
     try {
       setError(null)
-      await archiveProduct(archiveTarget.id!)
-      setArchiveTarget(null)
+      await archiveProduct(product.id!)
       await reload()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -215,7 +220,7 @@ export default function MerchPage() {
             <ProductsList
               products={visibleProducts}
               onEdit={(p) => setProductDialog(p)}
-              onArchive={(p) => setArchiveTarget(p)}
+              onArchive={(p) => { void handleArchive(p) }}
             />
           )}
 
@@ -271,13 +276,6 @@ export default function MerchPage() {
         />
       )}
       {noStockOpen && <NoStockDialog onClose={() => setNoStockOpen(false)} />}
-      {archiveTarget && (
-        <ArchiveProductDialog
-          product={archiveTarget}
-          onConfirm={handleArchive}
-          onClose={() => setArchiveTarget(null)}
-        />
-      )}
       {shopifyConfigured && shopifyOpen && (
         <ShopifyImportDialog
           products={products || []}

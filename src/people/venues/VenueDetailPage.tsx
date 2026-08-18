@@ -47,6 +47,7 @@ import VenueFields from './components/VenueFields.tsx'
 import type { VenueForm } from './components/VenueFields.tsx'
 import type { Venue, Contact, Id } from '../../types/entities.ts'
 import type { PlaceSuggestion } from '../../types/api.ts'
+import { useDialog } from '../../contexts/dialogContext.ts'
 
 interface VenueDetailOutletContext {
   insideSplitView?: boolean
@@ -65,6 +66,7 @@ const REQUIRED_FIELDS = ['name']
 
 export default function VenueDetailPage() {
   const { t } = useTranslation(['venues', 'common'])
+  const { confirmDelete } = useDialog()
   const categoryLabel = (category: string) =>
     category === 'festival' ? t($ => $.category.festival) : t($ => $.category.venue)
   const { id } = useParams()
@@ -100,7 +102,6 @@ export default function VenueDetailPage() {
   })
   const [contacts, setContacts] = useState<(Contact & { is_primary?: boolean })[]>([])
   const [loading, setLoading] = useState(true)
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [categoryChange, setCategoryChange] = useState<CategoryChange | null>(null)
   const [categorySaving, setCategorySaving] = useState(false)
   const [enriching, setEnriching] = useState(false)
@@ -240,7 +241,7 @@ export default function VenueDetailPage() {
   }
 
   async function handleDelete() {
-    setConfirmingDelete(false)
+    if (!await confirmDelete({ title: t($ => $.detail.deleteTitle) })) return
     await deleteVenue(venueId)
     outletCtx.onVenueDelete?.(venueId)
     closeView()
@@ -395,22 +396,12 @@ export default function VenueDetailPage() {
 
       {canWrite && (
         <Box sx={{ mt: 4 }}>
-          <Button color="error" variant="contained" onClick={() => setConfirmingDelete(true)}>
+          <Button color="error" variant="contained" onClick={() => { void handleDelete() }}>
             {t($ => $.common.actions.delete)}
           </Button>
         </Box>
       )}
 
-      <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
-        <DialogTitle>{t($ => $.detail.deleteTitle)}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
-          <Button color="error" variant="contained" onClick={handleDelete}>{t($ => $.common.actions.delete)}</Button>
-        </DialogActions>
-      </Dialog>
     </Box>
 
     {enriching && (

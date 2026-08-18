@@ -1,3 +1,5 @@
+import { DialogProvider } from '../../../contexts/DialogContext.tsx'
+import { MemoryRouter } from 'react-router'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
@@ -37,7 +39,7 @@ const CHART = {
 
 function wrap(props = {}) {
   return render(
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={theme}><MemoryRouter><DialogProvider>
       <ChordProViewerDialog
         open
         songId={1}
@@ -48,7 +50,7 @@ function wrap(props = {}) {
         onChartChange={() => {}}
         {...props}
       />
-    </ThemeProvider>,
+    </DialogProvider></MemoryRouter></ThemeProvider>,
   )
 }
 

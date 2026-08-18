@@ -1,7 +1,8 @@
 import { createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
 import type { NavTarget } from '../app/navTargets.ts'
-import type { DialogId, DialogParams } from '../dialogs/dialogRegistry.ts'
+import { isDialogSuppressed, resetDialogSuppression } from '../dialogs/dialogSuppression.ts'
+import type { ConfirmDeleteParams, DialogId, DialogParams } from '../dialogs/dialogRegistry.ts'
 
 /** One button in the dialog's action row. Labels arrive already translated. */
 export interface DialogAction {
@@ -62,6 +63,11 @@ export interface DialogContextValue {
   showDialog: (request: DialogRequest) => Promise<DialogOutcome>
   /** Shorthand for the cancel/confirm pair that most call sites need. */
   confirm: (options: ConfirmOptions) => Promise<boolean>
+  /**
+   * The destructive confirmation every delete goes through — one owner for the
+   * wording of the buttons and the danger colour. Resolves true when confirmed.
+   */
+  confirmDelete: (params: ConfirmDeleteParams) => Promise<boolean>
   /** Open a dialog defined in the registry, by id. */
   openDialog: <K extends DialogId>(id: K, ...args: OpenArgs<K>) => Promise<DialogOutcome>
   /** Close the dialog on screen (resolves it as dismissed). */
@@ -73,11 +79,33 @@ export interface DialogContextValue {
   resetDialogSuppression: (id?: string) => void
 }
 
-export const DialogContext = createContext<DialogContextValue | null>(null)
+/**
+ * Fallback used when there is no DialogProvider above the caller. Rendering is
+ * allowed — plenty of components hold a delete affordance nobody clicks, and a
+ * unit test of one should not have to mount the whole dialog stack. Opening a
+ * dialog, on the other hand, is a real bug: it throws where the mistake is,
+ * rather than silently doing nothing (the difference from `useToast()`, whose
+ * missing provider only costs a message).
+ */
+function noProvider(): never {
+  throw new Error('useDialog: no DialogProvider above this component (see src/main.tsx)')
+}
 
-/** Throws outside a DialogProvider — a silently missing dialog is worse. */
+const NO_PROVIDER: DialogContextValue = {
+  showDialog: noProvider,
+  confirm: noProvider,
+  confirmDelete: noProvider,
+  openDialog: noProvider,
+  closeDialog: noProvider,
+  navigateTo: noProvider,
+  // Suppression is plain localStorage, so it answers honestly either way — and
+  // a watcher can decide to stay quiet without a provider being mounted.
+  isDialogSuppressed,
+  resetDialogSuppression,
+}
+
+export const DialogContext = createContext<DialogContextValue>(NO_PROVIDER)
+
 export function useDialog(): DialogContextValue {
-  const value = useContext(DialogContext)
-  if (!value) throw new Error('useDialog must be used within a DialogProvider')
-  return value
+  return useContext(DialogContext)
 }

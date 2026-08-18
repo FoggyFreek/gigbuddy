@@ -50,6 +50,7 @@ One Node process in production: Express serves `/api`, the built `dist/` assets,
 | Frontend bootstrap / provider hierarchy | `src/main.tsx` |
 | Route tree + frontend access guards | `src/app/App.tsx` (`RequireAuth`/`RequirePermission`/`RequireEntitlement`/`RequireTenantCapability`/`RequireSuperAdmin`) |
 | App shell / navigation | `src/components/AppShell.tsx`, `src/components/appShell/` |
+| Modals + app-level prompts | `src/contexts/DialogContext.tsx`, `src/dialogs/` (registry, suppression, `AppDialogs`), `src/app/navTargets.ts` |
 | Backend bootstrap + middleware pipeline | `server/index.js` |
 | API composition, access tiers, rate limits, gates | `server/app/apiRouter.js` |
 | DB connection / transactions | `server/db/index.js`, `server/db/withTransaction.js` |
@@ -125,12 +126,25 @@ Load the **availability** skill before changing slots, the projection, or who ma
 
 - **Strict TypeScript** (`tsc --noEmit` at 0 errors); all `src/` app code is `.ts`/`.tsx`, only tests stay `.js`/`.jsx`. Backend stays ESM JavaScript. Load the **react-frontend** skill before frontend work.
 - Anything derivable from props or state is **calculated during render, not stored in state**.
-- No Redux/React Query — React contexts + hooks + component state; central contexts in `src/contexts/` (auth/tenant switching, profile, theming, toasts).
+- No Redux/React Query — React contexts + hooks + component state; central contexts in `src/contexts/` (auth/tenant switching, profile, theming, toasts, dialogs).
 - **All HTTP goes through `src/api/_client.ts`** (CSRF header, error normalization, 401 events) behind a thin typed API module in the owning frontend feature slice. Page components never embed `/api/...` paths.
 - Frontend guards and entitlement gating are **UX only** — backend middleware is authoritative.
 - **MUI v9** (Material 3). Component conventions, shared types, the cross-feature hooks (`useDebouncedSave`, `useCompactLayout`, …) and the tutorial registry are all in the **react-frontend** skill. **Never rename a shipped tutorial key** (persisted).
 - **Which feed a planning page reads is decided by tenant kind, not by the page** — `usePlanningSource(aggregate)` and `usePagedEventTabs` own that split, and a row's writability follows the tenant it came from. A new list goes through them, not around them; see the **tenant-model** skill.
 - **i18n**: i18next typed selector form `t($ => $.key)`, never bare `t('key')`; shared namespaces live in `src/i18n/`, feature namespaces live beside their feature, with en canonical + nl and parity enforced at compile time. Load the **i18n** skill for non-trivial work; copy existing English wording verbatim when extracting (tests assert literal copy).
+- **Modals go through the dialog layer, not a per-call-site component** — see below.
+
+### Dialogs — one host, one registry
+
+`DialogProvider` (`src/contexts/DialogContext.tsx`, mounted in `main.tsx`) owns the app's single modal host; `useDialog()` (`src/contexts/dialogContext.ts`) is the only way in and **throws outside the provider** — a silently missing dialog is worse than a loud one. Requests queue rather than replace each other, and the entry on screen is dropped only on the close transition's exit.
+
+- **Deleting anything is `await confirmDelete({ title, body? })`** → `boolean`, backed by the registry's `confirm-delete`: one owner for the danger colour, the button wording and the "This cannot be undone." default. Other confirmations are `await confirm({ title, body, confirmLabel, destructive })`. **Do not add another bespoke `<XyzConfirmDialog>`** for a plain confirm/cancel; a dedicated component is for modals with real content (forms, pickers, wizards) or one that owns busy/blocked state on its confirm button.
+- Outside a provider, `useDialog()` returns a fallback that **renders fine but throws the moment a dialog is opened** — so only a test that actually clicks through a confirmation needs `<DialogProvider>` (inside the router) in its `wrap()`. This is deliberately stricter than `useToast()`, which no-ops: a missing toast costs a message, a missing confirmation would swallow the user's answer.
+- Recurring or state-driven prompts are **defined once in `src/dialogs/dialogRegistry.ts`** and opened by id: `openDialog('trial-ended')`. `DialogParams` maps id → params, so params are required exactly when the dialog takes them. Copy lives in the `dialogs` i18n namespace.
+- **Never rename a shipped dialog id** — it is the "don't show this message again" storage key (`gigbuddy_suppressed_dialogs` in localStorage, `src/dialogs/dialogSuppression.ts`), same rule as tutorial keys. A suppressible dialog resolves `null` without rendering; check suppression *before* any fetch that only feeds the prompt.
+- Actions navigate by **naming a destination**, not a URL: `navigateTo: { settings: 'billing' }` or `{ path: '/gigs' }`. Settings section ids live in `src/app/navTargets.ts` and `SettingsPage` imports them from there, so a renamed section is a compile error at every link.
+- State-driven prompts hang off `src/dialogs/AppDialogs.tsx` at the composition root (`App.tsx`), **not off `AppShell`** — the shell is rendered directly by a dozen tests that must not need a dialog provider or a billing fetch. Each watcher hook stays quiet until there is an authenticated user.
+- Trial prompts (`trial-grace` / `trial-ended`) split on the *entitlement resolver's* grace window: `PERIOD_GRACE_MS` in `shared/entitlements.js` is the single owner of that boundary — the resolver and `src/commerce/billing/trialStatus.ts` both read it. **Never re-derive the grace length client-side.**
 
 ## Finance & billing
 

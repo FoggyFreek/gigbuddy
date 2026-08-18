@@ -50,6 +50,7 @@ import useDebouncedSave from '../../hooks/useDebouncedSave.ts'
 import { usePermissions } from '../../hooks/usePermissions.ts'
 import PlanningReadOnlyAlert from '../../components/PlanningReadOnlyAlert.tsx'
 import { useToast } from '../../contexts/toastContext.ts'
+import { useDialog } from '../../contexts/dialogContext.ts'
 import { formatDuration } from '../../utils/formatDuration.ts'
 import SaveStatusLabel from '../../components/SaveStatusLabel.tsx'
 import SongPickerDialog from '../songs/components/SongPickerDialog.tsx'
@@ -110,6 +111,7 @@ function countSongsBeforeSet(sets: SetlistSet[], setIndex: number): number {
 
 export default function SetlistEditorPage() {
   const { t } = useTranslation(['setlists', 'common'])
+  const { confirmDelete } = useDialog()
   const { id } = useParams()
   const setlistId = Number(id)
   const { canWritePlanning } = usePermissions()
@@ -121,7 +123,6 @@ export default function SetlistEditorPage() {
   const [loading, setLoading] = useState(true)
   const [activeItem, setActiveItem] = useState<SetlistItem | null>(null)
   const [picker, setPicker] = useState<{ open: boolean; setId: number | null }>({ open: false, setId: null })
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [editing, setEditing] = useState(false) // read-only by default; the Edit toggle enables it
   const [opStatus, setOpStatus] = useState('idle') // status for the immediate (non-debounced) saves
@@ -290,6 +291,7 @@ export default function SetlistEditorPage() {
   }
 
   async function handleDeleteSetlist() {
+    if (!await confirmDelete({ title: t($ => $.editor.deleteTitle) })) return
     try {
       await deleteSetlist(setlistId)
       navigate('/setlists')
@@ -503,7 +505,7 @@ export default function SetlistEditorPage() {
 
       {editing && (
         <Box sx={{ mt: 4 }}>
-          <Button color="error" startIcon={<DeleteIcon />} onClick={() => setConfirmingDelete(true)}>
+          <Button color="error" startIcon={<DeleteIcon />} onClick={() => { void handleDeleteSetlist() }}>
             {t($ => $.editor.deleteSetlist)}
           </Button>
         </Box>
@@ -523,16 +525,6 @@ export default function SetlistEditorPage() {
         sets={sets}
       />
 
-      <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
-        <DialogTitle>{t($ => $.editor.deleteTitle)}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
-          <Button color="error" variant="contained" onClick={handleDeleteSetlist}>{t($ => $.common.actions.delete)}</Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 }

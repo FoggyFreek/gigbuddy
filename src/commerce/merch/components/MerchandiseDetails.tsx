@@ -14,12 +14,12 @@ import TableSortLabel from '@mui/material/TableSortLabel'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined'
-import VoidSaleDialog from './VoidSaleDialog.tsx'
 import ListPagination from '../../../components/shared/ListPagination.tsx'
 import MoneyCells, { MoneyHeaderCells } from '../../../components/shared/MoneyCells.tsx'
 import { listMerchSales, voidMerchSale } from '../merch.ts'
 import { periodKey } from '../../../finance/invoices/invoicePeriod.ts'
 import type { MerchSale, Period, Id } from '../../../types/entities.ts'
+import { useDialog } from '../../../contexts/dialogContext.ts'
 
 const PAGE_SIZE = 25
 
@@ -39,7 +39,7 @@ interface MerchandiseDetailsProps {
 
 export default function MerchandiseDetails({ productId, period, onReload }: Readonly<MerchandiseDetailsProps>) {
   const { t } = useTranslation('merch')
-  const [voidTarget, setVoidTarget] = useState<MerchSale | null>(null)
+  const { confirm } = useDialog()
   const [sortKey, setSortKey] = useState<SortKey>('date')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [page, setPage] = useState(0)
@@ -109,10 +109,14 @@ export default function MerchandiseDetails({ productId, period, onReload }: Read
   const safePage = Math.min(page, pageCount)
   const paged = sorted.slice(safePage * rowsPerPage, (safePage + 1) * rowsPerPage)
 
-  async function handleVoid() {
-    const sale = voidTarget
-    setVoidTarget(null)
-    if (!sale) return
+  async function handleVoid(sale: MerchSale) {
+    const confirmed = await confirm({
+      title: t($ => $.void.title),
+      body: t($ => $.void.body, { qty: sale.quantity, name: sale.product_name }),
+      confirmLabel: t($ => $.void.confirm),
+      destructive: true,
+    })
+    if (!confirmed) return
     try {
       setActionError(null)
       await voidMerchSale(sale.id!)
@@ -197,7 +201,7 @@ export default function MerchandiseDetails({ productId, period, onReload }: Read
                     <TableCell align="right">
                       {s.status === 'recorded' && (
                         <Tooltip title={t($ => $.details.voidSale)}>
-                          <IconButton size="small" onClick={() => setVoidTarget(s)}>
+                          <IconButton size="small" onClick={() => { void handleVoid(s) }}>
                             <BlockOutlinedIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
@@ -221,13 +225,6 @@ export default function MerchandiseDetails({ productId, period, onReload }: Read
         </Paper>
       )}
 
-      {voidTarget && (
-        <VoidSaleDialog
-          sale={voidTarget}
-          onConfirm={handleVoid}
-          onClose={() => setVoidTarget(null)}
-        />
-      )}
     </Box>
   )
 }

@@ -33,6 +33,7 @@ import SaveStatusLabel from '../../../../components/SaveStatusLabel.tsx'
 import useDebouncedSave from '../../../../hooks/useDebouncedSave.ts'
 import { useCompactLayout } from '../../../../hooks/useCompactLayout.ts'
 import { useToast } from '../../../../contexts/toastContext.ts'
+import { useDialog } from '../../../../contexts/dialogContext.ts'
 import { printChordPro } from '../../chordpro.ts'
 import { updateSongChart } from '../../songs.ts'
 import type { SongChart, Id } from '../../../../types/entities.ts'
@@ -67,6 +68,7 @@ export default function ChordProViewerDialog({
 }: Readonly<ChordProViewerDialogProps>) {
   const { t } = useTranslation(['songs', 'common'])
   const showToast = useToast()
+  const { confirmDelete } = useDialog()
   const theme = useTheme()
   const stacked = useMediaQuery(theme.breakpoints.down('md'))
   const isCompact = useCompactLayout()
@@ -81,7 +83,6 @@ export default function ChordProViewerDialog({
   const bumpTranspose = (delta: number) => setTransposeOffset((n) => Math.max(-12, Math.min(12, n + delta)))
   // Read-only chord finder (fingers -> chord name); never touches the source.
   const [showAnalyzer, setShowAnalyzer] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
   // Print clones the live rendered DOM (incl. abcjs SVGs) into the print window.
   const viewRef = useRef<HTMLDivElement | null>(null)
 
@@ -124,7 +125,11 @@ export default function ChordProViewerDialog({
   }
 
   async function handleDeleteConfirm() {
-    setConfirmDelete(false)
+    const confirmed = await confirmDelete({
+      title: t($ => $.viewer.deleteTitle),
+      body: t($ => $.viewer.deleteBody, { name: name || t($ => $.viewer.deleteThisChart) }),
+    })
+    if (!confirmed) return
     await onDelete?.()
     onClose()
   }
@@ -233,7 +238,7 @@ export default function ChordProViewerDialog({
           </Button>
           {onDelete && (
             <Tooltip title={t($ => $.viewer.deleteChart)}>
-              <IconButton color="error" onClick={() => setConfirmDelete(true)} aria-label={t($ => $.viewer.deleteChart)}>
+              <IconButton color="error" onClick={() => { void handleDeleteConfirm() }} aria-label={t($ => $.viewer.deleteChart)}>
                 <DeleteIcon />
               </IconButton>
             </Tooltip>
@@ -284,16 +289,6 @@ export default function ChordProViewerDialog({
         )}
       </Box>
 
-      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <DialogTitle>{t($ => $.viewer.deleteTitle)}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t($ => $.viewer.deleteBody, { name: name || t($ => $.viewer.deleteThisChart) })}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
-          <Button color="error" variant="contained" onClick={handleDeleteConfirm}>{t($ => $.common.actions.delete)}</Button>
-        </DialogActions>
-      </Dialog>
     </Dialog>
   )
 }

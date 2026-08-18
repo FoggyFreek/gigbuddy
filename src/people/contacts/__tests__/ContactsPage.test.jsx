@@ -1,3 +1,4 @@
+import { DialogProvider } from '../../../contexts/DialogContext.tsx'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
@@ -41,7 +42,7 @@ const SUPPLIER = { id: 2, name: 'Studio X', email: '', phone: '', category: 'sup
 
 function wrapWithRoutes({ initialEntries }) {
   return render(
-    <MemoryRouter initialEntries={initialEntries}>
+    <MemoryRouter initialEntries={initialEntries}><DialogProvider>
       <ThemeProvider theme={theme}>
         <AuthContext.Provider value={writerAuth}>
           <Routes>
@@ -54,7 +55,7 @@ function wrapWithRoutes({ initialEntries }) {
           </Routes>
         </AuthContext.Provider>
       </ThemeProvider>
-    </MemoryRouter>
+    </DialogProvider></MemoryRouter>
   )
 }
 

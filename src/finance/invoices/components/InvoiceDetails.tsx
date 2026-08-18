@@ -22,7 +22,6 @@ import InvoiceLogoHeader from './InvoiceLogoHeader.tsx'
 import InvoiceCustomerFields from './InvoiceCustomerFields.tsx'
 import InvoiceLinesEditor from './InvoiceLinesEditor.tsx'
 import InvoiceTotalsPanel from './InvoiceTotalsPanel.tsx'
-import InvoiceDeleteDialog from './InvoiceDeleteDialog.tsx'
 import InvoicePaidDialog from './InvoicePaidDialog.tsx'
 import InvoiceSentDialog from './InvoiceSentDialog.tsx'
 import InvoiceVoidDialog from './InvoiceVoidDialog.tsx'
@@ -103,12 +102,6 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
 
   const dialogs = (
     <>
-      <InvoiceDeleteDialog
-        open={s.deleteDialogOpen}
-        invoiceNumber={s.invoice?.invoice_number}
-        onCancel={() => s.setDeleteDialogOpen(false)}
-        onConfirm={s.confirmDelete}
-      />
       <InvoiceSentDialog
         open={s.sentDialogOpen}
         invoiceNumber={s.invoice?.invoice_number}
@@ -244,7 +237,7 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
             <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', alignItems: 'center' }}>
               <Box>
                 {canWrite && !s.finalized && (
-                  <Button color="error" onClick={s.handleDelete} startIcon={<DeleteIcon />}>
+                  <Button color="error" onClick={() => { void s.handleDelete() }} startIcon={<DeleteIcon />}>
                     {t($ => $.common.actions.delete)}
                   </Button>
                 )}
@@ -265,7 +258,7 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Box>
               {canWrite && !s.finalized && (
-                <Button color="error" onClick={s.handleDelete} startIcon={<DeleteIcon />}>
+                <Button color="error" onClick={() => { void s.handleDelete() }} startIcon={<DeleteIcon />}>
                   {t($ => $.common.actions.delete)}
                 </Button>
               )}

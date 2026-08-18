@@ -1,3 +1,4 @@
+import { DialogProvider } from '../../../contexts/DialogContext.tsx'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
@@ -74,19 +75,19 @@ const writerAuth = { user: { isSuperAdmin: true } }
 
 function wrap(ui, { initialEntries = ['/'] } = {}) {
   return render(
-    <MemoryRouter initialEntries={initialEntries}>
+    <MemoryRouter initialEntries={initialEntries}><DialogProvider>
       <ThemeProvider theme={theme}>
         <AuthContext.Provider value={writerAuth}>
           <LocalizationProvider dateAdapter={AdapterDayjs}>{ui}</LocalizationProvider>
         </AuthContext.Provider>
       </ThemeProvider>
-    </MemoryRouter>
+    </DialogProvider></MemoryRouter>
   )
 }
 
 function wrapWithRoutes({ initialEntries }) {
   return render(
-    <MemoryRouter initialEntries={initialEntries}>
+    <MemoryRouter initialEntries={initialEntries}><DialogProvider>
       <ThemeProvider theme={theme}>
         <AuthContext.Provider value={writerAuth}>
           <LocalizationProvider dateAdapter={AdapterDayjs}>
@@ -98,7 +99,7 @@ function wrapWithRoutes({ initialEntries }) {
           </LocalizationProvider>
         </AuthContext.Provider>
       </ThemeProvider>
-    </MemoryRouter>
+    </DialogProvider></MemoryRouter>
   )
 }
 
@@ -260,7 +261,7 @@ describe('RehearsalDetailPage — cross-band rehearsal in a personal workspace',
     const switchTenant = vi.fn().mockResolvedValue(undefined)
     getMyRehearsal.mockResolvedValue(rehearsal)
     render(
-      <MemoryRouter initialEntries={['/rehearsals/1']}>
+      <MemoryRouter initialEntries={['/rehearsals/1']}><DialogProvider>
         <ThemeProvider theme={theme}>
           <AuthContext.Provider
             value={{
@@ -278,7 +279,7 @@ describe('RehearsalDetailPage — cross-band rehearsal in a personal workspace',
             </LocalizationProvider>
           </AuthContext.Provider>
         </ThemeProvider>
-      </MemoryRouter>
+      </DialogProvider></MemoryRouter>
     )
     return switchTenant
   }

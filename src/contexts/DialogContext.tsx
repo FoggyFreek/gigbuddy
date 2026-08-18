@@ -14,8 +14,10 @@ import { DialogContext } from './dialogContext.ts'
 import type {
   ConfirmOptions, DialogAction, DialogContextValue, DialogOutcome, DialogRequest,
 } from './dialogContext.ts'
-import { DIALOG_REGISTRY } from '../dialogs/dialogRegistry.ts'
-import type { DialogDefinition, DialogId, DialogParams } from '../dialogs/dialogRegistry.ts'
+import { DIALOG_IDS, DIALOG_REGISTRY } from '../dialogs/dialogRegistry.ts'
+import type {
+  ConfirmDeleteParams, DialogDefinition, DialogId, DialogParams,
+} from '../dialogs/dialogRegistry.ts'
 import { isDialogSuppressed, resetDialogSuppression, suppressDialog } from '../dialogs/dialogSuppression.ts'
 import { navTargetPath } from '../app/navTargets.ts'
 import type { NavTarget } from '../app/navTargets.ts'
@@ -107,6 +109,11 @@ export function DialogProvider({ children }: Readonly<DialogProviderProps>) {
     ],
   }).then((outcome) => outcome === 'confirm'), [showDialog, t])
 
+  const confirmDelete = useCallback((params: ConfirmDeleteParams) => showDialog({
+    id: DIALOG_IDS.CONFIRM_DELETE,
+    ...DIALOG_REGISTRY[DIALOG_IDS.CONFIRM_DELETE].build({ t, params }),
+  }).then((outcome) => outcome === 'confirm'), [showDialog, t])
+
   const openDialog = useCallback(<K extends DialogId>(
     id: K,
     ...args: DialogParams[K] extends void ? [] : [DialogParams[K]]
@@ -118,12 +125,13 @@ export function DialogProvider({ children }: Readonly<DialogProviderProps>) {
   const value = useMemo<DialogContextValue>(() => ({
     showDialog,
     confirm,
+    confirmDelete,
     openDialog,
     closeDialog: () => finish(null),
     navigateTo,
     isDialogSuppressed,
     resetDialogSuppression,
-  }), [showDialog, confirm, openDialog, finish, navigateTo])
+  }), [showDialog, confirm, confirmDelete, openDialog, finish, navigateTo])
 
   return (
     <DialogContext.Provider value={value}>

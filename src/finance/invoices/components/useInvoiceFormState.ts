@@ -19,6 +19,7 @@ import {
 } from './invoiceFormHelpers.ts'
 import type { InvoiceForm, InvoiceFormLine } from './invoiceFormHelpers.ts'
 import { commonVatSelection } from '../../../../shared/taxCategories.js'
+import { useDialog } from '../../../contexts/dialogContext.ts'
 
 interface UseInvoiceFormStateArgs {
   invoiceId: Id
@@ -48,8 +49,6 @@ export interface UseInvoiceFormStateResult {
   setMemoOpen: (open: boolean) => void
   discountOpen: boolean
   setDiscountOpen: (open: boolean) => void
-  deleteDialogOpen: boolean
-  setDeleteDialogOpen: (open: boolean) => void
   voidDialogOpen: boolean
   setVoidDialogOpen: (open: boolean) => void
   confirmVoid: () => Promise<void>
@@ -65,8 +64,7 @@ export interface UseInvoiceFormStateResult {
   removeLine: (index: number) => void
   handleSave: () => Promise<void>
   handleStatusChange: (newStatus: InvoiceStatus) => void | Promise<void>
-  handleDelete: () => void
-  confirmDelete: () => Promise<void>
+  handleDelete: () => Promise<void>
 }
 
 // Owns the editable invoice form: data loading, derived totals, line/field
@@ -74,11 +72,11 @@ export interface UseInvoiceFormStateResult {
 // live in their own hooks (see useInvoiceDetailsState).
 export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWrite = true }: UseInvoiceFormStateArgs): UseInvoiceFormStateResult {
   const { t } = useTranslation('invoices')
+  const { confirmDelete } = useDialog()
   const { profile: accountingProfile, accountingCountry } = useAccountingProfile()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [voidDialogOpen, setVoidDialogOpen] = useState(false)
   const [sentDialogOpen, setSentDialogOpen] = useState(false)
   const [paidDialogOpen, setPaidDialogOpen] = useState(false)
@@ -292,13 +290,13 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
     await applyStatusChange('paid')
   }
 
-  function handleDelete() {
-    setDeleteDialogOpen(true)
-  }
-
-  async function confirmDelete() {
-    setDeleteDialogOpen(false)
+  async function handleDelete() {
     if (!canWrite) return
+    const confirmed = await confirmDelete({
+      title: t($ => $.deleteDialog.title),
+      body: t($ => $.deleteDialog.body, { number: invoice?.invoice_number ?? '' }),
+    })
+    if (!confirmed) return
     try {
       await deleteInvoice(invoiceId)
       onClose(true)
@@ -326,8 +324,6 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
     setMemoOpen,
     discountOpen,
     setDiscountOpen,
-    deleteDialogOpen,
-    setDeleteDialogOpen,
     voidDialogOpen,
     setVoidDialogOpen,
     confirmVoid,
@@ -344,6 +340,5 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
     handleSave,
     handleStatusChange,
     handleDelete,
-    confirmDelete,
   }
 }
