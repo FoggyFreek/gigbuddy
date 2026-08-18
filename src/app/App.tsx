@@ -5,6 +5,7 @@ import RequireAuth from '../components/RequireAuth.tsx'
 import RequireSuperAdmin from '../components/RequireSuperAdmin.tsx'
 import RequirePermission from '../components/RequirePermission.tsx'
 import RequireTenantCapability from '../components/RequireTenantCapability.tsx'
+import AppDialogs from '../dialogs/AppDialogs.tsx'
 import { PERMISSIONS } from '../auth/permissions.ts'
 import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 
@@ -70,6 +71,9 @@ const StatusDriftPage = lazy(() => import('../admin/operations/StatusDriftPage.t
 export default function App() {
   return (
     <Suspense fallback={null}>
+      {/* State-driven prompts (trial ended, …). Renders nothing itself, and
+          each watcher stays quiet until there is an authenticated user. */}
+      <AppDialogs />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/pending" element={<PendingApprovalPage />} />

@@ -12,6 +12,8 @@ export {
   LIMIT_KEYS,
   ENTITLEMENT_KEYS,
   UNLIMITED,
+  PERIOD_GRACE_DAYS,
+  PERIOD_GRACE_MS,
   isUnlimited,
   validateEntitlements,
   mergeEntitlements,

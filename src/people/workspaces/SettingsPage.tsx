@@ -54,17 +54,16 @@ import { useTenantKind } from '../../hooks/useTenantKind.ts'
 import { useEntitlements } from '../../hooks/useEntitlements.ts'
 import { FEATURES } from '../../auth/entitlements.ts'
 import { TENANT_CAPABILITIES, type TenantCapability } from '../../auth/tenantCapabilities.ts'
+import type { SettingsSectionId } from '../../app/navTargets.ts'
 
 // A single settings surface that merges the former per-user account settings,
 // members management, and tenant (band) settings. Desktop uses a master-detail
 // layout (nav card + detail pane); mobile drills into each section separately
 // with a back arrow. The nav is role-gated: band and finance items appear only
 // when the active tenant role grants the matching permission.
-type SectionId =
-  | 'preferences' | 'billing' | 'connected-accounts' | 'my-availability'
-  | 'accent' | 'members' | 'storage'
-  | 'integrations' | 'chart-of-accounts' | 'default-accounts'
-  | 'financial-profile' | 'accounting-profile' | 'delete-account'
+// The ids themselves live in src/app/navTargets.ts, so anything linking into a
+// settings section (the dialog registry, for one) names it type-safely.
+type SectionId = SettingsSectionId
 
 // camelCase leaf keys under settings.nav.items — a literal union so the typed
 // selector index (`t($ => $.nav.items[labelKey])`) stays compile-checked.

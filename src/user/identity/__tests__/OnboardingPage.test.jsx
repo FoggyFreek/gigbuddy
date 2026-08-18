@@ -16,6 +16,7 @@ vi.mock('../../../commerce/billing/billing.ts', async (importOriginal) => ({
   ...(await importOriginal()),
   getBillingState: vi.fn(),
   startTrial: vi.fn(),
+  changeModule: vi.fn(),
   subscribe: vi.fn(),
   syncSubscription: vi.fn(),
 }))
@@ -45,7 +46,7 @@ vi.mock('../../../utils/randomBackground.ts', () => ({
 import { acceptTerms, onboardingComplete } from '../auth.ts'
 import { searchBandProfiles } from '../../../people/band-profiles/bandProfiles.ts'
 import { requestClaim } from '../../../people/band-profiles/bandProfileClaims.ts'
-import { getBillingState, startTrial, subscribe, syncSubscription } from '../../../commerce/billing/billing.ts'
+import { changeModule, getBillingState, startTrial, subscribe, syncSubscription } from '../../../commerce/billing/billing.ts'
 import {
   createOwnedTenant,
   createPersonalTenant,
@@ -91,6 +92,43 @@ const PLANS = [
   },
 ]
 
+// Step 0 copy anchors. Trial-first shows one of the two trial lines; a
+// trial-spent user gets the paid ladder heading instead.
+const NO_CARD = /No credit card required/
+const REMAINDER_NOTE = /remainder of your current trial/
+const TRIAL_FIRST_COPY = new RegExp(
+  [NO_CARD.source, REMAINDER_NOTE.source, 'Choose your plan'].join('|'),
+)
+const WELCOME_CTA = /start free|add to your trial/i
+
+// Noon local so the UTC calendar day matches the local one whatever the
+// runner's timezone — daysUntil compares UTC midnights.
+function isoInDays(days) {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  d.setHours(12, 0, 0, 0)
+  return d.toISOString()
+}
+
+// A live trial holding exactly one module, so the OTHER product is the one
+// onboarding offers to add.
+function trialingState({ audience = 'band', days = 18 } = {}) {
+  return {
+    subscription: {
+      status: 'trialing',
+      trialEndsAt: isoInDays(days),
+      modules: [{
+        audience, planId: audience === 'band' ? 5 : 4, status: 'active',
+      }],
+    },
+    trialAvailable: false,
+    trialDays: 30,
+    ownedBandCount: 0,
+    hasPersonalWorkspace: false,
+    plans: PLANS,
+  }
+}
+
 const baseUser = {
   id: 1,
   status: 'approved',
@@ -135,11 +173,11 @@ async function completeWelcomeStep(user, planName = 'Bronze', { kind = null } = 
   if (kind) {
     await user.click(await screen.findByRole('radio', { name: kind }))
   }
-  await screen.findByText(/30-day Gold trial starts first|Choose your plan/)
+  await screen.findByText(TRIAL_FIRST_COPY)
   const plan = screen.queryByText(planName)
   if (plan) await user.click(plan)
   await user.click(screen.getByRole('checkbox'))
-  await user.click(screen.getByRole('button', { name: /start/i }))
+  await user.click(screen.getByRole('button', { name: WELCOME_CTA }))
 }
 
 beforeEach(() => {
@@ -166,13 +204,14 @@ beforeEach(() => {
   acceptTerms.mockResolvedValue({ termsAcceptedAt: 'now', termsVersion: TERMS_VERSION })
   onboardingComplete.mockResolvedValue(undefined)
   startTrial.mockResolvedValue({ subscription: { status: 'trialing' }, trialDays: 30 })
+  changeModule.mockResolvedValue({ changed: true, trial: true })
 })
 
 describe('OnboardingPage — welcome step', () => {
   it('starts with Gold trial copy and disables the CTA until terms are agreed', async () => {
     const user = userEvent.setup()
     wrap()
-    await screen.findByText(/30-day Gold trial starts first/)
+    await screen.findByText(NO_CARD)
     const cta = screen.getByRole('button', { name: /start/i })
     expect(cta).toBeDisabled()
     expect(screen.queryByText('Silver')).not.toBeInTheDocument()
@@ -184,7 +223,7 @@ describe('OnboardingPage — welcome step', () => {
   it('opens the terms dialog from the agreement label', async () => {
     const user = userEvent.setup()
     wrap()
-    await screen.findByText(/30-day Gold trial starts first/)
+    await screen.findByText(NO_CARD)
     await user.click(screen.getByRole('button', { name: /terms & conditions/i }))
     expect(await screen.findByText('GigBuddy Terms & Conditions')).toBeInTheDocument()
   })
@@ -207,7 +246,7 @@ describe('OnboardingPage — welcome step', () => {
 
   it('links to the invite redemption page', async () => {
     wrap()
-    await screen.findByText(/30-day Gold trial starts first/)
+    await screen.findByText(NO_CARD)
     expect(screen.getByRole('link', { name: /redeem your invite code/i })).toHaveAttribute(
       'href', '/redeem-invite',
     )
@@ -291,7 +330,7 @@ describe('OnboardingPage — background', () => {
   it('shows a random background and re-picks it on every step change', async () => {
     const user = userEvent.setup()
     wrap()
-    await screen.findByText(/30-day Gold trial starts first/)
+    await screen.findByText(NO_CARD)
 
     expect(backgroundImages()).toEqual(['url(/backgrounds/bg_01_light.webp)'])
 
@@ -302,7 +341,7 @@ describe('OnboardingPage — background', () => {
     // Back counts too — every step change is a new picture.
     await waitFor(() => expect(backgroundImages()).toEqual(['url(/backgrounds/bg_02_light.webp)']))
     await user.click(screen.getByRole('button', { name: 'Back' }))
-    await screen.findByText(/30-day Gold trial starts first/)
+    await screen.findByText(NO_CARD)
     expect(backgroundImages()).toContain('url(/backgrounds/bg_03_light.webp)')
   })
 
@@ -311,7 +350,7 @@ describe('OnboardingPage — background', () => {
   it('keeps the outgoing image mounted while the new one fades in', async () => {
     const user = userEvent.setup()
     wrap()
-    await screen.findByText(/30-day Gold trial starts first/)
+    await screen.findByText(NO_CARD)
 
     await completeWelcomeStep(user)
     expect(await screen.findByLabelText('Band name')).toBeInTheDocument()
@@ -334,7 +373,7 @@ describe('OnboardingPage — what are you setting up?', () => {
       expect.stringContaining('A band'),
       expect.stringContaining('My own artist workspace'),
     ])
-    expect(screen.getByText(/30-day Gold trial starts first/)).toBeInTheDocument()
+    expect(screen.getByText(NO_CARD)).toBeInTheDocument()
     expect(screen.queryByText('Bronze')).not.toBeInTheDocument()
     expect(screen.queryByText('Artist Bronze')).not.toBeInTheDocument()
 
@@ -359,7 +398,7 @@ describe('OnboardingPage — what are you setting up?', () => {
 
     await user.click(await screen.findByRole('radio', { name: /my own artist workspace/i }))
 
-    expect(await screen.findByText(/30-day Gold trial starts first/)).toBeInTheDocument()
+    expect(await screen.findByText(NO_CARD)).toBeInTheDocument()
     expect(screen.queryByText('Artist Gold')).not.toBeInTheDocument()
     expect(screen.queryByText('Silver')).not.toBeInTheDocument()
   })
@@ -370,6 +409,52 @@ describe('OnboardingPage — what are you setting up?', () => {
 
     expect(await screen.findByText('redeem page')).toBeInTheDocument()
     expect(screen.queryByRole('radio')).not.toBeInTheDocument()
+  })
+
+  // The offer lives ON the tiles: gold logo, then the accent trial bar.
+  it('badges both tiles with the Gold logo and a 30-day trial bar', async () => {
+    wrap()
+
+    const [band, artist] = await screen.findAllByRole('radio')
+    for (const tile of [band, artist]) {
+      const images = [...tile.querySelectorAll('img')].map((i) => i.getAttribute('src'))
+      // Photo first (the decorative fill), tier logo second.
+      expect(images[1]).toBe('/icons/gb_gold.png')
+      expect(tile.textContent).toMatch(/30-day trial/i)
+    }
+    expect(screen.getByText(NO_CARD)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start free trial' })).toBeInTheDocument()
+  })
+
+  it('shows no trial badge at all once the trial is spent', async () => {
+    getBillingState.mockResolvedValue({
+      subscription: null, trialAvailable: false, trialDays: 30,
+      ownedBandCount: 0, hasPersonalWorkspace: false, plans: PLANS,
+    })
+    wrap()
+
+    expect(await screen.findByText('Choose your plan')).toBeInTheDocument()
+    const [band] = screen.getAllByRole('radio')
+    expect(band.querySelectorAll('img')).toHaveLength(1)
+    expect(band.textContent).not.toMatch(/trial/i)
+    // The pitch is a trial pitch — it must not be shown to someone who cannot
+    // have one.
+    expect(screen.queryByText(/try Gold free for 30 days/i)).not.toBeInTheDocument()
+    expect(screen.getByText('Silver')).toBeInTheDocument()
+  })
+
+  it('explains itself instead of dead-ending when no trial tier is configured', async () => {
+    getBillingState.mockResolvedValue({
+      subscription: null, trialAvailable: true, trialDays: 30,
+      ownedBandCount: 0, hasPersonalWorkspace: false,
+      plans: PLANS.map((p) => ({ ...p, is_trial_tier: false })),
+    })
+    const user = userEvent.setup()
+    wrap()
+
+    expect(await screen.findByText(/No trial plan is configured/i)).toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox'))
+    expect(screen.getByRole('button', { name: WELCOME_CTA })).toBeDisabled()
   })
 
   it('creates a personal workspace when that kind is chosen', async () => {
@@ -411,6 +496,100 @@ describe('OnboardingPage — what are you setting up?', () => {
     expect(nameField).toHaveValue('Alpha User')
     expect(nameField).toBeDisabled()
     expect(screen.queryByLabelText('Band name')).not.toBeInTheDocument()
+  })
+})
+
+describe('OnboardingPage — a trial that is already running', () => {
+  it('marks the held product as on trial and offers the other for the remainder', async () => {
+    getBillingState.mockResolvedValue(trialingState({ audience: 'band', days: 18 }))
+    wrap()
+
+    const [band, artist] = await screen.findAllByRole('radio')
+    expect(band.textContent).toMatch(/on trial/i)
+    expect(band.textContent).not.toMatch(/add to your trial/i)
+    expect(artist.textContent).toMatch(/Add to your trial · 18 days remaining/i)
+    expect(screen.getByText(REMAINDER_NOTE)).toBeInTheDocument()
+    expect(screen.queryByText(NO_CARD)).not.toBeInTheDocument()
+  })
+
+  it('singularises the last day', async () => {
+    getBillingState.mockResolvedValue(trialingState({ audience: 'band', days: 1 }))
+    wrap()
+
+    const [, artist] = await screen.findAllByRole('radio')
+    expect(artist.textContent).toMatch(/1 day remaining/i)
+  })
+
+  // The band side has no server-side mirror of attachArtistGoldToBandTrial, so
+  // without this call the new band would silently sit on the bronze fallback.
+  it('adds the missing module to the running trial after creating the workspace', async () => {
+    getBillingState.mockResolvedValue(trialingState({ audience: 'artist' }))
+    createOwnedTenant.mockResolvedValue({ id: 42, slug: 'the-band', band_name: 'The Band' })
+    const user = userEvent.setup()
+    wrap()
+
+    await completeWelcomeStep(user)
+    await fillBandStep(user)
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(await screen.findByRole('button', { name: /create workspace and add to trial/i }))
+
+    await waitFor(() => expect(changeModule).toHaveBeenCalledWith('band', 5))
+    expect(startTrial).not.toHaveBeenCalled()
+    // Ordering: the module is only added once the workspace it belongs to exists.
+    expect(createOwnedTenant.mock.invocationCallOrder[0])
+      .toBeLessThan(changeModule.mock.invocationCallOrder[0])
+    await waitFor(() => expect(onboardingComplete).toHaveBeenCalled())
+    expect(await screen.findByText('app home')).toBeInTheDocument()
+  })
+
+  // createPersonalTenant attaches Artist Gold itself; changeModule would 400
+  // with "Already on this plan", so the re-read must suppress the call.
+  it('does not re-add a module the server already attached', async () => {
+    getBillingState
+      .mockResolvedValueOnce(trialingState({ audience: 'band' }))
+      .mockResolvedValue({
+        ...trialingState({ audience: 'band' }),
+        subscription: {
+          ...trialingState({ audience: 'band' }).subscription,
+          modules: [
+            { audience: 'band', planId: 5, status: 'active' },
+            { audience: 'artist', planId: 4, status: 'active' },
+          ],
+        },
+      })
+    createPersonalTenant.mockResolvedValue({
+      id: 7, slug: 'alpha-user', kind: 'personal', display_name: 'Alpha User',
+    })
+    const user = userEvent.setup()
+    wrap()
+
+    await completeWelcomeStep(user, 'Artist Gold', { kind: /my own artist workspace/i })
+    await user.type(await screen.findByLabelText('Artist name'), 'Alpha User')
+    await user.click(await screen.findByLabelText('Accounting country'))
+    await user.click(await screen.findByRole('option', { name: 'Netherlands (NL)' }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(await screen.findByRole('button', { name: /create workspace and add to trial/i }))
+
+    await waitFor(() => expect(onboardingComplete).toHaveBeenCalled())
+    expect(changeModule).not.toHaveBeenCalled()
+  })
+
+  it('stops on a visible dead end when the module could not be added', async () => {
+    getBillingState.mockResolvedValue(trialingState({ audience: 'artist' }))
+    createOwnedTenant.mockResolvedValue({ id: 42, slug: 'the-band', band_name: 'The Band' })
+    changeModule.mockRejectedValue(new Error('over_target_limit'))
+    const user = userEvent.setup()
+    wrap()
+
+    await completeWelcomeStep(user)
+    await fillBandStep(user)
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(await screen.findByRole('button', { name: /create workspace and add to trial/i }))
+
+    expect(await screen.findByText(/couldn't be added to your trial/i)).toBeInTheDocument()
+    // The workspace exists, so the pointer must still be cleared.
+    await waitFor(() => expect(onboardingComplete).toHaveBeenCalled())
+    expect(screen.queryByText('app home')).not.toBeInTheDocument()
   })
 })
 
@@ -467,7 +646,7 @@ describe('OnboardingPage — resume via onboarding pointer', () => {
     await act(async () => {
       resolveOwned([{ id: 42, slug: 'the-band', band_name: 'The Band', vat_country: 'nl', archived_at: null }])
     })
-    expect(await screen.findByText(/30-day Gold trial starts first/)).toBeInTheDocument()
+    expect(await screen.findByText(NO_CARD)).toBeInTheDocument()
   })
 
   it('blocks the wizard when the resume lookup fails, rather than risking a duplicate create', async () => {

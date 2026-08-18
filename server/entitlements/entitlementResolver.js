@@ -22,6 +22,7 @@
 import {
   FEATURES,
   LIMIT_KEYS,
+  PERIOD_GRACE_MS,
   mergeEntitlements,
 } from '../auth/entitlements.js'
 import { PLAN_AUDIENCES, audienceForTenantKind } from '../../shared/planAudiences.js'
@@ -34,9 +35,8 @@ import {
 } from './entitlementRepository.js'
 
 const DAY_MS = 24 * 60 * 60 * 1000
-// Grace after a trial or paid period ends before the account locks — covers
-// renewal-payment processing lag.
-const PERIOD_GRACE_MS = 2 * DAY_MS
+// The grace after a trial or paid period ends (covering renewal-payment lag)
+// is shared with the frontend — see PERIOD_GRACE_MS in shared/entitlements.js.
 // Max extension while a renewal charge is still nonterminal at Mollie
 // (SEPA Direct Debit can take days to settle).
 const IN_FLIGHT_EXTENSION_MS = 7 * DAY_MS

@@ -89,6 +89,13 @@ export function isDowngrade(currentEnt, targetEnt) {
   return false
 }
 
+// Access grace after a trial or a paid period ends, before the account falls
+// back to the free plan. The resolver enforces it (`isUnlocked`); the frontend
+// reads the same value to tell "trial just ended, still unlocked" apart from
+// "trial over, back on the fallback plan" — one number, no drift.
+export const PERIOD_GRACE_DAYS = 2
+export const PERIOD_GRACE_MS = PERIOD_GRACE_DAYS * 24 * 60 * 60 * 1000
+
 // Limits use `null` as the unlimited sentinel (a real JSONB value, unlike
 // undefined, and unambiguous next to 0 which means "none allowed").
 export const UNLIMITED = null

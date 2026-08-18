@@ -17,6 +17,7 @@ import { TERMS_VERSION } from '../../../shared/termsVersion.js'
 import { useAuth } from '../../contexts/authContext.ts'
 import { acceptTerms, onboardingComplete } from './auth.ts'
 import {
+  changeModule,
   getBillingState,
   startTrial,
   subscribe,
@@ -35,12 +36,15 @@ import { uploadLogo } from '../../people/profiles/profile.ts'
 import { requestClaim } from '../../people/band-profiles/bandProfileClaims.ts'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 import type { BandProfile, Tenant } from '../../types/entities.ts'
-import type { TenantKind } from '../../auth/tenantKinds.ts'
-import { ladderPlans } from '../../commerce/billing/planLadder.ts'
+import { TENANT_KINDS, type TenantKind } from '../../auth/tenantKinds.ts'
+import { ladderPlans, moduleFor, trialTierPlan } from '../../commerce/billing/planLadder.ts'
+import { planLogoSrc } from '../../commerce/billing/planLogo.ts'
 import { audienceForTenantKind } from '../../auth/planAudiences.ts'
+import { daysUntil } from '../../utils/dateFormat.ts'
 import { redirectToCheckout } from '../../finance/invoices/checkoutNavigation.ts'
 import OnboardingBackground from './components/onboarding/OnboardingBackground.tsx'
 import WelcomeStep from './components/onboarding/WelcomeStep.tsx'
+import type { KindTrialOffer } from './components/onboarding/WorkspaceKindChoice.tsx'
 import BandStep from './components/onboarding/BandStep.tsx'
 import ClaimBandProfileField from './components/onboarding/ClaimBandProfileField.tsx'
 import SummaryStep from './components/onboarding/SummaryStep.tsx'
@@ -136,6 +140,11 @@ interface StepContentProps {
   ready: boolean
   loadError: boolean
   trialFirst: boolean
+  trialOffer: Partial<Record<TenantKind, KindTrialOffer>> | undefined
+  /** The trial plan of the CURRENT kind; null when none is configured. */
+  trialPlan: SubscriptionPlan | null
+  trialRunning: boolean
+  addingToTrial: boolean
   trialEndsAt: Date | null
   plans: SubscriptionPlan[]
   interval: BillingInterval
@@ -157,7 +166,8 @@ interface StepContentProps {
 
 // The active wizard step (or the loading spinner before the wizard is ready).
 function StepContent({
-  activeStep, kind, onKindChange, ready, loadError, trialFirst, trialEndsAt, plans, interval, onIntervalChange,
+  activeStep, kind, onKindChange, ready, loadError, trialFirst, trialOffer, trialPlan,
+  trialRunning, addingToTrial, trialEndsAt, plans, interval, onIntervalChange,
   selectedPlanId, onSelectPlan,
   selectedPlan, termsAgreed, onTermsAgreedChange, onOpenTerms, bandName, onBandNameChange,
   countryCode, onCountryCodeChange, onboardingTenant, logo, onLogoFileChange,
@@ -180,6 +190,9 @@ function StepContent({
         // continues the kind it started, read off the resumed tenant.
         showKindChoice={onboardingTenant === null}
         trialFirst={trialFirst}
+        trialOffer={trialOffer}
+        trialPlan={trialPlan}
+        trialRunning={trialRunning}
         plans={plans}
         interval={interval}
         onIntervalChange={onIntervalChange}
@@ -223,6 +236,7 @@ function StepContent({
       resumedBandName={onboardingTenant?.display_name ?? onboardingTenant?.band_name ?? null}
       logoFileName={logo?.file.name ?? null}
       trialEndsAt={trialEndsAt}
+      addingToTrial={addingToTrial}
     />
   )
 }
@@ -236,6 +250,7 @@ interface WizardControlsProps {
   countryCode: string
   selectedPlan: SubscriptionPlan | null
   trialFirst: boolean
+  addingToTrial: boolean
   onBack: () => void
   onWelcomeNext: () => void
   onGoSummary: () => void
@@ -243,7 +258,7 @@ interface WizardControlsProps {
 }
 
 // Back/next row: per-step next label, gating, and dispatch.
-function WizardControls({ activeStep, kind, busy, termsAgreed, bandName, countryCode, selectedPlan, trialFirst, onBack, onWelcomeNext, onGoSummary, onConfirm }: Readonly<WizardControlsProps>) {
+function WizardControls({ activeStep, kind, busy, termsAgreed, bandName, countryCode, selectedPlan, trialFirst, addingToTrial, onBack, onWelcomeNext, onGoSummary, onConfirm }: Readonly<WizardControlsProps>) {
   const { t } = useTranslation(['onboarding', 'common'])
   const paidSelected = Boolean(selectedPlan && !selectedPlan.is_fallback)
 
@@ -258,11 +273,17 @@ function WizardControls({ activeStep, kind, busy, termsAgreed, bandName, country
     else onConfirm()
   }
 
+  // "Start" is wrong once a trial is already running — this rides on it.
+  const startLabel = addingToTrial ? t($ => $.welcome.addToTrial) : t($ => $.welcome.startTrial)
+  const confirmTrialLabel = addingToTrial
+    ? t($ => $.summary.confirmAddToTrial)
+    : t($ => $.summary.confirmTrial)
+
   const nextLabel = [
-    trialFirst || paidSelected ? t($ => $.welcome.startTrial) : t($ => $.welcome.startFree),
+    trialFirst || paidSelected ? startLabel : t($ => $.welcome.startFree),
     t($ => $.nextStep),
     trialFirst
-      ? t($ => $.summary.confirmTrial)
+      ? confirmTrialLabel
       : (paidSelected ? t($ => $.summary.confirmPaid) : t($ => $.workspace[kind].confirmFree)),
   ][Math.min(activeStep, 2)]
 
@@ -314,6 +335,9 @@ export default function OnboardingPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [capBlocked, setCapBlocked] = useState(false)
+  // The workspace exists but could not be joined to the running trial — a dead
+  // end with an exit, not a silent downgrade to the free fallback.
+  const [addFailed, setAddFailed] = useState(false)
   const [tenantOnboardingEnabled, setTenantOnboardingEnabled] = useState<boolean | null>(null)
   const onboardingTenantId = user?.onboardingTenantId ?? null
   // Whether the resume-pointer lookup has settled. The wizard must not become
@@ -371,8 +395,55 @@ export default function OnboardingPage() {
     [plans, kind],
   )
 
-  const trialFirst = billingState?.trialAvailable === true
-    || billingState?.subscription?.status === 'trialing'
+  // The trial plan of EACH ladder, so both choice tiles can carry their own
+  // tier art before a kind is picked. `is_trial_tier` is the only authority —
+  // plan slugs are admin-editable.
+  const trialPlanByKind = useMemo(() => ({
+    band: trialTierPlan(plans ?? [], audienceForTenantKind('band')),
+    personal: trialTierPlan(plans ?? [], audienceForTenantKind('personal')),
+  }), [plans])
+
+  const subscription = billingState?.subscription ?? null
+  const trialRunning = subscription?.status === 'trialing'
+  const trialFirst = billingState?.trialAvailable === true || trialRunning
+  const daysRemaining = trialRunning
+    ? Math.max(0, daysUntil(subscription?.trialEndsAt) ?? 0)
+    : null
+  // Which product the chosen kind bills on, and whether the customer already
+  // holds it — the difference between "start a trial" and "add to the one
+  // that's running".
+  const addingToTrial = trialRunning
+    && moduleFor(subscription, audienceForTenantKind(kind)) === null
+
+  // Both ladders are already covered by the running trial — there is no
+  // product left to start or add, so a fresh (non-resumed) visit has nothing
+  // to offer here and must not pretend otherwise with terms/next controls.
+  const bothTrialsRunning = trialRunning
+    && TENANT_KINDS.every((k) => moduleFor(subscription, audienceForTenantKind(k)) !== null)
+
+  const trialOffer = useMemo(() => {
+    if (!billingState) return undefined
+    const offers: Partial<Record<TenantKind, KindTrialOffer>> = {}
+    for (const k of TENANT_KINDS) {
+      const plan = trialPlanByKind[k]
+      if (!plan) continue
+      let state: KindTrialOffer['state'] | null = null
+      if (trialRunning) {
+        state = moduleFor(subscription, audienceForTenantKind(k)) ? 'onTrial' : 'add'
+      } else if (billingState.trialAvailable) {
+        state = 'start'
+      }
+      if (!state) continue
+      offers[k] = {
+        logoSrc: planLogoSrc(plan.slug),
+        state,
+        trialDays: billingState.trialDays,
+        daysRemaining,
+      }
+    }
+    return offers
+  }, [billingState, subscription, trialRunning, trialPlanByKind, daysRemaining])
+
   const anticipatedTrialEnd = useMemo(() => {
     const existing = billingState?.subscription?.trialEndsAt
     if (existing) return new Date(existing)
@@ -393,7 +464,7 @@ export default function OnboardingPage() {
   const ready = plans !== null && billingState !== null && resumeChecked && tenantOnboardingEnabled !== null
   const onboardingDisabled = tenantOnboardingEnabled === false && onboardingTenantId === null
   const selectedPlan = trialFirst
-    ? (sortedPlans.find((p) => p.is_trial_tier) ?? null)
+    ? trialPlanByKind[kind]
     : (sortedPlans.find((p) => p.id === selectedPlanId) ?? null)
 
   const stepLabels = [
@@ -454,6 +525,26 @@ export default function OnboardingPage() {
   // Carried as wizard state and submitted only once the workspace exists.
   const [claimProfile, setClaimProfile] = useState<BandProfile | null>(null)
 
+  // Join the workspace just created to the trial that is already running, so it
+  // gets the Gold entitlements the choice tile promised. Returns false when the
+  // add genuinely failed.
+  //
+  // The re-read is load-bearing: createPersonalTenant attaches Artist Gold
+  // itself (attachArtistGoldToBandTrial), and the API rejects a no-op change.
+  // There is no band-side equivalent of that hook, so without this call a band
+  // created during an artist trial would quietly sit on the free fallback.
+  const addModuleToRunningTrial = useCallback(async (plan: SubscriptionPlan) => {
+    try {
+      const fresh = await getBillingState()
+      if (moduleFor(fresh.subscription, plan.audience)) return true
+      await changeModule(plan.audience, plan.id)
+      return true
+    } catch (err) {
+      console.error('[onboarding] could not add the module to the running trial', err)
+      return false
+    }
+  }, [])
+
   const handleConfirm = useCallback(async () => {
     if (!selectedPlan) return
     setBusy(true)
@@ -487,6 +578,13 @@ export default function OnboardingPage() {
         // available in Billing once the trial exists.
         if (billingState?.trialAvailable) {
           await startTrial(audienceForTenantKind(kind))
+        } else if (addingToTrial && !(await addModuleToRunningTrial(selectedPlan))) {
+          await onboardingComplete().catch((err) => {
+            console.error('[onboarding] onboardingComplete failed (add to trial)', err)
+          })
+          await refreshUser().catch(() => {})
+          setAddFailed(true)
+          return
         }
         await onboardingComplete().catch((err) => {
           console.error('[onboarding] onboardingComplete failed (trial)', err)
@@ -515,7 +613,8 @@ export default function OnboardingPage() {
       setBusy(false)
     }
   }, [selectedPlan, ensureOnboardingTenant, logo, claimProfile, trialFirst, billingState,
-    kind, interval, switchTenant, refreshUser, navigate, t])
+    kind, interval, switchTenant, refreshUser, navigate, t,
+    addingToTrial, addModuleToRunningTrial])
 
   const loadErrorAlert = loadError && (
     <Alert severity="error">{t($ => $.errors.loadFailed)}</Alert>
@@ -531,6 +630,10 @@ export default function OnboardingPage() {
         ready={ready}
         loadError={loadError}
         trialFirst={trialFirst}
+        trialOffer={trialOffer}
+        trialPlan={trialPlanByKind[kind]}
+        trialRunning={trialRunning}
+        addingToTrial={addingToTrial}
         trialEndsAt={anticipatedTrialEnd}
         plans={sortedPlans}
         interval={interval}
@@ -564,6 +667,7 @@ export default function OnboardingPage() {
           countryCode={countryCode}
           selectedPlan={selectedPlan}
           trialFirst={trialFirst}
+          addingToTrial={addingToTrial}
           onBack={() => setActiveStep((s) => Math.max(0, s - 1))}
           onWelcomeNext={() => { void handleWelcomeNext() }}
           onGoSummary={() => setActiveStep(2)}
@@ -573,10 +677,25 @@ export default function OnboardingPage() {
     </>
   )
 
-  // A handled dead end (band cap / onboarding disabled) replaces the wizard.
+  // A handled dead end (band cap / failed trial add / onboarding disabled)
+  // replaces the wizard.
   const bodyRegion = capBlocked ? (
     <Stack spacing={2}>
       <Alert severity="info">{t($ => $.errors.bandCapNoPointer)}</Alert>
+      <Button variant="contained" onClick={() => navigate('/')}>
+        {t($ => $.checkout.enterApp)}
+      </Button>
+    </Stack>
+  ) : (activeStep === 0 && onboardingTenant === null && bothTrialsRunning) ? (
+    <Stack spacing={2}>
+      <Alert severity="info">{t($ => $.errors.bothTrialsRunning)}</Alert>
+      <Button variant="contained" onClick={() => navigate('/')}>
+        {t($ => $.checkout.enterApp)}
+      </Button>
+    </Stack>
+  ) : addFailed ? (
+    <Stack spacing={2}>
+      <Alert severity="warning">{t($ => $.errors.addToTrialFailed)}</Alert>
       <Button variant="contained" onClick={() => navigate('/')}>
         {t($ => $.checkout.enterApp)}
       </Button>

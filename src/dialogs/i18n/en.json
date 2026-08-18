@@ -1,0 +1,15 @@
+{
+  "dontShowAgain": "Don't show this message again",
+  "trialEnded": {
+    "title": "Your free trial has ended",
+    "body": "Your trial features are locked, but nothing is gone — all of your data is safe. Pick a plan to unlock everything again.",
+    "cta": "Let's have a look",
+    "later": "Maybe later"
+  },
+  "trialGrace": {
+    "title": "Your free trial is about to end",
+    "body": "You still have access to your trial features, but they will be locked once the trial ends. Pick a plan to unlock everything again.",
+    "cta": "Let's have a look",
+    "later": "Maybe later"
+  }
+}

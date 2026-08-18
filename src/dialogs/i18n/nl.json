@@ -1,0 +1,15 @@
+{
+  "dontShowAgain": "Dit bericht niet meer tonen",
+  "trialEnded": {
+    "title": "Je gratis proefperiode is afgelopen",
+    "body": "Je proeffuncties zijn vergrendeld, maar er is niets verdwenen — al je gegevens blijven bewaard. Kies een abonnement om alles weer te ontgrendelen.",
+    "cta": "Laat maar zien",
+    "later": "Misschien later"
+  },
+  "trialGrace": {
+    "title": "Je gratis proefperiode loopt bijna af",
+    "body": "Je hebt nog steeds toegang tot je proeffuncties, maar deze worden vergrendeld zodra de proefperiode eindigt. Kies een abonnement om alles weer te ontgrendelen.",
+    "cta": "Laat maar zien",
+    "later": "Misschien later"
+  }
+}

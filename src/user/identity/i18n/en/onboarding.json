@@ -7,14 +7,22 @@
   "welcome": {
     "title": "Welcome to GigBuddy",
     "subtitle": "Everything your band needs in one place: gigs, rehearsals, setlists and finances.",
-    "trialPitch": "Try the gold plan free for 30 days. No credit card required.",
-    "trialFirst": "Your 30-day Gold trial starts first. You can choose Gold Artist, Gold Band, or both and schedule payment after the trial has started.",
+    "trialPitch": "Pick what you're setting up and try Gold free for 30 days.",
     "choosePlan": "Choose your plan",
     "haveInvite": "Joining an existing band? Redeem your invite code",
-    "startTrial": "Start trial",
+    "startTrial": "Start free trial",
+    "addToTrial": "Add to your trial",
     "startFree": "Start free",
     "selected": "Selected",
-    "free": "Free"
+    "free": "Free",
+    "trialOffer": {
+      "badge": "{{days}}-day trial",
+      "onTrial": "On trial",
+      "addToTrial_one": "Add to your trial · {{count}} day remaining",
+      "addToTrial_other": "Add to your trial · {{count}} days remaining",
+      "noCard": "No credit card required",
+      "remainderNote": "Adding this is free and runs for the remainder of your current trial — it does not start a new trial period."
+    }
   },
   "terms": {
     "agreeLabel": "I agree to the <termsLink>Terms & Conditions</termsLink>",
@@ -41,10 +49,12 @@
     "trialEnds": "Trial ends",
     "date": "{{date, datetime}}",
     "trialNote": "No payment details are needed to start. Your Gold trial runs until {{date, datetime}}; subscription choices and the exact future charge date are shown after it starts.",
+    "addToTrialNote": "This is added to your running trial and ends with it on {{date, datetime}}. No new trial period starts, and no payment details are needed.",
     "paymentNote": "You'll choose your payment method on our payment provider's secure page. Your paid subscription starts once that payment is confirmed.",
     "freeNote": "The free plan needs no payment details.",
     "confirmPaid": "Continue to payment",
-    "confirmTrial": "Create workspace and start trial"
+    "confirmTrial": "Create workspace and start trial",
+    "confirmAddToTrial": "Create workspace and add to trial"
   },
   "checkout": {
     "processing": "Confirming your payment…",
@@ -57,6 +67,9 @@
     "onboardingDisabled": "New tenant onboarding is currently disabled. You can still join an existing band with an invite code.",
     "bandCapNoPointer": "You already own a band, so onboarding isn't needed. You can manage plans in Settings.",
     "bandCapReached": "Your current subscription has reached its band limit. Upgrade your plan to add another band.",
+    "bothTrialsRunning": "Your trial already covers both band and artist workspaces, so there's nothing left to start here. You can create additional bands from your app.",
+    "trialTierMissing": "No trial plan is configured for this product yet. Please contact support.",
+    "addToTrialFailed": "Your workspace was created, but it couldn't be added to your trial. You can add it from Settings → Billing.",
     "logoUploadFailed": "The logo could not be uploaded — you can add it later under Profile.",
     "generic": "Something went wrong. Please try again.",
     "claimFailed": "We couldn't submit your band profile claim. You can try again from Settings."

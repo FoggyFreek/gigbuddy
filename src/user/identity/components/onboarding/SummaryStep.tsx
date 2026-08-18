@@ -9,7 +9,6 @@ import { slugFromBandName } from '../../../../utils/slugify.ts'
 import type { TenantKind } from '../../../../auth/tenantKinds.ts'
 
 interface SummaryStepProps {
-  /** Which sort of tenant this flow is creating — selects the copy. */
   kind: TenantKind
   plan: SubscriptionPlan
   interval: BillingInterval
@@ -19,6 +18,7 @@ interface SummaryStepProps {
   resumedBandName: string | null
   logoFileName: string | null
   trialEndsAt: Date | null
+  addingToTrial: boolean
 }
 
 export default function SummaryStep({
@@ -30,6 +30,7 @@ export default function SummaryStep({
   resumedBandName,
   logoFileName,
   trialEndsAt,
+  addingToTrial,
 }: Readonly<SummaryStepProps>) {
   const { t } = useTranslation(['onboarding', 'billing'])
   const price = priceForInterval(plan, interval)
@@ -44,6 +45,19 @@ export default function SummaryStep({
     priceLabel = t($ => $.billing.plans.perYear, { price: formatEur(price) })
   } else {
     priceLabel = t($ => $.billing.plans.perMonth, { price: formatEur(price) })
+  }
+
+  // A running trial ends when it ends: adding a product to it starts no new
+  // period, and the copy has to say so.
+  let noteText: string
+  if (trialEndsAt && addingToTrial) {
+    noteText = t($ => $.summary.addToTrialNote, { date: trialEndsAt })
+  } else if (trialEndsAt) {
+    noteText = t($ => $.summary.trialNote, { date: trialEndsAt })
+  } else if (plan.is_fallback) {
+    noteText = t($ => $.summary.freeNote)
+  } else {
+    noteText = t($ => $.summary.paymentNote)
   }
 
   const row = (label: string, value: string) => (
@@ -86,11 +100,7 @@ export default function SummaryStep({
         </Typography>
       )}
 
-      <Alert severity="info">
-        {trialEndsAt
-          ? t($ => $.summary.trialNote, { date: trialEndsAt })
-          : (plan.is_fallback ? t($ => $.summary.freeNote) : t($ => $.summary.paymentNote))}
-      </Alert>
+      <Alert severity="info">{noteText}</Alert>
     </Stack>
   )
 }
