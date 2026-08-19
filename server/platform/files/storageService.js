@@ -70,6 +70,16 @@ export const getObject = (key) => storageClient.getObject(BUCKET, key)
 export const getPartialObject = (key, offset, length) =>
   storageClient.getPartialObject(BUCKET, key, offset, length)
 
+// The whole object in memory. Only for things a generator has to hold anyway —
+// a logo being drawn into a PDF, an attachment being base64-encoded — never for
+// streaming a file to a client, which belongs on getObject().
+export async function readObjectBuffer(key) {
+  const stream = await getObject(key)
+  const chunks = []
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk))
+  return Buffer.concat(chunks)
+}
+
 // ---------- mutations ----------
 
 function putObjectRaw(key, buffer, size, contentType) {

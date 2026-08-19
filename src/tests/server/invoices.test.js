@@ -51,11 +51,11 @@ beforeEach(async () => {
 
   // Give Alpha gig a fee + linked venue, and Beta similarly.
   await pool.query(
-    `UPDATE gigs SET booking_fee_cents = 50000, venue_id = $1 WHERE id = $2`,
+    `UPDATE gigs SET guaranteed_fee_cents = 50000, venue_id = $1 WHERE id = $2`,
     [seed.venues[0].id, seed.gigA.id],
   )
   await pool.query(
-    `UPDATE gigs SET booking_fee_cents = 70000, venue_id = $1 WHERE id = $2`,
+    `UPDATE gigs SET guaranteed_fee_cents = 70000, venue_id = $1 WHERE id = $2`,
     [seed.venues[1].id, seed.gigB.id],
   )
 })

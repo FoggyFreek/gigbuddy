@@ -84,6 +84,12 @@
     "whatsApp": "Share via WhatsApp",
     "imageCard": "Generate image card"
   },
+  "documentMenu": {
+    "documents": "Documents",
+    "documentsAria": "download gig documents",
+    "itinerary": "Itinerary / Timetable",
+    "downloadFailed": "Downloading the itinerary failed"
+  },
   "gigShare": {
     "title": "Share gig as image",
     "cardVariation": "Card variation",
@@ -184,10 +190,7 @@
     "location": "Location",
     "openInMaps": "Open in maps",
     "terms": "Terms",
-    "paidAdmission": "Paid admission",
-    "guaranteedFee": "Guaranteed fee",
     "merchandiseCut": "Merchandise cut",
-    "percentageOfNetSales": "Percentage of net sales",
     "ticketLink": "Ticket link",
     "merchandiseSold": "Merchandise sold",
     "itemsSold_one": "{{count}} item · excl. VAT",
@@ -208,7 +211,159 @@
     "contacts": "Contacts",
     "tasks": "Tasks",
     "attachments": "Attachments",
-    "notes": "Notes"
+    "infoBlocks": {
+      "title": "Additional information",
+      "add": "Add info block",
+      "remove": "Remove this block",
+      "labelField": "Label",
+      "deleteTitle": "Delete the “{{label}}” block?",
+      "saveFailed": "Saving the information block failed",
+      "labels": {
+        "remarks": "Remarks / Notes",
+        "timetable": "Timetable",
+        "hospitality": "Hospitality",
+        "catering": "Catering",
+        "technical_information": "Technical information",
+        "dressing_room": "Dressing room",
+        "light": "Light",
+        "merchandise": "Merchandise",
+        "backline": "Backline",
+        "invoice_info": "Invoice info",
+        "press": "Press",
+        "guestlist": "Guestlist",
+        "recording": "Recording"
+      }
+    },
+    "timetable": {
+      "title": "Timetable",
+      "add": "Add line",
+      "remove": "Remove this line",
+      "empty": "No timetable yet.",
+      "startTime": "From",
+      "endTime": "Until",
+      "description": "Description",
+      "dragAria": "Drag to reorder this line",
+      "unnamedLine": "this line",
+      "deleteTitle": "Delete “{{label}}”?",
+      "saveFailed": "Saving the timetable failed"
+    },
+    "deal": {
+      "title": "Deal",
+      "dealType": "Deal type",
+      "dealTypes": {
+        "flat_fee": "Flat fee",
+        "guarantee": "Guarantee",
+        "guarantee_plus": "Guarantee +",
+        "guarantee_vs": "Guarantee vs.",
+        "door_deal": "Door deal"
+      },
+      "dealTypeHelp": {
+        "flat_fee": "A fixed guaranteed amount, with no revenue from ticket sales.",
+        "guarantee": "A guaranteed fee with a potential upside from ticket sales once the break-even point is reached (gross fee + venue costs).",
+        "guarantee_plus": "A guaranteed fee plus a percentage of ticket revenue. Venue costs can be included in the break-even calculation.",
+        "guarantee_vs": "Either the guaranteed fee or a percentage of ticket revenue — whichever is higher.",
+        "door_deal": "A percentage of ticket revenue after the break-even point, with no guaranteed fee."
+      },
+      "guaranteedFee": "Guaranteed fee",
+      "percentAfterBreakEven": "Pct. after break-even",
+      "ticketPercentage": "Ticket percentage",
+      "venueShare": "Venue / promoter",
+      "includeVenueCosts": "Include venue costs in the break-even calculation",
+      "venueCosts": "Venue costs",
+      "venueCostsHelp": "Production costs recouped from ticket revenue.",
+      "venueCapacity": "Venue capacity",
+      "expectedVisitors": "Expected visitors",
+      "expectedVisitorsHelp": "Used to simulate the potential upside.",
+      "ticketsSold": "Tickets sold",
+      "netTicketPrice": "Nett. ticket price",
+      "netTicketPriceHelp": "Excl. VAT and service fees — the basis for every calculation below.",
+      "grossTicketPrice": "Gross ticket price",
+      "percentage": "Percentage",
+      "fixedAmount": "Fixed amount",
+      "feeBases": {
+        "none": "None",
+        "percentage": "Percentage",
+        "amount": "Fixed amount"
+      },
+      "bookingFee": {
+        "title": "Booking fee",
+        "basis": "Booking fee",
+        "percentageHelp": "Calculated from the gross fee.",
+        "mode": "Exclusive or inclusive",
+        "modes": {
+          "exclusive": "Exclusive",
+          "inclusive": "Inclusive"
+        },
+        "modeHelp": {
+          "exclusive": "An exclusive booking fee is added on top of the gross fee. A gross fee of € 1000.00 with a 10% exclusive booking fee results in € 100.00 due to booker and € 1000.00 due to artist.",
+          "inclusive": "An inclusive booking fee is split out of the gross fee. A gross fee of € 1000.00 with a 10% inclusive booking fee results in € 100.00 due to booker and € 900.00 due to artist."
+        }
+      },
+      "commission": {
+        "title": "Commission",
+        "basis": "Commission",
+        "percentageHelp": "Calculated from the nett fee (gross fee minus costs)."
+      },
+      "costs": {
+        "title": "Costs",
+        "label": "Cost",
+        "labelPlaceholder": "Travel, backline, catering, …",
+        "amount": "Amount",
+        "add": "Add",
+        "delete": "Delete cost",
+        "deleteTitle": "Delete \"{{label}}\"?",
+        "empty": "No costs added yet.",
+        "total": "Total costs",
+        "deleteLabel": "Delete cost {{label}}"
+      },
+      "statement": {
+        "title": "Artist statement",
+        "grossFee": "Gross fee",
+        "costs": "Costs",
+        "nettFee": "Nett. fee",
+        "bookingFee": "Booking fee",
+        "commission": "Commission",
+        "dueToBooker": "Due to booker",
+        "dueToArtist": "Due to artist",
+        "breakdown": {
+          "grossFee": "The guaranteed fee agreed for this gig.",
+          "grossFeeDoorDeal": "A door deal has no guaranteed fee — everything comes from ticket revenue.",
+          "costs_one": "The total of {{count}} cost line.",
+          "costs_other": "The total of {{count}} cost lines.",
+          "nettFee": "Gross fee {{gross}} minus costs {{costs}}.",
+          "percentageOfGross": "{{percentage}}% of the gross fee ({{base}}).",
+          "percentageOfNett": "{{percentage}}% of the nett fee ({{base}}).",
+          "fixedAmount": "A fixed amount, entered as agreed.",
+          "notAgreed": "Not agreed for this gig.",
+          "dueToBooker": "Booking fee {{bookingFee}} plus commission {{commission}}.",
+          "dueToArtistExclusive": "The nett fee minus commission. The booking fee is exclusive, so it is added on top of the gross fee rather than taken out of it.",
+          "dueToArtistInclusive": "The nett fee minus commission and the booking fee, which is inclusive and therefore split out of the gross fee."
+        }
+      },
+      "tickets": {
+        "title": "Ticket upside",
+        "sold": "Tickets sold",
+        "soldOfCapacity": "{{sold}} / {{capacity}}",
+        "toBreakEven": "Tickets to break even",
+        "expectedUpside": "Expected upside",
+        "potentialUpside": "Potential upside",
+        "actualUpside": "Upside on tickets sold so far: {{amount}}.",
+        "atAttendance_one": "at {{count}} ticket",
+        "atAttendance_other": "at {{count}} tickets",
+        "unknown": "—",
+        "flatFeeNote": "A flat fee takes no share of ticket revenue.",
+        "breakdown": {
+          "sold": "Tickets sold so far, against the venue capacity.",
+          "expected": "The artist’s {{percentage}}% share at the expected number of visitors.",
+          "potential": "The artist’s {{percentage}}% share at full capacity — the ceiling for this deal.",
+          "flat_fee": "A flat fee has no break-even point.",
+          "guarantee": "Ticket revenue has to cover the gross fee plus the venue costs before the artist’s share starts.",
+          "guarantee_plus": "Ticket revenue has to cover the gross fee, and the venue costs when those are included, before the artist’s share starts.",
+          "guarantee_vs": "The ticket at which the artist’s share overtakes the guaranteed fee.",
+          "door_deal": "Ticket revenue has to cover the venue costs before the artist’s share starts."
+        }
+      }
+    }
   },
   "page": {
     "titleFallback": "Gig details",

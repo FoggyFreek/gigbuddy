@@ -8,6 +8,7 @@ import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
 import GigDetailContent, { type TabKey } from './components/gigdetails/GigDetailContent.tsx'
+import GigDocumentMenu from './components/gigdetails/GigDocumentMenu.tsx'
 import GigShareMenu from './components/gigdetails/GigShareMenu.tsx'
 import PastEventAlert from '../../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../../components/SaveStatusLabel.tsx'
@@ -85,8 +86,9 @@ export default function GigDetailPage() {
         </Typography>
         <Box sx={{ flexGrow: 1 }} />
         {/* Identity gate: the lifted gig lags during async loads / split-view id
-            changes, so only share once it matches the current id. Sharing is a
-            tenant-scoped write, so a cross-band gig doesn't get it at all. */}
+            changes, so only offer these once it matches the current id. Both
+            read through the active tenant, so a cross-band gig gets neither. */}
+        {loaded && !isCrossBand && <GigDocumentMenu gig={gig} />}
         {loaded && !isCrossBand && <GigShareMenu gig={gig} />}
         {insideSplitView && (
           <IconButton onClick={handleBack} aria-label={t($ => $.aria.close, { ns: 'common' })}>

@@ -33,10 +33,10 @@ vi.mock('../gigs.ts', () => ({
     start_time: '20:00:00',
     end_time: '23:00:00',
     status: 'confirmed',
-    booking_fee_cents: 15000,
+    guaranteed_fee_cents: 15000,
     admission: 'free',
     ticket_link: null,
-    notes: 'Bring own PA',
+    info_blocks: [{ id: 9, label: 'remarks', label_is_custom: false, content: 'Bring own PA', position: 0 }],
     tasks: [],
     attachments: [],
     participants: [],
@@ -52,6 +52,9 @@ vi.mock('../gigs.ts', () => ({
   addGigContact: vi.fn().mockResolvedValue({}),
   setGigContactPrimary: vi.fn().mockResolvedValue({}),
   removeGigContact: vi.fn().mockResolvedValue(undefined),
+  addGigInfoBlock: vi.fn().mockResolvedValue({ id: 9, label: 'remarks', label_is_custom: false, content: '', position: 0 }),
+  updateGigInfoBlock: vi.fn().mockResolvedValue({}),
+  deleteGigInfoBlock: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('../../../people/venues/venues.ts', async (importOriginal) => ({
@@ -220,9 +223,10 @@ describe('GigFormModal — create mode', () => {
     expect(screen.queryByText('Member availability')).not.toBeInTheDocument()
   })
 
-  it('hides the notes field in create mode', () => {
+  it('hides the additional information section in create mode', () => {
     wrap(<GigFormModal mode="create" onClose={() => {}} />)
-    expect(screen.queryByLabelText(/notes/i)).not.toBeInTheDocument()
+    expect(screen.queryByText('Additional information')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Remarks / Notes')).not.toBeInTheDocument()
   })
 
   it('renders member availability section in create mode', () => {
@@ -265,7 +269,7 @@ describe('GigFormModal — edit mode', () => {
     expect(screen.queryByLabelText(/guaranteed fee/i)).not.toBeInTheDocument()
   })
 
-  it('renders notes field', async () => {
+  it('renders the migrated notes as the Remarks block', async () => {
     wrap(<GigFormModal mode="edit" gigId={1} onClose={() => {}} />)
     await waitFor(() => screen.getByDisplayValue('Bring own PA'))
     expect(screen.getByDisplayValue('Bring own PA')).toBeInTheDocument()

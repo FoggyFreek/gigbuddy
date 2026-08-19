@@ -86,6 +86,7 @@ export default defineConfig([
     files: [
       'src/user/notifications/__tests__/sendPush.test.js',
       'src/finance/invoices/__tests__/eInvoiceImport.test.js',
+      'src/planning/gigs/__tests__/renderGigItineraryPdf.test.js',
       'src/tests/server/**/*.js',
     ],
     languageOptions: {

@@ -1,5 +1,11 @@
 import type {
+  AgencyFeeMode,
+  DealType,
+  FeeBasis,
   Gig,
+  GigCost,
+  GigInfoBlock,
+  GigTimetableEntry,
   Id,
   Participant,
   PurchaseAttachment,
@@ -13,13 +19,14 @@ export type GigDetailTabKey = 'event' | 'terms' | 'participants' | 'tasks'
 // gig, so the band label fields may be present.
 export interface GigDetail extends MaybeCrossTenant<Gig> {
   event_link?: string
-  booking_fee_cents?: number
   admission?: string
   ticket_link?: string
-  notes?: string
   tasks?: Task[]
   attachments?: PurchaseAttachment[]
   participants?: Participant[]
+  costs?: GigCost[]
+  info_blocks?: GigInfoBlock[]
+  timetable?: GigTimetableEntry[]
 }
 
 export interface GigDetailForm {
@@ -33,10 +40,26 @@ export interface GigDetailForm {
   start_time: string
   end_time: string
   status: string
-  booking_fee: string
-  admission: string
   ticket_link: string
+  // Deal terms. Money and counts are held as typed strings and converted on the
+  // way out (see gigFormFields.ts); the vocabulary fields hold the stored value.
+  deal_type: DealType
+  guaranteed_fee: string
   merchandise_cut: string
+  /** The artist's share of ticket revenue; the venue takes the remainder of 100. */
   percentage_of_sales: string
-  notes: string
+  breakeven_includes_venue_costs: boolean
+  venue_costs: string
+  venue_capacity: string
+  expected_visitors: string
+  tickets_sold: string
+  ticket_price_net: string
+  ticket_price_gross: string
+  agency_fee_basis: FeeBasis
+  agency_fee_percentage: string
+  agency_fee_amount: string
+  agency_fee_mode: AgencyFeeMode
+  commission_basis: FeeBasis
+  commission_percentage: string
+  commission_amount: string
 }

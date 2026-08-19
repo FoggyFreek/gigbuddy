@@ -364,7 +364,7 @@ export async function listGigsForImportDuplicateCheck(executor, tenantId) {
 export async function searchGigs(executor, tenantId, { like, limit }) {
   const { rows } = await executor.query(
     `SELECT
-       g.id, g.event_date, g.event_description, g.status, g.booking_fee_cents,
+       g.id, g.event_date, g.event_description, g.status, g.guaranteed_fee_cents,
        g.venue_id, g.festival_id,
        ${VENUE_JSON_SELECT},
        ${FESTIVAL_JSON_SELECT},
@@ -408,12 +408,12 @@ export async function upcomingBandFeesByStatus(executor, tenantId) {
   const { rows } = await executor.query(
     `SELECT status,
             COUNT(*)::int AS gig_count,
-            COALESCE(SUM(booking_fee_cents), 0)::int AS total_cents
+            COALESCE(SUM(guaranteed_fee_cents), 0)::int AS total_cents
        FROM gigs
       WHERE tenant_id = $1
         AND event_date >= CURRENT_DATE
         AND status IN ('option', 'confirmed', 'announced')
-        AND booking_fee_cents IS NOT NULL
+        AND guaranteed_fee_cents IS NOT NULL
       GROUP BY status`,
     [tenantId],
   )
@@ -423,6 +423,22 @@ export async function upcomingBandFeesByStatus(executor, tenantId) {
 export async function listGigTasks(executor, gigId, tenantId) {
   const { rows } = await executor.query(
     'SELECT * FROM gig_tasks WHERE gig_id = $1 AND tenant_id = $2 ORDER BY created_at ASC',
+    [gigId, tenantId],
+  )
+  return rows
+}
+
+// As listGigTasks, but with the assignee resolved to a name. The gig detail
+// read does not need this — the frontend already holds the roster and looks the
+// member up itself — while a document generated server-side has no roster to
+// join against, so it asks for the name here.
+export async function listGigTasksWithAssignees(executor, gigId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT t.id, t.title, t.done, t.due_date, t.assigned_to, bm.name AS assigned_to_name
+       FROM gig_tasks t
+       LEFT JOIN band_members bm ON bm.id = t.assigned_to AND bm.tenant_id = t.tenant_id
+      WHERE t.gig_id = $1 AND t.tenant_id = $2
+      ORDER BY t.created_at ASC, t.id ASC`,
     [gigId, tenantId],
   )
   return rows
@@ -499,7 +515,10 @@ export async function deleteGigParticipant(executor, gigId, memberId, tenantId) 
   return rowCount > 0
 }
 
-export async function lockGigForParticipantRemoval(executor, gigId, tenantId) {
+// Locks the gig row so a read-then-write in the caller's transaction sees a
+// stable picture of its children. Returns false when the gig is not this
+// tenant's — the caller turns that into a 404.
+export async function lockGig(executor, gigId, tenantId) {
   const { rowCount } = await executor.query(
     'SELECT 1 FROM gigs WHERE id = $1 AND tenant_id = $2 FOR UPDATE',
     [gigId, tenantId],
@@ -725,6 +744,214 @@ export async function listGigContacts(executor, gigId, tenantId) {
     [gigId, tenantId],
   )
   return rows
+}
+
+// --- Gig costs (the artist's own costs: travel, backline, catering, …) ---
+
+export async function listGigCosts(executor, gigId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT id, label, amount_cents, position
+       FROM gig_costs
+      WHERE gig_id = $1 AND tenant_id = $2
+      ORDER BY position ASC, id ASC`,
+    [gigId, tenantId],
+  )
+  return rows
+}
+
+export async function countGigCosts(executor, gigId, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT COUNT(*)::int AS count FROM gig_costs WHERE gig_id = $1 AND tenant_id = $2',
+    [gigId, tenantId],
+  )
+  return rows[0].count
+}
+
+// Appends after the current last line when the caller gave no explicit position.
+export async function insertGigCost(executor, gigId, tenantId, { label, amount_cents, position }) {
+  const { rows } = await executor.query(
+    `INSERT INTO gig_costs (gig_id, tenant_id, label, amount_cents, position)
+     VALUES ($1, $2, $3, $4,
+       COALESCE($5, (SELECT COALESCE(MAX(position), -1) + 1
+                       FROM gig_costs WHERE gig_id = $1 AND tenant_id = $2)))
+     RETURNING id, label, amount_cents, position`,
+    [gigId, tenantId, label, amount_cents, position],
+  )
+  return rows[0]
+}
+
+export async function updateGigCost(executor, gigId, costId, tenantId, { label, amount_cents, position }) {
+  const { rows } = await executor.query(
+    `UPDATE gig_costs
+        SET label = $1, amount_cents = $2, position = COALESCE($3, position), updated_at = NOW()
+      WHERE id = $4 AND gig_id = $5 AND tenant_id = $6
+      RETURNING id, label, amount_cents, position`,
+    [label, amount_cents, position, costId, gigId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function deleteGigCost(executor, gigId, costId, tenantId) {
+  const { rowCount } = await executor.query(
+    'DELETE FROM gig_costs WHERE id = $1 AND gig_id = $2 AND tenant_id = $3',
+    [costId, gigId, tenantId],
+  )
+  return rowCount > 0
+}
+
+// --- Gig info blocks (the "Additional information" section on the Tasks tab) ---
+
+const INFO_BLOCK_COLUMNS = 'id, label, label_is_custom, content, position'
+
+export async function listGigInfoBlocks(executor, gigId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT ${INFO_BLOCK_COLUMNS}
+       FROM gig_info_blocks
+      WHERE gig_id = $1 AND tenant_id = $2
+      ORDER BY position ASC, id ASC`,
+    [gigId, tenantId],
+  )
+  return rows
+}
+
+export async function countGigInfoBlocks(executor, gigId, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT COUNT(*)::int AS count FROM gig_info_blocks WHERE gig_id = $1 AND tenant_id = $2',
+    [gigId, tenantId],
+  )
+  return rows[0].count
+}
+
+// Appends after the current last block when the caller gave no explicit position.
+export async function insertGigInfoBlock(executor, gigId, tenantId, { label, label_is_custom, content, position }) {
+  const { rows } = await executor.query(
+    `INSERT INTO gig_info_blocks (gig_id, tenant_id, label, label_is_custom, content, position)
+     VALUES ($1, $2, $3, $4, $5,
+       COALESCE($6, (SELECT COALESCE(MAX(position), -1) + 1
+                       FROM gig_info_blocks WHERE gig_id = $1 AND tenant_id = $2)))
+     RETURNING ${INFO_BLOCK_COLUMNS}`,
+    [gigId, tenantId, label, label_is_custom, content, position],
+  )
+  return rows[0]
+}
+
+// Partial update: only the keys present in `patch` are written, so a debounced
+// content save cannot clobber a label the user just picked, and vice versa.
+export async function updateGigInfoBlock(executor, gigId, blockId, tenantId, patch) {
+  const assignments = []
+  const values = []
+  for (const key of ['label', 'label_is_custom', 'content', 'position']) {
+    if (key in patch) {
+      values.push(patch[key])
+      assignments.push(`${key} = $${values.length}`)
+    }
+  }
+  if (assignments.length === 0) return null
+  assignments.push('updated_at = NOW()')
+  const { rows } = await executor.query(
+    `UPDATE gig_info_blocks
+        SET ${assignments.join(', ')}
+      WHERE id = $${values.length + 1} AND gig_id = $${values.length + 2} AND tenant_id = $${values.length + 3}
+      RETURNING ${INFO_BLOCK_COLUMNS}`,
+    [...values, blockId, gigId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function deleteGigInfoBlock(executor, gigId, blockId, tenantId) {
+  const { rowCount } = await executor.query(
+    'DELETE FROM gig_info_blocks WHERE id = $1 AND gig_id = $2 AND tenant_id = $3',
+    [blockId, gigId, tenantId],
+  )
+  return rowCount > 0
+}
+
+// --- Gig timetable (the running order of the gig day, on the Tasks tab) ---
+
+// The times are TIME columns; they go over the wire as 'HH:MM', the same shape
+// the gig's own start_time/end_time take in the form.
+const TIMETABLE_COLUMNS = `id,
+  to_char(start_time, 'HH24:MI') AS start_time,
+  to_char(end_time, 'HH24:MI') AS end_time,
+  description, position`
+
+export async function listGigTimetable(executor, gigId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT ${TIMETABLE_COLUMNS}
+       FROM gig_timetable_entries
+      WHERE gig_id = $1 AND tenant_id = $2
+      ORDER BY position ASC, id ASC`,
+    [gigId, tenantId],
+  )
+  return rows
+}
+
+export async function countGigTimetableEntries(executor, gigId, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT COUNT(*)::int AS count FROM gig_timetable_entries WHERE gig_id = $1 AND tenant_id = $2',
+    [gigId, tenantId],
+  )
+  return rows[0].count
+}
+
+export async function listGigTimetableIds(executor, gigId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT id FROM gig_timetable_entries
+      WHERE gig_id = $1 AND tenant_id = $2 ORDER BY position ASC, id ASC`,
+    [gigId, tenantId],
+  )
+  return rows.map((r) => r.id)
+}
+
+// Appends after the current last line.
+export async function insertGigTimetableEntry(executor, gigId, tenantId, { start_time, end_time, description }) {
+  const { rows } = await executor.query(
+    `INSERT INTO gig_timetable_entries (gig_id, tenant_id, start_time, end_time, description, position)
+     VALUES ($1, $2, $3, $4, $5,
+       (SELECT COALESCE(MAX(position), -1) + 1
+          FROM gig_timetable_entries WHERE gig_id = $1 AND tenant_id = $2))
+     RETURNING ${TIMETABLE_COLUMNS}`,
+    [gigId, tenantId, start_time, end_time, description],
+  )
+  return rows[0]
+}
+
+// Partial update: only the keys present in `patch` are written.
+export async function updateGigTimetableEntry(executor, gigId, entryId, tenantId, patch) {
+  const assignments = []
+  const values = []
+  for (const key of ['start_time', 'end_time', 'description']) {
+    if (key in patch) {
+      values.push(patch[key])
+      assignments.push(`${key} = $${values.length}`)
+    }
+  }
+  if (assignments.length === 0) return null
+  assignments.push('updated_at = NOW()')
+  const { rows } = await executor.query(
+    `UPDATE gig_timetable_entries
+        SET ${assignments.join(', ')}
+      WHERE id = $${values.length + 1} AND gig_id = $${values.length + 2} AND tenant_id = $${values.length + 3}
+      RETURNING ${TIMETABLE_COLUMNS}`,
+    [...values, entryId, gigId, tenantId],
+  )
+  return rows[0] || null
+}
+
+export async function moveGigTimetableEntry(executor, entryId, position, gigId, tenantId) {
+  await executor.query(
+    `UPDATE gig_timetable_entries SET position = $2, updated_at = NOW()
+      WHERE id = $1 AND gig_id = $3 AND tenant_id = $4`,
+    [entryId, position, gigId, tenantId],
+  )
+}
+
+export async function deleteGigTimetableEntry(executor, gigId, entryId, tenantId) {
+  const { rowCount } = await executor.query(
+    'DELETE FROM gig_timetable_entries WHERE id = $1 AND gig_id = $2 AND tenant_id = $3',
+    [entryId, gigId, tenantId],
+  )
+  return rowCount > 0
 }
 
 export async function insertGigContact(executor, gigId, contactId, tenantId) {

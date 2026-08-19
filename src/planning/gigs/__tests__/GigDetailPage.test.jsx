@@ -36,7 +36,7 @@ function gigFixture(id) {
     start_time: '20:00:00',
     end_time: '23:00:00',
     status: 'option',
-    booking_fee_cents: 15000,
+    guaranteed_fee_cents: 15000,
     admission: 'free',
     ticket_link: null,
     notes: '',
@@ -67,6 +67,7 @@ vi.mock('../gigs.ts', () => ({
   deleteTask: vi.fn().mockResolvedValue(undefined),
   uploadGigAttachment: vi.fn().mockResolvedValue({}),
   deleteGigAttachment: vi.fn().mockResolvedValue(undefined),
+  downloadGigItinerary: vi.fn().mockResolvedValue({ blob: new Blob(['%PDF-']), filename: 'itinerary.pdf' }),
 }))
 
 vi.mock('../../../people/venues/venues.ts', async (importOriginal) => ({
@@ -125,6 +126,18 @@ describe('GigDetailPage — header share button', () => {
     await waitFor(() =>
       expect(within(header()).getByLabelText('share gig')).toBeInTheDocument()
     )
+  })
+
+  it('shows the documents menu to the left of the share button', async () => {
+    renderPage(1)
+    expect(within(header()).queryByLabelText('download gig documents')).not.toBeInTheDocument()
+
+    await waitFor(() =>
+      expect(within(header()).getByLabelText('download gig documents')).toBeInTheDocument()
+    )
+    const documents = within(header()).getByLabelText('download gig documents')
+    const share = within(header()).getByLabelText('share gig')
+    expect(documents.compareDocumentPosition(share) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('hides the share button while a different id is loading, then shows it', async () => {
@@ -216,6 +229,7 @@ describe('GigDetailPage — cross-band gig in a personal workspace', () => {
     await screen.findByTestId('source-tenant-switch')
 
     expect(within(header()).queryByLabelText('share gig')).not.toBeInTheDocument()
+    expect(within(header()).queryByLabelText('download gig documents')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
     expect(getGig).not.toHaveBeenCalled()
   })

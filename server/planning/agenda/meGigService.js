@@ -85,7 +85,9 @@ export async function getMyGig(db, userId, scope, gigId) {
   const attachments = (result.gig.attachments ?? [])
     .map(({ object_key: _objectKey, ...attachment }) => attachment)
   const tasks = (result.gig.tasks ?? []).filter((task) => task.assigned_to === memberId)
-  const { participants: _participants, ...withoutParticipants } = result.gig
+  // The deal's cost breakdown is band-scoped bookkeeping and the hub never
+  // renders a Terms tab, so it does not travel with a cross-band read.
+  const { participants: _participants, costs: _costs, ...withoutParticipants } = result.gig
   return {
     gig: scope.label({
       ...withoutBanner(withoutParticipants), attachments, tasks, viewerBandMemberId: memberId,

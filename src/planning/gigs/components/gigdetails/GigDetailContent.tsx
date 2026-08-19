@@ -28,6 +28,7 @@ import GigAvailability from './GigAvailability.tsx'
 import GigEventDetails from './GigEventDetails.tsx'
 import GigTasksSection from './GigTasksSection.tsx'
 import GigTerms from './GigTerms.tsx'
+import { feeToDisplay, numberToInput, patchForGigField } from './gigFormFields.ts'
 import type { GigDetail, GigDetailForm, GigDetailTabKey } from './types.ts'
 import useDebouncedSave from '../../../../hooks/useDebouncedSave.ts'
 import { useCrossTenantRow } from '../../../shared/useCrossTenantRow.ts'
@@ -35,14 +36,14 @@ import { usePlanningSource } from '../../../shared/usePlanningSource.ts'
 import { useTenantKind } from '../../../../hooks/useTenantKind.ts'
 import { TENANT_CAPABILITIES } from '../../../../auth/tenantCapabilities.ts'
 import { useAuth } from '../../../../contexts/authContext.ts'
-import { addGigParticipant, deleteGigBanner, removeGigParticipant, setGigVote, updateGig, uploadGigBanner } from '../../gigs.ts'
+import { addGigCost, addGigParticipant, deleteGigBanner, deleteGigCost, removeGigParticipant, setGigVote, updateGig, updateGigCost, uploadGigBanner } from '../../gigs.ts'
 import { getBannerPath } from '../../../../people/profiles/profile.ts'
 import { setMyTaskDone } from '../../../availability/me.ts'
 import { listMembers } from '../../../../people/memberships/bandMembers.ts'
 import { compressBanner } from '../../../../utils/compressImage.ts'
 import { toDateInput, toTimeInput } from '../../../events/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../../../../utils/requiredFields.ts'
-import type { AvailabilitySummary, Id, GigTag, Member, Venue, Task } from '../../../../types/entities.ts'
+import type { AvailabilitySummary, Id, GigCost, GigTag, Member, Venue, Task } from '../../../../types/entities.ts'
 import { resolveEventEndDate } from '../../../../../shared/eventTimes.js'
 
 const REQUIRED_FIELDS = ['event_date', 'event_description']
@@ -77,26 +78,6 @@ interface GigDetailContentProps {
   initialTab?: TabKey
 }
 
-function feeToDisplay(cents: number | null | undefined): string {
-  if (cents == null || cents === 0 && cents !== 0) return ''
-  if (cents == null) return ''
-  return (cents / 100).toFixed(2)
-}
-
-function feeToCents(str: string): number | null {
-  const n = Number.parseFloat(str)
-  if (Number.isNaN(n)) return null
-  return Math.round(n * 100)
-}
-
-// A percentage form field (merchandise cut / percentage of sales) → the value to
-// send. Empty/blank clears the field (null); otherwise the parsed number.
-function pctToValue(str: string): number | null {
-  if (str.trim() === '') return null
-  const n = Number.parseFloat(str)
-  return Number.isNaN(n) ? null : n
-}
-
 const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded, onGigLoadError, canWrite = true, initialTab = 'event' }, ref) {
   const { t } = useTranslation(['gigs', 'common'])
   const { user } = useAuth()
@@ -116,13 +97,27 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     start_time: '',
     end_time: '',
     status: 'option',
-    booking_fee: '',
-    admission: 'free',
     ticket_link: '',
+    deal_type: 'flat_fee',
+    guaranteed_fee: '',
     merchandise_cut: '',
     percentage_of_sales: '',
-    notes: '',
+    breakeven_includes_venue_costs: true,
+    venue_costs: '',
+    venue_capacity: '',
+    expected_visitors: '',
+    tickets_sold: '',
+    ticket_price_net: '',
+    ticket_price_gross: '',
+    agency_fee_basis: 'none',
+    agency_fee_percentage: '',
+    agency_fee_amount: '',
+    agency_fee_mode: 'exclusive',
+    commission_basis: 'none',
+    commission_percentage: '',
+    commission_amount: '',
   })
+  const [costs, setCosts] = useState<GigCost[]>([])
   const [loading, setLoading] = useState(true)
   const [initialTasks, setInitialTasks] = useState<Task[]>([])
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null)
@@ -168,14 +163,28 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       start_time: toTimeInput(g.start_time),
       end_time: toTimeInput(g.end_time),
       status: g.status || 'option',
-      booking_fee: feeToDisplay(g.booking_fee_cents),
-      admission: g.admission ?? 'free',
       ticket_link: g.ticket_link ?? '',
-      merchandise_cut: g.merchandise_cut == null ? '' : String(g.merchandise_cut),
-      percentage_of_sales: g.percentage_of_sales == null ? '' : String(g.percentage_of_sales),
-      notes: g.notes || '',
+      deal_type: g.deal_type ?? 'flat_fee',
+      guaranteed_fee: feeToDisplay(g.guaranteed_fee_cents),
+      merchandise_cut: numberToInput(g.merchandise_cut),
+      percentage_of_sales: numberToInput(g.percentage_of_sales),
+      breakeven_includes_venue_costs: g.breakeven_includes_venue_costs ?? true,
+      venue_costs: feeToDisplay(g.venue_costs_cents),
+      venue_capacity: numberToInput(g.venue_capacity),
+      expected_visitors: numberToInput(g.expected_visitors),
+      tickets_sold: numberToInput(g.tickets_sold),
+      ticket_price_net: feeToDisplay(g.ticket_price_net_cents),
+      ticket_price_gross: feeToDisplay(g.ticket_price_gross_cents),
+      agency_fee_basis: g.agency_fee_basis ?? 'none',
+      agency_fee_percentage: numberToInput(g.agency_fee_percentage),
+      agency_fee_amount: feeToDisplay(g.agency_fee_amount_cents),
+      agency_fee_mode: g.agency_fee_mode ?? 'exclusive',
+      commission_basis: g.commission_basis ?? 'none',
+      commission_percentage: numberToInput(g.commission_percentage),
+      commission_amount: feeToDisplay(g.commission_amount_cents),
     })
     setInitialTasks((g.tasks as Task[]) || [])
+    setCosts(g.costs ?? [])
   }, [onGigLoaded])
 
   const refresh = useCallback(async () => {
@@ -265,6 +274,23 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     return setMyTaskDone(task.id, done)
   }
 
+  // Cost lines save on the spot: a row has an explicit confirm, so there is no
+  // half-typed state for the debounce to protect.
+  async function handleAddCost(label: string, amountCents: number) {
+    const created = await addGigCost(gigId, { label, amount_cents: amountCents })
+    setCosts((current) => [...current, created])
+  }
+
+  async function handleUpdateCost(costId: Id, label: string, amountCents: number) {
+    const updated = await updateGigCost(gigId, costId, { label, amount_cents: amountCents })
+    setCosts((current) => current.map((cost) => (cost.id === costId ? updated : cost)))
+  }
+
+  async function handleDeleteCost(costId: Id) {
+    await deleteGigCost(gigId, costId)
+    setCosts((current) => current.filter((cost) => cost.id !== costId))
+  }
+
   function handleTaskUpsert(task: Task) {
     setInitialTasks((current) => {
       if (task.id == null || !current.some((item) => item.id === task.id)) return [...current, task]
@@ -278,12 +304,6 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
 
   function handleChange(field: string, value: unknown) {
     if (!editable) return
-    if (field === 'admission' && value === 'free') {
-      setForm((prev) => ({ ...prev, admission: 'free', ticket_link: '', percentage_of_sales: '' }))
-      if (hasRequiredErrors(form, REQUIRED_FIELDS)) return
-      schedule({ admission: 'free', ticket_link: null, percentage_of_sales: null })
-      return
-    }
     const patch: Record<string, unknown> = { [field]: value }
     const candidate = { ...form, ...patch }
     if (['event_date', 'start_time', 'end_time'].includes(field)) {
@@ -297,12 +317,12 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     const nextForm = { ...form, ...patch }
     setForm(nextForm as GigDetailForm)
     if (hasRequiredErrors(nextForm, REQUIRED_FIELDS)) return
-    if (field === 'booking_fee') {
-      patch.booking_fee_cents = feeToCents(value as string)
-      delete patch.booking_fee
-    }
-    if (field === 'merchandise_cut' || field === 'percentage_of_sales') {
-      patch[field] = pctToValue(value as string)
+    // Money, counts and percentages are typed as strings; each maps onto its own
+    // column and null/zero convention (see gigFormFields.ts).
+    const translated = patchForGigField(field, value as string)
+    if (translated) {
+      delete patch[field]
+      Object.assign(patch, translated)
     }
     schedule(patch)
   }
@@ -617,9 +637,13 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           gigId={gigId}
           gigLoaded={ownRow}
           form={form}
+          costs={costs}
           selectedVenue={selectedVenue}
           selectedFestival={selectedFestival}
           onChange={handleChange}
+          onAddCost={handleAddCost}
+          onUpdateCost={handleUpdateCost}
+          onDeleteCost={handleDeleteCost}
         />
       )}
 
@@ -653,10 +677,10 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         initialTasks={initialTasks}
         initialAttachments={gig?.attachments ?? []}
         members={members}
-        notes={form.notes}
+        initialInfoBlocks={gig?.info_blocks ?? []}
+        initialTimetable={gig?.timetable ?? []}
         currentBandMemberId={isCrossBand ? (gig?.viewerBandMemberId ?? null) : currentBandMemberId}
         plainTextAttachments={isCrossBand}
-        onChangeNotes={(notes) => handleChange('notes', notes)}
         onToggleTask={isCrossBand ? completeOwnTaskCrossBand : undefined}
         onTaskUpsert={handleTaskUpsert}
         onTaskDelete={handleTaskDelete}

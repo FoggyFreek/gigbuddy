@@ -1,5 +1,7 @@
-import { request, requestForm } from '../../api/_client.ts'
-import type { Gig, GigMerchSummary, GigTag, Id, Task } from '../../types/entities.ts'
+import { request, requestBlobWithHeaders, requestForm } from '../../api/_client.ts'
+import type {
+  Gig, GigCost, GigInfoBlock, GigMerchSummary, GigTag, GigTimetableEntry, Id, Task,
+} from '../../types/entities.ts'
 import type {
   GigMapGig,
   LimitedCollectionWithCursorResponse,
@@ -16,6 +18,12 @@ interface GigParticipant {
 interface GigContact {
   contact_id?: Id
   is_primary?: boolean
+}
+
+/** A generated document: its bytes plus the name the server gave it. */
+export interface GigItineraryFile {
+  blob: Blob
+  filename: string
 }
 
 interface GigAttachment {
@@ -97,6 +105,53 @@ export const setGigVote = (gigId: Id, bandMemberId: Id, vote: string) =>
     body: JSON.stringify({ vote }),
   })
 
+// The artist's own costs for a gig (travel, backline, catering, …). The gig
+// detail already carries them, so listGigCosts is only for a targeted refresh.
+export const listGigCosts = (gigId: Id) => api<GigCost[]>(`/${gigId}/costs`)
+export const addGigCost = (gigId: Id, body: { label: string; amount_cents: number }) =>
+  api<GigCost>(`/${gigId}/costs`, { method: 'POST', body: JSON.stringify(body) })
+export const updateGigCost = (gigId: Id, costId: Id, body: { label: string; amount_cents: number }) =>
+  api<GigCost>(`/${gigId}/costs/${costId}`, { method: 'PATCH', body: JSON.stringify(body) })
+export const deleteGigCost = (gigId: Id, costId: Id) =>
+  api<void>(`/${gigId}/costs/${costId}`, { method: 'DELETE' })
+
+// The gig's "Additional information" blocks. The gig detail already carries
+// them, so listGigInfoBlocks is only for a targeted refresh.
+export interface GigInfoBlockInput {
+  label: string
+  label_is_custom: boolean
+  content?: string
+}
+
+export const listGigInfoBlocks = (gigId: Id) => api<GigInfoBlock[]>(`/${gigId}/info-blocks`)
+export const addGigInfoBlock = (gigId: Id, body: GigInfoBlockInput) =>
+  api<GigInfoBlock>(`/${gigId}/info-blocks`, { method: 'POST', body: JSON.stringify(body) })
+export const updateGigInfoBlock = (gigId: Id, blockId: Id, body: Partial<GigInfoBlockInput>) =>
+  api<GigInfoBlock>(`/${gigId}/info-blocks/${blockId}`, { method: 'PATCH', body: JSON.stringify(body) })
+export const deleteGigInfoBlock = (gigId: Id, blockId: Id) =>
+  api<void>(`/${gigId}/info-blocks/${blockId}`, { method: 'DELETE' })
+
+// The gig day's running order. The gig detail already carries it, so
+// listGigTimetable is only for a targeted refresh.
+export interface GigTimetableInput {
+  start_time?: string | null
+  end_time?: string | null
+  description?: string
+}
+
+export const listGigTimetable = (gigId: Id) => api<GigTimetableEntry[]>(`/${gigId}/timetable`)
+export const addGigTimetableEntry = (gigId: Id, body: GigTimetableInput = {}) =>
+  api<GigTimetableEntry>(`/${gigId}/timetable`, { method: 'POST', body: JSON.stringify(body) })
+export const updateGigTimetableEntry = (gigId: Id, entryId: Id, body: GigTimetableInput) =>
+  api<GigTimetableEntry>(`/${gigId}/timetable/${entryId}`, { method: 'PATCH', body: JSON.stringify(body) })
+export const deleteGigTimetableEntry = (gigId: Id, entryId: Id) =>
+  api<void>(`/${gigId}/timetable/${entryId}`, { method: 'DELETE' })
+export const reorderGigTimetable = (gigId: Id, orderedEntryIds: Id[]) =>
+  api<void>(`/${gigId}/timetable/reorder`, {
+    method: 'PATCH',
+    body: JSON.stringify({ orderedEntryIds }),
+  })
+
 export const listGigContacts = (gigId: Id) => api<GigContact[]>(`/${gigId}/contacts`)
 export const addGigContact = (gigId: Id, contactId: Id) =>
   api<GigContact>(`/${gigId}/contacts`, {
@@ -110,3 +165,18 @@ export const setGigContactPrimary = (gigId: Id, contactId: Id, isPrimary: boolea
   })
 export const removeGigContact = (gigId: Id, contactId: Id) =>
   api<void>(`/${gigId}/contacts/${contactId}`, { method: 'DELETE' })
+
+// The itinerary PDF is generated per request and streamed straight back, so it
+// arrives as a blob rather than an object key. `lng` carries the reader's own
+// language: the document is localized server-side, where no browser i18n runs.
+//
+// The server names the document in Content-Disposition and this reads that name
+// back, so the naming rule has one owner and the two cannot drift.
+export async function downloadGigItinerary(gigId: Id, lng: string): Promise<GigItineraryFile> {
+  const { blob, headers } = await requestBlobWithHeaders(
+    `/api/gigs/${gigId}/itinerary.pdf?lng=${encodeURIComponent(lng)}`,
+    { method: 'GET' },
+  )
+  const match = /filename="([^"]+)"/.exec(headers.get('Content-Disposition') ?? '')
+  return { blob, filename: match?.[1] || `itinerary-${gigId}.pdf` }
+}

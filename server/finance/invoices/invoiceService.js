@@ -5,7 +5,7 @@
 //   { error: { status, body } }   — caller should respond with that status/body
 //   anything else                 — success payload (see each function)
 import { randomUUID } from 'node:crypto'
-import { getObject, uploadObjectWithQuota, removeObject, safeRemove, invoicePdfKey, invoiceLogoKey } from '../../platform/files/storageService.js'
+import { uploadObjectWithQuota, removeObject, safeRemove, invoicePdfKey, invoiceLogoKey } from '../../platform/files/storageService.js'
 import { computeInvoiceTotals } from '../../utils/computeInvoiceTotals.js'
 import { renderInvoicePdf } from '../../utils/renderInvoicePdf.js'
 import {
@@ -32,6 +32,7 @@ import {
 import { dispatchNotification } from '../../user/notifications/notificationService.js'
 import { PERMISSIONS } from '../../auth/permissions.js'
 import { logger } from '../../utils/logger.js'
+import { loadTenantLogoBuffer } from '../../utils/tenantLogo.js'
 import {
   acquireSessionLock,
   releaseSessionLock,
@@ -160,26 +161,15 @@ export function computeAndApply(invoiceFields, lines, treatment) {
 
 // ---------- PDF ----------
 
-async function loadLogoBuffer(tenant, customLogoPath, useDarkLogo = false) {
-  const key = customLogoPath || (useDarkLogo && tenant.logo_dark_path ? tenant.logo_dark_path : tenant.logo_path)
-  if (!key) return null
-  try {
-    const stream = await getObject(key)
-    const chunks = []
-    for await (const chunk of stream) chunks.push(chunk)
-    return Buffer.concat(chunks)
-  } catch (err) {
-    logger.error('invoice.logo_load_failed', { err })
-    return null
-  }
-}
-
 export async function renderAndStorePdf(pool, invoiceId, tenantId) {
   const invoice = await fetchInvoice(pool, tenantId, invoiceId)
   if (!invoice) return null
   const tenant = await fetchTenant(pool, tenantId)
   const lines = await fetchLines(pool, invoiceId, tenantId)
-  const logoBuffer = await loadLogoBuffer(tenant, invoice.custom_logo_path, !!invoice.invert_logo)
+  const logoBuffer = await loadTenantLogoBuffer(tenant, {
+    customLogoPath: invoice.custom_logo_path,
+    preferDark: !!invoice.invert_logo,
+  })
 
   // An ISSUED invoice renders from its snapshot, so re-rendering one (including
   // via POST /:id/render, which has no finalization guard) reproduces the
@@ -734,7 +724,7 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
         id: gig.id,
         event_date: gig.event_date,
         event_description: gig.event_description,
-        booking_fee_cents: gig.booking_fee_cents,
+        guaranteed_fee_cents: gig.guaranteed_fee_cents,
       },
       tenant: {
         id: tenant.id,
@@ -784,7 +774,7 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
           {
             description,
             quantity: 1,
-            unit_price_cents: gig.booking_fee_cents ?? 0,
+            unit_price_cents: gig.guaranteed_fee_cents ?? 0,
             tax_percentage: taxPercentage,
             position: 0,
           },

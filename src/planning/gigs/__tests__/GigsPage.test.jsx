@@ -261,7 +261,7 @@ describe('GigsPage', () => {
 describe('GigsPage — split-view detail route', () => {
   const GIG_DETAIL = {
     ...GIGS[0],
-    booking_fee_cents: null,
+    guaranteed_fee_cents: null,
     notes: '',
     tasks: [],
     participants: [],

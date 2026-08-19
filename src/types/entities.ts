@@ -139,9 +139,69 @@ export interface Gig {
   // Venue deal terms. NUMERIC(5,2) percentages arrive as strings over the wire
   // but may be set as numbers in code; null = not agreed.
   merchandise_cut?: number | string | null
+  /** Doubles as the artist's share of ticket revenue; the venue takes the rest. */
   percentage_of_sales?: number | string | null
+  // Deal terms. The maths that turns these into an artist statement lives in
+  // src/planning/gigs/dealTerms.ts — nothing here is derived server-side.
+  deal_type?: DealType
+  guaranteed_fee_cents?: number | null
+  breakeven_includes_venue_costs?: boolean
+  venue_costs_cents?: number | null
+  venue_capacity?: number | null
+  expected_visitors?: number | null
+  tickets_sold?: number | null
+  ticket_price_net_cents?: number | null
+  ticket_price_gross_cents?: number | null
+  agency_fee_basis?: FeeBasis
+  agency_fee_percentage?: number | string
+  agency_fee_amount_cents?: number
+  agency_fee_mode?: AgencyFeeMode
+  commission_basis?: FeeBasis
+  commission_percentage?: number | string
+  commission_amount_cents?: number
+  /** The artist's own costs, itemised. Only present on the gig detail read. */
+  costs?: GigCost[]
+  /** The "Additional information" blocks. Only present on the gig detail read. */
+  info_blocks?: GigInfoBlock[]
+  /** The gig day's running order. Only present on the gig detail read. */
+  timetable?: GigTimetableEntry[]
   viewerBandMemberId?: Id | null
 }
+
+export interface GigCost {
+  id?: Id
+  label?: string
+  amount_cents?: number | string | null
+  position?: number
+}
+
+// A labelled block of free-form text on the gig's Tasks tab. `label` holds a
+// canonical key from shared/gigInfoLabels.js when `label_is_custom` is false,
+// and the text the user typed when it is true.
+export interface GigInfoBlock {
+  id: Id
+  label: string
+  label_is_custom: boolean
+  content: string
+  position: number
+}
+
+// One line of the gig day's running order (get-in, soundcheck, doors, …).
+// Both times are optional and carry 'HH:MM'; a zero-length line has
+// end_time === start_time, and no ordering between the two is enforced.
+export interface GigTimetableEntry {
+  id: Id
+  start_time: string | null
+  end_time: string | null
+  description: string
+  position: number
+}
+
+// Deal vocabulary, mirroring the CHECK constraints in migration 189. The
+// matching runtime lists live in src/planning/gigs/dealTerms.ts.
+export type DealType = 'flat_fee' | 'guarantee' | 'guarantee_plus' | 'guarantee_vs' | 'door_deal'
+export type FeeBasis = 'none' | 'percentage' | 'amount'
+export type AgencyFeeMode = 'exclusive' | 'inclusive'
 
 export interface GigTag {
   id?: Id

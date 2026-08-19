@@ -15,8 +15,13 @@ import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import TaskComposer, { type TaskDraft } from './TaskComposer.tsx'
 import { TaskAssigneeControl, TaskDueControl } from './TaskMetaControls.tsx'
 import { createTask, deleteTask, updateTask } from '../../gigs.ts'
+import { useCompactLayout } from '../../../../hooks/useCompactLayout.ts'
 import { isPastDate } from '../../../../utils/dateFormat.ts'
 import type { Id, Member, Task } from '../../../../types/entities.ts'
+
+// Desktop lays the cards out as a wrapped flow of fixed-width tiles; compact
+// stacks them full width.
+const CARD_WIDTH = 320
 
 interface GigTasksProps {
   gigId: Id
@@ -43,8 +48,14 @@ export default function GigTasks({
   onTaskDelete,
 }: Readonly<GigTasksProps>) {
   const { t } = useTranslation('gigs')
+  const isCompact = useCompactLayout()
   const [tasks, setTasks] = useState<Task[]>(initialTasks)
   const [showCompleted, setShowCompleted] = useState(false)
+
+  const cardSx = isCompact
+    ? { width: '100%' }
+    : { flex: `0 0 ${CARD_WIDTH}px`, maxWidth: CARD_WIDTH }
+  const flowSx = { display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 1 }
 
   function applyUpdate(updated: Task) {
     setTasks((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
@@ -87,7 +98,7 @@ export default function GigTasks({
     const showMetaRow = canWrite || hasMeta
 
     return (
-      <Card key={String(task.id)} variant="outlined" sx={{ mb: 0.75 }}>
+      <Card key={String(task.id)} variant="outlined" sx={cardSx}>
         <Stack direction="row" sx={{ alignItems: 'center', gap: 0.5, pl: 1, pr: 1.5, py: 0.5 }}>
           <Checkbox
             size="small"
@@ -163,7 +174,7 @@ export default function GigTasks({
           <TaskComposer members={members} onAdd={handleAdd} />
         </Box>
       )}
-      {openTasks.map((task) => renderTaskCard(task))}
+      <Box sx={flowSx}>{openTasks.map((task) => renderTaskCard(task))}</Box>
 
       {/* Completed tasks — collapsed by default */}
       {doneTasks.length > 0 && (
@@ -196,7 +207,7 @@ export default function GigTasks({
             </Typography>
           </Box>
           <Collapse in={showCompleted}>
-            <Box sx={{ pt: 0.75 }}>{doneTasks.map((task) => renderTaskCard(task))}</Box>
+            <Box sx={{ ...flowSx, pt: 0.75 }}>{doneTasks.map((task) => renderTaskCard(task))}</Box>
           </Collapse>
         </Box>
       )}

@@ -88,7 +88,7 @@ beforeEach(async () => {
 
   // Give gig A a booking fee.
   await pool.query(
-    `UPDATE gigs SET booking_fee_cents = 50000, venue_id = $1 WHERE id = $2`,
+    `UPDATE gigs SET guaranteed_fee_cents = 50000, venue_id = $1 WHERE id = $2`,
     [seed.venues[0].id, seed.gigA.id],
   )
 

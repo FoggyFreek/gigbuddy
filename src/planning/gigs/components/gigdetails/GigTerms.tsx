@@ -8,12 +8,10 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import Divider from '@mui/material/Divider'
-import FormControlLabel from '@mui/material/FormControlLabel'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
 import Stack from '@mui/material/Stack'
-import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
@@ -23,6 +21,13 @@ import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import { useTranslation } from 'react-i18next'
 import { Link as RouterLink, useNavigate } from 'react-router'
 import StatusDot from '../../../../components/StatusDot.tsx'
+import ArtistStatement from './terms/ArtistStatement.tsx'
+import BookerSection from './terms/BookerSection.tsx'
+import DealSection from './terms/DealSection.tsx'
+import GigCostsEditor from './terms/GigCostsEditor.tsx'
+import TicketUpside from './terms/TicketUpside.tsx'
+import { NO_NUMBER_SPINNER_SX } from './terms/termsFieldSx.ts'
+import { dealTermsFromForm } from './gigFormFields.ts'
 import { getGigMerchSummary } from '../../gigs.ts'
 import { draftFromGig, listInvoicesByGig } from '../../../../finance/invoices/invoices.ts'
 import { createInvoiceFromGigDraft } from '../../../../finance/invoices/components/createInvoiceFromGigDraft.ts'
@@ -30,14 +35,8 @@ import { usePermissions } from '../../../../hooks/usePermissions.ts'
 import { formatShortDate } from '../../../../utils/dateFormat.ts'
 import { formatEur } from '../../../../finance/invoices/invoiceTotals.ts'
 import { invoiceStatusColor } from '../../../../finance/invoices/invoiceStatus.ts'
-import type { GigMerchSummary, Id, Invoice, InvoiceStatus, Venue } from '../../../../types/entities.ts'
+import type { GigCost, GigMerchSummary, Id, Invoice, InvoiceStatus, Venue } from '../../../../types/entities.ts'
 import type { GigDetailForm } from './types.ts'
-
-const NO_NUMBER_SPINNER_SX = {
-  '& input[type=number]': { MozAppearance: 'textfield' },
-  '& input[type=number]::-webkit-outer-spin-button': { WebkitAppearance: 'none', margin: 0 },
-  '& input[type=number]::-webkit-inner-spin-button': { WebkitAppearance: 'none', margin: 0 },
-}
 
 interface Props {
   active: boolean
@@ -45,9 +44,13 @@ interface Props {
   gigId: Id
   gigLoaded: boolean
   form: GigDetailForm
+  costs: GigCost[]
   selectedVenue: Venue | null
   selectedFestival: Venue | null
   onChange: (field: string, value: unknown) => void
+  onAddCost: (label: string, amountCents: number) => Promise<void>
+  onUpdateCost: (costId: Id, label: string, amountCents: number) => Promise<void>
+  onDeleteCost: (costId: Id) => Promise<void>
 }
 
 export default function GigTerms({
@@ -56,9 +59,13 @@ export default function GigTerms({
   gigId,
   gigLoaded,
   form,
+  costs,
   selectedVenue,
   selectedFestival,
   onChange,
+  onAddCost,
+  onUpdateCost,
+  onDeleteCost,
 }: Readonly<Props>) {
   const { t, i18n } = useTranslation(['gigs', 'common'])
   const { canViewFinance, canManageFinance } = usePermissions()
@@ -94,6 +101,10 @@ export default function GigTerms({
     return () => controller.abort()
   }, [gigId, invoicesEnabled])
 
+  // Derived from the form rather than the saved row, so the statement and the
+  // simulation track what is being typed instead of lagging the debounced save.
+  const dealTerms = dealTermsFromForm(form, costs)
+
   const invoiceTarget = selectedFestival ?? selectedVenue
   const invoiceCustomerName = invoiceTarget?.organization_name || invoiceTarget?.name || ''
   const canCreateInvoice =
@@ -126,31 +137,8 @@ export default function GigTerms({
                   {t($ => $.detail.terms)}
                 </Typography>
               </Grid>
-              <Grid size={12}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={form.admission === 'paid'}
-                      disabled={!editable}
-                      onChange={(event) => onChange('admission', event.target.checked ? 'paid' : 'free')}
-                    />
-                  }
-                  label={t($ => $.detail.paidAdmission)}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  label={t($ => $.detail.guaranteedFee)}
-                  fullWidth
-                  value={form.booking_fee}
-                  onChange={(event) => onChange('booking_fee', event.target.value)}
-                  placeholder="0.00"
-                  slotProps={{
-                    htmlInput: { readOnly: !editable },
-                    input: { startAdornment: <InputAdornment position="start">€</InputAdornment> },
-                  }}
-                />
-              </Grid>
+              <DealSection editable={editable} form={form} onChange={onChange} />
+
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   label={t($ => $.detail.merchandiseCut)}
@@ -166,55 +154,52 @@ export default function GigTerms({
                   }}
                 />
               </Grid>
-              {form.admission === 'paid' && (
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    label={t($ => $.detail.percentageOfNetSales)}
-                    type="number"
-                    fullWidth
-                    value={form.percentage_of_sales}
-                    onChange={(event) => onChange('percentage_of_sales', event.target.value)}
-                    placeholder="0"
-                    sx={NO_NUMBER_SPINNER_SX}
-                    slotProps={{
-                      htmlInput: { min: 0, max: 100, step: 0.5, readOnly: !editable },
-                      input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
-                    }}
-                  />
-                </Grid>
-              )}
-              {form.admission === 'paid' && (
-                <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField
-                    label={t($ => $.detail.ticketLink)}
-                    type="url"
-                    fullWidth
-                    value={form.ticket_link}
-                    onChange={(event) => onChange('ticket_link', event.target.value)}
-                    slotProps={{
-                      htmlInput: { readOnly: !editable },
-                      input: {
-                        endAdornment: form.ticket_link ? (
-                          <InputAdornment position="end">
-                            <Tooltip title={t($ => $.detail.openLink)}>
-                              <IconButton
-                                size="small"
-                                edge="end"
-                                component="a"
-                                href={form.ticket_link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                <OpenInNewIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </InputAdornment>
-                        ) : null,
-                      },
-                    }}
-                  />
-                </Grid>
-              )}
+              {/* Always offered: the deal type says whether tickets are sold,
+                  so there is no separate paid-admission flag to gate this on. */}
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label={t($ => $.detail.ticketLink)}
+                  type="url"
+                  fullWidth
+                  value={form.ticket_link}
+                  onChange={(event) => onChange('ticket_link', event.target.value)}
+                  slotProps={{
+                    htmlInput: { readOnly: !editable },
+                    input: {
+                      endAdornment: form.ticket_link ? (
+                        <InputAdornment position="end">
+                          <Tooltip title={t($ => $.detail.openLink)}>
+                            <IconButton
+                              size="small"
+                              edge="end"
+                              component="a"
+                              href={form.ticket_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <OpenInNewIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </InputAdornment>
+                      ) : null,
+                    },
+                  }}
+                />
+              </Grid>
+
+              <GigCostsEditor
+                editable={editable}
+                costs={costs}
+                onAdd={onAddCost}
+                onUpdate={onUpdateCost}
+                onDelete={onDeleteCost}
+              />
+
+              <BookerSection editable={editable} form={form} onChange={onChange} />
+
+              <ArtistStatement terms={dealTerms} costLineCount={costs.length} />
+
+              <TicketUpside terms={dealTerms} />
 
               {editable && merchSummary && merchSummary.unitsSold > 0 && (
                 <Grid size={12}>
