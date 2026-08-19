@@ -1,4 +1,3 @@
-import Alert from '@mui/material/Alert'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Grid from '@mui/material/Grid'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -7,8 +6,9 @@ import Switch from '@mui/material/Switch'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
-import PercentSplitField from './PercentSplitField.tsx'
+import TicketSplitField from './TicketSplitField.tsx'
 import { NO_NUMBER_SPINNER_SX } from './termsFieldSx.ts'
+import FieldHelpAdornment from '../FieldHelpAdornment.tsx'
 import {
   DEAL_TYPES,
   dealTypeChoosesVenueCosts,
@@ -41,6 +41,12 @@ export default function DealSection({ editable, form, onChange }: Readonly<Props
   }
   const countProps = { htmlInput: { min: 0, step: 1, readOnly: !editable } }
 
+  // The same field props with the field's explanation folded into its end, so a
+  // number's meaning travels with the number instead of a line of prose under it.
+  function withHelp<T extends { htmlInput?: object; input?: object }>(props: T, help: string) {
+    return { ...props, input: { ...props.input, endAdornment: <FieldHelpAdornment help={help} /> } }
+  }
+
   return (
     <>
       <Grid size={12}>
@@ -57,6 +63,11 @@ export default function DealSection({ editable, form, onChange }: Readonly<Props
           value={dealType}
           disabled={!editable}
           onChange={(event) => onChange('deal_type', event.target.value)}
+          slotProps={{
+            input: {
+              endAdornment: <FieldHelpAdornment help={t($ => $.detail.deal.dealTypeHelp[dealType])} />,
+            },
+          }}
         >
           {DEAL_TYPES.map((type) => (
             <MenuItem key={type} value={type}>{t($ => $.detail.deal.dealTypes[type])}</MenuItem>
@@ -81,23 +92,18 @@ export default function DealSection({ editable, form, onChange }: Readonly<Props
 
       {hasShare && (
         <Grid size={dealColumn}>
-          <PercentSplitField
-            artistLabel={dealType === 'guarantee_vs'
-              ? t($ => $.detail.deal.ticketPercentage)
-              : t($ => $.detail.deal.percentAfterBreakEven)}
-            venueLabel={t($ => $.detail.deal.venueShare)}
+          {/* Whether the share applies before or after break-even is the deal
+              type's business, and its own help icon says so. */}
+          <TicketSplitField
+            label={t($ => $.detail.deal.ticketPercentage)}
+            complementLabel={t($ => $.detail.deal.venueShare)}
+            help={t($ => $.detail.deal.ticketSplitHelp)}
             value={form.percentage_of_sales as string}
             disabled={!editable}
             onChange={(next) => onChange('percentage_of_sales', next)}
           />
         </Grid>
       )}
-
-      <Grid size={12}>
-        <Alert severity="info" variant="outlined" icon={false} sx={{ py: 0.5 }}>
-          <Typography variant="body2">{t($ => $.detail.deal.dealTypeHelp[dealType])}</Typography>
-        </Alert>
-      </Grid>
 
       {dealTypeChoosesVenueCosts(dealType) && (
         <Grid size={12}>
@@ -122,9 +128,8 @@ export default function DealSection({ editable, form, onChange }: Readonly<Props
           value={form.venue_costs}
           onChange={(event) => onChange('venue_costs', event.target.value)}
           placeholder="0.00"
-          helperText={t($ => $.detail.deal.venueCostsHelp)}
           sx={NO_NUMBER_SPINNER_SX}
-          slotProps={moneyProps}
+          slotProps={withHelp(moneyProps, t($ => $.detail.deal.venueCostsHelp))}
         />
       </Grid>
 
@@ -149,9 +154,8 @@ export default function DealSection({ editable, form, onChange }: Readonly<Props
           value={form.expected_visitors}
           onChange={(event) => onChange('expected_visitors', event.target.value)}
           placeholder="0"
-          helperText={t($ => $.detail.deal.expectedVisitorsHelp)}
           sx={NO_NUMBER_SPINNER_SX}
-          slotProps={countProps}
+          slotProps={withHelp(countProps, t($ => $.detail.deal.expectedVisitorsHelp))}
         />
       </Grid>
 
@@ -163,9 +167,8 @@ export default function DealSection({ editable, form, onChange }: Readonly<Props
           value={form.ticket_price_net}
           onChange={(event) => onChange('ticket_price_net', event.target.value)}
           placeholder="0.00"
-          helperText={t($ => $.detail.deal.netTicketPriceHelp)}
           sx={NO_NUMBER_SPINNER_SX}
-          slotProps={moneyProps}
+          slotProps={withHelp(moneyProps, t($ => $.detail.deal.netTicketPriceHelp))}
         />
       </Grid>
 

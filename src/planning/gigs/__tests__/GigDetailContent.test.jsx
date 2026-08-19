@@ -223,13 +223,13 @@ describe('GigDetailContent — field rendering', () => {
   // switch is gone and the ticket link no longer hides behind it.
   it('has no paid admission switch', async () => {
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     expect(screen.queryByLabelText(/paid admission/i)).not.toBeInTheDocument()
   })
 
   it('always shows the ticket link field', async () => {
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     expect(screen.getByLabelText(/ticket link/i)).toBeInTheDocument()
   })
 
@@ -246,7 +246,7 @@ describe('GigDetailContent — field rendering', () => {
   it('shows the migrated notes as the Remarks block on the Tasks tab', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Tasks')
 
     expect(screen.getByText('Additional information')).toBeInTheDocument()
@@ -256,7 +256,7 @@ describe('GigDetailContent — field rendering', () => {
   it('saves an edited information block against its own endpoint', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Tasks')
     await user.type(screen.getByLabelText('Remarks / Notes'), ' + DI')
 
@@ -271,7 +271,7 @@ describe('GigDetailContent — field rendering', () => {
   it('renders the Terms section heading', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
     expect(screen.getByRole('heading', { name: /^terms$/i })).toBeInTheDocument()
   })
@@ -282,41 +282,38 @@ describe('GigDetailContent — field rendering', () => {
     expect(screen.queryByLabelText(/band fee/i)).not.toBeInTheDocument()
   })
 
-  it('shows Merchandise cut regardless of admission', async () => {
-    wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
-    expect(screen.getByLabelText(/merchandise cut/i)).toBeInTheDocument()
-  })
-
   // The ticket share hangs off the deal type, not off admission: a door deal
   // can be agreed before ticketing is, and free admission must not wipe it.
   it('hides the ticket share on a flat fee', async () => {
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
-    expect(screen.queryByLabelText(/pct\. after break-even/i)).not.toBeInTheDocument()
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     expect(screen.queryByLabelText(/ticket percentage/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/venue \/ promoter/i)).not.toBeInTheDocument()
   })
 
   it('shows the ticket share on a guarantee, free admission or not', async () => {
     getGig.mockResolvedValueOnce({ ...GIG_FREE, deal_type: 'guarantee', percentage_of_sales: 70 })
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/pct\. after break-even/i))
-    expect(screen.getByLabelText(/pct\. after break-even/i)).toHaveValue(70)
+    await waitFor(() => screen.getByLabelText(/ticket percentage/i))
+    expect(screen.getByLabelText(/ticket percentage/i)).toHaveValue(70)
     // The venue's half of the split is derived, never stored.
     expect(screen.getByLabelText(/venue \/ promoter/i)).toHaveValue(30)
   })
 
-  it('labels the share as a ticket percentage on a guarantee vs.', async () => {
+  // One label for the pair, whatever the deal type: whether the share is taken
+  // before or after break-even is the deal type's own business.
+  it('names the share the same way on a guarantee vs.', async () => {
     getGig.mockResolvedValueOnce({ ...GIG_FREE, deal_type: 'guarantee_vs', percentage_of_sales: 50 })
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/ticket percentage/i))
-    expect(screen.queryByLabelText(/pct\. after break-even/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText(/ticket percentage/i)).toHaveValue(50)
+    expect(screen.getByLabelText(/venue \/ promoter/i)).toHaveValue(50)
   })
 
   it('drops the guaranteed fee on a door deal', async () => {
     getGig.mockResolvedValueOnce({ ...GIG_FREE, deal_type: 'door_deal', percentage_of_sales: 70 })
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/pct\. after break-even/i))
+    await waitFor(() => screen.getByLabelText(/ticket percentage/i))
     expect(screen.queryByLabelText(/guaranteed fee/i)).not.toBeInTheDocument()
   })
 
@@ -403,24 +400,13 @@ describe('GigDetailContent — Terms field saving', () => {
     updateGig.mockClear()
   })
 
-  it('saves Merchandise cut as a number', async () => {
-    const user = userEvent.setup()
-    wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
-    await openTab(user, 'Terms')
-    await user.type(screen.getByLabelText(/merchandise cut/i), '15')
-    await waitFor(
-      () => expect(updateGig).toHaveBeenCalledWith(1, { merchandise_cut: 15 })
-    )
-  })
-
   it('saves the artist ticket share as a number', async () => {
     getGig.mockResolvedValueOnce({ ...GIG_PAID, deal_type: 'guarantee' })
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/pct\. after break-even/i))
+    await waitFor(() => screen.getByLabelText(/ticket percentage/i))
     await openTab(user, 'Terms')
-    await user.type(screen.getByLabelText(/pct\. after break-even/i), '20')
+    await user.type(screen.getByLabelText(/ticket percentage/i), '20')
     await waitFor(
       () => expect(updateGig).toHaveBeenCalledWith(1, { percentage_of_sales: 20 })
     )
@@ -471,9 +457,10 @@ describe('GigDetailContent — Terms field saving', () => {
   it('saves the deal type on its own when it is switched', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
-    await user.click(screen.getByLabelText(/deal type/i))
+    // Exact: the field's help icon is named "About this deal type".
+    await user.click(screen.getByLabelText('Deal type'))
     await user.click(screen.getByRole('option', { name: 'Door deal' }))
     await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, { deal_type: 'door_deal' }))
   })
@@ -490,7 +477,6 @@ describe('GigDetailContent — reader mode (canWrite=false)', () => {
     await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
     expect(screen.getByLabelText(/event description/i)).toHaveAttribute('readonly')
     expect(screen.getByLabelText(/event description/i)).not.toBeDisabled()
-    expect(screen.getByLabelText(/merchandise cut/i)).toHaveAttribute('readonly')
     expect(screen.getByLabelText(/guaranteed fee/i)).toHaveAttribute('readonly')
     expect(screen.getByLabelText(/venue costs/i)).toHaveAttribute('readonly')
     expect(screen.getByLabelText(/notes/i)).toHaveAttribute('readonly')
@@ -499,7 +485,7 @@ describe('GigDetailContent — reader mode (canWrite=false)', () => {
 
   it('hides the banner upload control', async () => {
     wrap(<GigDetailContent gigId={1} canWrite={false} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     expect(screen.queryByRole('button', { name: /upload banner/i })).not.toBeInTheDocument()
   })
 
@@ -508,17 +494,17 @@ describe('GigDetailContent — reader mode (canWrite=false)', () => {
     // because the select is disabled its onChange never fires, so nothing saves.
     const user = userEvent.setup({ pointerEventsCheck: 0 })
     wrap(<GigDetailContent gigId={1} canWrite={false} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
-    expect(screen.getByLabelText(/deal type/i)).toHaveAttribute('aria-disabled', 'true')
-    await user.click(screen.getByLabelText(/deal type/i))
+    expect(screen.getByLabelText('Deal type')).toHaveAttribute('aria-disabled', 'true')
+    await user.click(screen.getByLabelText('Deal type'))
     expect(updateGig).not.toHaveBeenCalled()
   })
 
   it('offers no way to add or remove a cost line', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} canWrite={false} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
     expect(screen.queryByRole('button', { name: /^add$/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /delete cost/i })).not.toBeInTheDocument()
@@ -587,9 +573,7 @@ describe('GigDetailContent — Terms role gating', () => {
     await openTab(user, 'Terms')
 
     expect(screen.queryByRole('heading', { name: /^terms$/i })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/merchandise cut/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/guaranteed fee/i)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/merchandise cut/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/venue costs/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/ticket link/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/merchandise sold/i)).not.toBeInTheDocument()
@@ -773,13 +757,13 @@ describe('GigDetailContent — merch sold summary', () => {
 
   it('hides the card when there are no sales', async () => {
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     expect(screen.queryByText(/merchandise sold/i)).not.toBeInTheDocument()
   })
 
   it('does not render the card or fetch the summary for readers', async () => {
     wrap(<GigDetailContent gigId={1} canWrite={false} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     expect(screen.queryByText(/merchandise sold/i)).not.toBeInTheDocument()
     expect(getGigMerchSummary).not.toHaveBeenCalled()
   })
@@ -794,7 +778,7 @@ describe('GigDetailContent — ticket link field', () => {
   it('auto-saves ticket_link when typed', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
     // Paste the whole URL in one event rather than typing it character by
     // character: each keystroke re-renders the (heavy) detail body, and ~20 of
@@ -823,7 +807,7 @@ describe('GigDetailContent — ticket link field', () => {
   it('does not show open-link anchor when ticket_link is empty', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
     // ticket_link is empty — no anchor with a ticket URL should exist
     const links = screen.queryAllByRole('link')
@@ -907,7 +891,7 @@ describe('GigDetailContent — location map', () => {
   it('hides the map and does not geocode when neither venue nor festival has a city', async () => {
     getGig.mockResolvedValueOnce(gigWith({ venue: { id: 11, name: 'TBD', category: 'venue' }, festival: null }))
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     expect(geocodePlace).not.toHaveBeenCalled()
     expect(screen.queryByTestId('gig-location-map')).not.toBeInTheDocument()
   })
@@ -916,7 +900,7 @@ describe('GigDetailContent — location map', () => {
     let resolve
     geocodePlace.mockReturnValueOnce(new Promise((r) => { resolve = r }))
     const { unmount } = wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     unmount()
     await act(async () => { resolve({ lat: 1, lon: 2 }) })
     expect(screen.queryByTestId('gig-location-map')).not.toBeInTheDocument()
@@ -968,7 +952,7 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
   })
 
   async function openTerms(user) {
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
   }
 
@@ -1192,7 +1176,7 @@ describe('GigDetailContent — personal workspace', () => {
     // The Terms/Participants panels are unmounted, not merely hidden, so their
     // fields are gone too. The Event tab's band-availability panel is gated on
     // tenant kind (personal here) regardless, so it never mounts either.
-    expect(screen.queryByLabelText(/merchandise cut/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/ticket link/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/guaranteed fee/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/member availability/i)).not.toBeInTheDocument()
     expect(getAvailabilityOn).not.toHaveBeenCalled()
@@ -1279,8 +1263,8 @@ describe('GigDetailContent — personal workspace', () => {
     expect(listMembers).not.toHaveBeenCalled()
 
     await openTab(user, 'Terms')
-    await user.type(screen.getByLabelText(/merchandise cut/i), '15')
-    await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, { merchandise_cut: 15 }))
+    await user.type(screen.getByLabelText(/venue capacity/i), '15')
+    await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, { venue_capacity: 15 }))
   })
 
   // The band switcher takes the event-banner slot for a gigbuddy band's gig; a

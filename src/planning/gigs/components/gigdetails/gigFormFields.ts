@@ -26,7 +26,7 @@ const REQUIRED_MONEY_FIELDS = new Set(['agency_fee_amount', 'commission_amount']
 export const COUNT_FIELDS = new Set(['venue_capacity', 'expected_visitors', 'tickets_sold'])
 
 /** NUMERIC(5,2) percentages; blank clears them. */
-export const NULLABLE_PERCENT_FIELDS = new Set(['merchandise_cut', 'percentage_of_sales'])
+export const NULLABLE_PERCENT_FIELDS = new Set(['percentage_of_sales'])
 
 /** NUMERIC(5,2) percentages on NOT NULL columns; blank means zero. */
 export const REQUIRED_PERCENT_FIELDS = new Set(['agency_fee_percentage', 'commission_percentage'])

@@ -1,3 +1,4 @@
+import Box from '@mui/material/Box'
 import Card from '@mui/material/Card'
 import Grid from '@mui/material/Grid'
 import Stack from '@mui/material/Stack'
@@ -18,35 +19,46 @@ interface CellProps {
   amountCents: number
   breakdown: string
   emphasis?: boolean
+  span?: number
 }
 
-function StatementCell({ label, amountCents, breakdown, emphasis = false }: Readonly<CellProps>) {
+function StatementCell({ label, amountCents, breakdown, emphasis = false, span = 1 }: Readonly<CellProps>) {
   return (
-    // describeChild, so the breakdown lands on aria-describedby rather than
-    // replacing the card's own name — a screen reader still reads the label and
-    // the amount first, then the calculation behind them.
-    <Tooltip title={breakdown} arrow describeChild>
-      <Card
-        variant="outlined"
-        // tabIndex so the breakdown is reachable without a pointer — the
-        // tooltip is the only place the calculation is spelled out.
-        tabIndex={0}
-        sx={{
-          p: 1.5,
-          height: '100%',
-          cursor: 'help',
-          borderColor: emphasis ? 'primary.main' : 'divider',
-          bgcolor: emphasis ? 'action.hover' : undefined,
-        }}
-      >
-        <Stack spacing={0.25}>
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>{label}</Typography>
-          <Typography variant="h6" sx={{ lineHeight: 1.2, fontWeight: emphasis ? 700 : 500 }}>
-            {formatEur(amountCents)}
-          </Typography>
-        </Stack>
-      </Card>
-    </Tooltip>
+    <Grid size={span}>
+      {/* describeChild, so the breakdown lands on aria-describedby rather than
+          replacing the card's own name — a screen reader still reads the label
+          and the amount first, then the calculation behind them. */}
+      <Tooltip title={breakdown} arrow describeChild>
+        <Card
+          variant="outlined"
+          // tabIndex so the breakdown is reachable without a pointer — the
+          // tooltip is the only place the calculation is spelled out.
+          tabIndex={0}
+          sx={{
+            p: 1.5,
+            height: '100%',
+            cursor: 'help',
+            borderRadius: 0,
+            // Only the trailing edges are drawn, so neighbours share a single
+            // hairline instead of stacking two; the wrapper clips the outermost
+            // pair away.
+            borderWidth: '0 1px 1px 0',
+            borderColor: 'divider',
+            bgcolor: emphasis ? 'action.hover' : undefined,
+          }}
+        >
+          <Stack spacing={0.25}>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{label}</Typography>
+            <Typography
+              variant="h6"
+              sx={{ lineHeight: 1.2, fontWeight: emphasis ? 700 : 500, color: emphasis ? 'primary.main' : undefined }}
+            >
+              {formatEur(amountCents)}
+            </Typography>
+          </Stack>
+        </Card>
+      </Tooltip>
+    </Grid>
   )
 }
 
@@ -92,23 +104,23 @@ export default function ArtistStatement({ terms, costLineCount }: Readonly<Props
         {t($ => $.detail.deal.statement.title)}
       </Typography>
 
-      <Grid container spacing={1.5}>
-        <Grid size={{ xs: 12, sm: 4 }}>
+      {/* One collapsed grid: the fee build-up on the first row, the split of it
+          on the second. The negative margins push the trailing hairlines under
+          the wrapper's own border, which the overflow then clips. */}
+      <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+        <Grid container spacing={0} columns={{ xs: 2, sm: 4 }} sx={{ mr: '-1px', mb: '-1px' }}>
           <StatementCell
             label={t($ => $.detail.deal.statement.grossFee)}
             amountCents={statement.grossFeeCents}
             breakdown={feeBreakdown}
           />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 4 }}>
           <StatementCell
             label={t($ => $.detail.deal.statement.costs)}
             amountCents={statement.costsCents}
             breakdown={t($ => $.detail.deal.statement.breakdown.costs, { count: costLineCount })}
           />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 4 }}>
           <StatementCell
+            span={2}
             label={t($ => $.detail.deal.statement.nettFee)}
             amountCents={statement.nettFeeCents}
             breakdown={t($ => $.detail.deal.statement.breakdown.nettFee, {
@@ -116,23 +128,17 @@ export default function ArtistStatement({ terms, costLineCount }: Readonly<Props
               costs: formatEur(statement.costsCents),
             })}
           />
-        </Grid>
 
-        <Grid size={{ xs: 6, sm: 3 }}>
           <StatementCell
             label={t($ => $.detail.deal.statement.bookingFee)}
             amountCents={statement.agencyFeeCents}
             breakdown={agencyBreakdown}
           />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 3 }}>
           <StatementCell
             label={t($ => $.detail.deal.statement.commission)}
             amountCents={statement.commissionCents}
             breakdown={commissionBreakdown}
           />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 3 }}>
           <StatementCell
             label={t($ => $.detail.deal.statement.dueToBooker)}
             amountCents={statement.dueToBookerCents}
@@ -141,8 +147,6 @@ export default function ArtistStatement({ terms, costLineCount }: Readonly<Props
               commission: formatEur(statement.commissionCents),
             })}
           />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 3 }}>
           <StatementCell
             emphasis
             label={t($ => $.detail.deal.statement.dueToArtist)}
@@ -150,7 +154,7 @@ export default function ArtistStatement({ terms, costLineCount }: Readonly<Props
             breakdown={artistBreakdown}
           />
         </Grid>
-      </Grid>
+      </Box>
     </Grid>
   )
 }

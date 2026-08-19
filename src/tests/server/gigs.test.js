@@ -174,71 +174,69 @@ describe('gig admission — tenant isolation', () => {
   })
 })
 
-describe('gig deal terms — merchandise_cut & percentage_of_sales', () => {
-  it('PATCH persists both percentages to DB', async () => {
+describe('gig deal terms — percentage_of_sales', () => {
+  it('PATCH persists the percentage to DB', async () => {
     await asUserA(
       request(app)
         .patch(`/api/gigs/${seed.gigA.id}`)
-        .send({ merchandise_cut: 15, percentage_of_sales: '20.5' })
+        .send({ percentage_of_sales: '20.5' })
     ).expect(200)
     const { rows } = await pool.query(
-      'SELECT merchandise_cut, percentage_of_sales FROM gigs WHERE id = $1',
+      'SELECT percentage_of_sales FROM gigs WHERE id = $1',
       [seed.gigA.id]
     )
-    expect(Number(rows[0].merchandise_cut)).toBe(15)
     expect(Number(rows[0].percentage_of_sales)).toBe(20.5)
   })
 
-  it('PATCH null clears a percentage field', async () => {
+  it('PATCH null clears the percentage field', async () => {
     await asUserA(
-      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ merchandise_cut: 10 })
+      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ percentage_of_sales: 10 })
     ).expect(200)
     await asUserA(
-      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ merchandise_cut: null })
+      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ percentage_of_sales: null })
     ).expect(200)
     const { rows } = await pool.query(
-      'SELECT merchandise_cut FROM gigs WHERE id = $1',
+      'SELECT percentage_of_sales FROM gigs WHERE id = $1',
       [seed.gigA.id]
     )
-    expect(rows[0].merchandise_cut).toBeNull()
+    expect(rows[0].percentage_of_sales).toBeNull()
   })
 
   it('PATCH rejects out-of-range and non-numeric percentages → 400, DB unchanged', async () => {
     for (const bad of [150, -10, 'abc', '', '   ']) {
       await asUserA(
-        request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ merchandise_cut: bad })
+        request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ percentage_of_sales: bad })
       ).expect(400)
     }
     const { rows } = await pool.query(
-      'SELECT merchandise_cut FROM gigs WHERE id = $1',
+      'SELECT percentage_of_sales FROM gigs WHERE id = $1',
       [seed.gigA.id]
     )
-    expect(rows[0].merchandise_cut).toBeNull()
+    expect(rows[0].percentage_of_sales).toBeNull()
   })
 
-  it('PATCH percentages on foreign-tenant gig → 404, DB unchanged', async () => {
+  it('PATCH percentage on foreign-tenant gig → 404, DB unchanged', async () => {
     await asUserA(
       request(app)
         .patch(`/api/gigs/${seed.gigB.id}`)
-        .send({ merchandise_cut: 25 })
+        .send({ percentage_of_sales: 25 })
     ).expect(404)
     const { rows } = await pool.query(
-      'SELECT merchandise_cut FROM gigs WHERE id = $1',
+      'SELECT percentage_of_sales FROM gigs WHERE id = $1',
       [seed.gigB.id]
     )
-    expect(rows[0].merchandise_cut).toBeNull()
+    expect(rows[0].percentage_of_sales).toBeNull()
   })
 
-  it('GET /api/gigs/:id includes both deal-term fields', async () => {
+  it('GET /api/gigs/:id includes the deal-term field', async () => {
     await asUserA(
       request(app)
         .patch(`/api/gigs/${seed.gigA.id}`)
-        .send({ merchandise_cut: 12.5, percentage_of_sales: 30 })
+        .send({ percentage_of_sales: 30 })
     ).expect(200)
     const res = await asUserA(
       request(app).get(`/api/gigs/${seed.gigA.id}`)
     ).expect(200)
-    expect(Number(res.body.merchandise_cut)).toBe(12.5)
     expect(Number(res.body.percentage_of_sales)).toBe(30)
   })
 })

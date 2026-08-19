@@ -138,7 +138,6 @@ export interface Gig {
   members_availability?: MemberAvailability[]
   // Venue deal terms. NUMERIC(5,2) percentages arrive as strings over the wire
   // but may be set as numbers in code; null = not agreed.
-  merchandise_cut?: number | string | null
   /** Doubles as the artist's share of ticket revenue; the venue takes the rest. */
   percentage_of_sales?: number | string | null
   // Deal terms. The maths that turns these into an artist statement lives in

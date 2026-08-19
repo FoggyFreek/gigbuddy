@@ -38,6 +38,7 @@ import type { GigTimetableInput } from '../../gigs.ts'
 import { dayjsToTimeString, timeStringToDayjs } from '../../../events/eventFormUtils.ts'
 import useDebouncedSave from '../../../../hooks/useDebouncedSave.ts'
 import { useDialog } from '../../../../contexts/dialogContext.ts'
+import { lineCellSx, lineFieldSx, lineHeadCellSx, lineTableSx } from './lineTableSx.ts'
 import type { GigTimetableEntry, Id } from '../../../../types/entities.ts'
 
 // The line is persisted the moment it is added rather than on first keystroke:
@@ -47,34 +48,11 @@ function isBlank(entry: GigTimetableEntry): boolean {
   return !entry.start_time && !entry.end_time && !entry.description.trim()
 }
 
-// The header and every row share one column track so the hairlines line up.
 // A reader gets neither the drag handle nor the remove button, so the outer
 // columns fall away with them.
 function gridColumns(editable: boolean): string {
   return editable ? '40px 88px 88px minmax(0, 1fr) 44px' : '88px 88px minmax(0, 1fr)'
 }
-
-const cellSx = {
-  display: 'flex',
-  alignItems: 'center',
-  minWidth: 0,
-  borderRight: 1,
-  borderColor: 'divider',
-  '&:last-of-type': { borderRight: 0 },
-} as const
-
-const headCellSx = { ...cellSx, px: 1, py: 0.5 } as const
-
-// The fields fill their cell edge to edge: no outline, no underline, no
-// floating label — the grid's own hairlines are the only frame. With the label
-// gone the name has to be set explicitly, and for a picker field that means the
-// `input` slot: an aria-label on the field itself lands on the wrapper, not on
-// the editable sections.
-const fieldSx = {
-  px: 1,
-  '& .MuiInputBase-root': { py: 0.75 },
-  '& input': { p: 0 },
-} as const
 
 interface Props {
   gigId: Id
@@ -187,11 +165,9 @@ export default function GigTimetable({ gigId, editable, initialEntries }: Readon
         </Alert>
       )}
 
-      {/* One outlined block with hairline-separated rows: the lines read as a
-          schedule, not as a stack of individual form controls. The column
-          captions carry the field names, so the inputs themselves are labelled
-          for assistive technology only. */}
-      <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+      {/* The column captions carry the field names, so the inputs themselves
+          are labelled for assistive technology only. */}
+      <Box sx={lineTableSx}>
         <Box
           sx={{
             display: 'grid',
@@ -199,23 +175,23 @@ export default function GigTimetable({ gigId, editable, initialEntries }: Readon
             bgcolor: 'action.hover',
           }}
         >
-          {editable && <Box sx={headCellSx} />}
-          <Box sx={headCellSx}>
+          {editable && <Box sx={lineHeadCellSx} />}
+          <Box sx={lineHeadCellSx}>
             <Typography variant="caption" sx={{ fontWeight: 600 }}>
               {t($ => $.detail.timetable.startTime)}
             </Typography>
           </Box>
-          <Box sx={headCellSx}>
+          <Box sx={lineHeadCellSx}>
             <Typography variant="caption" sx={{ fontWeight: 600 }}>
               {t($ => $.detail.timetable.endTime)}
             </Typography>
           </Box>
-          <Box sx={headCellSx}>
+          <Box sx={lineHeadCellSx}>
             <Typography variant="caption" sx={{ fontWeight: 600 }}>
               {t($ => $.detail.timetable.description)}
             </Typography>
           </Box>
-          {editable && <Box sx={headCellSx} />}
+          {editable && <Box sx={lineHeadCellSx} />}
         </Box>
 
         {entries.length === 0 && (
@@ -295,7 +271,7 @@ function TimetableRow({ entry, editable, onFieldChange, onTimeChange, onSave, on
       }}
     >
       {editable && (
-        <Box sx={{ ...cellSx, justifyContent: 'center' }}>
+        <Box sx={{ ...lineCellSx, justifyContent: 'center' }}>
           <IconButton
             size="small"
             {...attributes}
@@ -307,7 +283,7 @@ function TimetableRow({ entry, editable, onFieldChange, onTimeChange, onSave, on
           </IconButton>
         </Box>
       )}
-      <Box sx={cellSx}>
+      <Box sx={lineCellSx}>
         <TimeField
           variant="standard"
           fullWidth
@@ -316,7 +292,7 @@ function TimetableRow({ entry, editable, onFieldChange, onTimeChange, onSave, on
           readOnly={!editable}
           value={timeStringToDayjs(entry.start_time)}
           onChange={(value) => onTimeChange(entry.id, 'start_time', dayjsToTimeString(value))}
-          sx={fieldSx}
+          sx={lineFieldSx}
           slotProps={{
             textField: {
               slotProps: {
@@ -329,7 +305,7 @@ function TimetableRow({ entry, editable, onFieldChange, onTimeChange, onSave, on
           }}
         />
       </Box>
-      <Box sx={cellSx}>
+      <Box sx={lineCellSx}>
         <TimeField
           variant="standard"
           fullWidth
@@ -338,7 +314,7 @@ function TimetableRow({ entry, editable, onFieldChange, onTimeChange, onSave, on
           readOnly={!editable}
           value={timeStringToDayjs(entry.end_time)}
           onChange={(value) => onTimeChange(entry.id, 'end_time', dayjsToTimeString(value))}
-          sx={fieldSx}
+          sx={lineFieldSx}
           slotProps={{
             textField: {
               slotProps: {
@@ -351,7 +327,7 @@ function TimetableRow({ entry, editable, onFieldChange, onTimeChange, onSave, on
           }}
         />
       </Box>
-      <Box sx={cellSx}>
+      <Box sx={lineCellSx}>
         <TextField
           variant="standard"
           fullWidth
@@ -361,7 +337,7 @@ function TimetableRow({ entry, editable, onFieldChange, onTimeChange, onSave, on
             schedule({ description: event.target.value })
           }}
           onBlur={() => { void flush() }}
-          sx={fieldSx}
+          sx={lineFieldSx}
           slotProps={{
             input: { disableUnderline: true },
             htmlInput: { readOnly: !editable, 'aria-label': t($ => $.detail.timetable.description) },
@@ -369,7 +345,7 @@ function TimetableRow({ entry, editable, onFieldChange, onTimeChange, onSave, on
         />
       </Box>
       {editable && (
-        <Box sx={{ ...cellSx, justifyContent: 'center' }}>
+        <Box sx={{ ...lineCellSx, justifyContent: 'center' }}>
           <Tooltip title={t($ => $.detail.timetable.remove)}>
             <IconButton size="small" color="primary" onClick={() => onDelete(entry)}>
               <CloseIcon fontSize="small" />

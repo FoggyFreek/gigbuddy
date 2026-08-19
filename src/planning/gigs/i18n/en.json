@@ -158,6 +158,7 @@
     "importFailed": "Import failed"
   },
   "detail": {
+    "fieldHelp": "More information",
     "tabs": {
       "event": "Event",
       "terms": "Terms",
@@ -190,7 +191,6 @@
     "location": "Location",
     "openInMaps": "Open in maps",
     "terms": "Terms",
-    "merchandiseCut": "Merchandise cut",
     "ticketLink": "Ticket link",
     "merchandiseSold": "Merchandise sold",
     "itemsSold_one": "{{count}} item · excl. VAT",
@@ -265,12 +265,12 @@
         "door_deal": "A percentage of ticket revenue after the break-even point, with no guaranteed fee."
       },
       "guaranteedFee": "Guaranteed fee",
-      "percentAfterBreakEven": "Pct. after break-even",
       "ticketPercentage": "Ticket percentage",
       "venueShare": "Venue / promoter",
+      "ticketSplitHelp": "The artist's share of ticket revenue first, the venue or promoter's second. The two always add up to 100%.",
       "includeVenueCosts": "Include venue costs in the break-even calculation",
       "venueCosts": "Venue costs",
-      "venueCostsHelp": "Production costs recouped from ticket revenue.",
+      "venueCostsHelp": "Production or venue rental costs.",
       "venueCapacity": "Venue capacity",
       "expectedVisitors": "Expected visitors",
       "expectedVisitorsHelp": "Used to simulate the potential upside.",
@@ -317,7 +317,7 @@
         "deleteLabel": "Delete cost {{label}}"
       },
       "statement": {
-        "title": "Artist statement",
+        "title": "Statement",
         "grossFee": "Gross fee",
         "costs": "Costs",
         "nettFee": "Nett. fee",

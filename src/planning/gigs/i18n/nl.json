@@ -158,6 +158,7 @@
     "importFailed": "Importeren mislukt"
   },
   "detail": {
+    "fieldHelp": "Meer informatie",
     "tabs": {
       "event": "Evenement",
       "terms": "Afspraken",
@@ -190,7 +191,6 @@
     "location": "Locatie",
     "openInMaps": "Openen in kaarten",
     "terms": "Afspraken",
-    "merchandiseCut": "Merchandise-aandeel",
     "ticketLink": "Ticketlink",
     "merchandiseSold": "Verkochte merchandise",
     "itemsSold_one": "{{count}} item · excl. btw",
@@ -265,12 +265,12 @@
         "door_deal": "Een percentage van de kaartopbrengst na het break-evenpunt, zonder gegarandeerde gage."
       },
       "guaranteedFee": "Gegarandeerde gage",
-      "percentAfterBreakEven": "Pct. na break-even",
       "ticketPercentage": "Kaartpercentage",
       "venueShare": "Zaal / promotor",
-      "includeVenueCosts": "Zaalkosten meerekenen in de break-evenberekening",
-      "venueCosts": "Zaalkosten",
-      "venueCostsHelp": "Productiekosten die uit de kaartopbrengst worden terugverdiend.",
+      "ticketSplitHelp": "Eerst het aandeel van de artiest in de kaartopbrengst, dan dat van de zaal of promotor. Samen zijn ze altijd 100%.",
+      "includeVenueCosts": "Locatiekosten meerekenen in de break-evenberekening",
+      "venueCosts": "Locatiekosten",
+      "venueCostsHelp": "Kosten uit productie of locatiehuur.",
       "venueCapacity": "Zaalcapaciteit",
       "expectedVisitors": "Verwachte bezoekers",
       "expectedVisitorsHelp": "Wordt gebruikt om de mogelijke opbrengst te simuleren.",
@@ -317,7 +317,7 @@
         "deleteLabel": "Kostenpost {{label}} verwijderen"
       },
       "statement": {
-        "title": "Artiestenafrekening",
+        "title": "Afrekening",
         "grossFee": "Brutogage",
         "costs": "Kosten",
         "nettFee": "Nettogage",

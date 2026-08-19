@@ -479,7 +479,7 @@ function CompactGigList({ loading, gigs, emptyMessage, selectedId, onRowClick, s
   }
 
   return (
-    <Paper variant="outlined">
+    <Paper variant="outlined" sx={{ borderRadius: '0px'}}>
       {content}
     </Paper>
   )

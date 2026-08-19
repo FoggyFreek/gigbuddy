@@ -45,7 +45,6 @@ export interface GigDetailForm {
   // way out (see gigFormFields.ts); the vocabulary fields hold the stored value.
   deal_type: DealType
   guaranteed_fee: string
-  merchandise_cut: string
   /** The artist's share of ticket revenue; the venue takes the remainder of 100. */
   percentage_of_sales: string
   breakeven_includes_venue_costs: boolean

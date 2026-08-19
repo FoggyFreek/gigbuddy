@@ -29,7 +29,7 @@ const MAX_INT4 = 2147483647
 export const GIG_PATCH_FIELDS = [
   'event_date', 'end_date', 'event_description', 'venue_id', 'festival_id', 'event_link',
   'start_time', 'end_time', 'status', 'guaranteed_fee_cents', 'admission',
-  'ticket_link', 'notes', 'merchandise_cut', 'percentage_of_sales',
+  'ticket_link', 'notes', 'percentage_of_sales',
   // Deal terms (migration 189). percentage_of_sales above doubles as the
   // artist's ticket share; the venue's is the remainder of 100.
   'deal_type', 'breakeven_includes_venue_costs',
@@ -85,7 +85,6 @@ const requiredWhole = (key, raw) => wholeIn(key, raw, { nullable: false })
 // The NOT NULL columns use the required* variants so `null` is a 400 rather
 // than a constraint violation surfacing as a 500.
 const GIG_FIELD_NORMALIZERS = {
-  merchandise_cut: nullablePercent,
   percentage_of_sales: nullablePercent,
   guaranteed_fee_cents: nullableWhole,
   venue_costs_cents: nullableWhole,

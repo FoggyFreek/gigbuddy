@@ -141,7 +141,7 @@ function wrap(ui) {
 }
 
 async function openTerms(user) {
-  await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+  await waitFor(() => screen.getByLabelText(/ticket link/i))
   await user.click(screen.getByRole('button', { name: 'Terms' }))
 }
 
@@ -162,6 +162,19 @@ function tileValue(sectionTestId, label) {
 
 const statementValue = (label) => tileValue('artist-statement', label)
 const upsideValue = (label) => tileValue('ticket-upside', label)
+
+// Every explanation hangs off the field it explains, so its icon is found
+// through that field rather than by a name of its own.
+function fieldHelp(fieldLabel) {
+  const field = screen.getByLabelText(fieldLabel).closest('.MuiFormControl-root')
+  return within(field).getByRole('button', { name: /more information/i })
+}
+
+async function readHelp(user, fieldLabel) {
+  await user.hover(fieldHelp(fieldLabel))
+  const tip = await screen.findByRole('tooltip')
+  return tip.textContent
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -211,6 +224,62 @@ describe('artist statement', () => {
   })
 })
 
+describe('field help', () => {
+  it('spells out nothing until a field\'s help icon is asked', async () => {
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    expect(screen.queryByText(/potential upside from ticket sales/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/production costs recouped from ticket revenue/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/used to simulate the potential upside/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/basis for every calculation below/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/calculated from the gross fee/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/split out of the gross fee/i)).not.toBeInTheDocument()
+
+    const help = fieldHelp('Deal type')
+    await user.hover(help)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(/potential upside from ticket sales/i)
+    // The explanation describes the icon; a paragraph must not become its name,
+    // or it would answer to the deal fields' own label queries.
+    expect(help).toHaveAccessibleDescription(/potential upside from ticket sales/i)
+    expect(screen.getByLabelText(/guaranteed fee/i)).toHaveValue(1000)
+  })
+
+  it('hangs each explanation off the field it explains', async () => {
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    expect(await readHelp(user, 'Venue costs')).toMatch(/production costs recouped from ticket revenue/i)
+    expect(await readHelp(user, 'Expected visitors')).toMatch(/used to simulate the potential upside/i)
+    expect(await readHelp(user, 'Nett. ticket price')).toMatch(/basis for every calculation below/i)
+    // Both fee blocks reuse one field pair, so each states its own basis.
+    expect(await readHelp(user, 'Percentage')).toMatch(/calculated from the gross fee/i)
+    expect(await readHelp(user, 'Exclusive or inclusive')).toMatch(/split out of the gross fee/i)
+  })
+
+  it('explains the deal type that is actually selected', async () => {
+    getGig.mockResolvedValue({ ...GUARANTEE_GIG, deal_type: 'door_deal' })
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    expect(await readHelp(user, 'Deal type'))
+      .toMatch(/percentage of ticket revenue after the break-even point/i)
+  })
+
+  it('follows the booking fee mode that is selected', async () => {
+    // The fixture is inclusive, so the other mode must read differently.
+    getGig.mockResolvedValue({ ...GUARANTEE_GIG, agency_fee_mode: 'exclusive' })
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    expect(await readHelp(user, 'Exclusive or inclusive')).toMatch(/added on top of the gross fee/i)
+  })
+})
+
 describe('ticket upside', () => {
   it('shows break-even, expected and potential shares', async () => {
     const user = userEvent.setup()
@@ -238,14 +307,19 @@ describe('ticket upside', () => {
 })
 
 describe('cost lines', () => {
-  it('lists the gig\'s costs with their total', async () => {
+  it('lists the gig\'s costs in a table with column captions and a total', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await openTerms(user)
 
     expect(screen.getByDisplayValue('Travel')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Catering')).toBeInTheDocument()
-    expect(screen.getByText('Total costs').parentElement).toHaveTextContent('€ 150,00')
+    // The captions carry the field names, so the cells themselves are labelled
+    // for assistive technology only.
+    const table = screen.getByTestId('gig-costs-table')
+    expect(within(table).getByText('Cost')).toBeInTheDocument()
+    expect(within(table).getByText('Amount')).toBeInTheDocument()
+    expect(screen.getByTestId('gig-costs-total')).toHaveTextContent('€ 150,00')
   })
 
   it('adds a cost and folds it into the statement', async () => {
@@ -264,6 +338,23 @@ describe('cost lines', () => {
     await waitFor(() => expect(addGigCost).toHaveBeenCalledWith(1, { label: 'Backline', amount_cents: 7500 }))
     await waitFor(() => expect(statementValue('Costs')).toBe('€ 225,00'))
     expect(statementValue('Nett. fee')).toBe('€ 775,00')
+  })
+
+  it('adds a cost from the draft line with the Enter key', async () => {
+    addGigCost.mockResolvedValue({ id: 43, label: 'Backline', amount_cents: 7500, position: 2 })
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    const labelInputs = screen.getAllByLabelText(/^cost$/i)
+    const amountInputs = screen.getAllByLabelText(/^amount$/i)
+    await user.type(labelInputs[labelInputs.length - 1], 'Backline')
+    await user.type(amountInputs[amountInputs.length - 1], '75{Enter}')
+
+    await waitFor(() => expect(addGigCost).toHaveBeenCalledWith(1, { label: 'Backline', amount_cents: 7500 }))
+    // The draft line is empty again, ready for the next cost.
+    const drafts = screen.getAllByLabelText(/^cost$/i)
+    expect(drafts[drafts.length - 1]).toHaveValue('')
   })
 
   it('will not add a cost without a label', async () => {

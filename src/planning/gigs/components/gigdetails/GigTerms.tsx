@@ -26,7 +26,6 @@ import BookerSection from './terms/BookerSection.tsx'
 import DealSection from './terms/DealSection.tsx'
 import GigCostsEditor from './terms/GigCostsEditor.tsx'
 import TicketUpside from './terms/TicketUpside.tsx'
-import { NO_NUMBER_SPINNER_SX } from './terms/termsFieldSx.ts'
 import { dealTermsFromForm } from './gigFormFields.ts'
 import { getGigMerchSummary } from '../../gigs.ts'
 import { draftFromGig, listInvoicesByGig } from '../../../../finance/invoices/invoices.ts'
@@ -132,28 +131,7 @@ export default function GigTerms({
         <Grid container spacing={2}>
           {canViewFinance && (
             <>
-              <Grid size={12}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  {t($ => $.detail.terms)}
-                </Typography>
-              </Grid>
               <DealSection editable={editable} form={form} onChange={onChange} />
-
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  label={t($ => $.detail.merchandiseCut)}
-                  type="number"
-                  fullWidth
-                  value={form.merchandise_cut}
-                  onChange={(event) => onChange('merchandise_cut', event.target.value)}
-                  placeholder="0"
-                  sx={NO_NUMBER_SPINNER_SX}
-                  slotProps={{
-                    htmlInput: { min: 0, max: 100, step: 0.5, readOnly: !editable },
-                    input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
-                  }}
-                />
-              </Grid>
               {/* Always offered: the deal type says whether tickets are sold,
                   so there is no separate paid-admission flag to gate this on. */}
               <Grid size={{ xs: 12, sm: 6 }}>

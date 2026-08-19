@@ -1,9 +1,9 @@
-import Grid from '@mui/material/Grid'
 import InputAdornment from '@mui/material/InputAdornment'
 import MenuItem from '@mui/material/MenuItem'
 import TextField from '@mui/material/TextField'
 import { useTranslation } from 'react-i18next'
 import { NO_NUMBER_SPINNER_SX } from './termsFieldSx.ts'
+import FieldHelpAdornment from '../FieldHelpAdornment.tsx'
 import { FEE_BASES } from '../../../dealTerms.ts'
 import type { FeeBasis } from '../../../dealTerms.ts'
 
@@ -12,7 +12,7 @@ interface Props {
   basis: FeeBasis
   percentage: string
   amount: string
-  /** What the percentage is taken from, shown under the percentage input. */
+  /** What the percentage is taken from, behind the percentage field's help icon. */
   percentageHelp: string
   editable: boolean
   onChange: (field: 'basis' | 'percentage' | 'amount', value: string) => void
@@ -32,58 +32,54 @@ export default function FeeBasisFields({
 }: Readonly<Props>) {
   const { t } = useTranslation('gigs')
 
+  // Plain fields, not grid cells: the owning section lays the whole block out on
+  // one line, and the basis decides how many fields there are to lay out.
   return (
     <>
-      <Grid size={{ xs: 12, sm: 6 }}>
-        <TextField
-          select
-          label={basisLabel}
-          fullWidth
-          value={basis}
-          disabled={!editable}
-          onChange={(event) => onChange('basis', event.target.value)}
-        >
-          {FEE_BASES.map((option) => (
-            <MenuItem key={option} value={option}>{t($ => $.detail.deal.feeBases[option])}</MenuItem>
-          ))}
-        </TextField>
-      </Grid>
+      <TextField
+        select
+        label={basisLabel}
+        fullWidth
+        value={basis}
+        disabled={!editable}
+        onChange={(event) => onChange('basis', event.target.value)}
+      >
+        {FEE_BASES.map((option) => (
+          <MenuItem key={option} value={option}>{t($ => $.detail.deal.feeBases[option])}</MenuItem>
+        ))}
+      </TextField>
 
       {basis === 'percentage' && (
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <TextField
-            label={t($ => $.detail.deal.percentage)}
-            type="number"
-            fullWidth
-            value={percentage}
-            onChange={(event) => onChange('percentage', event.target.value)}
-            placeholder="0"
-            helperText={percentageHelp}
-            sx={NO_NUMBER_SPINNER_SX}
-            slotProps={{
-              htmlInput: { min: 0, max: 100, step: 0.5, readOnly: !editable },
-              input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
-            }}
-          />
-        </Grid>
+        <TextField
+          label={t($ => $.detail.deal.percentage)}
+          type="number"
+          fullWidth
+          value={percentage}
+          onChange={(event) => onChange('percentage', event.target.value)}
+          placeholder="0"
+          sx={NO_NUMBER_SPINNER_SX}
+          slotProps={{
+            htmlInput: { min: 0, max: 100, step: 0.5, readOnly: !editable },
+            // The unit and the explanation share the field's end.
+            input: { endAdornment: <FieldHelpAdornment help={percentageHelp}>%</FieldHelpAdornment> },
+          }}
+        />
       )}
 
       {basis === 'amount' && (
-        <Grid size={{ xs: 12, sm: 6 }}>
-          <TextField
-            label={t($ => $.detail.deal.fixedAmount)}
-            type="number"
-            fullWidth
-            value={amount}
-            onChange={(event) => onChange('amount', event.target.value)}
-            placeholder="0.00"
-            sx={NO_NUMBER_SPINNER_SX}
-            slotProps={{
-              htmlInput: { min: 0, step: 0.01, readOnly: !editable },
-              input: { startAdornment: <InputAdornment position="start">€</InputAdornment> },
-            }}
-          />
-        </Grid>
+        <TextField
+          label={t($ => $.detail.deal.fixedAmount)}
+          type="number"
+          fullWidth
+          value={amount}
+          onChange={(event) => onChange('amount', event.target.value)}
+          placeholder="0.00"
+          sx={NO_NUMBER_SPINNER_SX}
+          slotProps={{
+            htmlInput: { min: 0, step: 0.01, readOnly: !editable },
+            input: { startAdornment: <InputAdornment position="start">€</InputAdornment> },
+          }}
+        />
       )}
     </>
   )
