@@ -61,4 +61,7 @@ export interface GigDetailForm {
   commission_basis: FeeBasis
   commission_percentage: string
   commission_amount: string
+  subject_to_vat: boolean
+  vat_percentage: string
+  ticket_vat_percentage: string
 }

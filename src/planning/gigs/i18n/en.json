@@ -276,7 +276,7 @@
       "expectedVisitorsHelp": "Used to simulate the potential upside.",
       "ticketsSold": "Tickets sold",
       "netTicketPrice": "Nett. ticket price",
-      "netTicketPriceHelp": "Excl. VAT and service fees — the basis for every calculation below.",
+      "netTicketPriceHelp": "The price the door takes per ticket, excl. service fees — the basis for every calculation below. If it includes VAT, set the ticket VAT % under Taxes.",
       "grossTicketPrice": "Gross ticket price",
       "percentage": "Percentage",
       "fixedAmount": "Fixed amount",
@@ -288,6 +288,8 @@
       "bookingFee": {
         "title": "Booking fee",
         "basis": "Booking fee",
+        "percentage": "Booking fee percentage",
+        "amount": "Booking fee amount",
         "percentageHelp": "Calculated from the gross fee.",
         "mode": "Exclusive or inclusive",
         "modes": {
@@ -302,13 +304,34 @@
       "commission": {
         "title": "Commission",
         "basis": "Commission",
+        "percentage": "Commission percentage",
+        "amount": "Commission amount",
         "percentageHelp": "Calculated from the nett fee (gross fee minus costs)."
+      },
+      "taxes": {
+        "title": "Taxes",
+        "subjectToVat": "Subject to VAT",
+        "generalVat": "General VAT %",
+        "generalVatHelp": "The rate an invoice generated from this gig is billed at. Leave blank for the default rate ({{rate}}%).",
+        "ticketVat": "Ticket VAT %",
+        "ticketVatHelp": "The VAT the venue charges on tickets, contained in the nett ticket price. Every ticket calculation runs on the price with it taken out."
       },
       "costs": {
         "title": "Costs",
         "label": "Cost",
         "labelPlaceholder": "Travel, backline, catering, …",
         "amount": "Amount",
+        "paidBy": "Paid by",
+        "paidByOptions": {
+          "artist_agency": "Artist/Agency",
+          "artist": "Artist",
+          "agency": "Agency"
+        },
+        "paidByHelp": {
+          "artist_agency": "Deducted from the gross fee before the booking fee is calculated, so both sides bear a share through the reduced base.",
+          "artist": "Deducted only from what is due to the artist. The booking fee is unaffected.",
+          "agency": "Deducted only from what is due to the booker. The amount due to the artist is unaffected."
+        },
         "add": "Add",
         "delete": "Delete cost",
         "deleteTitle": "Delete \"{{label}}\"?",
@@ -326,18 +349,23 @@
         "dueToBooker": "Due to booker",
         "dueToArtist": "Due to artist",
         "breakdown": {
-          "grossFee": "The guaranteed fee agreed for this gig.",
-          "grossFeeDoorDeal": "A door deal has no guaranteed fee — everything comes from ticket revenue.",
+          "ticketRevenue_one": "The artist’s {{percentage}}% share of the {{count}} ticket sold so far.",
+          "ticketRevenue_other": "The artist’s {{percentage}}% share of the {{count}} tickets sold so far.",
+          "ticketRevenueUnknown": "No tickets sold have been entered yet.",
+          "ticketRevenueFlatFee": "A flat fee takes no share of ticket revenue.",
+          "grossFee": "Guaranteed fee {{guarantee}} plus {{tickets}} earned on the tickets sold so far.",
           "costs_one": "The total of {{count}} cost line.",
           "costs_other": "The total of {{count}} cost lines.",
           "nettFee": "Gross fee {{gross}} minus costs {{costs}}.",
           "percentageOfGross": "{{percentage}}% of the gross fee ({{base}}).",
-          "percentageOfNett": "{{percentage}}% of the nett fee ({{base}}).",
+          "percentageOfNett": "{{percentage}}% of the nett fee minus the booking fee ({{base}}).",
           "fixedAmount": "A fixed amount, entered as agreed.",
           "notAgreed": "Not agreed for this gig.",
           "dueToBooker": "Booking fee {{bookingFee}} plus commission {{commission}}.",
+          "dueToBookerWithCosts": "Booking fee {{bookingFee}} plus commission {{commission}}, minus {{costs}} in costs paid by the agency.",
           "dueToArtistExclusive": "The nett fee minus commission. The booking fee is exclusive, so it is added on top of the gross fee rather than taken out of it.",
-          "dueToArtistInclusive": "The nett fee minus commission and the booking fee, which is inclusive and therefore split out of the gross fee."
+          "dueToArtistInclusive": "The nett fee minus commission and the booking fee, which is inclusive and therefore split out of the gross fee.",
+          "dueToArtistWithCosts": "Minus {{costs}} in costs paid by the artist."
         }
       },
       "tickets": {
@@ -348,6 +376,7 @@
         "expectedUpside": "Expected upside",
         "potentialUpside": "Potential upside",
         "actualUpside": "Upside on tickets sold so far: {{amount}}.",
+        "vatCorrectedPrice": "Ticket VAT of {{percentage}}% comes off first, so every calculation runs on {{price}} a ticket.",
         "atAttendance_one": "at {{count}} ticket",
         "atAttendance_other": "at {{count}} tickets",
         "unknown": "—",
@@ -359,7 +388,7 @@
           "flat_fee": "A flat fee has no break-even point.",
           "guarantee": "Ticket revenue has to cover the gross fee plus the venue costs before the artist’s share starts.",
           "guarantee_plus": "Ticket revenue has to cover the gross fee, and the venue costs when those are included, before the artist’s share starts.",
-          "guarantee_vs": "The ticket at which the artist’s share overtakes the guaranteed fee.",
+          "guarantee_vs": "Nothing is recouped — the deal simply pays whichever is higher, the guaranteed fee or the artist’s full share of the door.",
           "door_deal": "Ticket revenue has to cover the venue costs before the artist’s share starts."
         }
       }

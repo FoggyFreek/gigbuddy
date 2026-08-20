@@ -446,9 +446,9 @@ describe('GigDetailContent — Terms field saving', () => {
     getGig.mockResolvedValueOnce({ ...GIG_PAID, agency_fee_basis: 'amount', agency_fee_amount_cents: 5000 })
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/fixed amount/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
-    await user.clear(screen.getByLabelText(/fixed amount/i))
+    await user.clear(screen.getByLabelText(/booking fee amount/i))
     await waitFor(
       () => expect(updateGig).toHaveBeenCalledWith(1, { agency_fee_amount_cents: 0 })
     )

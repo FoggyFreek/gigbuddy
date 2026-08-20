@@ -1,6 +1,6 @@
 import { request, requestBlobWithHeaders, requestForm } from '../../api/_client.ts'
 import type {
-  Gig, GigCost, GigInfoBlock, GigMerchSummary, GigTag, GigTimetableEntry, Id, Task,
+  CostPaidBy, Gig, GigCost, GigInfoBlock, GigMerchSummary, GigTag, GigTimetableEntry, Id, Task,
 } from '../../types/entities.ts'
 import type {
   GigMapGig,
@@ -108,10 +108,13 @@ export const setGigVote = (gigId: Id, bandMemberId: Id, vote: string) =>
 // The artist's own costs for a gig (travel, backline, catering, …). The gig
 // detail already carries them, so listGigCosts is only for a targeted refresh.
 export const listGigCosts = (gigId: Id) => api<GigCost[]>(`/${gigId}/costs`)
-export const addGigCost = (gigId: Id, body: { label: string; amount_cents: number }) =>
+export const addGigCost = (gigId: Id, body: { label: string; amount_cents: number; paid_by: CostPaidBy }) =>
   api<GigCost>(`/${gigId}/costs`, { method: 'POST', body: JSON.stringify(body) })
-export const updateGigCost = (gigId: Id, costId: Id, body: { label: string; amount_cents: number }) =>
-  api<GigCost>(`/${gigId}/costs/${costId}`, { method: 'PATCH', body: JSON.stringify(body) })
+export const updateGigCost = (
+  gigId: Id,
+  costId: Id,
+  body: { label: string; amount_cents: number; paid_by: CostPaidBy },
+) => api<GigCost>(`/${gigId}/costs/${costId}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteGigCost = (gigId: Id, costId: Id) =>
   api<void>(`/${gigId}/costs/${costId}`, { method: 'DELETE' })
 

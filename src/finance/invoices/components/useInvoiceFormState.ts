@@ -7,6 +7,7 @@ import {
 } from '../invoices.ts'
 import { computeInvoiceTotals } from '../invoiceTotals.ts'
 import { useAccountingProfile } from '../../../contexts/accountingProfileContext.ts'
+import { getReducedVatRate } from '../../vat/vatRates.ts'
 import { checkInvoiceReadyForIssue, isInvoiceIssueErrorCode } from '../invoiceReadiness.ts'
 import { checkPeppolReadiness } from '../peppolReadiness.ts'
 import type { PeppolWarning } from '../peppolReadiness.ts'
@@ -80,7 +81,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
   const [voidDialogOpen, setVoidDialogOpen] = useState(false)
   const [sentDialogOpen, setSentDialogOpen] = useState(false)
   const [paidDialogOpen, setPaidDialogOpen] = useState(false)
-  const [form, setForm] = useState<InvoiceForm>(() => emptyDraft(9, accountingCountry))
+  const [form, setForm] = useState<InvoiceForm>(() => emptyDraft(accountingCountry))
   const [tenant, setTenant] = useState<Tenant | null>(null)
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [memoOpen, setMemoOpen] = useState(false)
@@ -196,7 +197,9 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
   }
 
   function addLine() {
-    const taxRate = appliesKor ? 0 : Number(accountingProfile?.default_vat_rate ?? 9)
+    // The reduced rate, like every other new invoice line — the profile's
+    // default_vat_rate is the standard rate, which belongs on what they buy.
+    const taxRate = appliesKor ? 0 : getReducedVatRate(accountingCountry)
     const taxSelection = appliesKor ? null : commonVatSelection(accountingCountry, taxRate)
     setForm((prev) => ({
       ...prev,

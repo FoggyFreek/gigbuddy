@@ -25,6 +25,7 @@ import ArtistStatement from './terms/ArtistStatement.tsx'
 import BookerSection from './terms/BookerSection.tsx'
 import DealSection from './terms/DealSection.tsx'
 import GigCostsEditor from './terms/GigCostsEditor.tsx'
+import TaxesSection from './terms/TaxesSection.tsx'
 import TicketUpside from './terms/TicketUpside.tsx'
 import { dealTermsFromForm } from './gigFormFields.ts'
 import { getGigMerchSummary } from '../../gigs.ts'
@@ -34,7 +35,9 @@ import { usePermissions } from '../../../../hooks/usePermissions.ts'
 import { formatShortDate } from '../../../../utils/dateFormat.ts'
 import { formatEur } from '../../../../finance/invoices/invoiceTotals.ts'
 import { invoiceStatusColor } from '../../../../finance/invoices/invoiceStatus.ts'
-import type { GigCost, GigMerchSummary, Id, Invoice, InvoiceStatus, Venue } from '../../../../types/entities.ts'
+import type {
+  CostPaidBy, GigCost, GigMerchSummary, Id, Invoice, InvoiceStatus, Venue,
+} from '../../../../types/entities.ts'
 import type { GigDetailForm } from './types.ts'
 
 interface Props {
@@ -47,8 +50,8 @@ interface Props {
   selectedVenue: Venue | null
   selectedFestival: Venue | null
   onChange: (field: string, value: unknown) => void
-  onAddCost: (label: string, amountCents: number) => Promise<void>
-  onUpdateCost: (costId: Id, label: string, amountCents: number) => Promise<void>
+  onAddCost: (label: string, amountCents: number, paidBy: CostPaidBy) => Promise<void>
+  onUpdateCost: (costId: Id, label: string, amountCents: number, paidBy: CostPaidBy) => Promise<void>
   onDeleteCost: (costId: Id) => Promise<void>
 }
 
@@ -174,6 +177,8 @@ export default function GigTerms({
               />
 
               <BookerSection editable={editable} form={form} onChange={onChange} />
+
+              <TaxesSection editable={editable} form={form} onChange={onChange} />
 
               <ArtistStatement terms={dealTerms} costLineCount={costs.length} />
 

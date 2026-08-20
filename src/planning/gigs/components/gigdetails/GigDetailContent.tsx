@@ -43,7 +43,9 @@ import { listMembers } from '../../../../people/memberships/bandMembers.ts'
 import { compressBanner } from '../../../../utils/compressImage.ts'
 import { toDateInput, toTimeInput } from '../../../events/eventFormUtils.ts'
 import { getRequiredErrors, hasRequiredErrors } from '../../../../utils/requiredFields.ts'
-import type { AvailabilitySummary, Id, GigCost, GigTag, Member, Venue, Task } from '../../../../types/entities.ts'
+import type {
+  AvailabilitySummary, CostPaidBy, Id, GigCost, GigTag, Member, Venue, Task,
+} from '../../../../types/entities.ts'
 import { resolveEventEndDate } from '../../../../../shared/eventTimes.js'
 
 const REQUIRED_FIELDS = ['event_date', 'event_description']
@@ -115,6 +117,9 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     commission_basis: 'none',
     commission_percentage: '',
     commission_amount: '',
+    subject_to_vat: true,
+    vat_percentage: '',
+    ticket_vat_percentage: '',
   })
   const [costs, setCosts] = useState<GigCost[]>([])
   const [loading, setLoading] = useState(true)
@@ -180,6 +185,9 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       commission_basis: g.commission_basis ?? 'none',
       commission_percentage: numberToInput(g.commission_percentage),
       commission_amount: feeToDisplay(g.commission_amount_cents),
+      subject_to_vat: g.subject_to_vat ?? true,
+      vat_percentage: numberToInput(g.vat_percentage),
+      ticket_vat_percentage: numberToInput(g.ticket_vat_percentage),
     })
     setInitialTasks((g.tasks as Task[]) || [])
     setCosts(g.costs ?? [])
@@ -274,13 +282,13 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
 
   // Cost lines save on the spot: a row has an explicit confirm, so there is no
   // half-typed state for the debounce to protect.
-  async function handleAddCost(label: string, amountCents: number) {
-    const created = await addGigCost(gigId, { label, amount_cents: amountCents })
+  async function handleAddCost(label: string, amountCents: number, paidBy: CostPaidBy) {
+    const created = await addGigCost(gigId, { label, amount_cents: amountCents, paid_by: paidBy })
     setCosts((current) => [...current, created])
   }
 
-  async function handleUpdateCost(costId: Id, label: string, amountCents: number) {
-    const updated = await updateGigCost(gigId, costId, { label, amount_cents: amountCents })
+  async function handleUpdateCost(costId: Id, label: string, amountCents: number, paidBy: CostPaidBy) {
+    const updated = await updateGigCost(gigId, costId, { label, amount_cents: amountCents, paid_by: paidBy })
     setCosts((current) => current.map((cost) => (cost.id === costId ? updated : cost)))
   }
 

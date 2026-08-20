@@ -1,4 +1,4 @@
-import { normalizeVatNumber } from '../../vat/vatRates.ts'
+import { DEFAULT_VAT_COUNTRY, getReducedVatRate, normalizeVatNumber } from '../../vat/vatRates.ts'
 import { storedViesConfirmation } from '../invoiceReadiness.ts'
 import { commonVatSelection } from '../../../../shared/taxCategories.js'
 import type { InvoiceLine } from '../../../types/entities.ts'
@@ -47,7 +47,10 @@ export interface InvoiceFormLine {
   position: number
 }
 
-export function emptyDraft(taxPct = 9, country = 'nl'): InvoiceForm {
+// A new invoice line defaults to the country's reduced rate — a live performance
+// sits under the reduced tariff (NL 9%) — unless the caller passes a rate, which
+// a KOR/exempt tenant does to force 0.
+export function emptyDraft(country = DEFAULT_VAT_COUNTRY, taxPct = getReducedVatRate(country)): InvoiceForm {
   const issueDate = new Date().toISOString().slice(0, 10)
   const taxSelection = commonVatSelection(country, taxPct)
   return {

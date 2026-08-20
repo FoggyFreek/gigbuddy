@@ -43,7 +43,8 @@ describe('gig deal terms — defaults', () => {
     const { rows } = await pool.query(
       `SELECT deal_type, agency_fee_basis, agency_fee_mode, agency_fee_percentage,
               agency_fee_amount_cents, commission_basis, commission_percentage,
-              commission_amount_cents, breakeven_includes_venue_costs
+              commission_amount_cents, breakeven_includes_venue_costs,
+              subject_to_vat, vat_percentage, ticket_vat_percentage
          FROM gigs WHERE id = $1`,
       [seed.gigA.id],
     )
@@ -53,6 +54,11 @@ describe('gig deal terms — defaults', () => {
       agency_fee_mode: 'exclusive',
       commission_basis: 'none',
       breakeven_includes_venue_costs: true,
+      // A performance is a taxed supply until the deal says otherwise, and
+      // neither rate overrides anything until one is agreed.
+      subject_to_vat: true,
+      vat_percentage: null,
+      ticket_vat_percentage: null,
     })
     // NUMERIC comes back as a string; the point is that it is not null.
     expect(Number(rows[0].agency_fee_percentage)).toBe(0)
@@ -119,6 +125,7 @@ describe('PATCH /api/gigs/:id — deal terms', () => {
     ['agency_fee_mode', 'partial'],
     ['commission_basis', 'maybe'],
     ['breakeven_includes_venue_costs', 'yes'],
+    ['subject_to_vat', 'probably'],
   ])('rejects an out-of-vocabulary %s', async (field, value) => {
     await asUserA(
       request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ [field]: value })
@@ -134,6 +141,8 @@ describe('PATCH /api/gigs/:id — deal terms', () => {
     ['agency_fee_percentage', 101],
     ['commission_percentage', -1],
     ['agency_fee_amount_cents', -100],
+    ['vat_percentage', 101],
+    ['ticket_vat_percentage', -1],
   ])('rejects %s = %s', async (field, value) => {
     await asUserA(
       request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ [field]: value })
@@ -142,11 +151,37 @@ describe('PATCH /api/gigs/:id — deal terms', () => {
 
   it('rejects null on a NOT NULL deal column rather than failing in Postgres', async () => {
     // A constraint violation would surface as a 500; these must be 400s.
-    for (const field of ['agency_fee_percentage', 'commission_amount_cents', 'breakeven_includes_venue_costs', 'deal_type']) {
+    for (const field of ['agency_fee_percentage', 'commission_amount_cents', 'breakeven_includes_venue_costs', 'deal_type', 'subject_to_vat']) {
       await asUserA(
         request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ [field]: null })
       ).expect(400)
     }
+  })
+
+  // VAT on the deal: the flag says whether it applies at all, the two rates are
+  // overrides, so clearing one means "no rate agreed", never "no VAT".
+  it('stores the deal VAT flag and both rates', async () => {
+    const res = await asUserA(
+      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({
+        subject_to_vat: true,
+        vat_percentage: 21,
+        ticket_vat_percentage: 9,
+      })
+    ).expect(200)
+    expect(res.body.subject_to_vat).toBe(true)
+    expect(Number(res.body.vat_percentage)).toBe(21)
+    expect(Number(res.body.ticket_vat_percentage)).toBe(9)
+  })
+
+  it('clears a VAT rate with null while the gig stays subject to VAT', async () => {
+    await asUserA(
+      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ vat_percentage: 21 })
+    ).expect(200)
+    const res = await asUserA(
+      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ vat_percentage: null })
+    ).expect(200)
+    expect(res.body.vat_percentage).toBeNull()
+    expect(res.body.subject_to_vat).toBe(true)
   })
 
   it('does not leak another tenant\'s gig through a terms patch', async () => {
@@ -333,6 +368,35 @@ describe('gig costs', () => {
       request(app).post(`/api/gigs/${seed.gigA.id}/costs`).send({ label: 'TBC' })
     ).expect(201)
     expect(res.body.amount_cents).toBe(0)
+  })
+
+  it('defaults paid_by to artist and accepts an explicit value', async () => {
+    const defaulted = await asUserA(
+      request(app).post(`/api/gigs/${seed.gigA.id}/costs`).send({ label: 'Travel', amount_cents: 12500 })
+    ).expect(201)
+    expect(defaulted.body.paid_by).toBe('artist')
+
+    const explicit = await asUserA(
+      request(app)
+        .post(`/api/gigs/${seed.gigA.id}/costs`)
+        .send({ label: 'Backline', amount_cents: 7500, paid_by: 'artist_agency' })
+    ).expect(201)
+    expect(explicit.body.paid_by).toBe('artist_agency')
+
+    const patched = await asUserA(
+      request(app)
+        .patch(`/api/gigs/${seed.gigA.id}/costs/${defaulted.body.id}`)
+        .send({ label: 'Travel', amount_cents: 12500, paid_by: 'agency' })
+    ).expect(200)
+    expect(patched.body.paid_by).toBe('agency')
+  })
+
+  it('rejects an invalid paid_by', async () => {
+    await asUserA(
+      request(app)
+        .post(`/api/gigs/${seed.gigA.id}/costs`)
+        .send({ label: 'Travel', amount_cents: 12500, paid_by: 'venue' })
+    ).expect(400)
   })
 
   it('caps the number of cost lines', async () => {

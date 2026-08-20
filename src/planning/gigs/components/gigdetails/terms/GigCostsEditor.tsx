@@ -4,6 +4,7 @@ import Box from '@mui/material/Box'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
+import MenuItem from '@mui/material/MenuItem'
 import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
@@ -14,13 +15,13 @@ import { NO_NUMBER_SPINNER_SX } from './termsFieldSx.ts'
 import { lineCellSx, lineFieldSx, lineHeadCellSx, lineTableSx } from '../lineTableSx.ts'
 import { useDialog } from '../../../../../contexts/dialogContext.ts'
 import { formatEur } from '../../../../../finance/invoices/invoiceTotals.ts'
-import { sumCostsCents } from '../../../dealTerms.ts'
+import { COST_PAID_BY_OPTIONS, DEFAULT_COST_PAID_BY, sumCostsCents } from '../../../dealTerms.ts'
 import { feeToCents, feeToDisplay } from '../gigFormFields.ts'
-import type { GigCost, Id } from '../../../../../types/entities.ts'
+import type { CostPaidBy, GigCost, Id } from '../../../../../types/entities.ts'
 
 // A reader gets no delete button, so that column falls away with it.
 function gridColumns(editable: boolean): string {
-  return editable ? 'minmax(0, 1fr) 132px 44px' : 'minmax(0, 1fr) 132px'
+  return editable ? 'minmax(0, 1fr) 132px 160px 44px' : 'minmax(0, 1fr) 132px 160px'
 }
 
 function rowSx(editable: boolean) {
@@ -46,8 +47,8 @@ const euroAdornment = <InputAdornment position="start">€</InputAdornment>
 interface Props {
   editable: boolean
   costs: GigCost[]
-  onAdd: (label: string, amountCents: number) => Promise<void>
-  onUpdate: (costId: Id, label: string, amountCents: number) => Promise<void>
+  onAdd: (label: string, amountCents: number, paidBy: CostPaidBy) => Promise<void>
+  onUpdate: (costId: Id, label: string, amountCents: number, paidBy: CostPaidBy) => Promise<void>
   onDelete: (costId: Id) => Promise<void>
 }
 
@@ -61,6 +62,7 @@ export default function GigCostsEditor({ editable, costs, onAdd, onUpdate, onDel
   const { confirmDelete } = useDialog()
   const [draftLabel, setDraftLabel] = useState('')
   const [draftAmount, setDraftAmount] = useState('')
+  const [draftPaidBy, setDraftPaidBy] = useState<CostPaidBy>(DEFAULT_COST_PAID_BY)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -71,9 +73,10 @@ export default function GigCostsEditor({ editable, costs, onAdd, onUpdate, onDel
     setBusy(true)
     setError(null)
     try {
-      await onAdd(draftLabel.trim(), feeToCents(draftAmount) ?? 0)
+      await onAdd(draftLabel.trim(), feeToCents(draftAmount) ?? 0, draftPaidBy)
       setDraftLabel('')
       setDraftAmount('')
+      setDraftPaidBy(DEFAULT_COST_PAID_BY)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -127,6 +130,11 @@ export default function GigCostsEditor({ editable, costs, onAdd, onUpdate, onDel
           <Box sx={{ ...lineHeadCellSx, justifyContent: 'flex-end' }}>
             <Typography variant="caption" sx={{ fontWeight: 600 }}>
               {t($ => $.detail.deal.costs.amount)}
+            </Typography>
+          </Box>
+          <Box sx={lineHeadCellSx}>
+            <Typography variant="caption" sx={{ fontWeight: 600 }}>
+              {t($ => $.detail.deal.costs.paidBy)}
             </Typography>
           </Box>
           {editable && <Box sx={lineHeadCellSx} />}
@@ -185,6 +193,26 @@ export default function GigCostsEditor({ editable, costs, onAdd, onUpdate, onDel
                 }}
               />
             </Box>
+            <Box sx={lineCellSx}>
+              <TextField
+                select
+                variant="standard"
+                fullWidth
+                value={draftPaidBy}
+                onChange={(event) => setDraftPaidBy(event.target.value as CostPaidBy)}
+                sx={lineFieldSx}
+                slotProps={{
+                  input: { disableUnderline: true },
+                  htmlInput: { 'aria-label': t($ => $.detail.deal.costs.paidBy) },
+                }}
+              >
+                {COST_PAID_BY_OPTIONS.map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {t($ => $.detail.deal.costs.paidByOptions[option])}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Box>
             <Box sx={{ ...lineCellSx, justifyContent: 'center' }}>
               <Tooltip title={t($ => $.detail.deal.costs.add)}>
                 <span>
@@ -214,6 +242,7 @@ export default function GigCostsEditor({ editable, costs, onAdd, onUpdate, onDel
               {formatEur(sumCostsCents(costs))}
             </Typography>
           </Box>
+          <Box sx={lineHeadCellSx} />
           {editable && <Box sx={lineHeadCellSx} />}
         </Box>
       </Box>
@@ -224,7 +253,7 @@ export default function GigCostsEditor({ editable, costs, onAdd, onUpdate, onDel
 interface CostRowProps {
   cost: GigCost
   editable: boolean
-  onUpdate: (costId: Id, label: string, amountCents: number) => Promise<void>
+  onUpdate: (costId: Id, label: string, amountCents: number, paidBy: CostPaidBy) => Promise<void>
   onError: (message: string) => void
   onDelete: () => void
 }
@@ -236,13 +265,17 @@ function CostRow({ cost, editable, onUpdate, onError, onDelete }: Readonly<CostR
   // value that was not stored.
   const [label, setLabel] = useState(cost.label ?? '')
   const [amount, setAmount] = useState(feeToDisplay(Number(cost.amount_cents ?? 0)))
+  const [paidBy, setPaidBy] = useState<CostPaidBy>(cost.paid_by ?? DEFAULT_COST_PAID_BY)
 
   function reset() {
     setLabel(cost.label ?? '')
     setAmount(feeToDisplay(Number(cost.amount_cents ?? 0)))
+    setPaidBy(cost.paid_by ?? DEFAULT_COST_PAID_BY)
   }
 
-  async function commit() {
+  // The select commits on change rather than on blur, since a picked option is
+  // already a complete edit — there is nothing left to type.
+  async function commit(nextPaidBy: CostPaidBy = paidBy) {
     if (cost.id == null) return
     const trimmed = label.trim()
     const cents = feeToCents(amount) ?? 0
@@ -250,13 +283,20 @@ function CostRow({ cost, editable, onUpdate, onError, onDelete }: Readonly<CostR
       reset()
       return
     }
-    if (trimmed === cost.label && cents === Number(cost.amount_cents ?? 0)) return
+    if (trimmed === cost.label && cents === Number(cost.amount_cents ?? 0) && nextPaidBy === (cost.paid_by ?? DEFAULT_COST_PAID_BY)) {
+      return
+    }
     try {
-      await onUpdate(cost.id, trimmed, cents)
+      await onUpdate(cost.id, trimmed, cents, nextPaidBy)
     } catch (err) {
       reset()
       onError((err as Error).message)
     }
+  }
+
+  async function handlePaidByChange(nextPaidBy: CostPaidBy) {
+    setPaidBy(nextPaidBy)
+    await commit(nextPaidBy)
   }
 
   // A reader gets the stored figures as text — formatted money, not a number
@@ -270,6 +310,9 @@ function CostRow({ cost, editable, onUpdate, onError, onDelete }: Readonly<CostR
         <Box sx={{ ...amountCellSx, px: 1, py: 1 }}>
           <Typography variant="body2">{formatEur(Number(cost.amount_cents ?? 0))}</Typography>
         </Box>
+        <Box sx={{ ...lineCellSx, px: 1, py: 1 }}>
+          <Typography variant="body2">{t($ => $.detail.deal.costs.paidByOptions[paidBy])}</Typography>
+        </Box>
       </Box>
     )
   }
@@ -282,7 +325,7 @@ function CostRow({ cost, editable, onUpdate, onError, onDelete }: Readonly<CostR
           fullWidth
           value={label}
           onChange={(event) => setLabel(event.target.value)}
-          onBlur={commit}
+          onBlur={() => commit()}
           sx={lineFieldSx}
           slotProps={{
             input: { disableUnderline: true },
@@ -297,13 +340,33 @@ function CostRow({ cost, editable, onUpdate, onError, onDelete }: Readonly<CostR
           fullWidth
           value={amount}
           onChange={(event) => setAmount(event.target.value)}
-          onBlur={commit}
+          onBlur={() => commit()}
           sx={amountFieldSx}
           slotProps={{
             input: { disableUnderline: true, startAdornment: euroAdornment },
             htmlInput: { min: 0, step: 0.01, 'aria-label': t($ => $.detail.deal.costs.amount) },
           }}
         />
+      </Box>
+      <Box sx={lineCellSx}>
+        <TextField
+          select
+          variant="standard"
+          fullWidth
+          value={paidBy}
+          onChange={(event) => handlePaidByChange(event.target.value as CostPaidBy)}
+          sx={lineFieldSx}
+          slotProps={{
+            input: { disableUnderline: true },
+            htmlInput: { 'aria-label': t($ => $.detail.deal.costs.paidBy) },
+          }}
+        >
+          {COST_PAID_BY_OPTIONS.map((option) => (
+            <MenuItem key={option} value={option}>
+              {t($ => $.detail.deal.costs.paidByOptions[option])}
+            </MenuItem>
+          ))}
+        </TextField>
       </Box>
       <Box sx={{ ...lineCellSx, justifyContent: 'center' }}>
         <Tooltip title={t($ => $.detail.deal.costs.delete)}>

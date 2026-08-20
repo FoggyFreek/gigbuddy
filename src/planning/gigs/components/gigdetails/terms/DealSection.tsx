@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import TicketSplitField from './TicketSplitField.tsx'
 import { NO_NUMBER_SPINNER_SX } from './termsFieldSx.ts'
 import FieldHelpAdornment from '../FieldHelpAdornment.tsx'
+import { feeToCents, feeToDisplay } from '../gigFormFields.ts'
 import {
   DEAL_TYPES,
   dealTypeChoosesVenueCosts,
@@ -45,6 +46,12 @@ export default function DealSection({ editable, form, onChange }: Readonly<Props
   // number's meaning travels with the number instead of a line of prose under it.
   function withHelp<T extends { htmlInput?: object; input?: object }>(props: T, help: string) {
     return { ...props, input: { ...props.input, endAdornment: <FieldHelpAdornment help={help} /> } }
+  }
+
+  // Money fields keep whatever the user typed while they're typing, but always
+  // settle back to two decimals once they move on.
+  function roundMoneyOnBlur(field: string, value: string) {
+    onChange(field, feeToDisplay(feeToCents(value)))
   }
 
   return (
@@ -127,6 +134,7 @@ export default function DealSection({ editable, form, onChange }: Readonly<Props
           fullWidth
           value={form.venue_costs}
           onChange={(event) => onChange('venue_costs', event.target.value)}
+          onBlur={(event) => roundMoneyOnBlur('venue_costs', event.target.value)}
           placeholder="0.00"
           sx={NO_NUMBER_SPINNER_SX}
           slotProps={withHelp(moneyProps, t($ => $.detail.deal.venueCostsHelp))}
@@ -166,6 +174,7 @@ export default function DealSection({ editable, form, onChange }: Readonly<Props
           fullWidth
           value={form.ticket_price_net}
           onChange={(event) => onChange('ticket_price_net', event.target.value)}
+          onBlur={(event) => roundMoneyOnBlur('ticket_price_net', event.target.value)}
           placeholder="0.00"
           sx={NO_NUMBER_SPINNER_SX}
           slotProps={withHelp(moneyProps, t($ => $.detail.deal.netTicketPriceHelp))}
@@ -179,6 +188,7 @@ export default function DealSection({ editable, form, onChange }: Readonly<Props
           fullWidth
           value={form.ticket_price_gross}
           onChange={(event) => onChange('ticket_price_gross', event.target.value)}
+          onBlur={(event) => roundMoneyOnBlur('ticket_price_gross', event.target.value)}
           placeholder="0.00"
           sx={NO_NUMBER_SPINNER_SX}
           slotProps={moneyProps}

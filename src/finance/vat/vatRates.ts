@@ -9,6 +9,7 @@ import {
   VAT_RATE_VALUES as VAT_RATE_VALUES_JS,
   getVatRates as getVatRatesJs,
   getStandardVatRate as getStandardVatRateJs,
+  getReducedVatRate as getReducedVatRateJs,
   isAllowedVatRate as isAllowedVatRateJs,
   getVatIdExample as getVatIdExampleJs,
   isValidVatId as isValidVatIdJs,
@@ -27,6 +28,12 @@ export function getVatRates(country: string | null | undefined): number[] {
 
 export function getStandardVatRate(country: string | null | undefined): number {
   return getStandardVatRateJs(country ?? undefined) as number
+}
+
+// The reduced rate a live performance is invoiced at — the default for a new
+// sales-invoice line, where the standard rate stays the default for purchases.
+export function getReducedVatRate(country: string | null | undefined): number {
+  return getReducedVatRateJs(country ?? undefined) as number
 }
 
 export function isAllowedVatRate(country: string | null | undefined, rate: number): boolean {

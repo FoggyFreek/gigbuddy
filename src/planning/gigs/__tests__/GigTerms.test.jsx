@@ -69,7 +69,7 @@ vi.mock('../../../people/venues/venues.ts', async (importOriginal) => ({
 vi.mock('../../../people/venues/geocode.ts', () => ({ geocodePlace: vi.fn(() => Promise.resolve(null)) }))
 vi.mock('../components/map/GigLocationMap.tsx', () => ({ default: () => <div /> }))
 
-import { addGigCost, deleteGigCost, getGig, updateGigCost } from '../gigs.ts'
+import { addGigCost, deleteGigCost, getGig, updateGig, updateGigCost } from '../gigs.ts'
 
 // A guarantee that clears break-even well before capacity, so every tile in the
 // statement and the simulation carries a number worth asserting on.
@@ -187,14 +187,60 @@ describe('artist statement', () => {
     wrap(<GigDetailContent gigId={1} />)
     await openTerms(user)
 
-    expect(statementValue('Gross fee')).toBe('€ 1.000,00')
+    // 120 of 300 sold at € 20,00 nett, € 1.800,00 recouped first, 70% of the
+    // rest: € 420,00 ticket revenue folded into the € 1.420,00 gross fee.
+    expect(statementValue('Gross fee')).toBe('€ 1.420,00')
     expect(statementValue('Costs')).toBe('€ 150,00')
-    expect(statementValue('Nett. fee')).toBe('€ 850,00')
+    // Both cost lines default to paid_by artist, which never reaches the nett
+    // fee — only a cost paid by artist/agency would.
+    expect(statementValue('Nett. fee')).toBe('€ 1.420,00')
     // 10% of the gross fee, inclusive — so it comes out of the artist's side.
-    expect(statementValue('Booking fee')).toBe('€ 100,00')
+    expect(statementValue('Booking fee')).toBe('€ 142,00')
     expect(statementValue('Commission')).toBe('€ 0,00')
-    expect(statementValue('Due to booker')).toBe('€ 100,00')
-    expect(statementValue('Due to artist')).toBe('€ 750,00')
+    expect(statementValue('Due to booker')).toBe('€ 142,00')
+    expect(statementValue('Due to artist')).toBe('€ 1.128,00')
+  })
+
+  it('spells out how the guarantee and the door add up to the gross fee', async () => {
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    const statement = screen.getByTestId('artist-statement')
+    const gross = within(statement).getByText('Gross fee').closest('.MuiPaper-root')
+    // Ticket revenue has no tile of its own — its share is spelled out in the
+    // gross fee's own tooltip instead.
+    expect(gross).toHaveAccessibleDescription(
+      /^Guaranteed fee €\s1\.000,00 plus €\s420,00 earned on the tickets sold so far\. .*70\.0% share of the 120 tickets sold so far/
+    )
+  })
+
+  it('reworks the fee the booker earns when the tickets sold change', async () => {
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    await user.clear(screen.getByLabelText(/tickets sold/i))
+    await user.type(screen.getByLabelText(/tickets sold/i), '200')
+
+    // 200 × € 20,00 = € 4.000,00 − € 1.800,00 = € 2.200,00 × 70% = € 1.540,00
+    // ticket revenue, folded into a € 2.540,00 gross fee.
+    await waitFor(() => expect(statementValue('Gross fee')).toBe('€ 2.540,00'))
+    // The booking fee follows the door, not the guarantee alone.
+    expect(statementValue('Booking fee')).toBe('€ 254,00')
+  })
+
+  it('counts nothing from a door that has sold nothing yet', async () => {
+    getGig.mockResolvedValue({ ...GUARANTEE_GIG, tickets_sold: null })
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    expect(statementValue('Gross fee')).toBe('€ 1.000,00')
+    const gross = within(screen.getByTestId('artist-statement'))
+      .getByText('Gross fee')
+      .closest('.MuiPaper-root')
+    expect(gross).toHaveAccessibleDescription(/No tickets sold have been entered yet\.$/)
   })
 
   it('spells out each figure in a description rather than replacing its label', async () => {
@@ -204,11 +250,40 @@ describe('artist statement', () => {
 
     const statement = screen.getByTestId('artist-statement')
     const tile = within(statement).getByText('Nett. fee').closest('.MuiPaper-root')
-    expect(tile).toHaveAccessibleDescription(/^Gross fee €\s1\.000,00 minus costs €\s150,00\.$/)
+    // The gig's costs are paid by artist, not artist/agency, so none of the
+    // € 150,00 shown on the Costs tile reaches the nett fee.
+    expect(tile).toHaveAccessibleDescription(/^Gross fee €\s1\.420,00 minus costs €\s0,00\.$/)
     // The breakdown describes the tile; it must not become the tile's label and
     // hide the figure it is explaining.
     expect(tile).not.toHaveAttribute('aria-label')
     expect(within(tile).getByText('Nett. fee')).toBeInTheDocument()
+  })
+
+  it('lets the commission go negative on a gig whose costs have eaten the fee', async () => {
+    getGig.mockResolvedValue({
+      ...GUARANTEE_GIG,
+      tickets_sold: null,
+      commission_basis: 'percentage',
+      commission_percentage: '10.00',
+      // artist_agency, so this cost reaches the shared base both the booking
+      // fee and the nett fee are calculated on.
+      costs: [{ id: 41, label: 'Backline', amount_cents: 200000, paid_by: 'artist_agency', position: 0 }],
+    })
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    // The € 2.000,00 cost outruns the € 1.000,00 fee, so the shared base
+    // goes to -€ 1.000,00: the booking fee floors at zero, but the
+    // commission does not — 10% of -€ 1.000,00 is -€ 100,00.
+    expect(statementValue('Booking fee')).toBe('€ 0,00')
+    expect(statementValue('Commission')).toBe('€ -100,00')
+    expect(statementValue('Due to booker')).toBe('€ -100,00')
+
+    const commission = within(screen.getByTestId('artist-statement'))
+      .getByText('Commission')
+      .closest('.MuiPaper-root')
+    expect(commission).toHaveAccessibleDescription('10% of the nett fee minus the booking fee (€ -1.000,00).')
   })
 
   it('recalculates while the deal is still being typed', async () => {
@@ -219,8 +294,12 @@ describe('artist statement', () => {
     await user.clear(screen.getByLabelText(/guaranteed fee/i))
     await user.type(screen.getByLabelText(/guaranteed fee/i), '2000')
 
+    // A bigger guarantee is a higher break-even: € 2.800,00 now has to be
+    // recouped, which the 120 tickets sold no longer reach, so the door adds
+    // nothing to the gross fee.
     await waitFor(() => expect(statementValue('Gross fee')).toBe('€ 2.000,00'))
-    expect(statementValue('Nett. fee')).toBe('€ 1.850,00')
+    // Unaffected — the gig's costs default to paid_by artist.
+    expect(statementValue('Nett. fee')).toBe('€ 2.000,00')
   })
 })
 
@@ -255,7 +334,7 @@ describe('field help', () => {
     expect(await readHelp(user, 'Expected visitors')).toMatch(/used to simulate the potential upside/i)
     expect(await readHelp(user, 'Nett. ticket price')).toMatch(/basis for every calculation below/i)
     // Both fee blocks reuse one field pair, so each states its own basis.
-    expect(await readHelp(user, 'Percentage')).toMatch(/calculated from the gross fee/i)
+    expect(await readHelp(user, 'Booking fee percentage')).toMatch(/calculated from the gross fee/i)
     expect(await readHelp(user, 'Exclusive or inclusive')).toMatch(/split out of the gross fee/i)
   })
 
@@ -306,6 +385,66 @@ describe('ticket upside', () => {
   })
 })
 
+describe('taxes', () => {
+  // The nett ticket price of € 20.00 carries the venue's 9% VAT, so every
+  // simulation runs on the € 18,35 that is actually shared.
+  const VAT_GIG = { ...GUARANTEE_GIG, subject_to_vat: true, ticket_vat_percentage: '9.00' }
+
+  it('runs the simulation on the ticket price with its VAT taken out', async () => {
+    getGig.mockResolvedValue(VAT_GIG)
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    expect(screen.getByText(/every calculation runs on .*18,35 a ticket/i)).toBeInTheDocument()
+    // Each ticket brings in less, so break-even takes 99 of them instead of 90.
+    expect(upsideValue('Tickets to break even')).toBe('99')
+    expect(upsideValue('Expected upside')).toBe('€ 1.308,80')
+    expect(upsideValue('Potential upside')).toBe('€ 2.593,21')
+  })
+
+  it('says nothing about VAT on a deal that agreed no ticket rate', async () => {
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    expect(screen.queryByText(/a ticket/i)).not.toBeInTheDocument()
+    expect(upsideValue('Tickets to break even')).toBe('90')
+  })
+
+  it('saves the ticket rate and reworks the door as it is typed', async () => {
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    await user.type(screen.getByLabelText('Ticket VAT %'), '9')
+
+    await waitFor(() => expect(upsideValue('Potential upside')).toBe('€ 2.593,21'))
+    await waitFor(
+      () => expect(updateGig).toHaveBeenCalledWith(1, { ticket_vat_percentage: 9 }),
+      { timeout: 3000 },
+    )
+  })
+
+  it('drops both rates when the deal is not subject to VAT', async () => {
+    getGig.mockResolvedValue(VAT_GIG)
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    await user.click(screen.getByLabelText('Subject to VAT'))
+
+    // Greyed out, not hidden — the rates stay visible in the table.
+    expect(screen.getByLabelText('Ticket VAT %')).toBeDisabled()
+    // Nothing comes out of the door any more, so the shares go back up.
+    expect(upsideValue('Potential upside')).toBe('€ 2.940,00')
+    await waitFor(
+      () => expect(updateGig).toHaveBeenCalledWith(1, { subject_to_vat: false }),
+      { timeout: 3000 },
+    )
+  })
+})
+
 describe('cost lines', () => {
   it('lists the gig\'s costs in a table with column captions and a total', async () => {
     const user = userEvent.setup()
@@ -335,9 +474,12 @@ describe('cost lines', () => {
     await user.type(amountInputs[amountInputs.length - 1], '75')
     await user.click(screen.getByRole('button', { name: /^add$/i }))
 
-    await waitFor(() => expect(addGigCost).toHaveBeenCalledWith(1, { label: 'Backline', amount_cents: 7500 }))
+    await waitFor(() => expect(addGigCost).toHaveBeenCalledWith(
+      1, { label: 'Backline', amount_cents: 7500, paid_by: 'artist' }
+    ))
     await waitFor(() => expect(statementValue('Costs')).toBe('€ 225,00'))
-    expect(statementValue('Nett. fee')).toBe('€ 775,00')
+    // Unaffected — the new cost defaults to paid_by artist.
+    expect(statementValue('Nett. fee')).toBe('€ 1.420,00')
   })
 
   it('adds a cost from the draft line with the Enter key', async () => {
@@ -351,7 +493,9 @@ describe('cost lines', () => {
     await user.type(labelInputs[labelInputs.length - 1], 'Backline')
     await user.type(amountInputs[amountInputs.length - 1], '75{Enter}')
 
-    await waitFor(() => expect(addGigCost).toHaveBeenCalledWith(1, { label: 'Backline', amount_cents: 7500 }))
+    await waitFor(() => expect(addGigCost).toHaveBeenCalledWith(
+      1, { label: 'Backline', amount_cents: 7500, paid_by: 'artist' }
+    ))
     // The draft line is empty again, ready for the next cost.
     const drafts = screen.getAllByLabelText(/^cost$/i)
     expect(drafts[drafts.length - 1]).toHaveValue('')
@@ -378,8 +522,50 @@ describe('cost lines', () => {
     await user.tab()
 
     await waitFor(
-      () => expect(updateGigCost).toHaveBeenCalledWith(1, 41, { label: 'Travel (van)', amount_cents: 12500 })
+      () => expect(updateGigCost).toHaveBeenCalledWith(
+        1, 41, { label: 'Travel (van)', amount_cents: 12500, paid_by: 'artist' }
+      )
     )
+  })
+
+  it('changes who a cost is paid by, saving immediately', async () => {
+    updateGigCost.mockResolvedValue({ id: 41, label: 'Travel', amount_cents: 12500, paid_by: 'artist_agency', position: 0 })
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    const paidBySelects = screen.getAllByLabelText(/^paid by$/i)
+    // The first row is Travel; the last is the draft line.
+    await user.click(paidBySelects[0])
+    await user.click(await screen.findByRole('option', { name: 'Artist/Agency' }))
+
+    await waitFor(
+      () => expect(updateGigCost).toHaveBeenCalledWith(
+        1, 41, { label: 'Travel', amount_cents: 12500, paid_by: 'artist_agency' }
+      )
+    )
+  })
+
+  it('adds a cost with the chosen paid_by', async () => {
+    addGigCost.mockResolvedValue({ id: 43, label: 'Backline', amount_cents: 7500, paid_by: 'agency', position: 2 })
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    const labelInputs = screen.getAllByLabelText(/^cost$/i)
+    const amountInputs = screen.getAllByLabelText(/^amount$/i)
+    await user.type(labelInputs[labelInputs.length - 1], 'Backline')
+    await user.type(amountInputs[amountInputs.length - 1], '75')
+
+    const paidBySelects = screen.getAllByLabelText(/^paid by$/i)
+    await user.click(paidBySelects[paidBySelects.length - 1])
+    await user.click(await screen.findByRole('option', { name: 'Agency' }))
+
+    await user.click(screen.getByRole('button', { name: /^add$/i }))
+
+    await waitFor(() => expect(addGigCost).toHaveBeenCalledWith(
+      1, { label: 'Backline', amount_cents: 7500, paid_by: 'agency' }
+    ))
   })
 
   it('rolls a rejected edit back to the stored row and says why', async () => {

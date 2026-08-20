@@ -6,7 +6,7 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
 import { formatEur } from '../../../../../finance/invoices/invoiceTotals.ts'
-import { computeArtistStatement } from '../../../dealTerms.ts'
+import { computeArtistStatement, dealTypeHasTicketShare } from '../../../dealTerms.ts'
 import type { GigDealTerms } from '../../../dealTerms.ts'
 
 interface Props {
@@ -68,15 +68,33 @@ export default function ArtistStatement({ terms, costLineCount }: Readonly<Props
   const { t } = useTranslation('gigs')
   const statement = computeArtistStatement(terms)
 
-  const feeBreakdown = terms.deal_type === 'door_deal'
-    ? t($ => $.detail.deal.statement.breakdown.grossFeeDoorDeal)
-    : t($ => $.detail.deal.statement.breakdown.grossFee)
+  // The door pays on tickets already sold; an empty attendance is not a zero.
+  // Ticket revenue has no tile of its own — it is folded into the gross fee,
+  // so this sentence hangs off the gross fee's tooltip instead.
+  const ticketBreakdown = (() => {
+    if (!dealTypeHasTicketShare(terms.deal_type)) {
+      return t($ => $.detail.deal.statement.breakdown.ticketRevenueFlatFee)
+    }
+    if (terms.tickets_sold == null) return t($ => $.detail.deal.statement.breakdown.ticketRevenueUnknown)
+    return t($ => $.detail.deal.statement.breakdown.ticketRevenue, {
+      count: Number(terms.tickets_sold),
+      percentage: (Number(terms.percentage_of_sales) || 0).toFixed(1),
+    })
+  })()
+
+  const grossFeeBreakdown = [
+    t($ => $.detail.deal.statement.breakdown.grossFee, {
+      guarantee: formatEur(statement.guaranteedFeeCents),
+      tickets: formatEur(statement.ticketRevenueCents),
+    }),
+    ticketBreakdown,
+  ].join(' ')
 
   const agencyBreakdown = (() => {
     if (terms.agency_fee_basis === 'percentage') {
       return t($ => $.detail.deal.statement.breakdown.percentageOfGross, {
         percentage: terms.agency_fee_percentage,
-        base: formatEur(statement.grossFeeCents),
+        base: formatEur(statement.bookingFeeBaseCents),
       })
     }
     if (terms.agency_fee_basis === 'amount') return t($ => $.detail.deal.statement.breakdown.fixedAmount)
@@ -87,16 +105,23 @@ export default function ArtistStatement({ terms, costLineCount }: Readonly<Props
     if (terms.commission_basis === 'percentage') {
       return t($ => $.detail.deal.statement.breakdown.percentageOfNett, {
         percentage: terms.commission_percentage,
-        base: formatEur(statement.nettFeeCents),
+        base: formatEur(statement.commissionBaseCents),
       })
     }
     if (terms.commission_basis === 'amount') return t($ => $.detail.deal.statement.breakdown.fixedAmount)
     return t($ => $.detail.deal.statement.breakdown.notAgreed)
   })()
 
-  const artistBreakdown = terms.agency_fee_mode === 'inclusive' && terms.agency_fee_basis !== 'none'
-    ? t($ => $.detail.deal.statement.breakdown.dueToArtistInclusive)
-    : t($ => $.detail.deal.statement.breakdown.dueToArtistExclusive)
+  const artistBreakdown = [
+    terms.agency_fee_mode === 'inclusive' && terms.agency_fee_basis !== 'none'
+      ? t($ => $.detail.deal.statement.breakdown.dueToArtistInclusive)
+      : t($ => $.detail.deal.statement.breakdown.dueToArtistExclusive),
+    statement.costsPaidByArtistCents > 0
+      ? t($ => $.detail.deal.statement.breakdown.dueToArtistWithCosts, {
+        costs: formatEur(statement.costsPaidByArtistCents),
+      })
+      : null,
+  ].filter(Boolean).join(' ')
 
   return (
     <Grid size={12} data-testid="artist-statement">
@@ -104,15 +129,17 @@ export default function ArtistStatement({ terms, costLineCount }: Readonly<Props
         {t($ => $.detail.deal.statement.title)}
       </Typography>
 
-      {/* One collapsed grid: the fee build-up on the first row, the split of it
-          on the second. The negative margins push the trailing hairlines under
-          the wrapper's own border, which the overflow then clips. */}
+      {/* One collapsed grid: the gross fee (ticket revenue folded into its
+          tooltip) taken down to the nett fee via costs on the first row, the
+          nett fee split on the second. The negative margins push the
+          trailing hairlines under the wrapper's own border, which the
+          overflow then clips. */}
       <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-        <Grid container spacing={0} columns={{ xs: 2, sm: 4 }} sx={{ mr: '-1px', mb: '-1px' }}>
+        <Grid container spacing={0} columns={{ xs: 1, sm: 3 }} sx={{ mr: '-1px', mb: '-1px' }}>
           <StatementCell
             label={t($ => $.detail.deal.statement.grossFee)}
+            breakdown={grossFeeBreakdown}
             amountCents={statement.grossFeeCents}
-            breakdown={feeBreakdown}
           />
           <StatementCell
             label={t($ => $.detail.deal.statement.costs)}
@@ -120,15 +147,20 @@ export default function ArtistStatement({ terms, costLineCount }: Readonly<Props
             breakdown={t($ => $.detail.deal.statement.breakdown.costs, { count: costLineCount })}
           />
           <StatementCell
-            span={2}
             label={t($ => $.detail.deal.statement.nettFee)}
             amountCents={statement.nettFeeCents}
             breakdown={t($ => $.detail.deal.statement.breakdown.nettFee, {
               gross: formatEur(statement.grossFeeCents),
-              costs: formatEur(statement.costsCents),
+              // What actually reaches the nett fee: only costs paid by
+              // artist/agency do. Artist- and agency-only costs are deducted
+              // later, when due to artist/due to booker are calculated, so
+              // they are not in this figure even though they are in the
+              // Costs tile above.
+              costs: formatEur(statement.grossFeeCents - statement.nettFeeCents),
             })}
           />
-
+        </Grid>
+        <Grid container spacing={0} columns={{ xs: 2, sm: 4 }} sx={{ mr: '-1px', mb: '-1px' }}>
           <StatementCell
             label={t($ => $.detail.deal.statement.bookingFee)}
             amountCents={statement.agencyFeeCents}
@@ -142,10 +174,16 @@ export default function ArtistStatement({ terms, costLineCount }: Readonly<Props
           <StatementCell
             label={t($ => $.detail.deal.statement.dueToBooker)}
             amountCents={statement.dueToBookerCents}
-            breakdown={t($ => $.detail.deal.statement.breakdown.dueToBooker, {
-              bookingFee: formatEur(statement.agencyFeeCents),
-              commission: formatEur(statement.commissionCents),
-            })}
+            breakdown={statement.costsPaidByAgencyCents > 0
+              ? t($ => $.detail.deal.statement.breakdown.dueToBookerWithCosts, {
+                bookingFee: formatEur(statement.agencyFeeCents),
+                commission: formatEur(statement.commissionCents),
+                costs: formatEur(statement.costsPaidByAgencyCents),
+              })
+              : t($ => $.detail.deal.statement.breakdown.dueToBooker, {
+                bookingFee: formatEur(statement.agencyFeeCents),
+                commission: formatEur(statement.commissionCents),
+              })}
           />
           <StatementCell
             emphasis

@@ -1,7 +1,9 @@
+import Box from '@mui/material/Box'
 import InputAdornment from '@mui/material/InputAdornment'
 import MenuItem from '@mui/material/MenuItem'
 import TextField from '@mui/material/TextField'
 import { useTranslation } from 'react-i18next'
+import { lineCellSx, lineFieldSx } from '../lineTableSx.ts'
 import { NO_NUMBER_SPINNER_SX } from './termsFieldSx.ts'
 import FieldHelpAdornment from '../FieldHelpAdornment.tsx'
 import { FEE_BASES } from '../../../dealTerms.ts'
@@ -9,6 +11,8 @@ import type { FeeBasis } from '../../../dealTerms.ts'
 
 interface Props {
   basisLabel: string
+  percentageLabel: string
+  amountLabel: string
   basis: FeeBasis
   percentage: string
   amount: string
@@ -19,10 +23,13 @@ interface Props {
 }
 
 // The booking fee and the commission are both "a percentage of something, or a
-// fixed amount" — one shape, used twice, with the basis as the discriminator so
-// neither number has to stand in for "not set".
+// fixed amount" — one shape, used twice, with the basis as the discriminator.
+// Both fields stay on the row and grey out rather than disappear, so the basis
+// (including "none") never changes how many columns the table has.
 export default function FeeBasisFields({
   basisLabel,
+  percentageLabel,
+  amountLabel,
   basis,
   percentage,
   amount,
@@ -31,56 +38,70 @@ export default function FeeBasisFields({
   onChange,
 }: Readonly<Props>) {
   const { t } = useTranslation('gigs')
+  const percentageActive = basis === 'percentage'
+  const amountActive = basis === 'amount'
 
-  // Plain fields, not grid cells: the owning section lays the whole block out on
-  // one line, and the basis decides how many fields there are to lay out.
   return (
     <>
-      <TextField
-        select
-        label={basisLabel}
-        fullWidth
-        value={basis}
-        disabled={!editable}
-        onChange={(event) => onChange('basis', event.target.value)}
-      >
-        {FEE_BASES.map((option) => (
-          <MenuItem key={option} value={option}>{t($ => $.detail.deal.feeBases[option])}</MenuItem>
-        ))}
-      </TextField>
-
-      {basis === 'percentage' && (
+      <Box sx={lineCellSx}>
         <TextField
-          label={t($ => $.detail.deal.percentage)}
+          select
+          variant="standard"
+          fullWidth
+          value={basis}
+          disabled={!editable}
+          onChange={(event) => onChange('basis', event.target.value)}
+          sx={lineFieldSx}
+          slotProps={{
+            input: { disableUnderline: true },
+            htmlInput: { 'aria-label': basisLabel },
+          }}
+        >
+          {FEE_BASES.map((option) => (
+            <MenuItem key={option} value={option}>{t($ => $.detail.deal.feeBases[option])}</MenuItem>
+          ))}
+        </TextField>
+      </Box>
+
+      <Box sx={lineCellSx}>
+        <TextField
+          variant="standard"
           type="number"
           fullWidth
           value={percentage}
+          disabled={!percentageActive}
           onChange={(event) => onChange('percentage', event.target.value)}
           placeholder="0"
-          sx={NO_NUMBER_SPINNER_SX}
+          sx={{ ...lineFieldSx, ...NO_NUMBER_SPINNER_SX }}
           slotProps={{
-            htmlInput: { min: 0, max: 100, step: 0.5, readOnly: !editable },
-            // The unit and the explanation share the field's end.
-            input: { endAdornment: <FieldHelpAdornment help={percentageHelp}>%</FieldHelpAdornment> },
+            htmlInput: { min: 0, max: 100, step: 0.5, readOnly: !editable, 'aria-label': percentageLabel },
+            input: {
+              disableUnderline: true,
+              endAdornment: <FieldHelpAdornment help={percentageHelp}>%</FieldHelpAdornment>,
+            },
           }}
         />
-      )}
+      </Box>
 
-      {basis === 'amount' && (
+      <Box sx={lineCellSx}>
         <TextField
-          label={t($ => $.detail.deal.fixedAmount)}
+          variant="standard"
           type="number"
           fullWidth
           value={amount}
+          disabled={!amountActive}
           onChange={(event) => onChange('amount', event.target.value)}
           placeholder="0.00"
-          sx={NO_NUMBER_SPINNER_SX}
+          sx={{ ...lineFieldSx, ...NO_NUMBER_SPINNER_SX }}
           slotProps={{
-            htmlInput: { min: 0, step: 0.01, readOnly: !editable },
-            input: { startAdornment: <InputAdornment position="start">€</InputAdornment> },
+            htmlInput: { min: 0, step: 0.01, readOnly: !editable, 'aria-label': amountLabel },
+            input: {
+              disableUnderline: true,
+              startAdornment: <InputAdornment position="start">€</InputAdornment>,
+            },
           }}
         />
-      )}
+      </Box>
     </>
   )
 }

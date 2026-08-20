@@ -15,6 +15,7 @@ import {
   isIssuedInvoiceStatus,
 } from '../vat/vatTreatmentService.js'
 import { normalizeVatNumber } from '../../../shared/vatRates.js'
+import { gigInvoiceVatPercentage } from '../../../shared/gigDealVat.js'
 import {
   checkInvoiceReadyForIssue,
   checkReverseCharge,
@@ -62,6 +63,8 @@ import {
   confirmInvoiceVatSnapshot,
 } from './invoiceRepository.js'
 import { searchGigs as searchGigRows } from '../../planning/gigs/gigRepository.js'
+import { buildGigDraftLines } from './gigDraftLines.js'
+import { resolveInvoiceLng } from '../../utils/invoiceI18n.js'
 import { fetchTenant } from '../../people/workspaces/tenantRepository.js'
 import {
   SIMPLE_PATCH_FIELDS,
@@ -703,7 +706,15 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
   // Date-aware: prefilling a draft dated after a scheduled scheme change must
   // offer that scheme's rate, which the legacy flag cannot express.
   const treatment = await resolveLiveTreatment(pool, tenantId, issueDate)
-  const taxPercentage = treatment?.schemeExempt ? 0 : behavior.defaultVatRate
+  // The deal's own General VAT % when it sets one, otherwise the country's
+  // reduced rate: what the tenant invoices is a live performance, which sits
+  // under the reduced tariff (NL 9%). The profile's default_vat_rate is the
+  // standard rate, for what they BUY. An exempt scheme outranks the deal.
+  const taxPercentage = treatment?.schemeExempt
+    ? 0
+    : gigInvoiceVatPercentage(gig, behavior.accountingCountry)
+
+  const invoiceLng = resolveInvoiceLng(behavior.accountingCountry)
 
   const eventDateStr = gig.event_date
     ? new Date(gig.event_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -770,15 +781,9 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
         // Date of supply (art. 226(7)) defaults to the gig's performance date.
         supply_date: gig.event_date ? new Date(gig.event_date).toISOString().slice(0, 10) : null,
         discount_cents: 0,
-        lines: [
-          {
-            description,
-            quantity: 1,
-            unit_price_cents: gig.guaranteed_fee_cents ?? 0,
-            tax_percentage: taxPercentage,
-            position: 0,
-          },
-        ],
+        // Every deal type but a flat fee is billed as the deal itself:
+        // ticket revenue, what the venue recoups, and its share of the rest.
+        lines: buildGigDraftLines(gig, { description, taxPercentage, lng: invoiceLng }),
       },
     },
   }

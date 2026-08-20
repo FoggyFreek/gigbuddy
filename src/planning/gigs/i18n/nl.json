@@ -276,7 +276,7 @@
       "expectedVisitorsHelp": "Wordt gebruikt om de mogelijke opbrengst te simuleren.",
       "ticketsSold": "Verkochte kaarten",
       "netTicketPrice": "Netto kaartprijs",
-      "netTicketPriceHelp": "Excl. btw en servicekosten — de basis voor alle berekeningen hieronder.",
+      "netTicketPriceHelp": "De prijs die de kassa per kaart binnenkrijgt, excl. servicekosten — de basis voor alle berekeningen hieronder. Staat de btw erin, vul die dan in bij Belastingen als ticket-btw %.",
       "grossTicketPrice": "Bruto kaartprijs",
       "percentage": "Percentage",
       "fixedAmount": "Vast bedrag",
@@ -288,7 +288,9 @@
       "bookingFee": {
         "title": "Boekingsfee",
         "basis": "Boekingsfee",
-        "percentageHelp": "Berekend over de brutogage.",
+        "percentage": "Boekingsfee percentage",
+        "amount": "Boekingsfee bedrag",
+        "percentageHelp": "Berekend over de brutogage — de gegarandeerde gage plus de tot nu toe verdiende kaartopbrengst.",
         "mode": "Exclusief of inclusief",
         "modes": {
           "exclusive": "Exclusief",
@@ -302,13 +304,34 @@
       "commission": {
         "title": "Commissie",
         "basis": "Commissie",
+        "percentage": "Commissie percentage",
+        "amount": "Commissie bedrag",
         "percentageHelp": "Berekend over de nettogage (brutogage min kosten)."
+      },
+      "taxes": {
+        "title": "Belastingen",
+        "subjectToVat": "Btw-plichtig",
+        "generalVat": "Algemeen btw %",
+        "generalVatHelp": "Het tarief waarmee een factuur vanuit dit optreden wordt opgemaakt. Laat leeg voor het standaardtarief ({{rate}}%).",
+        "ticketVat": "Ticket-btw %",
+        "ticketVatHelp": "De btw die het podium op kaarten rekent en die in de nettoticketprijs zit. Alle ticketberekeningen gaan over de prijs zonder die btw."
       },
       "costs": {
         "title": "Kosten",
         "label": "Kostenpost",
         "labelPlaceholder": "Reiskosten, backline, catering, …",
         "amount": "Bedrag",
+        "paidBy": "Betaald door",
+        "paidByOptions": {
+          "artist_agency": "Artiest/Bureau",
+          "artist": "Artiest",
+          "agency": "Bureau"
+        },
+        "paidByHelp": {
+          "artist_agency": "Wordt afgetrokken van de brutogage voordat de boekingsfee wordt berekend, zodat beide partijen via de verlaagde grondslag meebetalen.",
+          "artist": "Wordt alleen afgetrokken van het bedrag voor de artiest. De boekingsfee blijft ongewijzigd.",
+          "agency": "Wordt alleen afgetrokken van het bedrag voor de boeker. Het bedrag voor de artiest blijft ongewijzigd."
+        },
         "add": "Toevoegen",
         "delete": "Kostenpost verwijderen",
         "deleteTitle": "\"{{label}}\" verwijderen?",
@@ -326,18 +349,23 @@
         "dueToBooker": "Voor de boeker",
         "dueToArtist": "Voor de artiest",
         "breakdown": {
-          "grossFee": "De gegarandeerde gage die voor dit optreden is afgesproken.",
-          "grossFeeDoorDeal": "Een doordeal heeft geen gegarandeerde gage — alles komt uit de kaartopbrengst.",
+          "ticketRevenue_one": "Het aandeel van {{percentage}}% in de {{count}} tot nu toe verkochte kaart.",
+          "ticketRevenue_other": "Het aandeel van {{percentage}}% in de {{count}} tot nu toe verkochte kaarten.",
+          "ticketRevenueUnknown": "Er zijn nog geen verkochte kaarten ingevuld.",
+          "ticketRevenueFlatFee": "Een vaste gage deelt niet mee in de kaartopbrengst.",
+          "grossFee": "Gegarandeerde gage {{guarantee}} plus {{tickets}} uit de tot nu toe verkochte kaarten.",
           "costs_one": "Het totaal van {{count}} kostenpost.",
           "costs_other": "Het totaal van {{count}} kostenposten.",
           "nettFee": "Brutogage {{gross}} min kosten {{costs}}.",
           "percentageOfGross": "{{percentage}}% van de brutogage ({{base}}).",
-          "percentageOfNett": "{{percentage}}% van de nettogage ({{base}}).",
+          "percentageOfNett": "{{percentage}}% van de nettogage min de boekingsfee ({{base}}).",
           "fixedAmount": "Een vast bedrag, zoals afgesproken ingevoerd.",
           "notAgreed": "Niet afgesproken voor dit optreden.",
           "dueToBooker": "Boekingsfee {{bookingFee}} plus commissie {{commission}}.",
+          "dueToBookerWithCosts": "Boekingsfee {{bookingFee}} plus commissie {{commission}}, min {{costs}} aan kosten betaald door het bureau.",
           "dueToArtistExclusive": "De nettogage min commissie. De boekingsfee is exclusief en komt dus boven op de brutogage in plaats van eruit.",
-          "dueToArtistInclusive": "De nettogage min commissie en de boekingsfee, die inclusief is en dus uit de brutogage wordt gehaald."
+          "dueToArtistInclusive": "De nettogage min commissie en de boekingsfee, die inclusief is en dus uit de brutogage wordt gehaald.",
+          "dueToArtistWithCosts": "Min {{costs}} aan kosten betaald door de artiest."
         }
       },
       "tickets": {
@@ -348,6 +376,7 @@
         "expectedUpside": "Verwachte opbrengst",
         "potentialUpside": "Mogelijke opbrengst",
         "actualUpside": "Opbrengst op de tot nu toe verkochte kaarten: {{amount}}.",
+        "vatCorrectedPrice": "Er gaat eerst {{percentage}}% ticket-btw af, dus alle berekeningen gaan over {{price}} per kaart.",
         "atAttendance_one": "bij {{count}} kaart",
         "atAttendance_other": "bij {{count}} kaarten",
         "unknown": "—",
@@ -359,7 +388,7 @@
           "flat_fee": "Een vaste gage heeft geen break-evenpunt.",
           "guarantee": "De kaartopbrengst moet eerst de brutogage plus de zaalkosten dekken voordat het aandeel van de artiest begint.",
           "guarantee_plus": "De kaartopbrengst moet eerst de brutogage dekken, en de zaalkosten wanneer die worden meegerekend, voordat het aandeel van de artiest begint.",
-          "guarantee_vs": "De kaart waarbij het aandeel van de artiest de gegarandeerde gage inhaalt.",
+          "guarantee_vs": "Er wordt niets terugverdiend — de deal betaalt gewoon het hoogste van de gegarandeerde gage of het volledige aandeel van de artiest in de kassa.",
           "door_deal": "De kaartopbrengst moet eerst de zaalkosten dekken voordat het aandeel van de artiest begint."
         }
       }

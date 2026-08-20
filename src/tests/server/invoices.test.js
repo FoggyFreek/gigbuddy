@@ -551,6 +551,10 @@ describe('invoices — draft-from-gig', () => {
     expect(res.body.draft.customer_tax_id).toBe('NL001794860B34')
     expect(res.body.draft.lines).toHaveLength(1)
     expect(res.body.draft.lines[0].unit_price_cents).toBe(50000)
+    // A performance is invoiced at the country's reduced rate, not the standard
+    // rate the profile carries for what the tenant buys.
+    expect(Number(res.body.draft.lines[0].tax_percentage)).toBe(9)
+    expect(Number(res.body.tenant.tax_percentage)).toBe(21)
   })
 
   it('returns empty billing_targets when only venue is linked', async () => {
@@ -601,6 +605,137 @@ describe('invoices — draft-from-gig', () => {
   it('cross-tenant draft returns 404', async () => {
     const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigB.id}`))
     expect(res.status).toBe(404)
+  })
+
+  // A gig whose deal shares in the door is billed as the calculation behind it,
+  // so the venue can check the settlement line by line. The decomposition and
+  // its tie-out with the artist statement are covered in the frontend unit test
+  // for shared/gigDealInvoiceLines.js; what matters here is that the draft
+  // endpoint actually serves those lines, described and taxed.
+  async function setDealTerms(gigId, terms) {
+    const columns = Object.keys(terms)
+    await pool.query(
+      `UPDATE gigs SET ${columns.map((c, i) => `${c} = $${i + 1}`).join(', ')} WHERE id = $${columns.length + 1}`,
+      [...columns.map((c) => terms[c]), gigId],
+    )
+  }
+
+  it('bills a door deal as ticket revenue, break-even and the venue share', async () => {
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'door_deal',
+      venue_costs_cents: 30000,
+      tickets_sold: 200,
+      ticket_price_net_cents: 1000,
+      percentage_of_sales: 70,
+    })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+
+    const lines = res.body.draft.lines
+    expect(lines).toHaveLength(3)
+    expect(lines.map((line) => [line.quantity, line.unit_price_cents])).toEqual([
+      [200, 1000],
+      [1, -30000],
+      [1, -51000],
+    ])
+    // 2000 gross, less the 300 break-even, less the venue's 30% of the rest.
+    const net = lines.reduce((total, line) => total + line.quantity * line.unit_price_cents, 0)
+    expect(net).toBe(119000)
+    // A deduction adjusts money, not stock: the quantity stays positive and the
+    // amount carries the sign.
+    expect(lines.every((line) => line.quantity > 0)).toBe(true)
+    expect(lines.every((line) => Number(line.tax_percentage) === 9)).toBe(true)
+    expect(lines.map((line) => line.position)).toEqual([0, 1, 2])
+    expect(lines[0].description).toContain(seed.gigA.event_description ?? '')
+    expect(lines[2].description).toContain('30%')
+    expect(new Set(lines.map((line) => line.description)).size).toBe(3)
+  })
+
+  it('bills a guarantee as the fee plus the itemised door settlement', async () => {
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'guarantee',
+      guaranteed_fee_cents: 50000,
+      venue_costs_cents: 30000,
+      tickets_sold: 200,
+      ticket_price_net_cents: 1000,
+      percentage_of_sales: 70,
+    })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+
+    const lines = res.body.draft.lines
+    // Fee, revenue, the fee and venue costs recouped, and the venue's share.
+    expect(lines).toHaveLength(5)
+    expect(lines[0]).toMatchObject({ quantity: 1, unit_price_cents: 50000 })
+    const net = lines.reduce((total, line) => total + line.quantity * line.unit_price_cents, 0)
+    expect(net).toBe(134000)
+  })
+
+  it('keeps the single fee line for a flat fee', async () => {
+    await setDealTerms(seed.gigA.id, { deal_type: 'flat_fee' })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+    expect(res.body.draft.lines).toHaveLength(1)
+    expect(res.body.draft.lines[0].unit_price_cents).toBe(50000)
+  })
+
+  it('falls back to one empty line when a door deal never reached break-even', async () => {
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'door_deal',
+      venue_costs_cents: 500000,
+      tickets_sold: 10,
+      ticket_price_net_cents: 1000,
+      percentage_of_sales: 70,
+    })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+    expect(res.body.draft.lines).toHaveLength(1)
+    expect(res.body.draft.lines[0].unit_price_cents).toBe(0)
+  })
+
+  // The deal's own Taxes section decides what the invoice is billed at, and
+  // whether the door's own VAT has to come out of the ticket revenue first.
+  it('bills the lines at the general VAT rate the deal overrides with', async () => {
+    await setDealTerms(seed.gigA.id, { deal_type: 'flat_fee', subject_to_vat: true, vat_percentage: 21 })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+    expect(Number(res.body.draft.lines[0].tax_percentage)).toBe(21)
+  })
+
+  it('bills at zero for a deal that is not subject to VAT', async () => {
+    await setDealTerms(seed.gigA.id, { deal_type: 'flat_fee', subject_to_vat: false, vat_percentage: 21 })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+    expect(Number(res.body.draft.lines[0].tax_percentage)).toBe(0)
+  })
+
+  it('takes the ticket VAT out of the door before the venue recoups anything', async () => {
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'door_deal',
+      venue_costs_cents: 0,
+      tickets_sold: 104,
+      ticket_price_net_cents: 685,
+      percentage_of_sales: 100,
+      subject_to_vat: true,
+      ticket_vat_percentage: 9,
+    })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+
+    const lines = res.body.draft.lines
+    // EUR 712.40 through the door, of which 9/109 — EUR 58.82 — is the venue's
+    // VAT, billed as its own correction line.
+    expect(lines.map((line) => [line.quantity, line.unit_price_cents])).toEqual([[104, 685], [1, -5882]])
+    expect(lines[1].description).toContain('9%')
+    expect(lines.reduce((total, line) => total + line.quantity * line.unit_price_cents, 0)).toBe(65358)
+  })
+
+  it('creates an invoice from a door-deal draft that totals the artist share', async () => {
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'door_deal',
+      venue_costs_cents: 30000,
+      tickets_sold: 200,
+      ticket_price_net_cents: 1000,
+      percentage_of_sales: 70,
+    })
+    const draft = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+    const created = await asUserA(request(app).post('/api/invoices'))
+      .send({ ...draft.body.draft, customer_name: draft.body.draft.customer_name || 'Venue' })
+      .expect(201)
+    expect(created.body.subtotal_cents).toBe(119000)
   })
 })
 

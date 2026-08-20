@@ -194,8 +194,8 @@ describe('InvoiceDetails', () => {
     })
 
     await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
-    expect(screen.getAllByText('VAT %')).toHaveLength(1)
-    await userEvent.click(screen.getByRole('combobox', { name: 'VAT %' }))
+    expect(screen.getByRole('columnheader', { name: 'VAT %' })).toBeInTheDocument()
+    await userEvent.click(document.querySelector('[role="gridcell"][data-field="tax_percentage"]'))
 
     expect(screen.getByRole('option', { name: '20%' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: '5%' })).toBeInTheDocument()
@@ -445,15 +445,15 @@ describe('InvoiceDetails', () => {
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
-    expect(screen.getAllByPlaceholderText(/Start typing/)).toHaveLength(1)
+    expect(screen.getAllByLabelText('remove line')).toHaveLength(1)
     // With a single line the remove control is disabled.
     expect(screen.getByLabelText('remove line')).toBeDisabled()
 
     await userEvent.click(screen.getByRole('button', { name: 'Add item' }))
-    expect(screen.getAllByPlaceholderText(/Start typing/)).toHaveLength(2)
+    expect(screen.getAllByLabelText('remove line')).toHaveLength(2)
 
     await userEvent.click(screen.getAllByLabelText('remove line')[0])
-    expect(screen.getAllByPlaceholderText(/Start typing/)).toHaveLength(1)
+    expect(screen.getAllByLabelText('remove line')).toHaveLength(1)
   })
 
   it('surfaces a logo upload error', async () => {

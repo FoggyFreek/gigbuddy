@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest'
 import { Buffer } from 'node:buffer'
 import { renderInvoiceUbl } from '../../../../server/utils/renderInvoiceUbl.js'
 import { checkPeppolReadiness } from '../../../../shared/peppolReadiness.js'
+import { buildGigDealInvoiceLines } from '../../../../shared/gigDealInvoiceLines.js'
 import { CASES, EXPECTED_PEPPOL_FAILURES } from '../../../tests/fixtures/ubl/cases.js'
 import {
   describeFailures,
@@ -32,6 +33,16 @@ const NL_BUYER = {
   customer_tax_id: 'NL819789471B01',
 }
 const withBuyer = (invoice) => ({ ...base.invoice, ...NL_BUYER, ...invoice })
+
+// The real draft-from-gig decomposition, rendered as invoice lines: this is the
+// exact shape the invoice endpoint hands a venue for a deal that shares in the
+// door, so it is the shape the official rules have to accept.
+const dealSettlementLines = (terms) => buildGigDealInvoiceLines(terms).map((line) => ({
+  description: line.kind,
+  quantity: line.quantity,
+  unit_price_cents: line.unitPriceCents,
+  tax_percentage: 21,
+}))
 
 // Each entry pins an assumption the renderer makes that our own tests could
 // only assert by transcribing the spec.
@@ -107,6 +118,34 @@ const VARIANTS = {
       customer_contact_family_name: null,
     }),
   },
+  // A gig billed as the deal that produced the amount: ticket revenue, what the
+  // venue recoups and its share of the rest. The deductions are what make the
+  // shape unusual — the document states them as a positive quantity at a
+  // NEGATIVE AMOUNT (money adjusted, not stock returned), which only survives
+  // BR-27 because the renderer moves that sign onto the quantity.
+  'a door deal billed as its settlement': {
+    ...base,
+    invoice: withBuyer(),
+    lines: dealSettlementLines({
+      deal_type: 'door_deal',
+      venue_costs_cents: 30000,
+      tickets_sold: 200,
+      ticket_price_net_cents: 1000,
+      percentage_of_sales: 70,
+    }),
+  },
+  'a guarantee billed with its break-even itemised': {
+    ...base,
+    invoice: withBuyer(),
+    lines: dealSettlementLines({
+      deal_type: 'guarantee',
+      guaranteed_fee_cents: 50000,
+      venue_costs_cents: 30000,
+      tickets_sold: 200,
+      ticket_price_net_cents: 1000,
+      percentage_of_sales: 70,
+    }),
+  },
   'no registration number on the supplier': {
     ...base, tenant: { ...base.tenant, kvk_number: null }, invoice: withBuyer(),
   },
@@ -127,6 +166,24 @@ describe.skipIf(!schematronAvailable())('e-invoicing conformance (official Schem
     for (const [name, input] of Object.entries(VARIANTS)) {
       it(name, () => expectValid(renderInvoiceUbl(input)))
     }
+
+    // Peppol adds R120 (line net vs quantity x price) on top of BR-27, and both
+    // have to hold for a settlement carrying negative deduction lines.
+    it('accepts a deal settlement on the Peppol profile too', () => {
+      const xml = renderInvoiceUbl({
+        ...base,
+        invoice: withBuyer(),
+        lines: dealSettlementLines({
+          deal_type: 'guarantee_vs',
+          guaranteed_fee_cents: 50000,
+          tickets_sold: 200,
+          ticket_price_net_cents: 1000,
+          percentage_of_sales: 70,
+        }),
+      })
+      expectValid(xml)
+      expect(validatePeppol(xml)).toEqual([])
+    })
 
     it('accepts an embedded invoice PDF', () => {
       const xml = renderInvoiceUbl({
@@ -169,6 +226,32 @@ describe.skipIf(!schematronAvailable())('e-invoicing conformance (official Schem
       const rejected = validatePeppol(renderInvoiceUbl(input)).length > 0
       expect(`${name}: blocked=${blocked}`).toBe(`${name}: blocked=${rejected}`)
     }
+  })
+
+  // The document keeps a deduction as a positive quantity at a negative amount;
+  // BR-27 makes that fatal on the wire, so the renderer swaps the sign onto the
+  // quantity. Both halves are pinned: that the swap happens, and that it is
+  // needed — an unswapped line is rejected by the real ruleset.
+  it('moves a deduction line sign onto the quantity, as BR-27 requires', () => {
+    const deduction = { description: 'Venue costs', quantity: 1, unit_price_cents: -30000, tax_percentage: 21 }
+    const xml = renderInvoiceUbl({
+      ...base,
+      invoice: withBuyer(),
+      lines: [{ description: 'Ticket revenue', quantity: 200, unit_price_cents: 1000, tax_percentage: 21 }, deduction],
+    })
+    expectValid(xml)
+    expect(validatePeppol(xml)).toEqual([])
+
+    const line = xml.split('<cac:InvoiceLine>')[2]
+    expect(line).toContain('<cbc:InvoicedQuantity unitCode="C62">-1.00</cbc:InvoicedQuantity>')
+    expect(line).toContain('<cbc:LineExtensionAmount currencyID="EUR">-300.00</cbc:LineExtensionAmount>')
+    expect(line).toContain('<cbc:PriceAmount currencyID="EUR">300.00</cbc:PriceAmount>')
+
+    // Without the swap — the shape the document itself uses — CEN says no.
+    const unswapped = xml
+      .replace('<cbc:InvoicedQuantity unitCode="C62">-1.00', '<cbc:InvoicedQuantity unitCode="C62">1.00')
+      .replace('<cbc:PriceAmount currencyID="EUR">300.00', '<cbc:PriceAmount currencyID="EUR">-300.00')
+    expect(validateEn16931(unswapped).map((f) => f.id)).toContain('BR-27')
   })
 
   // Proves the harness has teeth: without these, "everything passes" could just

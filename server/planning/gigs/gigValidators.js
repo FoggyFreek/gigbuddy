@@ -23,6 +23,10 @@ export const VALID_DEAL_TYPES = ['flat_fee', 'guarantee', 'guarantee_plus', 'gua
 export const VALID_FEE_BASES = ['none', 'percentage', 'amount']
 export const VALID_AGENCY_FEE_MODES = ['exclusive', 'inclusive']
 
+// Who a cost line is paid by — kept in step with the CHECK constraint in
+// migration 194 and with the frontend engine in src/planning/gigs/dealTerms.ts.
+export const VALID_COST_PAID_BY = ['artist_agency', 'artist', 'agency']
+
 // INTEGER columns; anything larger is a client bug, not a 500 from Postgres.
 const MAX_INT4 = 2147483647
 
@@ -37,6 +41,9 @@ export const GIG_PATCH_FIELDS = [
   'ticket_price_net_cents', 'ticket_price_gross_cents',
   'agency_fee_basis', 'agency_fee_percentage', 'agency_fee_amount_cents', 'agency_fee_mode',
   'commission_basis', 'commission_percentage', 'commission_amount_cents',
+  // VAT on the deal (migration 193). subject_to_vat is the discriminator; the
+  // two rates are overrides, so null is "no rate agreed", not "no VAT".
+  'subject_to_vat', 'vat_percentage', 'ticket_vat_percentage',
   // Only meaningful in a personal workspace; the route gates the field on the
   // MY_BANDS capability and the service validates it against my_bands.
   'my_band_id',
@@ -98,14 +105,17 @@ const GIG_FIELD_NORMALIZERS = {
   agency_fee_mode: oneOf(VALID_AGENCY_FEE_MODES),
   commission_basis: oneOf(VALID_FEE_BASES),
   breakeven_includes_venue_costs: booleanIn,
+  subject_to_vat: booleanIn,
+  vat_percentage: nullablePercent,
+  ticket_vat_percentage: nullablePercent,
   agency_fee_percentage: requiredPercent,
   commission_percentage: requiredPercent,
   agency_fee_amount_cents: requiredWhole,
   commission_amount_cents: requiredWhole,
 }
 
-// A gig cost line: a free-text label (travel, backline, catering, …) and a
-// non-negative amount in cents. Returns { error } or { data }.
+// A gig cost line: a free-text label (travel, backline, catering, …), a
+// non-negative amount in cents, and who pays it. Returns { error } or { data }.
 export function normalizeGigCost(body) {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
     return { error: 'Invalid cost' }
@@ -117,12 +127,15 @@ export function normalizeGigCost(body) {
   const amount = requiredWhole('amount_cents', body.amount_cents ?? 0)
   if (amount.error) return { error: amount.error }
 
+  const paidBy = body.paid_by ?? 'artist'
+  if (!VALID_COST_PAID_BY.includes(paidBy)) return { error: 'Invalid paid_by' }
+
   if (body.position === undefined || body.position === null) {
-    return { data: { label, amount_cents: amount.value, position: null } }
+    return { data: { label, amount_cents: amount.value, paid_by: paidBy, position: null } }
   }
   const position = requiredWhole('position', body.position)
   if (position.error) return { error: position.error }
-  return { data: { label, amount_cents: amount.value, position: position.value } }
+  return { data: { label, amount_cents: amount.value, paid_by: paidBy, position: position.value } }
 }
 
 // An "Additional information" block: a label plus free-form multi-line text.

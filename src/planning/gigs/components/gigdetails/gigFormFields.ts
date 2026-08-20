@@ -26,7 +26,13 @@ const REQUIRED_MONEY_FIELDS = new Set(['agency_fee_amount', 'commission_amount']
 export const COUNT_FIELDS = new Set(['venue_capacity', 'expected_visitors', 'tickets_sold'])
 
 /** NUMERIC(5,2) percentages; blank clears them. */
-export const NULLABLE_PERCENT_FIELDS = new Set(['percentage_of_sales'])
+export const NULLABLE_PERCENT_FIELDS = new Set([
+  'percentage_of_sales',
+  // Blank is "no rate agreed", which is not the same as 0% — whether VAT
+  // applies at all is `subject_to_vat`'s job.
+  'vat_percentage',
+  'ticket_vat_percentage',
+])
 
 /** NUMERIC(5,2) percentages on NOT NULL columns; blank means zero. */
 export const REQUIRED_PERCENT_FIELDS = new Set(['agency_fee_percentage', 'commission_percentage'])
@@ -99,5 +105,8 @@ export function dealTermsFromForm(form: GigDetailForm, costs: GigCost[]): GigDea
     commission_basis: form.commission_basis as FeeBasis,
     commission_percentage: percentToValue(String(form.commission_percentage ?? '')) ?? 0,
     commission_amount_cents: centsFromForm(form.commission_amount) ?? 0,
+    subject_to_vat: form.subject_to_vat as boolean,
+    vat_percentage: percentToValue(String(form.vat_percentage ?? '')),
+    ticket_vat_percentage: percentToValue(String(form.ticket_vat_percentage ?? '')),
   }
 }

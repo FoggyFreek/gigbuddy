@@ -119,19 +119,28 @@ export default function TicketUpside({ terms }: Readonly<Props>) {
             label={t($ => $.detail.deal.tickets.expectedUpside)}
             value={scenarioValue(upside.expected)}
             caption={scenarioCaption(upside.expected)}
-            breakdown={t($ => $.detail.deal.tickets.breakdown.expected, { percentage: upside.artistPercentage })}
+            breakdown={t($ => $.detail.deal.tickets.breakdown.expected, { percentage: upside.artistPercentage.toFixed(1) })}
           />
           <UpsideTile
             emphasis
             label={t($ => $.detail.deal.tickets.potentialUpside)}
             value={scenarioValue(upside.potential)}
             caption={scenarioCaption(upside.potential)}
-            breakdown={t($ => $.detail.deal.tickets.breakdown.potential, { percentage: upside.artistPercentage })}
+            breakdown={t($ => $.detail.deal.tickets.breakdown.potential, { percentage: upside.artistPercentage.toFixed(1) })}
           />
         </Grid>
       </Box>
 
       {/* Prose, not a figure — it stays outside the grid. */}
+      {upside.ticketVatPercentage > 0 && (
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
+          {t($ => $.detail.deal.tickets.vatCorrectedPrice, {
+            percentage: upside.ticketVatPercentage,
+            price: formatEur(upside.ticketPriceExVatCents),
+          })}
+        </Typography>
+      )}
+
       <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
         {t($ => $.detail.deal.tickets.actualUpside, {
           amount: upside.sold === null ? unknown : formatEur(upside.sold.artistShareCents),

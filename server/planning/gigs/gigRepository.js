@@ -750,7 +750,7 @@ export async function listGigContacts(executor, gigId, tenantId) {
 
 export async function listGigCosts(executor, gigId, tenantId) {
   const { rows } = await executor.query(
-    `SELECT id, label, amount_cents, position
+    `SELECT id, label, amount_cents, paid_by, position
        FROM gig_costs
       WHERE gig_id = $1 AND tenant_id = $2
       ORDER BY position ASC, id ASC`,
@@ -768,25 +768,25 @@ export async function countGigCosts(executor, gigId, tenantId) {
 }
 
 // Appends after the current last line when the caller gave no explicit position.
-export async function insertGigCost(executor, gigId, tenantId, { label, amount_cents, position }) {
+export async function insertGigCost(executor, gigId, tenantId, { label, amount_cents, paid_by, position }) {
   const { rows } = await executor.query(
-    `INSERT INTO gig_costs (gig_id, tenant_id, label, amount_cents, position)
-     VALUES ($1, $2, $3, $4,
-       COALESCE($5, (SELECT COALESCE(MAX(position), -1) + 1
+    `INSERT INTO gig_costs (gig_id, tenant_id, label, amount_cents, paid_by, position)
+     VALUES ($1, $2, $3, $4, $5,
+       COALESCE($6, (SELECT COALESCE(MAX(position), -1) + 1
                        FROM gig_costs WHERE gig_id = $1 AND tenant_id = $2)))
-     RETURNING id, label, amount_cents, position`,
-    [gigId, tenantId, label, amount_cents, position],
+     RETURNING id, label, amount_cents, paid_by, position`,
+    [gigId, tenantId, label, amount_cents, paid_by, position],
   )
   return rows[0]
 }
 
-export async function updateGigCost(executor, gigId, costId, tenantId, { label, amount_cents, position }) {
+export async function updateGigCost(executor, gigId, costId, tenantId, { label, amount_cents, paid_by, position }) {
   const { rows } = await executor.query(
     `UPDATE gig_costs
-        SET label = $1, amount_cents = $2, position = COALESCE($3, position), updated_at = NOW()
-      WHERE id = $4 AND gig_id = $5 AND tenant_id = $6
-      RETURNING id, label, amount_cents, position`,
-    [label, amount_cents, position, costId, gigId, tenantId],
+        SET label = $1, amount_cents = $2, paid_by = $3, position = COALESCE($4, position), updated_at = NOW()
+      WHERE id = $5 AND gig_id = $6 AND tenant_id = $7
+      RETURNING id, label, amount_cents, paid_by, position`,
+    [label, amount_cents, paid_by, position, costId, gigId, tenantId],
   )
   return rows[0] || null
 }

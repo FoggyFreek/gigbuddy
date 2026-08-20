@@ -158,6 +158,12 @@ export interface Gig {
   commission_basis?: FeeBasis
   commission_percentage?: number | string
   commission_amount_cents?: number
+  /** Whether the deal carries VAT at all; the two rates below only apply if it does. */
+  subject_to_vat?: boolean
+  /** The rate an invoice from this gig is billed at; null = no override. */
+  vat_percentage?: number | string | null
+  /** The venue's VAT contained in the nett ticket price; null = none to take out. */
+  ticket_vat_percentage?: number | string | null
   /** The artist's own costs, itemised. Only present on the gig detail read. */
   costs?: GigCost[]
   /** The "Additional information" blocks. Only present on the gig detail read. */
@@ -167,10 +173,19 @@ export interface Gig {
   viewerBandMemberId?: Id | null
 }
 
+// Who a cost line is paid by, which decides how it moves through the artist
+// statement (src/planning/gigs/dealTerms.ts): 'artist_agency' comes off the
+// gross fee before the booking fee is calculated, 'artist' comes off only
+// what is due to the artist, 'agency' comes off only what is due to the
+// booker. Missing/undefined on old data reads as 'artist', the pre-existing
+// behaviour.
+export type CostPaidBy = 'artist_agency' | 'artist' | 'agency'
+
 export interface GigCost {
   id?: Id
   label?: string
   amount_cents?: number | string | null
+  paid_by?: CostPaidBy
   position?: number
 }
 
