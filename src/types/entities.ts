@@ -11,6 +11,7 @@ import type { PurchaseImportWarningCode } from '../finance/purchases/purchaseImp
 import type { BandMemberRole } from '../people/memberships/bandMemberRoles.ts'
 import type { TenantKind } from '../auth/tenantKinds.ts'
 import type { JoinPolicy } from '../people/memberships/membership.ts'
+import { COST_PAID_BY, DEAL_TYPES, FEE_BASES, GUARANTEE_VARIANTS } from '../../shared/gigDealVocabulary.js'
 
 export type Id = number | string
 
@@ -143,6 +144,7 @@ export interface Gig {
   // Deal terms. The maths that turns these into an artist statement lives in
   // src/planning/gigs/dealTerms.ts — nothing here is derived server-side.
   deal_type?: DealType
+  guarantee_variant?: GuaranteeVariant | null
   guaranteed_fee_cents?: number | null
   breakeven_includes_venue_costs?: boolean
   venue_costs_cents?: number | null
@@ -154,7 +156,6 @@ export interface Gig {
   agency_fee_basis?: FeeBasis
   agency_fee_percentage?: number | string
   agency_fee_amount_cents?: number
-  agency_fee_mode?: AgencyFeeMode
   commission_basis?: FeeBasis
   commission_percentage?: number | string
   commission_amount_cents?: number
@@ -179,7 +180,7 @@ export interface Gig {
 // what is due to the artist, 'agency' comes off only what is due to the
 // booker. Missing/undefined on old data reads as 'artist', the pre-existing
 // behaviour.
-export type CostPaidBy = 'artist_agency' | 'artist' | 'agency'
+export type CostPaidBy = typeof COST_PAID_BY[number]
 
 export interface GigCost {
   id?: Id
@@ -211,11 +212,11 @@ export interface GigTimetableEntry {
   position: number
 }
 
-// Deal vocabulary, mirroring the CHECK constraints in migration 189. The
-// matching runtime lists live in src/planning/gigs/dealTerms.ts.
-export type DealType = 'flat_fee' | 'guarantee' | 'guarantee_plus' | 'guarantee_vs' | 'door_deal'
-export type FeeBasis = 'none' | 'percentage' | 'amount'
-export type AgencyFeeMode = 'exclusive' | 'inclusive'
+// Deal vocabulary is derived from the shared runtime declarations. Server
+// tests keep those declarations aligned with the database CHECK constraints.
+export type DealType = typeof DEAL_TYPES[number]
+export type GuaranteeVariant = typeof GUARANTEE_VARIANTS[number]
+export type FeeBasis = typeof FEE_BASES[number]
 
 export interface GigTag {
   id?: Id

@@ -1,14 +1,10 @@
 import Box from '@mui/material/Box'
 import Grid from '@mui/material/Grid'
-import MenuItem from '@mui/material/MenuItem'
-import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import { useTranslation } from 'react-i18next'
 import FeeBasisFields from './FeeBasisFields.tsx'
-import { lineCellSx, lineFieldSx, lineHeadCellSx, lineTableSx } from '../lineTableSx.ts'
-import FieldHelpAdornment from '../FieldHelpAdornment.tsx'
-import { AGENCY_FEE_MODES } from '../../../dealTerms.ts'
-import type { AgencyFeeMode, FeeBasis } from '../../../dealTerms.ts'
+import { lineHeadCellSx, lineTableSx } from '../lineTableSx.ts'
+import type { FeeBasis } from '../../../dealTerms.ts'
 import type { GigDetailForm } from '../types.ts'
 
 interface Props {
@@ -17,7 +13,7 @@ interface Props {
   onChange: (field: string, value: unknown) => void
 }
 
-const BOOKING_FEE_COLUMNS = 'repeat(4, minmax(0, 1fr))'
+const BOOKING_FEE_COLUMNS = 'repeat(3, minmax(0, 1fr))'
 const COMMISSION_COLUMNS = 'repeat(3, minmax(0, 1fr))'
 
 // What the artist owes their agency: a booking fee off the gross fee, and a
@@ -25,8 +21,6 @@ const COMMISSION_COLUMNS = 'repeat(3, minmax(0, 1fr))'
 export default function BookerSection({ editable, form, onChange }: Readonly<Props>) {
   const { t } = useTranslation('gigs')
   const agencyBasis = form.agency_fee_basis as FeeBasis
-  const agencyMode = form.agency_fee_mode as AgencyFeeMode
-  const modeActive = agencyBasis !== 'none'
 
   return (
     <>
@@ -54,11 +48,6 @@ export default function BookerSection({ editable, form, onChange }: Readonly<Pro
                 {t($ => $.detail.deal.fixedAmount)}
               </Typography>
             </Box>
-            <Box sx={lineHeadCellSx}>
-              <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                {t($ => $.detail.deal.bookingFee.mode)}
-              </Typography>
-            </Box>
           </Box>
 
           <Box sx={{ display: 'grid', gridTemplateColumns: BOOKING_FEE_COLUMNS, borderTop: 1, borderColor: 'divider' }}>
@@ -73,33 +62,6 @@ export default function BookerSection({ editable, form, onChange }: Readonly<Pro
               editable={editable}
               onChange={(field, value) => onChange(`agency_fee_${field}`, value)}
             />
-
-            <Box sx={lineCellSx}>
-              <TextField
-                select
-                variant="standard"
-                fullWidth
-                value={agencyMode}
-                disabled={!editable || !modeActive}
-                onChange={(event) => onChange('agency_fee_mode', event.target.value)}
-                sx={lineFieldSx}
-                slotProps={{
-                  htmlInput: { 'aria-label': t($ => $.detail.deal.bookingFee.mode) },
-                  // Worked through in an example, so it explains the mode that is
-                  // selected rather than both at once.
-                  input: {
-                    disableUnderline: true,
-                    endAdornment: (
-                      <FieldHelpAdornment help={t($ => $.detail.deal.bookingFee.modeHelp[agencyMode])} />
-                    ),
-                  },
-                }}
-              >
-                {AGENCY_FEE_MODES.map((mode) => (
-                  <MenuItem key={mode} value={mode}>{t($ => $.detail.deal.bookingFee.modes[mode])}</MenuItem>
-                ))}
-              </TextField>
-            </Box>
           </Box>
         </Box>
       </Grid>

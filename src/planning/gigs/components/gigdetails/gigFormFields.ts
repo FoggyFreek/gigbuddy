@@ -6,7 +6,7 @@
 // 400s on null there, so the distinction has to be made here rather than left
 // to whichever field happened to be edited.
 import type { GigCost } from '../../../../types/entities.ts'
-import type { AgencyFeeMode, DealType, FeeBasis, GigDealTerms } from '../../dealTerms.ts'
+import type { DealType, FeeBasis, GigDealTerms, GuaranteeVariant } from '../../dealTerms.ts'
 import type { GigDetailForm } from './types.ts'
 
 /** Money typed in euros → the `_cents` column it lands in. */
@@ -88,6 +88,7 @@ function centsFromForm(value: unknown): number | null {
 export function dealTermsFromForm(form: GigDetailForm, costs: GigCost[]): GigDealTerms {
   return {
     deal_type: form.deal_type as DealType,
+    guarantee_variant: form.guarantee_variant as GuaranteeVariant | null,
     guaranteed_fee_cents: centsFromForm(form.guaranteed_fee),
     costs,
     venue_costs_cents: centsFromForm(form.venue_costs),
@@ -95,13 +96,11 @@ export function dealTermsFromForm(form: GigDetailForm, costs: GigCost[]): GigDea
     expected_visitors: countToValue(String(form.expected_visitors ?? '')),
     tickets_sold: countToValue(String(form.tickets_sold ?? '')),
     ticket_price_net_cents: centsFromForm(form.ticket_price_net),
-    ticket_price_gross_cents: centsFromForm(form.ticket_price_gross),
     percentage_of_sales: percentToValue(String(form.percentage_of_sales ?? '')),
     breakeven_includes_venue_costs: form.breakeven_includes_venue_costs as boolean,
     agency_fee_basis: form.agency_fee_basis as FeeBasis,
     agency_fee_percentage: percentToValue(String(form.agency_fee_percentage ?? '')) ?? 0,
     agency_fee_amount_cents: centsFromForm(form.agency_fee_amount) ?? 0,
-    agency_fee_mode: form.agency_fee_mode as AgencyFeeMode,
     commission_basis: form.commission_basis as FeeBasis,
     commission_percentage: percentToValue(String(form.commission_percentage ?? '')) ?? 0,
     commission_amount_cents: centsFromForm(form.commission_amount) ?? 0,

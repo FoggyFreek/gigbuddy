@@ -1,11 +1,11 @@
 import type {
-  AgencyFeeMode,
   DealType,
   FeeBasis,
   Gig,
   GigCost,
   GigInfoBlock,
   GigTimetableEntry,
+  GuaranteeVariant,
   Id,
   Participant,
   PurchaseAttachment,
@@ -44,6 +44,7 @@ export interface GigDetailForm {
   // Deal terms. Money and counts are held as typed strings and converted on the
   // way out (see gigFormFields.ts); the vocabulary fields hold the stored value.
   deal_type: DealType
+  guarantee_variant: GuaranteeVariant | null
   guaranteed_fee: string
   /** The artist's share of ticket revenue; the venue takes the remainder of 100. */
   percentage_of_sales: string
@@ -57,7 +58,6 @@ export interface GigDetailForm {
   agency_fee_basis: FeeBasis
   agency_fee_percentage: string
   agency_fee_amount: string
-  agency_fee_mode: AgencyFeeMode
   commission_basis: FeeBasis
   commission_percentage: string
   commission_amount: string

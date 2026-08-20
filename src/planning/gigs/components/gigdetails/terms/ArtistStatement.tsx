@@ -113,9 +113,7 @@ export default function ArtistStatement({ terms, costLineCount }: Readonly<Props
   })()
 
   const artistBreakdown = [
-    terms.agency_fee_mode === 'inclusive' && terms.agency_fee_basis !== 'none'
-      ? t($ => $.detail.deal.statement.breakdown.dueToArtistInclusive)
-      : t($ => $.detail.deal.statement.breakdown.dueToArtistExclusive),
+    t($ => $.detail.deal.statement.breakdown.dueToArtistInclusive),
     statement.costsPaidByArtistCents > 0
       ? t($ => $.detail.deal.statement.breakdown.dueToArtistWithCosts, {
         costs: formatEur(statement.costsPaidByArtistCents),
@@ -156,7 +154,7 @@ export default function ArtistStatement({ terms, costLineCount }: Readonly<Props
               // later, when due to artist/due to booker are calculated, so
               // they are not in this figure even though they are in the
               // Costs tile above.
-              costs: formatEur(statement.grossFeeCents - statement.nettFeeCents),
+              costs: formatEur(statement.costsPaidByArtistAgencyCents),
             })}
           />
         </Grid>

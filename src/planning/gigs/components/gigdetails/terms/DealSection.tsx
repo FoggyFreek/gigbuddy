@@ -12,11 +12,13 @@ import FieldHelpAdornment from '../FieldHelpAdornment.tsx'
 import { feeToCents, feeToDisplay } from '../gigFormFields.ts'
 import {
   DEAL_TYPES,
-  dealTypeChoosesVenueCosts,
+  GUARANTEE_VARIANTS,
+  dealTypeHasGuaranteeVariant,
   dealTypeHasGuaranteedFee,
   dealTypeHasTicketShare,
+  dealUsesVenueCostsToggle,
 } from '../../../dealTerms.ts'
-import type { DealType } from '../../../dealTerms.ts'
+import type { DealType, GuaranteeVariant } from '../../../dealTerms.ts'
 import type { GigDetailForm } from '../types.ts'
 
 interface Props {
@@ -28,12 +30,14 @@ interface Props {
 export default function DealSection({ editable, form, onChange }: Readonly<Props>) {
   const { t } = useTranslation('gigs')
   const dealType = form.deal_type as DealType
+  const guaranteeVariant = (form.guarantee_variant ?? 'plus') as GuaranteeVariant
+  const hasVariant = dealTypeHasGuaranteeVariant(dealType)
   const hasFee = dealTypeHasGuaranteedFee(dealType)
   const hasShare = dealTypeHasTicketShare(dealType)
 
   // Both the fee and the share sit on the deal row, so the row's columns depend
   // on how many of the two this deal type actually uses.
-  const columnsInUse = 1 + (hasFee ? 1 : 0) + (hasShare ? 1 : 0)
+  const columnsInUse = 1 + (hasVariant ? 1 : 0) + (hasFee ? 1 : 0) + (hasShare ? 1 : 0)
   const dealColumn = { xs: 12, md: 12 / columnsInUse }
 
   const moneyProps = {
@@ -61,6 +65,32 @@ export default function DealSection({ editable, form, onChange }: Readonly<Props
           {t($ => $.detail.deal.title)}
         </Typography>
       </Grid>
+
+      {hasVariant && (
+        <Grid size={dealColumn}>
+          <TextField
+            select
+            label={t($ => $.detail.deal.guaranteeVariant)}
+            fullWidth
+            value={guaranteeVariant}
+            disabled={!editable}
+            onChange={(event) => onChange('guarantee_variant', event.target.value)}
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <FieldHelpAdornment help={t($ => $.detail.deal.guaranteeVariantHelp[guaranteeVariant])} />
+                ),
+              },
+            }}
+          >
+            {GUARANTEE_VARIANTS.map((variant) => (
+              <MenuItem key={variant} value={variant}>
+                {t($ => $.detail.deal.guaranteeVariants[variant])}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+      )}
 
       <Grid size={dealColumn}>
         <TextField
@@ -112,7 +142,7 @@ export default function DealSection({ editable, form, onChange }: Readonly<Props
         </Grid>
       )}
 
-      {dealTypeChoosesVenueCosts(dealType) && (
+      {dealUsesVenueCostsToggle(dealType, guaranteeVariant) && (
         <Grid size={12}>
           <FormControlLabel
             control={

@@ -7,6 +7,14 @@ import {
   MAX_GIG_INFO_LABEL_LENGTH,
   isGigInfoLabelKey,
 } from '../../../shared/gigInfoLabels.js'
+import {
+  COST_PAID_BY,
+  DEAL_TYPES,
+  DEFAULT_COST_PAID_BY,
+  FEE_BASES,
+  GUARANTEE_VARIANTS,
+} from '../../../shared/gigDealVocabulary.js'
+import { dealTypeHasGuaranteeVariant } from '../../../shared/gigDealEngine.js'
 
 export const VALID_STATUSES = ['option', 'confirmed', 'announced']
 export const VALID_VOTES = ['yes', 'no']
@@ -17,15 +25,13 @@ export const MAX_GIG_COST_LABEL_LENGTH = 100
 export const MAX_GIG_TIMETABLE_ENTRIES = 100
 export const MAX_GIG_TIMETABLE_DESCRIPTION_LENGTH = 500
 
-// Deal vocabulary — kept in step with the CHECK constraints in migration 189
-// and with the frontend engine in src/planning/gigs/dealTerms.ts.
-export const VALID_DEAL_TYPES = ['flat_fee', 'guarantee', 'guarantee_plus', 'guarantee_vs', 'door_deal']
-export const VALID_FEE_BASES = ['none', 'percentage', 'amount']
-export const VALID_AGENCY_FEE_MODES = ['exclusive', 'inclusive']
+// Deal vocabulary shared with the database-parity tests and frontend engine.
+export const VALID_DEAL_TYPES = DEAL_TYPES
+export const VALID_FEE_BASES = FEE_BASES
+export const VALID_GUARANTEE_VARIANTS = GUARANTEE_VARIANTS
 
-// Who a cost line is paid by — kept in step with the CHECK constraint in
-// migration 194 and with the frontend engine in src/planning/gigs/dealTerms.ts.
-export const VALID_COST_PAID_BY = ['artist_agency', 'artist', 'agency']
+// Who a cost line is paid by — kept in step with migration 194.
+export const VALID_COST_PAID_BY = COST_PAID_BY
 
 // INTEGER columns; anything larger is a client bug, not a 500 from Postgres.
 const MAX_INT4 = 2147483647
@@ -36,10 +42,10 @@ export const GIG_PATCH_FIELDS = [
   'ticket_link', 'notes', 'percentage_of_sales',
   // Deal terms (migration 189). percentage_of_sales above doubles as the
   // artist's ticket share; the venue's is the remainder of 100.
-  'deal_type', 'breakeven_includes_venue_costs',
+  'deal_type', 'guarantee_variant', 'breakeven_includes_venue_costs',
   'venue_costs_cents', 'venue_capacity', 'expected_visitors', 'tickets_sold',
   'ticket_price_net_cents', 'ticket_price_gross_cents',
-  'agency_fee_basis', 'agency_fee_percentage', 'agency_fee_amount_cents', 'agency_fee_mode',
+  'agency_fee_basis', 'agency_fee_percentage', 'agency_fee_amount_cents',
   'commission_basis', 'commission_percentage', 'commission_amount_cents',
   // VAT on the deal (migration 193). subject_to_vat is the discriminator; the
   // two rates are overrides, so null is "no rate agreed", not "no VAT".
@@ -78,6 +84,11 @@ function oneOf(allowed) {
   return (key, raw) => (allowed.includes(raw) ? { value: raw } : { error: `Invalid ${key}` })
 }
 
+function nullableOneOf(allowed) {
+  const normalize = oneOf(allowed)
+  return (key, raw) => raw === null ? { value: null } : normalize(key, raw)
+}
+
 function booleanIn(key, raw) {
   return typeof raw === 'boolean' ? { value: raw } : { error: `Invalid ${key}` }
 }
@@ -101,8 +112,8 @@ const GIG_FIELD_NORMALIZERS = {
   expected_visitors: nullableWhole,
   tickets_sold: nullableWhole,
   deal_type: oneOf(VALID_DEAL_TYPES),
+  guarantee_variant: nullableOneOf(VALID_GUARANTEE_VARIANTS),
   agency_fee_basis: oneOf(VALID_FEE_BASES),
-  agency_fee_mode: oneOf(VALID_AGENCY_FEE_MODES),
   commission_basis: oneOf(VALID_FEE_BASES),
   breakeven_includes_venue_costs: booleanIn,
   subject_to_vat: booleanIn,
@@ -127,7 +138,7 @@ export function normalizeGigCost(body) {
   const amount = requiredWhole('amount_cents', body.amount_cents ?? 0)
   if (amount.error) return { error: amount.error }
 
-  const paidBy = body.paid_by ?? 'artist'
+  const paidBy = body.paid_by ?? DEFAULT_COST_PAID_BY
   if (!VALID_COST_PAID_BY.includes(paidBy)) return { error: 'Invalid paid_by' }
 
   if (body.position === undefined || body.position === null) {
@@ -318,6 +329,18 @@ export function normalizeImportRow(item) {
 // Builds the dynamic SET fragments/values for a gig UPDATE. Returns
 // { error } for an invalid status, otherwise { fields, values }.
 export function buildGigUpdateFields(body) {
+  const hasDealType = Object.hasOwn(body, 'deal_type')
+  const hasGuaranteeVariant = Object.hasOwn(body, 'guarantee_variant')
+  if (hasDealType !== hasGuaranteeVariant) {
+    return { error: 'deal_type and guarantee_variant must be updated together' }
+  }
+  if (hasDealType) {
+    const requiresVariant = dealTypeHasGuaranteeVariant(body.deal_type)
+    if (requiresVariant !== (body.guarantee_variant !== null)) {
+      return { error: 'Invalid guarantee_variant' }
+    }
+  }
+
   const fields = []
   const values = []
   let idx = 1

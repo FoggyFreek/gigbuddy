@@ -4,13 +4,15 @@ import {
   computeGigDealSettlement,
   GIG_DEAL_LINE_KINDS,
 } from '../../../../shared/gigDealInvoiceLines.js'
-import { computeArtistStatement, DEAL_TYPES } from '../dealTerms.ts'
+import { DEAL_REGISTRY, dealDefinitionFor } from '../../../../shared/gigDealEngine.js'
+import { computeArtistStatement } from '../dealTerms.ts'
 
 // Same minimal terms object the dealTerms tests use, so both sides of the deal
 // are exercised with identical input.
 function terms(overrides = {}) {
-  return {
+  const result = {
     deal_type: 'flat_fee',
+    guarantee_variant: null,
     guaranteed_fee_cents: null,
     costs: [],
     venue_costs_cents: null,
@@ -24,7 +26,6 @@ function terms(overrides = {}) {
     agency_fee_basis: 'none',
     agency_fee_percentage: 0,
     agency_fee_amount_cents: 0,
-    agency_fee_mode: 'exclusive',
     commission_basis: 'none',
     commission_percentage: 0,
     commission_amount_cents: 0,
@@ -33,7 +34,18 @@ function terms(overrides = {}) {
     ticket_vat_percentage: null,
     ...overrides,
   }
+  if (result.deal_type === 'guarantee' && !Object.hasOwn(overrides, 'guarantee_variant')) {
+    result.guarantee_variant = 'plus'
+  }
+  return result
 }
+
+const DEAL_CONFIGS = [
+  { deal_type: 'flat_fee', guarantee_variant: null },
+  { deal_type: 'guarantee', guarantee_variant: 'plus' },
+  { deal_type: 'guarantee', guarantee_variant: 'versus' },
+  { deal_type: 'door_deal', guarantee_variant: null },
+]
 
 function sumLines(lines) {
   return lines.reduce((total, line) => total + line.amountCents, 0)
@@ -55,8 +67,9 @@ const EARNING_DEALS = {
     ticket_price_net_cents: 1000,
     percentage_of_sales: '70.00',
   }),
-  guarantee_plus: terms({
-    deal_type: 'guarantee_plus',
+  guaranteePlus: terms({
+    deal_type: 'guarantee',
+    guarantee_variant: 'plus',
     breakeven_includes_venue_costs: false,
     guaranteed_fee_cents: 50000,
     venue_costs_cents: 30000,
@@ -64,8 +77,9 @@ const EARNING_DEALS = {
     ticket_price_net_cents: 1000,
     percentage_of_sales: '70.00',
   }),
-  guarantee_vs: terms({
-    deal_type: 'guarantee_vs',
+  guaranteeVersus: terms({
+    deal_type: 'guarantee',
+    guarantee_variant: 'versus',
     guaranteed_fee_cents: 50000,
     tickets_sold: 200,
     ticket_price_net_cents: 1000,
@@ -114,14 +128,14 @@ describe('gig deal invoice lines — what the venue is billed', () => {
   })
 
   it('leaves venue costs out of a guarantee+ break-even when the deal does', () => {
-    const lines = buildGigDealInvoiceLines(EARNING_DEALS.guarantee_plus)
+    const lines = buildGigDealInvoiceLines(EARNING_DEALS.guaranteePlus)
     expect(kinds(lines)).not.toContain(GIG_DEAL_LINE_KINDS.BREAK_EVEN_VENUE_COSTS)
     // Fee 500 + 70% of (2000 - 500) = 500 + 1050.
     expect(sumLines(lines)).toBe(155000)
   })
 
   it('offsets the guarantee it has to beat on a guarantee vs.', () => {
-    const lines = buildGigDealInvoiceLines(EARNING_DEALS.guarantee_vs)
+    const lines = buildGigDealInvoiceLines(EARNING_DEALS.guaranteeVersus)
     expect(kinds(lines)).toEqual([
       GIG_DEAL_LINE_KINDS.PERFORMANCE_FEE,
       GIG_DEAL_LINE_KINDS.TICKET_REVENUE,
@@ -134,7 +148,7 @@ describe('gig deal invoice lines — what the venue is billed', () => {
 
   it('bills the guarantee alone when the door never beats it', () => {
     const lines = buildGigDealInvoiceLines(terms({
-      ...EARNING_DEALS.guarantee_vs,
+      ...EARNING_DEALS.guaranteeVersus,
       tickets_sold: 10,
     }))
     expect(kinds(lines)).toEqual([GIG_DEAL_LINE_KINDS.PERFORMANCE_FEE])
@@ -194,8 +208,10 @@ describe('gig deal invoice lines — what the venue is billed', () => {
 // the lines the venue is billed for sum to the gross fee the artist statement
 // shows. What the artist then owes their booker is not the venue's business.
 describe('gig deal invoice lines — tie-out with the artist statement', () => {
-  it('covers every deal type the Terms tab offers', () => {
-    expect(Object.keys(EARNING_DEALS).sort()).toEqual([...DEAL_TYPES].sort())
+  it('covers every deal type and guarantee variant the Terms tab offers', () => {
+    for (const config of DEAL_CONFIGS) {
+      expect(Object.values(EARNING_DEALS)).toContainEqual(expect.objectContaining(config))
+    }
   })
 
   it.each(Object.entries(EARNING_DEALS))('sums to the gross fee of a %s', (_dealType, deal) => {
@@ -211,9 +227,9 @@ describe('gig deal invoice lines — tie-out with the artist statement', () => {
     [70, 123456, 123456],
     [99.99, 999999, 1],
   ])('ties out at %s%% of %s cents over a %s break-even', (percentage, revenueCents, breakEvenCents) => {
-    for (const dealType of DEAL_TYPES) {
+    for (const dealConfig of DEAL_CONFIGS) {
       const deal = terms({
-        deal_type: dealType,
+        ...dealConfig,
         guaranteed_fee_cents: 25000,
         venue_costs_cents: breakEvenCents,
         tickets_sold: revenueCents,
@@ -289,9 +305,9 @@ describe('gig deal invoice lines — ticket VAT', () => {
   })
 
   it.each([9, 7, 21, 5.5])('ties out with the artist statement at %s%% ticket VAT', (rate) => {
-    for (const dealType of DEAL_TYPES) {
+    for (const dealConfig of DEAL_CONFIGS) {
       const deal = terms({
-        deal_type: dealType,
+        ...dealConfig,
         guaranteed_fee_cents: 25000,
         venue_costs_cents: 12345,
         tickets_sold: 137,
@@ -303,6 +319,41 @@ describe('gig deal invoice lines — ticket VAT', () => {
       const statement = computeArtistStatement(deal)
       if (lines.length) expect(sumLines(lines)).toBe(statement.grossFeeCents)
       else expect(statement.grossFeeCents).toBe(0)
+    }
+  })
+})
+
+describe('shared deal registry', () => {
+  it('has one reachable entry for every deal type and no extra entries', () => {
+    const reachable = new Set()
+    for (const { deal_type, guarantee_variant } of DEAL_CONFIGS) {
+      reachable.add(dealDefinitionFor(deal_type, guarantee_variant))
+    }
+    expect(reachable).toEqual(new Set(Object.values(DEAL_REGISTRY)))
+  })
+})
+
+describe('invoice-line rounding property', () => {
+  it('ties every generated line set to the shared settlement exactly', () => {
+    let state = 0x5eed1234
+    const next = () => {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0
+      return state / 0x100000000
+    }
+
+    for (let index = 0; index < 500; index += 1) {
+      const deal = terms({
+        ...DEAL_CONFIGS[Math.floor(next() * DEAL_CONFIGS.length)],
+        guaranteed_fee_cents: Math.floor(next() * 500000),
+        venue_costs_cents: Math.floor(next() * 300000),
+        tickets_sold: Math.floor(next() * 1000),
+        ticket_price_net_cents: Math.floor(next() * 10000),
+        percentage_of_sales: Math.round(next() * 10000) / 100,
+        breakeven_includes_venue_costs: next() >= 0.5,
+        subject_to_vat: next() >= 0.25,
+        ticket_vat_percentage: [0, 9, 21][Math.floor(next() * 3)],
+      })
+      expect(sumLines(buildGigDealInvoiceLines(deal))).toBe(computeGigDealSettlement(deal).totalCents)
     }
   })
 })

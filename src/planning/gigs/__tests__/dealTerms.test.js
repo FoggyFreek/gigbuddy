@@ -9,8 +9,9 @@ import {
 
 // Minimal terms object; each test overrides only what it exercises.
 function terms(overrides = {}) {
-  return {
+  const result = {
     deal_type: 'flat_fee',
+    guarantee_variant: null,
     guaranteed_fee_cents: null,
     costs: [],
     venue_costs_cents: null,
@@ -24,7 +25,6 @@ function terms(overrides = {}) {
     agency_fee_basis: 'none',
     agency_fee_percentage: 0,
     agency_fee_amount_cents: 0,
-    agency_fee_mode: 'exclusive',
     commission_basis: 'none',
     commission_percentage: 0,
     commission_amount_cents: 0,
@@ -33,22 +33,22 @@ function terms(overrides = {}) {
     ticket_vat_percentage: null,
     ...overrides,
   }
+  if (result.deal_type === 'guarantee' && !Object.hasOwn(overrides, 'guarantee_variant')) {
+    result.guarantee_variant = 'plus'
+  }
+  return result
 }
 
 describe('deal type predicates', () => {
   it('gives every deal type except a door deal a guaranteed fee', () => {
     expect(dealTypeHasGuaranteedFee('flat_fee')).toBe(true)
     expect(dealTypeHasGuaranteedFee('guarantee')).toBe(true)
-    expect(dealTypeHasGuaranteedFee('guarantee_plus')).toBe(true)
-    expect(dealTypeHasGuaranteedFee('guarantee_vs')).toBe(true)
     expect(dealTypeHasGuaranteedFee('door_deal')).toBe(false)
   })
 
   it('gives every deal type except a flat fee a ticket share', () => {
     expect(dealTypeHasTicketShare('flat_fee')).toBe(false)
     expect(dealTypeHasTicketShare('guarantee')).toBe(true)
-    expect(dealTypeHasTicketShare('guarantee_plus')).toBe(true)
-    expect(dealTypeHasTicketShare('guarantee_vs')).toBe(true)
     expect(dealTypeHasTicketShare('door_deal')).toBe(true)
   })
 })
@@ -106,31 +106,51 @@ describe('computeArtistStatement — gross, costs, nett', () => {
     }))
     expect(s.agencyFeeCents).toBe(10000)
   })
+
+  it('does not depend on expected visitors or venue capacity', () => {
+    const deal = terms({
+      deal_type: 'guarantee',
+      guarantee_variant: 'plus',
+      guaranteed_fee_cents: 100000,
+      venue_costs_cents: 50000,
+      tickets_sold: 160,
+      ticket_price_net_cents: 2000,
+      percentage_of_sales: 67.5,
+    })
+    expect(computeArtistStatement({ ...deal, expected_visitors: 0, venue_capacity: 0 })).toEqual(
+      computeArtistStatement({ ...deal, expected_visitors: 999999, venue_capacity: 999999 }),
+    )
+  })
+
+  it('does not depend on the display-only gross ticket price', () => {
+    const deal = terms({
+      deal_type: 'door_deal',
+      venue_costs_cents: 50000,
+      tickets_sold: 160,
+      ticket_price_net_cents: 2000,
+      percentage_of_sales: 67.5,
+    })
+    const baseline = {
+      statement: computeArtistStatement(deal),
+      upside: computeTicketUpside(deal),
+    }
+    for (const ticket_price_gross_cents of [null, 0, 2420, 999999]) {
+      expect({
+        statement: computeArtistStatement({ ...deal, ticket_price_gross_cents }),
+        upside: computeTicketUpside({ ...deal, ticket_price_gross_cents }),
+      }).toEqual(baseline)
+    }
+  })
 })
 
 describe('computeArtistStatement — booking fee', () => {
-  it('adds an exclusive booking fee on top, leaving the artist the full fee', () => {
-    // Spec example: € 1000.00 gross with a 10% exclusive booking fee results in
-    // € 100.00 due to booker and € 1000.00 due to artist.
-    const s = computeArtistStatement(terms({
-      guaranteed_fee_cents: 100000,
-      agency_fee_basis: 'percentage',
-      agency_fee_percentage: 10,
-      agency_fee_mode: 'exclusive',
-    }))
-    expect(s.agencyFeeCents).toBe(10000)
-    expect(s.dueToBookerCents).toBe(10000)
-    expect(s.dueToArtistCents).toBe(100000)
-  })
-
-  it('splits an inclusive booking fee out of the gross fee', () => {
-    // Spec example: € 1000.00 gross with a 10% inclusive booking fee results in
+  it('splits a booking fee out of the gross fee', () => {
+    // Spec example: € 1000.00 gross with a 10% booking fee results in
     // € 100.00 due to booker and € 900.00 due to artist.
     const s = computeArtistStatement(terms({
       guaranteed_fee_cents: 100000,
       agency_fee_basis: 'percentage',
       agency_fee_percentage: 10,
-      agency_fee_mode: 'inclusive',
     }))
     expect(s.agencyFeeCents).toBe(10000)
     expect(s.dueToBookerCents).toBe(10000)
@@ -186,14 +206,13 @@ describe('computeArtistStatement — commission', () => {
   })
 
   it('nets the booking fee out of the nett fee before taking the commission', () => {
-    // Spec example: € 200.00 gross, 10% exclusive booking fee (€ 20.00) leaves
+    // Spec example: € 200.00 gross, 10% booking fee (€ 20.00) leaves
     // € 180.00 for the commission base, so a 10% commission is € 18.00 — €
     // 38.00 due to the booker and € 162.00 due to the artist.
     const s = computeArtistStatement(terms({
       guaranteed_fee_cents: 20000,
       agency_fee_basis: 'percentage',
       agency_fee_percentage: 10,
-      agency_fee_mode: 'inclusive',
       commission_basis: 'percentage',
       commission_percentage: 10,
     }))
@@ -215,13 +234,12 @@ describe('computeArtistStatement — commission', () => {
     expect(s.dueToArtistCents).toBe(95000)
   })
 
-  it('stacks an inclusive booking fee and a commission on the booker, unaffected by an artist-paid cost', () => {
+  it('stacks a booking fee and a commission on the booker, unaffected by an artist-paid cost', () => {
     const s = computeArtistStatement(terms({
       guaranteed_fee_cents: 100000,
       costs: [{ amount_cents: 15000 }], // defaults to paid_by artist
       agency_fee_basis: 'percentage',
       agency_fee_percentage: 10,
-      agency_fee_mode: 'inclusive',
       commission_basis: 'percentage',
       commission_percentage: 10,
     }))
@@ -304,7 +322,6 @@ describe('computeArtistStatement — a booking fee is never negative, a commissi
       costs: [{ amount_cents: 65000 }],
       agency_fee_basis: 'amount',
       agency_fee_amount_cents: 10000,
-      agency_fee_mode: 'inclusive',
       commission_basis: 'amount',
       commission_amount_cents: 5000,
     }))
@@ -316,7 +333,7 @@ describe('computeArtistStatement — a booking fee is never negative, a commissi
 })
 
 describe('computeArtistStatement — paid_by splits how a cost moves through the statement', () => {
-  // One shared base for the three: a € 5000.00 guarantee, a 20% inclusive
+  // One shared base for the three: a € 5000.00 guarantee, a 20% booking
   // booking fee, no commission — so the only thing that varies is who a
   // € 100.00 cost line is paid by.
   function baseTerms(paidBy) {
@@ -325,7 +342,6 @@ describe('computeArtistStatement — paid_by splits how a cost moves through the
       costs: [{ amount_cents: 10000, paid_by: paidBy }],
       agency_fee_basis: 'percentage',
       agency_fee_percentage: 20,
-      agency_fee_mode: 'inclusive',
     })
   }
 
@@ -337,7 +353,7 @@ describe('computeArtistStatement — paid_by splits how a cost moves through the
     expect(s.costsPaidByAgencyCents).toBe(0)
     expect(s.nettFeeCents).toBe(490000)
     expect(s.dueToBookerCents).toBe(98000)
-    expect(s.dueToArtistCents).toBe(392000) // 490000 - 98000 (inclusive)
+    expect(s.dueToArtistCents).toBe(392000) // 490000 - 98000
   })
 
   it('artist: leaves the booking fee and the nett fee untouched, comes off only due to artist', () => {
@@ -349,7 +365,7 @@ describe('computeArtistStatement — paid_by splits how a cost moves through the
     expect(s.costsPaidByArtistCents).toBe(10000)
     expect(s.nettFeeCents).toBe(500000) // unaffected — the cost is deducted only from due to artist
     expect(s.dueToBookerCents).toBe(100000)
-    expect(s.dueToArtistCents).toBe(390000) // 500000 - 100000 (inclusive) - 10000
+    expect(s.dueToArtistCents).toBe(390000) // 500000 - 100000 - 10000
   })
 
   it('agency: leaves due-to-artist untouched and comes off only what is due to the booker', () => {
@@ -362,7 +378,7 @@ describe('computeArtistStatement — paid_by splits how a cost moves through the
     expect(s.costsPaidByAgencyCents).toBe(10000)
     expect(s.nettFeeCents).toBe(500000)
     expect(s.dueToBookerCents).toBe(90000) // 100000 - 10000
-    expect(s.dueToArtistCents).toBe(400000) // unaffected: 500000 - 100000 (inclusive)
+    expect(s.dueToArtistCents).toBe(400000) // unaffected: 500000 - 100000
   })
 
   it('reads a missing paid_by as artist — the pre-existing behaviour', () => {
@@ -372,7 +388,6 @@ describe('computeArtistStatement — paid_by splits how a cost moves through the
       costs: [{ amount_cents: 10000 }],
       agency_fee_basis: 'percentage',
       agency_fee_percentage: 20,
-      agency_fee_mode: 'inclusive',
     }))
     expect(withoutPaidBy).toEqual(withPaidBy)
   })
@@ -387,7 +402,6 @@ describe('computeArtistStatement — paid_by splits how a cost moves through the
       ],
       agency_fee_basis: 'percentage',
       agency_fee_percentage: 20,
-      agency_fee_mode: 'inclusive',
     }))
     expect(s.bookingFeeBaseCents).toBe(490000) // 500000 - 10000 (artist_agency only)
     expect(s.agencyFeeCents).toBe(98000)
@@ -396,7 +410,46 @@ describe('computeArtistStatement — paid_by splits how a cost moves through the
     expect(s.costsPaidByArtistCents).toBe(5000)
     expect(s.nettFeeCents).toBe(490000) // 500000 - 10000 (artist_agency only)
     expect(s.dueToBookerCents).toBe(96000) // 98000 - 2000
-    expect(s.dueToArtistCents).toBe(387000) // 490000 - 98000 (inclusive) - 5000
+    expect(s.dueToArtistCents).toBe(387000) // 490000 - 98000 - 5000
+  })
+
+  it('reconciles the gross fee across every deal, cost payer and commission choice', () => {
+    const deals = [
+      { deal_type: 'flat_fee', guarantee_variant: null },
+      { deal_type: 'guarantee', guarantee_variant: 'plus' },
+      { deal_type: 'guarantee', guarantee_variant: 'versus' },
+      { deal_type: 'door_deal', guarantee_variant: null },
+    ]
+    const paidByKinds = ['artist_agency', 'artist', 'agency']
+    const commissions = [
+      { commission_basis: 'none', commission_percentage: 0 },
+      { commission_basis: 'percentage', commission_percentage: 7.5 },
+    ]
+
+    for (const deal of deals) {
+      for (const paid_by of paidByKinds) {
+        for (const commission of commissions) {
+          const statement = computeArtistStatement(terms({
+            ...deal,
+            guaranteed_fee_cents: 100000,
+            venue_costs_cents: 10000,
+            tickets_sold: 200,
+            ticket_price_net_cents: 1500,
+            percentage_of_sales: 65,
+            costs: [{ amount_cents: 12345, paid_by }],
+            agency_fee_basis: 'percentage',
+            agency_fee_percentage: 12.5,
+            ...commission,
+          }))
+
+          expect(
+            statement.dueToArtistCents
+              + statement.dueToBookerCents
+              + statement.costsCents,
+          ).toBe(statement.grossFeeCents)
+        }
+      }
+    }
   })
 })
 
@@ -441,7 +494,8 @@ describe('computeTicketUpside — break-even', () => {
 
   it('excludes venue costs from a guarantee+ break-even when the flag is off', () => {
     const base = {
-      deal_type: 'guarantee_plus',
+      deal_type: 'guarantee',
+      guarantee_variant: 'plus',
       guaranteed_fee_cents: 100000,
       venue_costs_cents: 80000,
       ticket_price_net_cents: 2000,
@@ -449,18 +503,6 @@ describe('computeTicketUpside — break-even', () => {
     }
     expect(computeTicketUpside(terms({ ...base, breakeven_includes_venue_costs: true })).breakEvenCents).toBe(180000)
     expect(computeTicketUpside(terms({ ...base, breakeven_includes_venue_costs: false })).breakEvenCents).toBe(100000)
-  })
-
-  it('ignores the flag on a plain guarantee, where venue costs always count', () => {
-    const u = computeTicketUpside(terms({
-      deal_type: 'guarantee',
-      guaranteed_fee_cents: 100000,
-      venue_costs_cents: 80000,
-      breakeven_includes_venue_costs: false,
-      ticket_price_net_cents: 2000,
-      percentage_of_sales: 70,
-    }))
-    expect(u.breakEvenCents).toBe(180000)
   })
 
   it('recoups only the venue costs on a door deal', () => {
@@ -480,7 +522,8 @@ describe('computeTicketUpside — break-even', () => {
     // full share, and the deal pays whichever of that and the guarantee is
     // higher — there is no threshold to clear either in money or in tickets.
     const u = computeTicketUpside(terms({
-      deal_type: 'guarantee_vs',
+      deal_type: 'guarantee',
+      guarantee_variant: 'versus',
       guaranteed_fee_cents: 100000,
       ticket_price_net_cents: 2000,
       percentage_of_sales: 50,
@@ -513,7 +556,8 @@ describe('computeTicketUpside — break-even', () => {
   it('reports zero break-even tickets on a guarantee vs. even without a share agreed', () => {
     // There is nothing to break even on regardless of the percentage.
     const u = computeTicketUpside(terms({
-      deal_type: 'guarantee_vs',
+      deal_type: 'guarantee',
+      guarantee_variant: 'versus',
       guaranteed_fee_cents: 100000,
       ticket_price_net_cents: 2000,
       percentage_of_sales: 0,
@@ -589,7 +633,8 @@ describe('computeTicketUpside — scenarios', () => {
 
   it('reports the full door share on a guarantee vs., not the excess over the guarantee', () => {
     const u = computeTicketUpside(terms({
-      deal_type: 'guarantee_vs',
+      deal_type: 'guarantee',
+      guarantee_variant: 'versus',
       guaranteed_fee_cents: 100000,
       ticket_price_net_cents: 2000,
       percentage_of_sales: 50,
@@ -609,7 +654,8 @@ describe('computeTicketUpside — scenarios', () => {
 describe('computeArtistStatement — guarantee vs. pays the guarantee or the ticket share, never both', () => {
   // € 1000.00 guarantee, € 20.00 net ticket, 50% share → € 10.00 per ticket.
   const guaranteeVs = {
-    deal_type: 'guarantee_vs',
+    deal_type: 'guarantee',
+    guarantee_variant: 'versus',
     guaranteed_fee_cents: 100000,
     ticket_price_net_cents: 2000,
     percentage_of_sales: 50,
@@ -719,10 +765,10 @@ describe('computeArtistStatement — ticket revenue in the gross fee', () => {
 // End-to-end deals as they are actually agreed: one terms object read back as
 // both the statement and the simulation, so the two views are checked together.
 describe('realistic deals', () => {
-  it('settles a club guarantee with an exclusive booking fee and commission', () => {
+  it('settles a club guarantee with a booking fee and commission', () => {
     // EUR 1500.00 guarantee, EUR 600.00 venue costs, 70/30 split on a EUR 17.50
-    // nett ticket, 400 capacity, 250 expected, 300 sold. Agent takes 10% on top
-    // of the gross fee, management 5% of the nett fee.
+    // nett ticket, 400 capacity, 250 expected, 300 sold. Agent takes 10% from
+    // the gross fee, management 5% of the nett fee.
     const deal = terms({
       deal_type: 'guarantee',
       guaranteed_fee_cents: 150000,
@@ -736,7 +782,6 @@ describe('realistic deals', () => {
       costs: [{ amount_cents: 25000 }, { amount_cents: 15000 }],
       agency_fee_basis: 'percentage',
       agency_fee_percentage: '10.00',
-      agency_fee_mode: 'exclusive',
       commission_basis: 'percentage',
       commission_percentage: '5.00',
     })
@@ -756,9 +801,7 @@ describe('realistic deals', () => {
     expect(s.commissionBaseCents).toBe(333450) // nett fee minus the booking fee
     expect(s.commissionCents).toBe(16673) // 5% of EUR 3334.50, rounded half up
     expect(s.dueToBookerCents).toBe(53723)
-    // The booking fee is exclusive, so only the commission and the artist-paid
-    // costs come off the artist.
-    expect(s.dueToArtistCents).toBe(313827)
+    expect(s.dueToArtistCents).toBe(276777)
   })
 
   it('settles a door deal where the whole fee comes from the door', () => {
@@ -797,9 +840,10 @@ describe('realistic deals', () => {
 
   it('settles a guarantee vs. at the point where the door overtakes the fee', () => {
     // EUR 2000.00 or 60% of the door, whichever is higher; EUR 22.50 nett
-    // ticket, 200 of 500 sold, 15% inclusive booking fee.
+    // ticket, 200 of 500 sold, 15% booking fee.
     const deal = terms({
-      deal_type: 'guarantee_vs',
+      deal_type: 'guarantee',
+      guarantee_variant: 'versus',
       guaranteed_fee_cents: 200000,
       ticket_price_net_cents: 2250,
       percentage_of_sales: 60,
@@ -809,7 +853,6 @@ describe('realistic deals', () => {
       costs: [{ amount_cents: 50000 }],
       agency_fee_basis: 'percentage',
       agency_fee_percentage: 15,
-      agency_fee_mode: 'inclusive',
     })
 
     const u = computeTicketUpside(deal)
@@ -828,7 +871,7 @@ describe('realistic deals', () => {
     expect(s.grossFeeCents).toBe(270000)
     expect(s.nettFeeCents).toBe(270000) // unaffected — the cost defaults to paid_by artist
     expect(s.agencyFeeCents).toBe(40500)
-    // Inclusive, so the booking fee comes out of the artist's side.
+    // The booking fee comes out of the artist's side.
     expect(s.dueToArtistCents).toBe(179500)
   })
 
@@ -836,7 +879,8 @@ describe('realistic deals', () => {
     // EUR 1200.00 plus 50% of the door from the first ticket past the fee; the
     // venue carries its own EUR 900.00 of costs.
     const deal = terms({
-      deal_type: 'guarantee_plus',
+      deal_type: 'guarantee',
+      guarantee_variant: 'plus',
       guaranteed_fee_cents: 120000,
       venue_costs_cents: 90000,
       breakeven_includes_venue_costs: false,
@@ -873,7 +917,6 @@ describe('realistic deals', () => {
       costs: [{ amount_cents: 12500 }],
       agency_fee_basis: 'amount',
       agency_fee_amount_cents: 10000,
-      agency_fee_mode: 'inclusive',
     })
 
     const u = computeTicketUpside(deal)

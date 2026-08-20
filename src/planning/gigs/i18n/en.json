@@ -253,16 +253,21 @@
       "dealTypes": {
         "flat_fee": "Flat fee",
         "guarantee": "Guarantee",
-        "guarantee_plus": "Guarantee +",
-        "guarantee_vs": "Guarantee vs.",
         "door_deal": "Door deal"
       },
       "dealTypeHelp": {
         "flat_fee": "A fixed guaranteed amount, with no revenue from ticket sales.",
-        "guarantee": "A guaranteed fee with a potential upside from ticket sales once the break-even point is reached (gross fee + venue costs).",
-        "guarantee_plus": "A guaranteed fee plus a percentage of ticket revenue. Venue costs can be included in the break-even calculation.",
-        "guarantee_vs": "Either the guaranteed fee or a percentage of ticket revenue — whichever is higher.",
+        "guarantee": "A guaranteed fee with potential upside from ticket sales. Choose how the fee and ticket share relate under Guarantee variant.",
         "door_deal": "A percentage of ticket revenue after the break-even point, with no guaranteed fee."
+      },
+      "guaranteeVariant": "Guarantee variant",
+      "guaranteeVariants": {
+        "plus": "Plus",
+        "versus": "Versus"
+      },
+      "guaranteeVariantHelp": {
+        "plus": "The guaranteed fee plus a percentage of ticket revenue after break-even. Venue costs can be included in break-even.",
+        "versus": "Either the guaranteed fee or the artist's percentage of ticket revenue — whichever is higher."
       },
       "guaranteedFee": "Guaranteed fee",
       "ticketPercentage": "Ticket percentage",
@@ -270,7 +275,7 @@
       "ticketSplitHelp": "The artist's share of ticket revenue first, the venue or promoter's second. The two always add up to 100%.",
       "includeVenueCosts": "Include venue costs in the break-even calculation",
       "venueCosts": "Venue costs",
-      "venueCostsHelp": "Production or venue rental costs.",
+      "venueCostsHelp": "Production costs recouped from ticket revenue at break-even, such as venue rental.",
       "venueCapacity": "Venue capacity",
       "expectedVisitors": "Expected visitors",
       "expectedVisitorsHelp": "Used to simulate the potential upside.",
@@ -290,16 +295,7 @@
         "basis": "Booking fee",
         "percentage": "Booking fee percentage",
         "amount": "Booking fee amount",
-        "percentageHelp": "Calculated from the gross fee.",
-        "mode": "Exclusive or inclusive",
-        "modes": {
-          "exclusive": "Exclusive",
-          "inclusive": "Inclusive"
-        },
-        "modeHelp": {
-          "exclusive": "An exclusive booking fee is added on top of the gross fee. A gross fee of € 1000.00 with a 10% exclusive booking fee results in € 100.00 due to booker and € 1000.00 due to artist.",
-          "inclusive": "An inclusive booking fee is split out of the gross fee. A gross fee of € 1000.00 with a 10% inclusive booking fee results in € 100.00 due to booker and € 900.00 due to artist."
-        }
+        "percentageHelp": "Calculated from the gross fee."
       },
       "commission": {
         "title": "Commission",
@@ -363,8 +359,7 @@
           "notAgreed": "Not agreed for this gig.",
           "dueToBooker": "Booking fee {{bookingFee}} plus commission {{commission}}.",
           "dueToBookerWithCosts": "Booking fee {{bookingFee}} plus commission {{commission}}, minus {{costs}} in costs paid by the agency.",
-          "dueToArtistExclusive": "The nett fee minus commission. The booking fee is exclusive, so it is added on top of the gross fee rather than taken out of it.",
-          "dueToArtistInclusive": "The nett fee minus commission and the booking fee, which is inclusive and therefore split out of the gross fee.",
+          "dueToArtistInclusive": "The nett fee minus commission and the booking fee, which is split out of the gross fee.",
           "dueToArtistWithCosts": "Minus {{costs}} in costs paid by the artist."
         }
       },
@@ -386,10 +381,12 @@
           "expected": "The artist’s {{percentage}}% share at the expected number of visitors.",
           "potential": "The artist’s {{percentage}}% share at full capacity — the ceiling for this deal.",
           "flat_fee": "A flat fee has no break-even point.",
-          "guarantee": "Ticket revenue has to cover the gross fee plus the venue costs before the artist’s share starts.",
-          "guarantee_plus": "Ticket revenue has to cover the gross fee, and the venue costs when those are included, before the artist’s share starts.",
-          "guarantee_vs": "Nothing is recouped — the deal simply pays whichever is higher, the guaranteed fee or the artist’s full share of the door.",
-          "door_deal": "Ticket revenue has to cover the venue costs before the artist’s share starts."
+          "guarantee": "Ticket revenue follows the selected guarantee variant.",
+          "door_deal": "Ticket revenue has to cover the venue costs before the artist’s share starts.",
+          "guaranteeVariants": {
+            "plus": "Ticket revenue has to cover the gross fee, and the venue costs when those are included, before the artist’s share starts.",
+            "versus": "Nothing is recouped — the deal simply pays whichever is higher, the guaranteed fee or the artist’s full share of the door."
+          }
         }
       }
     }

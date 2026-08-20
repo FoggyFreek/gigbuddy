@@ -89,6 +89,7 @@ const GUARANTEE_GIG = {
   participants: [],
   tags: [],
   deal_type: 'guarantee',
+  guarantee_variant: 'plus',
   guaranteed_fee_cents: 100000,
   percentage_of_sales: '70.00',
   breakeven_includes_venue_costs: true,
@@ -101,7 +102,6 @@ const GUARANTEE_GIG = {
   agency_fee_basis: 'percentage',
   agency_fee_percentage: '10.00',
   agency_fee_amount_cents: 0,
-  agency_fee_mode: 'inclusive',
   commission_basis: 'none',
   commission_percentage: '0.00',
   commission_amount_cents: 0,
@@ -194,7 +194,7 @@ describe('artist statement', () => {
     // Both cost lines default to paid_by artist, which never reaches the nett
     // fee — only a cost paid by artist/agency would.
     expect(statementValue('Nett. fee')).toBe('€ 1.420,00')
-    // 10% of the gross fee, inclusive — so it comes out of the artist's side.
+    // 10% of the gross fee, so it comes out of the artist's side.
     expect(statementValue('Booking fee')).toBe('€ 142,00')
     expect(statementValue('Commission')).toBe('€ 0,00')
     expect(statementValue('Due to booker')).toBe('€ 142,00')
@@ -303,6 +303,41 @@ describe('artist statement', () => {
   })
 })
 
+describe('deal type controls', () => {
+  it('offers three deal types and shows the plus controls for a guarantee', async () => {
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    await user.click(screen.getByLabelText('Deal type'))
+    expect((await screen.findAllByRole('option')).map((option) => option.textContent)).toEqual([
+      'Flat fee',
+      'Guarantee',
+      'Door deal',
+    ])
+    await user.keyboard('{Escape}')
+
+    expect(screen.getByLabelText('Guarantee variant')).toHaveTextContent('Plus')
+    expect(screen.getByLabelText(/include venue costs/i)).toBeInTheDocument()
+  })
+
+  it('shows no venue-cost toggle for versus and no variant selector outside a guarantee', async () => {
+    getGig.mockResolvedValueOnce({ ...GUARANTEE_GIG, guarantee_variant: 'versus' })
+    const user = userEvent.setup()
+    const rendered = wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    expect(screen.getByLabelText('Guarantee variant')).toHaveTextContent('Versus')
+    expect(screen.queryByLabelText(/include venue costs/i)).not.toBeInTheDocument()
+
+    rendered.unmount()
+    getGig.mockResolvedValueOnce({ ...GUARANTEE_GIG, deal_type: 'flat_fee', guarantee_variant: null })
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+    expect(screen.queryByLabelText('Guarantee variant')).not.toBeInTheDocument()
+  })
+})
+
 describe('field help', () => {
   it('spells out nothing until a field\'s help icon is asked', async () => {
     const user = userEvent.setup()
@@ -335,11 +370,10 @@ describe('field help', () => {
     expect(await readHelp(user, 'Nett. ticket price')).toMatch(/basis for every calculation below/i)
     // Both fee blocks reuse one field pair, so each states its own basis.
     expect(await readHelp(user, 'Booking fee percentage')).toMatch(/calculated from the gross fee/i)
-    expect(await readHelp(user, 'Exclusive or inclusive')).toMatch(/split out of the gross fee/i)
   })
 
   it('explains the deal type that is actually selected', async () => {
-    getGig.mockResolvedValue({ ...GUARANTEE_GIG, deal_type: 'door_deal' })
+    getGig.mockResolvedValue({ ...GUARANTEE_GIG, deal_type: 'door_deal', guarantee_variant: null })
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await openTerms(user)
@@ -348,15 +382,6 @@ describe('field help', () => {
       .toMatch(/percentage of ticket revenue after the break-even point/i)
   })
 
-  it('follows the booking fee mode that is selected', async () => {
-    // The fixture is inclusive, so the other mode must read differently.
-    getGig.mockResolvedValue({ ...GUARANTEE_GIG, agency_fee_mode: 'exclusive' })
-    const user = userEvent.setup()
-    wrap(<GigDetailContent gigId={1} />)
-    await openTerms(user)
-
-    expect(await readHelp(user, 'Exclusive or inclusive')).toMatch(/added on top of the gross fee/i)
-  })
 })
 
 describe('ticket upside', () => {
@@ -375,7 +400,7 @@ describe('ticket upside', () => {
   })
 
   it('replaces the tiles with a note on a flat fee', async () => {
-    getGig.mockResolvedValue({ ...GUARANTEE_GIG, deal_type: 'flat_fee' })
+    getGig.mockResolvedValue({ ...GUARANTEE_GIG, deal_type: 'flat_fee', guarantee_variant: null })
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await openTerms(user)

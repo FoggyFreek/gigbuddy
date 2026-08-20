@@ -41,7 +41,7 @@ function asUserB(req) {
 describe('gig deal terms — defaults', () => {
   it('starts a gig on a flat fee with no booking fee or commission', async () => {
     const { rows } = await pool.query(
-      `SELECT deal_type, agency_fee_basis, agency_fee_mode, agency_fee_percentage,
+      `SELECT deal_type, guarantee_variant, agency_fee_basis, agency_fee_percentage,
               agency_fee_amount_cents, commission_basis, commission_percentage,
               commission_amount_cents, breakeven_includes_venue_costs,
               subject_to_vat, vat_percentage, ticket_vat_percentage
@@ -50,8 +50,8 @@ describe('gig deal terms — defaults', () => {
     )
     expect(rows[0]).toMatchObject({
       deal_type: 'flat_fee',
+      guarantee_variant: null,
       agency_fee_basis: 'none',
-      agency_fee_mode: 'exclusive',
       commission_basis: 'none',
       breakeven_includes_venue_costs: true,
       // A performance is a taxed supply until the deal says otherwise, and
@@ -73,6 +73,7 @@ describe('PATCH /api/gigs/:id — deal terms', () => {
     const res = await asUserA(
       request(app).patch(`/api/gigs/${seed.gigA.id}`).send({
         deal_type: 'guarantee',
+        guarantee_variant: 'plus',
         guaranteed_fee_cents: 100000,
         percentage_of_sales: 70,
         venue_costs_cents: 80000,
@@ -84,7 +85,6 @@ describe('PATCH /api/gigs/:id — deal terms', () => {
         breakeven_includes_venue_costs: false,
         agency_fee_basis: 'percentage',
         agency_fee_percentage: 10,
-        agency_fee_mode: 'inclusive',
         commission_basis: 'amount',
         commission_amount_cents: 5000,
       })
@@ -92,6 +92,7 @@ describe('PATCH /api/gigs/:id — deal terms', () => {
 
     expect(res.body).toMatchObject({
       deal_type: 'guarantee',
+      guarantee_variant: 'plus',
       guaranteed_fee_cents: 100000,
       venue_costs_cents: 80000,
       venue_capacity: 300,
@@ -101,7 +102,6 @@ describe('PATCH /api/gigs/:id — deal terms', () => {
       ticket_price_gross_cents: 2420,
       breakeven_includes_venue_costs: false,
       agency_fee_basis: 'percentage',
-      agency_fee_mode: 'inclusive',
       commission_basis: 'amount',
       commission_amount_cents: 5000,
     })
@@ -122,7 +122,6 @@ describe('PATCH /api/gigs/:id — deal terms', () => {
   it.each([
     ['deal_type', 'handshake'],
     ['agency_fee_basis', 'sometimes'],
-    ['agency_fee_mode', 'partial'],
     ['commission_basis', 'maybe'],
     ['breakeven_includes_venue_costs', 'yes'],
     ['subject_to_vat', 'probably'],
@@ -130,6 +129,33 @@ describe('PATCH /api/gigs/:id — deal terms', () => {
     await asUserA(
       request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ [field]: value })
     ).expect(400)
+  })
+
+  it('rejects the removed agency fee mode instead of accepting it silently', async () => {
+    await asUserA(
+      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ agency_fee_mode: 'inclusive' })
+    ).expect(400)
+  })
+
+  it.each([
+    [{ deal_type: 'flat_fee', guarantee_variant: 'plus' }],
+    [{ deal_type: 'guarantee', guarantee_variant: null }],
+  ])('rejects an invalid deal type and guarantee variant pair', async (patch) => {
+    await asUserA(
+      request(app).patch(`/api/gigs/${seed.gigA.id}`).send(patch)
+    ).expect(400)
+  })
+
+  it.each([
+    ['flat_fee', 'plus'],
+    ['guarantee', null],
+  ])('enforces the deal type and guarantee variant pair in PostgreSQL', async (dealType, variant) => {
+    await expect(
+      pool.query(
+        'UPDATE gigs SET deal_type = $1, guarantee_variant = $2 WHERE id = $3',
+        [dealType, variant, seed.gigA.id],
+      ),
+    ).rejects.toMatchObject({ code: '23514' })
   })
 
   it.each([
@@ -186,7 +212,10 @@ describe('PATCH /api/gigs/:id — deal terms', () => {
 
   it('does not leak another tenant\'s gig through a terms patch', async () => {
     await asUserB(
-      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ deal_type: 'door_deal' })
+      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({
+        deal_type: 'door_deal',
+        guarantee_variant: null,
+      })
     ).expect(404)
 
     const { rows } = await pool.query('SELECT deal_type FROM gigs WHERE id = $1', [seed.gigA.id])
@@ -252,56 +281,6 @@ describe('guaranteed_fee_cents — the renamed booking fee', () => {
     )
     expect(rows[0].guaranteed_fee_cents).toBeNull()
     expect(rows[0].booking_fee_cents).toBeNull()
-  })
-})
-
-describe('migration 189 — deal_type backfill', () => {
-  // Reconstructs the legacy shapes migration 092 could produce and re-runs the
-  // backfill expression over them, proving the derivation still holds and that
-  // a deal type set since is not clobbered.
-  async function backfilledDealType(fee, percentage, presetDealType = null) {
-    const { rows } = await pool.query(
-      `INSERT INTO gigs (tenant_id, event_date, event_description, status,
-                         booking_fee_cents, percentage_of_sales, deal_type)
-       VALUES ($1, '2026-12-01', 'Legacy shape', 'confirmed', $2, $3, COALESCE($4, 'flat_fee'))
-       RETURNING id, deal_type`,
-      [seed.tenantA.id, fee, percentage, presetDealType],
-    )
-    if (presetDealType) return rows[0].deal_type
-
-    const { rows: updated } = await pool.query(
-      `UPDATE gigs
-          SET deal_type = CASE
-            WHEN COALESCE(percentage_of_sales, 0) > 0 AND booking_fee_cents IS NOT NULL THEN 'guarantee_vs'
-            WHEN COALESCE(percentage_of_sales, 0) > 0 THEN 'door_deal'
-            ELSE 'flat_fee'
-          END
-        WHERE id = $1
-        RETURNING deal_type`,
-      [rows[0].id],
-    )
-    return updated[0].deal_type
-  }
-
-  it('reads a fee with a ticket percentage as a guarantee vs.', async () => {
-    expect(await backfilledDealType(100000, 50)).toBe('guarantee_vs')
-  })
-
-  it('reads a ticket percentage with no fee as a door deal', async () => {
-    expect(await backfilledDealType(null, 50)).toBe('door_deal')
-  })
-
-  it('reads a bare fee as a flat fee', async () => {
-    expect(await backfilledDealType(100000, null)).toBe('flat_fee')
-  })
-
-  it('reads a zero percentage as a flat fee, not a door deal', async () => {
-    expect(await backfilledDealType(100000, 0)).toBe('flat_fee')
-  })
-
-  it('leaves the seeded gigs on the default flat fee', async () => {
-    const { rows } = await pool.query('SELECT deal_type FROM gigs WHERE tenant_id = $1', [seed.tenantA.id])
-    expect(rows.every((row) => row.deal_type === 'flat_fee')).toBe(true)
   })
 })
 

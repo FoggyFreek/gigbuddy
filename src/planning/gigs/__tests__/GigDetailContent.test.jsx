@@ -303,7 +303,12 @@ describe('GigDetailContent — field rendering', () => {
   // One label for the pair, whatever the deal type: whether the share is taken
   // before or after break-even is the deal type's own business.
   it('names the share the same way on a guarantee vs.', async () => {
-    getGig.mockResolvedValueOnce({ ...GIG_FREE, deal_type: 'guarantee_vs', percentage_of_sales: 50 })
+    getGig.mockResolvedValueOnce({
+      ...GIG_FREE,
+      deal_type: 'guarantee',
+      guarantee_variant: 'versus',
+      percentage_of_sales: 50,
+    })
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/ticket percentage/i))
     expect(screen.getByLabelText(/ticket percentage/i)).toHaveValue(50)
@@ -462,7 +467,10 @@ describe('GigDetailContent — Terms field saving', () => {
     // Exact: the field's help icon is named "About this deal type".
     await user.click(screen.getByLabelText('Deal type'))
     await user.click(screen.getByRole('option', { name: 'Door deal' }))
-    await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, { deal_type: 'door_deal' }))
+    await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, {
+      deal_type: 'door_deal',
+      guarantee_variant: null,
+    }))
   })
 })
 

@@ -93,6 +93,11 @@ export default function TicketUpside({ terms }: Readonly<Props>) {
     )
   }
 
+  const guaranteeVariant = terms.guarantee_variant
+  const breakEvenBreakdown = guaranteeVariant === null
+    ? t($ => $.detail.deal.tickets.breakdown[terms.deal_type])
+    : t($ => $.detail.deal.tickets.breakdown.guaranteeVariants[guaranteeVariant])
+
   return (
     <Grid size={12} data-testid="ticket-upside">
       <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 1, mb: 1 }}>
@@ -113,7 +118,7 @@ export default function TicketUpside({ terms }: Readonly<Props>) {
             label={t($ => $.detail.deal.tickets.toBreakEven)}
             value={upside.breakEvenTickets === null ? unknown : String(upside.breakEvenTickets)}
             caption={upside.breakEvenCents === null ? undefined : formatEur(upside.breakEvenCents)}
-            breakdown={t($ => $.detail.deal.tickets.breakdown[terms.deal_type])}
+            breakdown={breakEvenBreakdown}
           />
           <UpsideTile
             label={t($ => $.detail.deal.tickets.expectedUpside)}

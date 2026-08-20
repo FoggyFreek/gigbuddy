@@ -47,6 +47,7 @@ import type {
   AvailabilitySummary, CostPaidBy, Id, GigCost, GigTag, Member, Venue, Task,
 } from '../../../../types/entities.ts'
 import { resolveEventEndDate } from '../../../../../shared/eventTimes.js'
+import { dealTypeHasGuaranteeVariant } from '../../dealTerms.ts'
 
 const REQUIRED_FIELDS = ['event_date', 'event_description']
 
@@ -101,6 +102,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     status: 'option',
     ticket_link: '',
     deal_type: 'flat_fee',
+    guarantee_variant: null,
     guaranteed_fee: '',
     percentage_of_sales: '',
     breakeven_includes_venue_costs: true,
@@ -113,7 +115,6 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     agency_fee_basis: 'none',
     agency_fee_percentage: '',
     agency_fee_amount: '',
-    agency_fee_mode: 'exclusive',
     commission_basis: 'none',
     commission_percentage: '',
     commission_amount: '',
@@ -169,6 +170,8 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       status: g.status || 'option',
       ticket_link: g.ticket_link ?? '',
       deal_type: g.deal_type ?? 'flat_fee',
+      guarantee_variant: g.guarantee_variant
+        ?? (dealTypeHasGuaranteeVariant(g.deal_type ?? 'flat_fee') ? 'plus' : null),
       guaranteed_fee: feeToDisplay(g.guaranteed_fee_cents),
       percentage_of_sales: numberToInput(g.percentage_of_sales),
       breakeven_includes_venue_costs: g.breakeven_includes_venue_costs ?? true,
@@ -181,7 +184,6 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       agency_fee_basis: g.agency_fee_basis ?? 'none',
       agency_fee_percentage: numberToInput(g.agency_fee_percentage),
       agency_fee_amount: feeToDisplay(g.agency_fee_amount_cents),
-      agency_fee_mode: g.agency_fee_mode ?? 'exclusive',
       commission_basis: g.commission_basis ?? 'none',
       commission_percentage: numberToInput(g.commission_percentage),
       commission_amount: feeToDisplay(g.commission_amount_cents),
@@ -311,6 +313,14 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   function handleChange(field: string, value: unknown) {
     if (!editable) return
     const patch: Record<string, unknown> = { [field]: value }
+    if (field === 'deal_type') {
+      const dealType = value as GigDetailForm['deal_type']
+      patch.guarantee_variant = dealTypeHasGuaranteeVariant(dealType)
+        ? (form.guarantee_variant ?? 'plus')
+        : null
+    } else if (field === 'guarantee_variant') {
+      patch.deal_type = form.deal_type
+    }
     const candidate = { ...form, ...patch }
     if (['event_date', 'start_time', 'end_time'].includes(field)) {
       patch.end_date = resolveEventEndDate(

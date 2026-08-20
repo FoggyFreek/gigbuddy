@@ -174,7 +174,8 @@ describe.skipIf(!schematronAvailable())('e-invoicing conformance (official Schem
         ...base,
         invoice: withBuyer(),
         lines: dealSettlementLines({
-          deal_type: 'guarantee_vs',
+          deal_type: 'guarantee',
+          guarantee_variant: 'versus',
           guaranteed_fee_cents: 50000,
           tickets_sold: 200,
           ticket_price_net_cents: 1000,

@@ -9,7 +9,6 @@ const FORM = {
   agency_fee_basis: 'percentage',
   agency_fee_percentage: '10.00',
   agency_fee_amount: '0.00',
-  agency_fee_mode: 'inclusive',
   commission_basis: 'percentage',
   commission_percentage: '5.00',
   commission_amount: '0.00',
@@ -45,7 +44,6 @@ describe('BookerSection', () => {
     expect(within(bookingFeeHeader).getByText('Booking fee')).toBeInTheDocument()
     expect(within(bookingFeeHeader).getByText('Percentage')).toBeInTheDocument()
     expect(within(bookingFeeHeader).getByText('Fixed amount')).toBeInTheDocument()
-    expect(within(bookingFeeHeader).getByText('Exclusive or inclusive')).toBeInTheDocument()
 
     const commissionHeader = screen.getByTestId('commission-header')
     expect(within(commissionHeader).getByText('Commission')).toBeInTheDocument()
@@ -62,13 +60,12 @@ describe('BookerSection', () => {
     expect(screen.getByLabelText('Commission amount')).toBeDisabled()
   })
 
-  it('greys out the percentage, the amount and the mode instead of hiding them when no fee is agreed', () => {
+  it('greys out the percentage and amount instead of hiding them when no fee is agreed', () => {
     wrap({ form: { ...FORM, agency_fee_basis: 'none' } })
 
     expectSelectDisabled('Booking fee', false)
     expect(screen.getByLabelText('Booking fee percentage')).toBeDisabled()
     expect(screen.getByLabelText('Booking fee amount')).toBeDisabled()
-    expectSelectDisabled('Exclusive or inclusive', true)
     // The commission is unaffected by the booking fee's basis.
     expect(screen.getByLabelText('Commission percentage')).toBeEnabled()
   })
@@ -77,6 +74,5 @@ describe('BookerSection', () => {
     wrap({ editable: false })
 
     expectSelectDisabled('Booking fee', true)
-    expectSelectDisabled('Exclusive or inclusive', true)
   })
 })
