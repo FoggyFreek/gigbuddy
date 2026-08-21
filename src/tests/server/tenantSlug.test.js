@@ -39,7 +39,7 @@ const patchSlug = (userId, tenantId, slug, extra = {}) => as(
 
 async function grantGold(tenant, user) {
   await billing.setTenantOwner(tenant.id, user.id)
-  await billing.createSubscription({ userId: user.id, planSlug: 'gold' })
+  return billing.createSubscription({ userId: user.id, planSlug: 'gold' })
 }
 
 describe('PATCH /api/tenant/slug', () => {
@@ -93,7 +93,7 @@ describe('PATCH /api/tenant/slug', () => {
   })
 
   it('requires tenant.manage and rejects personal workspaces', async () => {
-    await grantGold(seed.tenantA, seed.userA)
+    const subscription = await grantGold(seed.tenantA, seed.userA)
     await pool.query(
       "UPDATE memberships SET role = 'contributor' WHERE tenant_id = $1 AND user_id = $2",
       [seed.tenantA.id, seed.userA.id],
@@ -101,7 +101,7 @@ describe('PATCH /api/tenant/slug', () => {
     await patchSlug(seed.userA.id, seed.tenantA.id, 'alpha-live').expect(403)
 
     const personal = await billing.createPersonalTenant(seed.userA.id)
-    await billing.createSubscription({ userId: seed.userA.id, planSlug: 'artist_gold' })
+    await billing.createSubscriptionModule(subscription.id, { planSlug: 'artist_gold' })
     const personalRes = await patchSlug(seed.userA.id, personal.id, 'solo-live').expect(403)
     expect(personalRes.body.code).toBe('tenant_kind_not_supported')
   })

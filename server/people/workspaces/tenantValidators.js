@@ -1,5 +1,6 @@
 // Input parsing and validation for tenant routes. No DB access here.
 import { normalizeVatCountry } from '../../../shared/vatRates.js'
+import { INVOICE_MODES } from '../../../shared/invoiceModes.js'
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/
 
@@ -12,6 +13,12 @@ export function parseTenantSlugChange(body) {
     return { error: 'Invalid slug', code: 'invalid_slug' }
   }
   return { slug: body.slug }
+}
+
+export function parsePreferredInvoiceMode(body) {
+  return INVOICE_MODES.includes(body?.preferred_invoice_mode)
+    ? { preferredInvoiceMode: body.preferred_invoice_mode }
+    : { error: 'Invalid preferred invoice mode', code: 'invalid_invoice_mode' }
 }
 
 // Room for a dedupe suffix ("-2".."-25" or "-xxxxxx") within the 64-char slug

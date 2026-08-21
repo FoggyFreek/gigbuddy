@@ -411,15 +411,18 @@ describe('OnboardingPage — what are you setting up?', () => {
     expect(screen.queryByRole('radio')).not.toBeInTheDocument()
   })
 
-  // The offer lives ON the tiles: gold logo, then the accent trial bar.
-  it('badges both tiles with the Gold logo and a 30-day trial bar', async () => {
+  // The offer lives ON the tiles: ladder-specific Gold logo, then the accent trial bar.
+  it('badges both tiles with their Gold logo and a 30-day trial bar', async () => {
     wrap()
 
     const [band, artist] = await screen.findAllByRole('radio')
-    for (const tile of [band, artist]) {
+    for (const [tile, logo] of [
+      [band, '/icons/gb_gold.png'],
+      [artist, '/icons/gb_artist_gold.png'],
+    ]) {
       const images = [...tile.querySelectorAll('img')].map((i) => i.getAttribute('src'))
       // Photo first (the decorative fill), tier logo second.
-      expect(images[1]).toBe('/icons/gb_gold.png')
+      expect(images[1]).toBe(logo)
       expect(tile.textContent).toMatch(/30-day trial/i)
     }
     expect(screen.getByText(NO_CARD)).toBeInTheDocument()

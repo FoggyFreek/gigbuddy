@@ -268,12 +268,13 @@ describe('GigDetailContent — field rendering', () => {
     expect(updateGig).not.toHaveBeenCalled()
   })
 
-  it('renders the Terms section heading', async () => {
+  it('renders the deal sections when the Terms tab is selected', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
-    expect(screen.getByRole('heading', { name: /^terms$/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /^deal$/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /^booking fee$/i })).toBeInTheDocument()
   })
 
   it('renames Band fee to Guaranteed fee', async () => {
@@ -435,14 +436,17 @@ describe('GigDetailContent — Terms field saving', () => {
     getGig.mockResolvedValueOnce({ ...GIG_PAID, deal_type: 'guarantee' })
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/venue costs/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
 
-    await user.type(screen.getByLabelText(/venue costs/i), '800')
+    await user.type(screen.getByRole('spinbutton', { name: /^venue costs$/i }), '800')
     await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, { venue_costs_cents: 80000 }))
 
     await user.type(screen.getByLabelText(/venue capacity/i), '300')
-    await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, { venue_capacity: 300 }))
+    await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, {
+      venue_capacity: 300,
+      venue_costs_cents: 80000,
+    }))
   })
 
   // The booking fee and commission sit on NOT NULL columns: a blanked input has

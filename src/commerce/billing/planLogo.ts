@@ -6,8 +6,8 @@ const TIER_LOGOS: Record<string, string> = {
   bronze: '/icons/gb_bronze.png',
   silver: '/icons/gb_silver.png',
   gold: '/icons/gb_gold.png',
-  artistbronze: '/icons/gb__artist_bronze.png',
-  artistgold: '/icons/gb_artist_gold.png',
+  artist_bronze: '/icons/gb_artist_bronze.png',
+  artist_gold: '/icons/gb_artist_gold.png',
 }
 
 export function planLogoSrc(slug: string | null | undefined): string | null {

@@ -183,3 +183,12 @@ export async function downloadGigItinerary(gigId: Id, lng: string): Promise<GigI
   const match = /filename="([^"]+)"/.exec(headers.get('Content-Disposition') ?? '')
   return { blob, filename: match?.[1] || `itinerary-${gigId}.pdf` }
 }
+
+export async function downloadGigArtistSettlement(gigId: Id, lng: string): Promise<GigItineraryFile> {
+  const { blob, headers } = await requestBlobWithHeaders(
+    `/api/gigs/${gigId}/artist-settlement.pdf?lng=${encodeURIComponent(lng)}`,
+    { method: 'GET' },
+  )
+  const match = /filename="([^"]+)"/.exec(headers.get('Content-Disposition') ?? '')
+  return { blob, filename: match?.[1] || `artist-settlement-${gigId}.pdf` }
+}

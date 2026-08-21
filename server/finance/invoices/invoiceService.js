@@ -16,6 +16,8 @@ import {
 } from '../vat/vatTreatmentService.js'
 import { normalizeVatNumber } from '../../../shared/vatRates.js'
 import { gigInvoiceVatPercentage } from '../../../shared/gigDealVat.js'
+import { resolveEffectiveMode } from '../../../shared/invoiceModes.js'
+import { isKnownDealConfiguration } from '../../../shared/gigDealEngine.js'
 import {
   checkInvoiceReadyForIssue,
   checkReverseCharge,
@@ -65,7 +67,7 @@ import {
 import { searchGigs as searchGigRows } from '../../planning/gigs/gigRepository.js'
 import { buildGigDraftLines } from './gigDraftLines.js'
 import { resolveInvoiceLng } from '../../utils/invoiceI18n.js'
-import { fetchTenant } from '../../people/workspaces/tenantRepository.js'
+import { fetchPreferredInvoiceMode, fetchTenant } from '../../people/workspaces/tenantRepository.js'
 import {
   SIMPLE_PATCH_FIELDS,
   CONTENT_FIELDS_SET,
@@ -693,12 +695,21 @@ function buildBillingTarget(type, row) {
 export async function buildDraftFromGig(pool, tenantId, gigId) {
   const gig = await fetchGig(pool, tenantId, gigId)
   if (!gig) return { error: { status: 404, body: { error: 'Gig not found' } } }
+  if (!isKnownDealConfiguration(gig.deal_type, gig.guarantee_variant)) {
+    logger.warn('invoice.gig_deal_unknown', {
+      tenantId,
+      gigId,
+      dealType: gig.deal_type,
+      guaranteeVariant: gig.guarantee_variant,
+    })
+  }
 
   const venue = gig.venue_id ? await fetchVenue(pool, tenantId, gig.venue_id) : null
   const festival = gig.festival_id ? await fetchVenue(pool, tenantId, gig.festival_id) : null
 
   const tenant = await fetchTenant(pool, tenantId)
   if (!tenant) return { error: { status: 404, body: { error: 'Tenant not found' } } }
+  const preferredInvoiceMode = await fetchPreferredInvoiceMode(pool, tenantId)
   const behavior = await loadAccountingBehavior(pool, tenantId)
 
   const issueDate = new Date().toISOString().slice(0, 10)
@@ -783,7 +794,12 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
         discount_cents: 0,
         // Every deal type but a flat fee is billed as the deal itself:
         // ticket revenue, what the venue recoups, and its share of the rest.
-        lines: buildGigDraftLines(gig, { description, taxPercentage, lng: invoiceLng }),
+        lines: buildGigDraftLines(gig, {
+          description,
+          taxPercentage,
+          lng: invoiceLng,
+          mode: resolveEffectiveMode(gig, preferredInvoiceMode),
+        }),
       },
     },
   }

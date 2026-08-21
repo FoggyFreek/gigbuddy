@@ -653,6 +653,7 @@ describe('invoices — draft-from-gig', () => {
   it('bills a guarantee as the fee plus the itemised door settlement', async () => {
     await setDealTerms(seed.gigA.id, {
       deal_type: 'guarantee',
+      guarantee_variant: 'plus',
       guaranteed_fee_cents: 50000,
       venue_costs_cents: 30000,
       tickets_sold: 200,
@@ -674,6 +675,55 @@ describe('invoices — draft-from-gig', () => {
     const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
     expect(res.body.draft.lines).toHaveLength(1)
     expect(res.body.draft.lines[0].unit_price_cents).toBe(50000)
+  })
+
+  it('splits the booking fee without changing the draft total in specified mode', async () => {
+    await pool.query(
+      `UPDATE tenants SET preferred_invoice_mode = 'specified' WHERE id = $1`,
+      [seed.tenantA.id],
+    )
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'flat_fee',
+      guaranteed_fee_cents: 100000,
+      agency_fee_basis: 'amount',
+      agency_fee_amount_cents: 15000,
+    })
+
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+    expect(res.body.draft.lines.map((line) => [line.description, line.unit_price_cents])).toEqual([
+      [expect.stringContaining('Artiestenvergoeding'), 85000],
+      ['Boekingskosten', 15000],
+    ])
+    expect(res.body.draft.lines.reduce(
+      (total, line) => total + line.quantity * line.unit_price_cents, 0,
+    )).toBe(100000)
+  })
+
+  it('captures specified lines in the draft when the tenant preference changes later', async () => {
+    await pool.query(
+      `UPDATE tenants SET preferred_invoice_mode = 'specified' WHERE id = $1`,
+      [seed.tenantA.id],
+    )
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'flat_fee',
+      guaranteed_fee_cents: 100000,
+      agency_fee_basis: 'amount',
+      agency_fee_amount_cents: 15000,
+    })
+    const draft = await asUserA(
+      request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`),
+    ).expect(200)
+
+    await pool.query(
+      `UPDATE tenants SET preferred_invoice_mode = 'combined' WHERE id = $1`,
+      [seed.tenantA.id],
+    )
+    const created = await asUserA(request(app).post('/api/invoices'))
+      .send({ ...draft.body.draft, customer_name: draft.body.draft.customer_name || 'Venue' })
+      .expect(201)
+
+    expect(created.body.lines.map((line) => line.unit_price_cents)).toEqual([85000, 15000])
+    expect(created.body.subtotal_cents).toBe(100000)
   })
 
   it('falls back to one empty line when a door deal never reached break-even', async () => {
@@ -721,6 +771,28 @@ describe('invoices — draft-from-gig', () => {
     expect(lines.map((line) => [line.quantity, line.unit_price_cents])).toEqual([[104, 685], [1, -5882]])
     expect(lines[1].description).toContain('9%')
     expect(lines.reduce((total, line) => total + line.quantity * line.unit_price_cents, 0)).toBe(65358)
+  })
+
+  it('deducts Copyright / PRS after ticket VAT and applies general VAT to the resulting lines', async () => {
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'door_deal',
+      venue_costs_cents: 0,
+      tickets_sold: 104,
+      ticket_price_net_cents: 685,
+      percentage_of_sales: 100,
+      subject_to_vat: true,
+      vat_percentage: 21,
+      ticket_vat_percentage: 9,
+      copyright_percentage: 10,
+    })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+
+    expect(res.body.draft.lines.map((line) => [line.unit_price_cents, Number(line.tax_percentage)])).toEqual([
+      [685, 21],
+      [-5882, 21],
+      [-6536, 21],
+    ])
+    expect(res.body.draft.lines[2].description).toContain('10%')
   })
 
   it('creates an invoice from a door-deal draft that totals the artist share', async () => {

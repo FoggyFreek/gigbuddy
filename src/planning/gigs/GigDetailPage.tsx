@@ -24,7 +24,7 @@ export default function GigDetailPage() {
   const { confirmDelete } = useDialog()
   const { id } = useParams()
   const gigId = Number(id)
-  const { canWritePlanning } = usePermissions()
+  const { canWritePlanning, canViewFinance } = usePermissions()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const TAB_KEYS: TabKey[] = ['event', 'terms', 'participants', 'tasks']
@@ -88,7 +88,7 @@ export default function GigDetailPage() {
         {/* Identity gate: the lifted gig lags during async loads / split-view id
             changes, so only offer these once it matches the current id. Both
             read through the active tenant, so a cross-band gig gets neither. */}
-        {loaded && !isCrossBand && <GigDocumentMenu gig={gig} />}
+        {loaded && !isCrossBand && <GigDocumentMenu gig={gig} canViewFinance={canViewFinance} />}
         {loaded && !isCrossBand && <GigShareMenu gig={gig} />}
         {insideSplitView && (
           <IconButton onClick={handleBack} aria-label={t($ => $.aria.close, { ns: 'common' })}>

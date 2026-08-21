@@ -153,6 +153,7 @@ describe('SettingsPage — nav gating', () => {
       'Finance and accounting settings',
       'Financial profile',
       'Accounting profile',
+      'Invoice mode',
       'Accounting Settings',
       'Chart of accounts',
     ])
@@ -170,7 +171,7 @@ describe('SettingsPage — nav gating', () => {
   it('gives a financial_admin the whole finance group but no band settings', async () => {
     wrap('/settings', { role: 'financial_admin' })
     expect(await screen.findByText('Finance and accounting settings')).toBeInTheDocument()
-    for (const label of ['Financial profile', 'Accounting profile', 'Accounting Settings', 'Chart of accounts']) {
+    for (const label of ['Financial profile', 'Accounting profile', 'Invoice mode', 'Accounting Settings', 'Chart of accounts']) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
     expect(screen.queryByText('Band settings')).not.toBeInTheDocument()
@@ -233,7 +234,7 @@ describe('SettingsPage — plan gating', () => {
 
     expect(await screen.findAllByText('My preferences')).not.toHaveLength(0)
     expect(screen.queryByText('Finance and accounting settings')).not.toBeInTheDocument()
-    for (const label of ['Financial profile', 'Accounting profile', 'Accounting Settings', 'Chart of accounts']) {
+    for (const label of ['Financial profile', 'Accounting profile', 'Invoice mode', 'Accounting Settings', 'Chart of accounts']) {
       expect(screen.queryByText(label)).not.toBeInTheDocument()
     }
     expect(screen.queryByText('Finance setup wizard')).not.toBeInTheDocument()
@@ -249,7 +250,7 @@ describe('SettingsPage — plan gating', () => {
     })
 
     expect(await screen.findByText('Finance and accounting settings')).toBeInTheDocument()
-    for (const label of ['Financial profile', 'Accounting profile', 'Accounting Settings', 'Chart of accounts']) {
+    for (const label of ['Financial profile', 'Accounting profile', 'Invoice mode', 'Accounting Settings', 'Chart of accounts']) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
   })

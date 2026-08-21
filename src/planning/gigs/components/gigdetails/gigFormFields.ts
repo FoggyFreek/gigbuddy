@@ -32,6 +32,7 @@ export const NULLABLE_PERCENT_FIELDS = new Set([
   // applies at all is `subject_to_vat`'s job.
   'vat_percentage',
   'ticket_vat_percentage',
+  'copyright_percentage',
 ])
 
 /** NUMERIC(5,2) percentages on NOT NULL columns; blank means zero. */
@@ -107,5 +108,6 @@ export function dealTermsFromForm(form: GigDetailForm, costs: GigCost[]): GigDea
     subject_to_vat: form.subject_to_vat as boolean,
     vat_percentage: percentToValue(String(form.vat_percentage ?? '')),
     ticket_vat_percentage: percentToValue(String(form.ticket_vat_percentage ?? '')),
+    copyright_percentage: percentToValue(String(form.copyright_percentage ?? '')),
   }
 }

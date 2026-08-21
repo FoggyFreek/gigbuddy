@@ -18,12 +18,19 @@ function formatPercentage(value, lng) {
 const DESCRIBE_LINE = Object.freeze({
   // The performance itself is described by the gig, not by a fixed label.
   [GIG_DEAL_LINE_KINDS.PERFORMANCE_FEE]: ({ description }) => description,
+  [GIG_DEAL_LINE_KINDS.ARTIST_FEE]: ({ t, description }) => (
+    description ? t('dealLineArtistFeeFor', { event: description }) : t('dealLineArtistFee')
+  ),
+  [GIG_DEAL_LINE_KINDS.BOOKING_FEE]: ({ t }) => t('dealLineBookingFee'),
   // The gig's own description is the only context the venue gets, so the ticket
   // line carries it when there is no fee line above to carry it instead.
   [GIG_DEAL_LINE_KINDS.TICKET_REVENUE]: ({ t, description, isFirstLine }) => (
     description && isFirstLine ? t('dealLineTicketRevenueFor', { event: description }) : t('dealLineTicketRevenue')
   ),
   [GIG_DEAL_LINE_KINDS.TICKET_VAT]: ({ t, lng, line }) => t('dealLineTicketVat', {
+    percentage: formatPercentage(line.percentage, lng),
+  }),
+  [GIG_DEAL_LINE_KINDS.COPYRIGHT]: ({ t, lng, line }) => t('dealLineCopyright', {
     percentage: formatPercentage(line.percentage, lng),
   }),
   [GIG_DEAL_LINE_KINDS.BREAK_EVEN_FEE]: ({ t }) => t('dealLineBreakEvenFee'),
@@ -40,9 +47,9 @@ const DESCRIBE_LINE = Object.freeze({
  * Always returns at least one line: a deal that settles at zero falls back to
  * the performance line, which the user then fills in by hand.
  */
-export function buildGigDraftLines(gig, { description, taxPercentage, lng }) {
+export function buildGigDraftLines(gig, { description, taxPercentage, lng, mode = 'combined' }) {
   const t = getInvoiceT(lng)
-  const dealLines = buildGigDealInvoiceLines(gig)
+  const dealLines = buildGigDealInvoiceLines(gig, { mode })
 
   if (!dealLines.length) {
     return [{ description, quantity: 1, unit_price_cents: 0, tax_percentage: taxPercentage, position: 0 }]

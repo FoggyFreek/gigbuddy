@@ -13,6 +13,7 @@ import { verifyDocumentContent } from '../../utils/verifyFileContent.js'
 import { dispatchNotification } from '../../user/notifications/notificationService.js'
 import { logger } from '../../utils/logger.js'
 import { renderGigItineraryPdf } from '../../utils/renderGigItineraryPdf.js'
+import { renderGigArtistSettlementPdf } from '../../utils/renderGigArtistSettlementPdf.js'
 import { loadTenantLogoBuffer } from '../../utils/tenantLogo.js'
 import { sanitizeFilename } from '../../utils/sanitizeFilename.js'
 import { createTask as createTaskService, patchTask as patchTaskService, removeTask as removeTaskService } from '../tasks/taskService.js'
@@ -375,6 +376,34 @@ export async function getGigItineraryPdf(db, tenantId, gigId, { lng = 'en' } = {
   return { pdf: { buffer, filename: itineraryFilename(gig) } }
 }
 
+// A live, post-show statement of the finalized ticket and cost terms. Finance
+// permission is enforced by the route; this service owns tenant isolation and
+// passes one coherent gig/cost/tenant snapshot to the pure renderer.
+export async function getGigArtistSettlementPdf(
+  db,
+  tenantId,
+  gigId,
+  { lng = 'en', generatedAt = new Date() } = {},
+) {
+  const gig = await fetchGigWithRelations(db, gigId, tenantId)
+  if (!gig) return NOT_FOUND
+
+  const [costs, tenant] = await Promise.all([
+    listGigCostRows(db, gigId, tenantId),
+    fetchTenant(db, tenantId),
+  ])
+  const logoBuffer = await loadTenantLogoBuffer(tenant)
+  const buffer = await renderGigArtistSettlementPdf({
+    gig,
+    costs,
+    logoBuffer,
+    lng,
+    generatedAt,
+    bandName: tenant?.display_name || tenant?.band_name || '',
+  })
+  return { pdf: { buffer, filename: artistSettlementFilename(gig) } }
+}
+
 // The Contacts tab reads three sources — the gig's own linked contacts plus the
 // ones inherited from its venue and its festival — so the itinerary carries the
 // same three, in the same order. Each contact appears once: a person linked
@@ -400,6 +429,14 @@ function mergeItineraryContacts({ gigContacts, venueContacts, festivalContacts }
 // readable. Either half may be missing — an unnamed gig or one without a date
 // still gets a valid name.
 function itineraryFilename(gig) {
+  return gigDocumentFilename('itinerary', gig)
+}
+
+function artistSettlementFilename(gig) {
+  return gigDocumentFilename('artist-settlement', gig)
+}
+
+function gigDocumentFilename(prefix, gig) {
   const slug = String(gig.event_description || '')
     .normalize('NFKD')
     .replace(/[^a-zA-Z0-9]+/g, '-')
@@ -409,7 +446,7 @@ function itineraryFilename(gig) {
   // MMddYYYY, read off the 'YYYY-MM-DD' a DATE column returns.
   const date = toDateStr(gig.event_date)
   const stamp = date ? `${date.slice(5, 7)}${date.slice(8, 10)}${date.slice(0, 4)}` : null
-  const parts = ['itinerary', slug, stamp].filter(Boolean)
+  const parts = [prefix, slug, stamp].filter(Boolean)
   return sanitizeFilename(`${parts.join('-')}.pdf`)
 }
 

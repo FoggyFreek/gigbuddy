@@ -165,6 +165,8 @@ export interface Gig {
   vat_percentage?: number | string | null
   /** The venue's VAT contained in the nett ticket price; null = none to take out. */
   ticket_vat_percentage?: number | string | null
+  /** Copyright / PRS deducted from ticket revenue after ticket VAT; null = ignored. */
+  copyright_percentage?: number | string | null
   /** The artist's own costs, itemised. Only present on the gig detail read. */
   costs?: GigCost[]
   /** The "Additional information" blocks. Only present on the gig detail read. */

@@ -81,6 +81,21 @@ export const updateActiveTenantSlug = (slug: string) =>
     body: JSON.stringify({ slug }),
   })
 
+export type InvoiceMode = 'combined' | 'specified'
+
+export interface TenantInvoiceModeResponse {
+  preferred_invoice_mode: InvoiceMode
+}
+
+export const getTenantInvoiceMode = () =>
+  request<TenantInvoiceModeResponse>('/api/tenant/invoice-mode')
+
+export const updateTenantInvoiceMode = (preferredInvoiceMode: InvoiceMode) =>
+  request<TenantInvoiceModeResponse>('/api/tenant/invoice-mode', {
+    method: 'PATCH',
+    body: JSON.stringify({ preferred_invoice_mode: preferredInvoiceMode }),
+  })
+
 export const listTenants = () => api<Tenant[]>('/')
 export const getTenant = (id: Id) => api<Tenant>(`/${id}`)
 export interface CreateTenantPayload extends Partial<Tenant> {

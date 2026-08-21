@@ -36,7 +36,7 @@ import { usePermissions } from '../../hooks/usePermissions.ts'
 import PlanningReadOnlyAlert from '../../components/PlanningReadOnlyAlert.tsx'
 import { getRequiredErrors, hasRequiredErrors } from '../../utils/requiredFields.ts'
 import { venueHeadline } from '../venues/venueDisplay.ts'
-import { contactMatchesCategoryFilter, SUPPLIER_CATEGORY } from './contactCategories.ts'
+import { contactIsSupplierLike, contactMatchesCategoryFilter } from './contactCategories.ts'
 import ContactFields from './components/ContactFields.tsx'
 import SaveStatusLabel from '../../components/SaveStatusLabel.tsx'
 import SupplierPurchasesSection from './components/SupplierPurchasesSection.tsx'
@@ -78,7 +78,11 @@ export default function ContactDetailPage() {
   const { canWritePlanning: canWrite, canViewFinance } = usePermissions()
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
   const insideSplitView = !!outletCtx.insideSplitView
-  const contactFilter = outletCtx.contactFilter as Record<string, string> | undefined
+  const contactFilter = outletCtx.contactFilter as {
+    category?: string
+    categoryIn?: readonly string[]
+    excludeCategory?: string
+  } | undefined
   const onClose = outletCtx.onClose as (() => void) | undefined
   const onContactUpdate = outletCtx.onContactUpdate as ((id: Id, patch: Partial<ContactForm>) => void) | undefined
   const onContactDelete = outletCtx.onContactDelete as ((id: Id) => void) | undefined
@@ -376,7 +380,7 @@ export default function ContactDetailPage() {
             </Box>
           ))}
 
-          {form.category === SUPPLIER_CATEGORY && canViewFinance && (
+          {contactIsSupplierLike(form) && canViewFinance && (
             <SupplierPurchasesSection contactId={contactId} />
           )}
         </>

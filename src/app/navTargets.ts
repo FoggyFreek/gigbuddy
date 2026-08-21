@@ -11,7 +11,7 @@ export const SETTINGS_SECTIONS = [
   'preferences', 'billing', 'connected-accounts', 'my-availability',
   'accent', 'members', 'storage',
   'integrations', 'chart-of-accounts', 'default-accounts',
-  'financial-profile', 'accounting-profile', 'delete-account',
+  'financial-profile', 'accounting-profile', 'invoice-mode', 'delete-account',
 ] as const
 
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]

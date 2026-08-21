@@ -1,7 +1,7 @@
 // VAT on a gig deal, shared by the server (which bills it) and the frontend
 // (which simulates it).
 //
-// Two rates, two jobs:
+// Two VAT rates and one related ticket-revenue deduction:
 //
 //   General VAT  — the rate an invoice generated from this gig is billed at.
 //                  Blank means the gig does not override what the invoice would
@@ -12,8 +12,9 @@
 //                  taken out, and the invoice bills the door at its gross with
 //                  the VAT as one correction line.
 //
-// `subject_to_vat` is the discriminator for both: a deal that is not subject to
-// VAT is billed at 0% and has nothing to strip out of the door.
+// Copyright / PRS is deducted from ticket revenue after the contained ticket
+// VAT. `subject_to_vat` is the discriminator for all three: when false, the
+// invoice is billed at 0% and nothing is stripped out of the door.
 //
 // The ticket split is taken ONCE, on the revenue total, never per ticket: VAT is
 // owed on what the door actually took, and rounding each ticket separately would
@@ -37,6 +38,12 @@ function isSubjectToVat(terms) {
 export function gigTicketVatPercentage(terms) {
   if (!isSubjectToVat(terms)) return 0
   return percentage(terms?.ticket_vat_percentage)
+}
+
+/** Copyright / PRS deducted from ticket revenue after its included VAT. */
+export function gigCopyrightPercentage(terms) {
+  if (!isSubjectToVat(terms)) return 0
+  return percentage(terms?.copyright_percentage)
 }
 
 /**

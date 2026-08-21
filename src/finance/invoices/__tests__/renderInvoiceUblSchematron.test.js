@@ -37,7 +37,7 @@ const withBuyer = (invoice) => ({ ...base.invoice, ...NL_BUYER, ...invoice })
 // The real draft-from-gig decomposition, rendered as invoice lines: this is the
 // exact shape the invoice endpoint hands a venue for a deal that shares in the
 // door, so it is the shape the official rules have to accept.
-const dealSettlementLines = (terms) => buildGigDealInvoiceLines(terms).map((line) => ({
+const dealSettlementLines = (terms, mode = 'combined') => buildGigDealInvoiceLines(terms, { mode }).map((line) => ({
   description: line.kind,
   quantity: line.quantity,
   unit_price_cents: line.unitPriceCents,
@@ -145,6 +145,16 @@ const VARIANTS = {
       ticket_price_net_cents: 1000,
       percentage_of_sales: 70,
     }),
+  },
+  'a specified booking fee split from the artist fee': {
+    ...base,
+    invoice: withBuyer(),
+    lines: dealSettlementLines({
+      deal_type: 'flat_fee',
+      guaranteed_fee_cents: 100000,
+      agency_fee_basis: 'amount',
+      agency_fee_amount_cents: 15000,
+    }, 'specified'),
   },
   'no registration number on the supplier': {
     ...base, tenant: { ...base.tenant, kvk_number: null }, invoice: withBuyer(),

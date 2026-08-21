@@ -88,7 +88,9 @@
     "documents": "Documenten",
     "documentsAria": "documenten van optreden downloaden",
     "itinerary": "Draaiboek / Tijdschema",
-    "downloadFailed": "Downloaden van het draaiboek is mislukt"
+    "artistSettlement": "Artiestenafrekening",
+    "downloadFailed": "Downloaden van het draaiboek is mislukt",
+    "settlementDownloadFailed": "Downloaden van de artiestenafrekening is mislukt"
   },
   "gigShare": {
     "title": "Gig delen als afbeelding",
@@ -310,7 +312,9 @@
         "generalVat": "Algemeen btw %",
         "generalVatHelp": "Het tarief waarmee een factuur vanuit dit optreden wordt opgemaakt. Laat leeg voor het standaardtarief ({{rate}}%).",
         "ticketVat": "Ticket-btw %",
-        "ticketVatHelp": "De btw die het podium op kaarten rekent en die in de nettoticketprijs zit. Alle ticketberekeningen gaan over de prijs zonder die btw."
+        "ticketVatHelp": "De btw die het podium op kaarten rekent en die in de nettoticketprijs zit. Alle ticketberekeningen gaan over de prijs zonder die btw.",
+        "copyright": "Auteursrecht / Buma %",
+        "copyrightHelp": "Auteursrecht / Buma wordt na de ticket-btw van de ticketopbrengst afgetrokken. Laat leeg om dit te negeren."
       },
       "costs": {
         "title": "Kosten",
@@ -372,6 +376,7 @@
         "potentialUpside": "Mogelijke opbrengst",
         "actualUpside": "Opbrengst op de tot nu toe verkochte kaarten: {{amount}}.",
         "vatCorrectedPrice": "Er gaat eerst {{percentage}}% ticket-btw af, dus alle berekeningen gaan over {{price}} per kaart.",
+        "copyrightCorrectedPrice": "Daarna gaat {{percentage}}% auteursrecht / Buma eraf, waardoor {{price}} per kaart overblijft voor de dealberekening.",
         "atAttendance_one": "bij {{count}} kaart",
         "atAttendance_other": "bij {{count}} kaarten",
         "unknown": "—",

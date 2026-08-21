@@ -31,6 +31,7 @@ function terms(overrides = {}) {
     subject_to_vat: true,
     vat_percentage: null,
     ticket_vat_percentage: null,
+    copyright_percentage: null,
     ...overrides,
   }
   if (result.deal_type === 'guarantee' && !Object.hasOwn(overrides, 'guarantee_variant')) {
@@ -998,5 +999,36 @@ describe('computeTicketUpside — ticket VAT', () => {
   it('carries the VAT-corrected share into the artist statement', () => {
     const deal = terms({ ...doorDeal, tickets_sold: 100 })
     expect(computeArtistStatement(deal).ticketRevenueCents).toBe(250000 - 16355)
+  })
+})
+
+describe('computeTicketUpside - Copyright / PRS', () => {
+  const doorDeal = {
+    deal_type: 'door_deal',
+    venue_costs_cents: 0,
+    ticket_price_net_cents: 2500,
+    percentage_of_sales: 100,
+    venue_capacity: 100,
+    expected_visitors: 50,
+    tickets_sold: 1,
+    subject_to_vat: true,
+    ticket_vat_percentage: 7,
+    copyright_percentage: 10,
+  }
+
+  it('calculates copyright on ticket revenue after VAT is removed', () => {
+    const u = computeTicketUpside(terms(doorDeal))
+    expect(u.sold).toMatchObject({
+      ticketRevenueCents: 2500,
+      ticketVatCents: 164,
+      copyrightCents: 234,
+      artistShareCents: 2102,
+    })
+  })
+
+  it('ignores an empty copyright percentage', () => {
+    const u = computeTicketUpside(terms({ ...doorDeal, copyright_percentage: null }))
+    expect(u.copyrightPercentage).toBe(0)
+    expect(u.sold.artistShareCents).toBe(2336)
   })
 })

@@ -1,4 +1,5 @@
 import {
+  gigCopyrightPercentage,
   gigTicketVatPercentage,
   splitTicketVat,
   ticketPriceExVatCents,
@@ -7,6 +8,7 @@ import { DEFAULT_COST_PAID_BY } from './gigDealVocabulary.js'
 
 export const GIG_DEAL_DEDUCTION_KINDS = Object.freeze({
   TICKET_VAT: 'ticket_vat',
+  COPYRIGHT: 'copyright',
   BREAK_EVEN_FEE: 'break_even_fee',
   BREAK_EVEN_VENUE_COSTS: 'break_even_venue_costs',
   GUARANTEE_OFFSET: 'guarantee_offset',
@@ -15,6 +17,7 @@ export const GIG_DEAL_DEDUCTION_KINDS = Object.freeze({
 
 const {
   TICKET_VAT,
+  COPYRIGHT,
   BREAK_EVEN_FEE,
   BREAK_EVEN_VENUE_COSTS,
   GUARANTEE_OFFSET,
@@ -84,6 +87,10 @@ function registryKey(dealType, guaranteeVariant) {
   return guaranteeVariant == null ? dealType : `${dealType}:${guaranteeVariant}`
 }
 
+export function isKnownDealConfiguration(dealType, guaranteeVariant = null) {
+  return Object.hasOwn(DEAL_REGISTRY, registryKey(dealType, guaranteeVariant))
+}
+
 export function dealDefinitionFor(dealType, guaranteeVariant = null) {
   return DEAL_REGISTRY[registryKey(dealType, guaranteeVariant)] ?? UNKNOWN_DEAL
 }
@@ -130,10 +137,12 @@ function ticketContext(terms, tickets, projectUnsharedRevenue = false) {
   const ticketPriceNetCents = cents(terms.ticket_price_net_cents)
   const artistPercentage = toNumber(terms.percentage_of_sales)
   const ticketVatPercentage = gigTicketVatPercentage(terms)
+  const copyrightPercentage = gigCopyrightPercentage(terms)
   const grossTicketRevenueCents = deal.sharesTickets || projectUnsharedRevenue
     ? ticketsSold * ticketPriceNetCents
     : 0
   const { netCents, vatCents } = splitTicketVat(grossTicketRevenueCents, ticketVatPercentage)
+  const copyrightCents = percentOf(netCents, copyrightPercentage)
   return {
     deal,
     terms,
@@ -142,7 +151,9 @@ function ticketContext(terms, tickets, projectUnsharedRevenue = false) {
     grossTicketRevenueCents,
     ticketVatCents: vatCents,
     ticketVatPercentage,
-    ticketRevenueCents: netCents,
+    copyrightCents,
+    copyrightPercentage,
+    ticketRevenueCents: netCents - copyrightCents,
     guaranteedFeeCents,
     artistPercentage,
     venuePercentage: 100 - artistPercentage,
@@ -186,9 +197,15 @@ export function computeGigDealSettlement(terms) {
   return {
     ...publicContext,
     artistTicketShareCents: tickets.artistTicketShareCents,
-    deductions: context.ticketVatCents > 0
-      ? [{ kind: TICKET_VAT, cents: context.ticketVatCents, percentage: context.ticketVatPercentage }, ...tickets.deductions]
-      : tickets.deductions,
+    deductions: [
+      ...(context.ticketVatCents > 0
+        ? [{ kind: TICKET_VAT, cents: context.ticketVatCents, percentage: context.ticketVatPercentage }]
+        : []),
+      ...(context.copyrightCents > 0
+        ? [{ kind: COPYRIGHT, cents: context.copyrightCents, percentage: context.copyrightPercentage }]
+        : []),
+      ...tickets.deductions,
+    ],
     billsGuaranteedFee: deal.guaranteesFee,
     totalCents: context.guaranteedFeeCents + tickets.artistTicketShareCents,
   }
@@ -202,6 +219,7 @@ function scenarioAt(terms, tickets) {
     tickets: context.ticketsSold,
     ticketRevenueCents: context.grossTicketRevenueCents,
     ticketVatCents: context.ticketVatCents,
+    ...(context.copyrightCents > 0 ? { copyrightCents: context.copyrightCents } : {}),
     artistShareCents: settled.artistShareCents,
   }
 }
@@ -226,13 +244,16 @@ export function computeSoldTicketShare(terms) {
 export function computeTicketUpside(terms) {
   const context = upsideContext(terms)
   const exVatPriceCents = context.ticketPriceNetCents / (1 + context.ticketVatPercentage / 100)
+  const priceAfterCopyrightCents = exVatPriceCents * (1 - context.copyrightPercentage / 100)
   return {
     artistPercentage: context.artistPercentage,
     venuePercentage: context.venuePercentage,
     ticketVatPercentage: context.ticketVatPercentage,
     ticketPriceExVatCents: ticketPriceExVatCents(context.ticketPriceNetCents, context.ticketVatPercentage),
+    copyrightPercentage: context.copyrightPercentage,
+    ticketPriceAfterCopyrightCents: Math.round(priceAfterCopyrightCents),
     breakEvenCents: context.breakEvenCents,
-    breakEvenTickets: breakEvenTicketsOf(context.breakEvenCents, exVatPriceCents),
+    breakEvenTickets: breakEvenTicketsOf(context.breakEvenCents, priceAfterCopyrightCents),
     sold: computeSoldTicketShare(terms),
     expected: scenarioAt(terms, terms.expected_visitors),
     potential: scenarioAt(terms, terms.venue_capacity),

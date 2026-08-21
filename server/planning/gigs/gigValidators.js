@@ -48,8 +48,8 @@ export const GIG_PATCH_FIELDS = [
   'agency_fee_basis', 'agency_fee_percentage', 'agency_fee_amount_cents',
   'commission_basis', 'commission_percentage', 'commission_amount_cents',
   // VAT on the deal (migration 193). subject_to_vat is the discriminator; the
-  // two rates are overrides, so null is "no rate agreed", not "no VAT".
-  'subject_to_vat', 'vat_percentage', 'ticket_vat_percentage',
+  // percentages are nullable terms, so null means the term has no effect.
+  'subject_to_vat', 'vat_percentage', 'ticket_vat_percentage', 'copyright_percentage',
   // Only meaningful in a personal workspace; the route gates the field on the
   // MY_BANDS capability and the service validates it against my_bands.
   'my_band_id',
@@ -119,6 +119,7 @@ const GIG_FIELD_NORMALIZERS = {
   subject_to_vat: booleanIn,
   vat_percentage: nullablePercent,
   ticket_vat_percentage: nullablePercent,
+  copyright_percentage: nullablePercent,
   agency_fee_percentage: requiredPercent,
   commission_percentage: requiredPercent,
   agency_fee_amount_cents: requiredWhole,

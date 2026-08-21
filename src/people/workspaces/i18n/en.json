@@ -18,6 +18,7 @@
       "defaultAccounts": "Accounting Settings",
       "financialProfile": "Financial profile",
       "accountingProfile": "Accounting profile",
+      "invoiceMode": "Invoice mode",
       "manageAccounts": "Manage band account"
     },
     "workspaceSettings": "Workspace settings"
@@ -57,6 +58,27 @@
     "title": "Finance setup wizard",
     "help": "Walk through your opening balance, financial profile and default accounts.",
     "cta": "Start"
+  },
+  "invoiceMode": {
+    "title": "Preferred invoice mode",
+    "description": "Choose how booking fees are shown when a gig is turned into an invoice draft.",
+    "options": {
+      "combined": {
+        "label": "Combined",
+        "description": "Include the booking fee in the artist fee."
+      },
+      "specified": {
+        "label": "Specified",
+        "description": "Show the booking fee as a separate line on the same invoice."
+      }
+    },
+    "example": {
+      "title": "Example: €1,000 including a €150 booking fee",
+      "combined": "Combined: €1,000 artist fee",
+      "specified": "Specified: €850 artist fee + €150 booking fee",
+      "total": "The invoice total remains €1,000 in both modes."
+    },
+    "error": "The invoice mode could not be loaded or saved."
   },
   "members": {
     "title": "Members",

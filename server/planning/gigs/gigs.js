@@ -16,6 +16,7 @@ import {
   searchGigTags,
   getGig,
   getGigItineraryPdf,
+  getGigArtistSettlementPdf,
   gigMerchSummary,
   importGigs,
   createGig,
@@ -134,6 +135,19 @@ router.get('/:id/itinerary.pdf', async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
   const lng = normalizeDocumentLng(req.query.lng)
   const result = await getGigItineraryPdf(pool, req.tenantId, id, { lng })
+  if (result.error) return sendError(res, result.error)
+
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="${result.pdf.filename}"`)
+  res.send(result.pdf.buffer)
+})
+
+// The artist settlement contains deal finances, so unlike the itinerary it is
+// only available to members who may view finance.
+router.get('/:id/artist-settlement.pdf', requirePermission(PERMISSIONS.FINANCE_VIEW), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const lng = normalizeDocumentLng(req.query.lng)
+  const result = await getGigArtistSettlementPdf(pool, req.tenantId, id, { lng })
   if (result.error) return sendError(res, result.error)
 
   res.setHeader('Content-Type', 'application/pdf')

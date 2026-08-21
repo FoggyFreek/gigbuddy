@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../gigs.ts', () => ({
+  downloadGigArtistSettlement: vi.fn(),
   downloadGigItinerary: vi.fn(),
 }))
 
@@ -13,7 +14,7 @@ vi.mock('../../../promotion/sharing/shareCard.ts', () => ({
 }))
 
 import GigDocumentMenu from '../components/gigdetails/GigDocumentMenu.tsx'
-import { downloadGigItinerary } from '../gigs.ts'
+import { downloadGigArtistSettlement, downloadGigItinerary } from '../gigs.ts'
 import { downloadBlob } from '../../../promotion/sharing/shareCard.ts'
 import { ToastContext } from '../../../contexts/toastContext.ts'
 import theme from '../../../theme.ts'
@@ -38,15 +39,29 @@ beforeEach(() => {
     blob: new Blob(['%PDF-'], { type: 'application/pdf' }),
     filename: 'itinerary-paradiso-night-09122026.pdf',
   })
+  downloadGigArtistSettlement.mockResolvedValue({
+    blob: new Blob(['%PDF-'], { type: 'application/pdf' }),
+    filename: 'artist-settlement-paradiso-night-09122026.pdf',
+  })
 })
 
 describe('GigDocumentMenu', () => {
-  it('offers the itinerary once the menu is open, and nothing before', async () => {
-    wrap(<GigDocumentMenu gig={GIG} />)
+  it('offers both generated PDFs to a finance viewer once the menu is open', async () => {
+    wrap(<GigDocumentMenu gig={GIG} canViewFinance />)
     expect(screen.queryByText('Itinerary / Timetable')).not.toBeInTheDocument()
+    expect(screen.queryByText('Artist settlement')).not.toBeInTheDocument()
 
     await openMenu()
     expect(screen.getByText('Itinerary / Timetable')).toBeInTheDocument()
+    expect(screen.getByText('Artist settlement')).toBeInTheDocument()
+  })
+
+  it('keeps the finance-only settlement out of the menu for other members', async () => {
+    wrap(<GigDocumentMenu gig={GIG} />)
+    await openMenu()
+
+    expect(screen.getByText('Itinerary / Timetable')).toBeInTheDocument()
+    expect(screen.queryByText('Artist settlement')).not.toBeInTheDocument()
   })
 
   it('downloads the itinerary PDF for the gig in the reader\'s language', async () => {
@@ -59,6 +74,16 @@ describe('GigDocumentMenu', () => {
     // The filename comes from the server's Content-Disposition, not the client.
     await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1))
     expect(downloadBlob.mock.calls[0][1]).toBe('itinerary-paradiso-night-09122026.pdf')
+  })
+
+  it('downloads the artist settlement PDF for the gig in the reader\'s language', async () => {
+    wrap(<GigDocumentMenu gig={GIG} canViewFinance />)
+    await openMenu()
+    await userEvent.click(screen.getByText('Artist settlement'))
+
+    await waitFor(() => expect(downloadGigArtistSettlement).toHaveBeenCalledWith(7, expect.any(String)))
+    await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1))
+    expect(downloadBlob.mock.calls[0][1]).toBe('artist-settlement-paradiso-night-09122026.pdf')
   })
 
   it('closes the menu after choosing a document', async () => {

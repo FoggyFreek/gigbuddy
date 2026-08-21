@@ -32,6 +32,7 @@ function terms(overrides = {}) {
     subject_to_vat: true,
     vat_percentage: null,
     ticket_vat_percentage: null,
+    copyright_percentage: null,
     ...overrides,
   }
   if (result.deal_type === 'guarantee' && !Object.hasOwn(overrides, 'guarantee_variant')) {
@@ -204,6 +205,95 @@ describe('gig deal invoice lines — what the venue is billed', () => {
   })
 })
 
+describe('gig deal invoice lines — specified booking fee', () => {
+  it('splits a booking fee out of the artist fee without increasing the invoice', () => {
+    const deal = terms({
+      guaranteed_fee_cents: 100000,
+      agency_fee_basis: 'amount',
+      agency_fee_amount_cents: 15000,
+    })
+    const combined = buildGigDealInvoiceLines(deal)
+    const specified = buildGigDealInvoiceLines(deal, { mode: 'specified' })
+
+    expect(specified.map((line) => [line.kind, line.amountCents])).toEqual([
+      [GIG_DEAL_LINE_KINDS.ARTIST_FEE, 85000],
+      [GIG_DEAL_LINE_KINDS.BOOKING_FEE, 15000],
+    ])
+    expect(sumLines(specified)).toBe(100000)
+    expect(sumLines(specified)).toBe(sumLines(combined))
+  })
+
+  it('does not emit a zero booking line when the fee basis is none', () => {
+    const combined = buildGigDealInvoiceLines(EARNING_DEALS.flat_fee)
+    expect(buildGigDealInvoiceLines(EARNING_DEALS.flat_fee, { mode: 'specified' })).toEqual(combined)
+  })
+
+  it('splits a pure door settlement into artist and booking fee lines', () => {
+    const deal = terms({
+      ...EARNING_DEALS.door_deal,
+      agency_fee_basis: 'amount',
+      agency_fee_amount_cents: 15000,
+    })
+    const combinedTotal = sumLines(buildGigDealInvoiceLines(deal))
+    const specified = buildGigDealInvoiceLines(deal, { mode: 'specified' })
+
+    expect(specified.map((line) => [line.kind, line.amountCents])).toEqual([
+      [GIG_DEAL_LINE_KINDS.ARTIST_FEE, combinedTotal - 15000],
+      [GIG_DEAL_LINE_KINDS.BOOKING_FEE, 15000],
+    ])
+    expect(sumLines(specified)).toBe(combinedTotal)
+  })
+
+  it('computes an awkward percentage once and preserves cents exactly', () => {
+    const deal = terms({
+      guaranteed_fee_cents: 99999,
+      agency_fee_basis: 'percentage',
+      agency_fee_percentage: 33.33,
+    })
+    const specified = buildGigDealInvoiceLines(deal, { mode: 'specified' })
+    const artist = specified.find((line) => line.kind === GIG_DEAL_LINE_KINDS.ARTIST_FEE)
+    const booking = specified.find((line) => line.kind === GIG_DEAL_LINE_KINDS.BOOKING_FEE)
+
+    expect(booking.amountCents).toBe(33330)
+    expect(artist.amountCents + booking.amountCents).toBe(99999)
+  })
+
+  it('preserves the combined total across deal, fee, commission and cost combinations', () => {
+    const feeConfigs = [
+      { agency_fee_basis: 'none', agency_fee_percentage: 0, agency_fee_amount_cents: 0 },
+      { agency_fee_basis: 'percentage', agency_fee_percentage: 12.34, agency_fee_amount_cents: 0 },
+      { agency_fee_basis: 'amount', agency_fee_percentage: 0, agency_fee_amount_cents: 12345 },
+    ]
+    const commissionConfigs = [
+      { commission_basis: 'none', commission_percentage: 0, commission_amount_cents: 0 },
+      { commission_basis: 'percentage', commission_percentage: 7.89, commission_amount_cents: 0 },
+    ]
+
+    for (const dealConfig of DEAL_CONFIGS) {
+      for (const feeConfig of feeConfigs) {
+        for (const commissionConfig of commissionConfigs) {
+          for (const paid_by of ['artist', 'agency', 'artist_agency']) {
+            const deal = terms({
+              ...dealConfig,
+              guaranteed_fee_cents: 100000,
+              venue_costs_cents: 25000,
+              tickets_sold: 250,
+              ticket_price_net_cents: 1000,
+              percentage_of_sales: 67.5,
+              costs: [{ amount_cents: 4321, paid_by }],
+              ...feeConfig,
+              ...commissionConfig,
+            })
+            const combinedTotal = sumLines(buildGigDealInvoiceLines(deal, { mode: 'combined' }))
+            const specifiedTotal = sumLines(buildGigDealInvoiceLines(deal, { mode: 'specified' }))
+            expect(specifiedTotal).toBe(combinedTotal)
+          }
+        }
+      }
+    }
+  })
+})
+
 // The invoice and the Terms tab must never disagree about what the gig earned:
 // the lines the venue is billed for sum to the gross fee the artist statement
 // shows. What the artist then owes their booker is not the venue's business.
@@ -320,6 +410,42 @@ describe('gig deal invoice lines — ticket VAT', () => {
       if (lines.length) expect(sumLines(lines)).toBe(statement.grossFeeCents)
       else expect(statement.grossFeeCents).toBe(0)
     }
+  })
+})
+
+describe('gig deal invoice lines - Copyright / PRS', () => {
+  const taxedDoorDeal = terms({
+    deal_type: 'door_deal',
+    venue_costs_cents: 0,
+    tickets_sold: 104,
+    ticket_price_net_cents: 685,
+    percentage_of_sales: 100,
+    ticket_vat_percentage: 9,
+    copyright_percentage: 10,
+  })
+
+  it('deducts copyright after ticket VAT and before the door is shared', () => {
+    const lines = buildGigDealInvoiceLines(taxedDoorDeal)
+
+    expect(kinds(lines)).toEqual([
+      GIG_DEAL_LINE_KINDS.TICKET_REVENUE,
+      GIG_DEAL_LINE_KINDS.TICKET_VAT,
+      GIG_DEAL_LINE_KINDS.COPYRIGHT,
+    ])
+    expect(lines.map((line) => line.amountCents)).toEqual([71240, -5882, -6536])
+    expect(sumLines(lines)).toBe(58822)
+  })
+
+  it('ignores copyright when the percentage is empty', () => {
+    const lines = buildGigDealInvoiceLines(terms({ ...taxedDoorDeal, copyright_percentage: null }))
+    expect(kinds(lines)).not.toContain(GIG_DEAL_LINE_KINDS.COPYRIGHT)
+    expect(sumLines(lines)).toBe(65358)
+  })
+
+  it('ignores copyright when the deal is not subject to VAT', () => {
+    const lines = buildGigDealInvoiceLines(terms({ ...taxedDoorDeal, subject_to_vat: false }))
+    expect(kinds(lines)).toEqual([GIG_DEAL_LINE_KINDS.TICKET_REVENUE])
+    expect(sumLines(lines)).toBe(71240)
   })
 })
 

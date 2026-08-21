@@ -121,6 +121,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     subject_to_vat: true,
     vat_percentage: '',
     ticket_vat_percentage: '',
+    copyright_percentage: '',
   })
   const [costs, setCosts] = useState<GigCost[]>([])
   const [loading, setLoading] = useState(true)
@@ -190,6 +191,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       subject_to_vat: g.subject_to_vat ?? true,
       vat_percentage: numberToInput(g.vat_percentage),
       ticket_vat_percentage: numberToInput(g.ticket_vat_percentage),
+      copyright_percentage: numberToInput(g.copyright_percentage),
     })
     setInitialTasks((g.tasks as Task[]) || [])
     setCosts(g.costs ?? [])

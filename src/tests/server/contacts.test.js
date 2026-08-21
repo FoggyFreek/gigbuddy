@@ -91,6 +91,24 @@ describe('GET /api/contacts - category filters', () => {
     expect(res.body.every((c) => c.category === 'supplier')).toBe(true)
   })
 
+  it('returns supplier-like categories and keeps the widened filter tenant-scoped', async () => {
+    await pool.query(
+      `INSERT INTO contacts (tenant_id, name, category) VALUES
+       ($1, 'Alpha Supplier', 'supplier'),
+       ($1, 'Alpha Booker', 'booker'),
+       ($1, 'Alpha Press', 'press'),
+       ($2, 'Beta Booker', 'booker')`,
+      [seed.tenantA.id, seed.tenantB.id],
+    )
+
+    const res = await asUserA(request(app).get('/api/contacts')
+      .query({ categoryIn: ['supplier', 'booker'] })).expect(200)
+
+    expect(res.body.map((contact) => contact.name)).toEqual(['Alpha Booker', 'Alpha Supplier'])
+    expect(res.body.every((contact) => ['supplier', 'booker'].includes(contact.category))).toBe(true)
+    expect(res.body.some((contact) => contact.name === 'Beta Booker')).toBe(false)
+  })
+
   it('excludes supplier contacts when excludeCategory=supplier', async () => {
     await pool.query(
       `INSERT INTO contacts (tenant_id, name, category)
@@ -106,6 +124,7 @@ describe('GET /api/contacts - category filters', () => {
   it('returns 400 for invalid category filters', async () => {
     await asUserA(request(app).get('/api/contacts?category=invalid')).expect(400)
     await asUserA(request(app).get('/api/contacts?excludeCategory=invalid')).expect(400)
+    await asUserA(request(app).get('/api/contacts?categoryIn=supplier&categoryIn=invalid')).expect(400)
   })
 })
 

@@ -32,7 +32,7 @@ function complementOf(share: string): string {
 
 const PERCENT_BOUNDS = { min: 0, max: 100, step: 0.5 }
 
-// Two shares of the same 100%, presented as one field: `70 % / 30 %` inside a
+// Two shares of the same 100%, presented as one field: `70 / 30` inside a
 // single outline under a single label. Splitting it into two labelled fields
 // invited the reading that they were independent numbers.
 export default function TicketSplitField({
@@ -63,7 +63,6 @@ export default function TicketSplitField({
           input: {
             endAdornment: (
               <InputAdornment position="end" sx={{ gap: 0.75 }}>
-                <Typography sx={{ color: 'text.secondary' }}>%</Typography>
                 <Typography aria-hidden sx={{ color: 'text.secondary' }}>/</Typography>
                 <InputBase
                   type="number"
@@ -75,7 +74,6 @@ export default function TicketSplitField({
                     input: { ...PERCENT_BOUNDS, readOnly: disabled, 'aria-label': complementLabel },
                   }}
                 />
-                <Typography sx={{ color: 'text.secondary' }}>%</Typography>
                 <FieldHelpIcon help={help} />
               </InputAdornment>
             ),

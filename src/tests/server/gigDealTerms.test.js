@@ -44,7 +44,7 @@ describe('gig deal terms — defaults', () => {
       `SELECT deal_type, guarantee_variant, agency_fee_basis, agency_fee_percentage,
               agency_fee_amount_cents, commission_basis, commission_percentage,
               commission_amount_cents, breakeven_includes_venue_costs,
-              subject_to_vat, vat_percentage, ticket_vat_percentage
+              subject_to_vat, vat_percentage, ticket_vat_percentage, copyright_percentage
          FROM gigs WHERE id = $1`,
       [seed.gigA.id],
     )
@@ -59,6 +59,7 @@ describe('gig deal terms — defaults', () => {
       subject_to_vat: true,
       vat_percentage: null,
       ticket_vat_percentage: null,
+      copyright_percentage: null,
     })
     // NUMERIC comes back as a string; the point is that it is not null.
     expect(Number(rows[0].agency_fee_percentage)).toBe(0)
@@ -169,6 +170,7 @@ describe('PATCH /api/gigs/:id — deal terms', () => {
     ['agency_fee_amount_cents', -100],
     ['vat_percentage', 101],
     ['ticket_vat_percentage', -1],
+    ['copyright_percentage', 101],
   ])('rejects %s = %s', async (field, value) => {
     await asUserA(
       request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ [field]: value })
@@ -186,17 +188,19 @@ describe('PATCH /api/gigs/:id — deal terms', () => {
 
   // VAT on the deal: the flag says whether it applies at all, the two rates are
   // overrides, so clearing one means "no rate agreed", never "no VAT".
-  it('stores the deal VAT flag and both rates', async () => {
+  it('stores the deal VAT flag and all percentages', async () => {
     const res = await asUserA(
       request(app).patch(`/api/gigs/${seed.gigA.id}`).send({
         subject_to_vat: true,
         vat_percentage: 21,
         ticket_vat_percentage: 9,
+        copyright_percentage: 7.5,
       })
     ).expect(200)
     expect(res.body.subject_to_vat).toBe(true)
     expect(Number(res.body.vat_percentage)).toBe(21)
     expect(Number(res.body.ticket_vat_percentage)).toBe(9)
+    expect(Number(res.body.copyright_percentage)).toBe(7.5)
   })
 
   it('clears a VAT rate with null while the gig stays subject to VAT', async () => {
@@ -208,6 +212,16 @@ describe('PATCH /api/gigs/:id — deal terms', () => {
     ).expect(200)
     expect(res.body.vat_percentage).toBeNull()
     expect(res.body.subject_to_vat).toBe(true)
+  })
+
+  it('clears the copyright percentage with null', async () => {
+    await asUserA(
+      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ copyright_percentage: 7.5 })
+    ).expect(200)
+    const res = await asUserA(
+      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ copyright_percentage: null })
+    ).expect(200)
+    expect(res.body.copyright_percentage).toBeNull()
   })
 
   it('does not leak another tenant\'s gig through a terms patch', async () => {

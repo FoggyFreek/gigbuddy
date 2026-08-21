@@ -6,6 +6,7 @@ import {
   VALID_CATEGORIES,
   parseId,
   parseCategoryFilter,
+  parseCategoryInFilter,
   parseSearchLimit,
   buildContactUpdateFields,
   normalizeImportRow,
@@ -42,10 +43,13 @@ const NOT_FOUND = notFound('Not found')
 
 export async function listContacts(db, tenantId, query) {
   const category = parseCategoryFilter(query.category)
+  const categoryIn = parseCategoryInFilter(query.categoryIn)
   const excludeCategory = parseCategoryFilter(query.excludeCategory)
-  if (category === false || excludeCategory === false) return badRequest('Invalid category value')
-  if (category && excludeCategory) return badRequest('Use category or excludeCategory, not both')
-  return { contacts: await listContactRows(db, tenantId, { category, excludeCategory }) }
+  if (category === false || categoryIn === false || excludeCategory === false) return badRequest('Invalid category value')
+  if ([Boolean(category), categoryIn.length > 0, Boolean(excludeCategory)].filter(Boolean).length > 1) {
+    return badRequest('Use category, categoryIn or excludeCategory, not more than one')
+  }
+  return { contacts: await listContactRows(db, tenantId, { category, categoryIn, excludeCategory }) }
 }
 
 export async function searchContacts(db, tenantId, query) {

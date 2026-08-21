@@ -146,6 +146,15 @@ export default function TicketUpside({ terms }: Readonly<Props>) {
         </Typography>
       )}
 
+      {upside.copyrightPercentage > 0 && (
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
+          {t($ => $.detail.deal.tickets.copyrightCorrectedPrice, {
+            percentage: upside.copyrightPercentage,
+            price: formatEur(upside.ticketPriceAfterCopyrightCents),
+          })}
+        </Typography>
+      )}
+
       <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
         {t($ => $.detail.deal.tickets.actualUpside, {
           amount: upside.sold === null ? unknown : formatEur(upside.sold.artistShareCents),

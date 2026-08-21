@@ -150,6 +150,12 @@ Load the **availability** skill before changing slots, the projection, or who ma
 
 Two separate concerns, each with its own skill. **Load the skill before touching either** — the prohibitions below are the minimum that must hold even if you don't.
 
+### Gig deal terms and invoice modes
+
+Gig deal vocabulary lives in `shared/gigDealVocabulary.js`; calculation and invoice decomposition live in `shared/gigDealEngine.js` and `shared/gigDealInvoiceLines.js`. There are three deal types: `flat_fee`, `guarantee`, and `door_deal`. A guarantee has a required `plus` or `versus` variant; non-guarantees have no variant. Booking fees are inclusive in the gross artist fee and are calculated once by the shared engine.
+
+Each tenant chooses `combined` or `specified` invoice presentation. `combined` keeps the booking fee inside the artist fee. `specified` splits that same total into artist-fee and booking-fee lines on one invoice; it never appends the booking fee. With no booking-fee basis it resolves to `combined`. Invoice drafts capture the resulting lines, so later preference changes do not rewrite an existing draft or issued invoice.
+
 **Books** (`server/finance/`, `src/finance/`) → the **finance-ledger** skill. An immutable double-entry ledger (`ledger_transactions` + `ledger_entries`):
 
 - **`postJournal()` is the only insert path** — never write ledger rows directly.

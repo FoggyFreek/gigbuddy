@@ -1,16 +1,21 @@
 import './_envSetup.js'
 // @vitest-environment node
 import { readFile } from 'node:fs/promises'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
-let pool, runMigrations, seedTwoTenants
+let pool, runMigrations, truncateAll, seedTwoTenants
 
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations
+  truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   await runMigrations()
+})
+
+beforeEach(async () => {
+  await truncateAll()
 })
 
 afterAll(async () => {

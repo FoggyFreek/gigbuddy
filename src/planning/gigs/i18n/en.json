@@ -88,7 +88,9 @@
     "documents": "Documents",
     "documentsAria": "download gig documents",
     "itinerary": "Itinerary / Timetable",
-    "downloadFailed": "Downloading the itinerary failed"
+    "artistSettlement": "Artist settlement",
+    "downloadFailed": "Downloading the itinerary failed",
+    "settlementDownloadFailed": "Downloading the artist settlement failed"
   },
   "gigShare": {
     "title": "Share gig as image",
@@ -310,7 +312,9 @@
         "generalVat": "General VAT %",
         "generalVatHelp": "The rate an invoice generated from this gig is billed at. Leave blank for the default rate ({{rate}}%).",
         "ticketVat": "Ticket VAT %",
-        "ticketVatHelp": "The VAT the venue charges on tickets, contained in the nett ticket price. Every ticket calculation runs on the price with it taken out."
+        "ticketVatHelp": "The VAT the venue charges on tickets, contained in the nett ticket price. Every ticket calculation runs on the price with it taken out.",
+        "copyright": "Copyright / PRS %",
+        "copyrightHelp": "Copyright / PRS deducted from ticket revenue after ticket VAT. Leave blank to ignore it."
       },
       "costs": {
         "title": "Costs",
@@ -372,6 +376,7 @@
         "potentialUpside": "Potential upside",
         "actualUpside": "Upside on tickets sold so far: {{amount}}.",
         "vatCorrectedPrice": "Ticket VAT of {{percentage}}% comes off first, so every calculation runs on {{price}} a ticket.",
+        "copyrightCorrectedPrice": "Copyright / PRS of {{percentage}}% comes off after ticket VAT, leaving {{price}} a ticket for the deal calculation.",
         "atAttendance_one": "at {{count}} ticket",
         "atAttendance_other": "at {{count}} tickets",
         "unknown": "—",

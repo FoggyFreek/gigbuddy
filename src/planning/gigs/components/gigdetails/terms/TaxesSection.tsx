@@ -17,9 +17,9 @@ interface Props {
   onChange: (field: string, value: unknown) => void
 }
 
-const TAX_COLUMNS = 'repeat(3, minmax(0, 1fr))'
+const TAX_COLUMNS = 'repeat(4, minmax(0, 1fr))'
 
-// The two VAT rates of a deal, and whether it carries VAT at all. The general
+// The VAT and copyright percentages of a deal, and whether they apply at all. The general
 // rate overrides what an invoice generated from this gig is billed at; the
 // ticket rate is the venue's VAT contained in the nett ticket price, which
 // every ticket calculation takes out before anyone shares in the door.
@@ -54,6 +54,11 @@ export default function TaxesSection({ editable, form, onChange }: Readonly<Prop
             <Box sx={lineHeadCellSx}>
               <Typography variant="caption" sx={{ fontWeight: 600 }}>
                 {t($ => $.detail.deal.taxes.ticketVat)}
+              </Typography>
+            </Box>
+            <Box sx={lineHeadCellSx}>
+              <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                {t($ => $.detail.deal.taxes.copyright)}
               </Typography>
             </Box>
           </Box>
@@ -114,6 +119,30 @@ export default function TaxesSection({ editable, form, onChange }: Readonly<Prop
                     disableUnderline: true,
                     endAdornment: (
                       <FieldHelpAdornment help={t($ => $.detail.deal.taxes.ticketVatHelp)}>%</FieldHelpAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Box>
+
+            <Box sx={lineCellSx}>
+              <TextField
+                variant="standard"
+                type="number"
+                fullWidth
+                value={form.copyright_percentage}
+                disabled={!subjectToVat}
+                onChange={(event) => onChange('copyright_percentage', event.target.value)}
+                placeholder="0"
+                sx={{ ...lineFieldSx, ...NO_NUMBER_SPINNER_SX }}
+                slotProps={{
+                  htmlInput: {
+                    min: 0, max: 100, step: 0.5, readOnly: !editable, 'aria-label': t($ => $.detail.deal.taxes.copyright),
+                  },
+                  input: {
+                    disableUnderline: true,
+                    endAdornment: (
+                      <FieldHelpAdornment help={t($ => $.detail.deal.taxes.copyrightHelp)}>%</FieldHelpAdornment>
                     ),
                   },
                 }}

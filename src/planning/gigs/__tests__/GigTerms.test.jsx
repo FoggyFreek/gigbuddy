@@ -451,6 +451,21 @@ describe('taxes', () => {
     )
   })
 
+  it('saves Copyright / PRS and applies it after ticket VAT', async () => {
+    getGig.mockResolvedValue(VAT_GIG)
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await openTerms(user)
+
+    await user.type(screen.getByLabelText('Copyright / PRS %'), '10')
+
+    expect(screen.getByText(/copyright \/ prs of 10% comes off after ticket vat/i)).toBeInTheDocument()
+    await waitFor(
+      () => expect(updateGig).toHaveBeenCalledWith(1, { copyright_percentage: 10 }),
+      { timeout: 3000 },
+    )
+  })
+
   it('drops both rates when the deal is not subject to VAT', async () => {
     getGig.mockResolvedValue(VAT_GIG)
     const user = userEvent.setup()

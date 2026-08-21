@@ -32,6 +32,7 @@ import usersRouter from '../people/memberships/users.js'
 import tenantsRouter from '../people/workspaces/tenants.js'
 import tenantsSelfRouter from '../people/workspaces/tenantsSelf.js'
 import tenantSettingsRouter from '../people/workspaces/tenantSettings.js'
+import tenantInvoiceModeRouter from '../people/workspaces/tenantInvoiceMode.js'
 import bandDirectoryRouter from '../people/band-directory/bandDirectory.js'
 import meRouter from '../planning/agenda/me.js'
 import meAvailabilityRouter from '../user/availability/meAvailability.js'
@@ -261,6 +262,7 @@ router.use('/admin/band-profile-claims', superAdmin, adminBandProfileClaimsRoute
 router.use('/invites', membersManage, bandMembershipAdmin, invitesAdminRouter)
 router.use('/users', membersManage, bandMembershipAdmin, usersRouter)
 router.use('/statistics', tenantManage, statisticsRouter)
+router.use('/tenant/invoice-mode', financeView, tenantInvoiceModeRouter)
 router.use(
   '/tenant',
   tenantManage,

@@ -4,12 +4,16 @@
 
 // ---------- contacts ----------
 
-export async function listContacts(executor, tenantId, { category, excludeCategory }) {
+export async function listContacts(executor, tenantId, { category, categoryIn, excludeCategory }) {
   const filters = ['tenant_id = $1']
   const values = [tenantId]
   if (category) {
     values.push(category)
     filters.push(`category = $${values.length}`)
+  }
+  if (categoryIn?.length) {
+    values.push(categoryIn)
+    filters.push(`category = ANY($${values.length}::text[])`)
   }
   if (excludeCategory) {
     values.push(excludeCategory)

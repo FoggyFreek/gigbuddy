@@ -8,19 +8,20 @@ import Tooltip from '@mui/material/Tooltip'
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined'
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 import { useTranslation } from 'react-i18next'
-import { downloadGigItinerary } from '../../gigs.ts'
+import { downloadGigArtistSettlement, downloadGigItinerary } from '../../gigs.ts'
 import { downloadBlob } from '../../../../promotion/sharing/shareCard.ts'
 import { useToast } from '../../../../contexts/toastContext.ts'
 import type { Gig } from '../../../../types/entities.ts'
 
 interface GigDocumentMenuProps {
   gig?: Gig
+  canViewFinance?: boolean
 }
 
 // The gig's generated documents. One entry today (the itinerary), but it is a
 // menu rather than a bare button because that is the shape the next document
 // slots into — and it keeps the toolbar from growing an icon per format.
-export default function GigDocumentMenu({ gig }: Readonly<GigDocumentMenuProps>) {
+export default function GigDocumentMenu({ gig, canViewFinance = false }: Readonly<GigDocumentMenuProps>) {
   const { t, i18n } = useTranslation('gigs')
   const showToast = useToast()
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
@@ -52,6 +53,21 @@ export default function GigDocumentMenu({ gig }: Readonly<GigDocumentMenuProps>)
     }
   }
 
+  async function handleArtistSettlement(e: React.MouseEvent) {
+    e.stopPropagation()
+    handleClose()
+    if (!gig?.id || busy) return
+    setBusy(true)
+    try {
+      const { blob, filename } = await downloadGigArtistSettlement(gig.id, i18n.language)
+      downloadBlob(blob, filename)
+    } catch {
+      showToast?.(t($ => $.documentMenu.settlementDownloadFailed), 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <>
       <Tooltip title={t($ => $.documentMenu.documents)}>
@@ -74,6 +90,12 @@ export default function GigDocumentMenu({ gig }: Readonly<GigDocumentMenuProps>)
           <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
           <ListItemText>{t($ => $.documentMenu.itinerary)}</ListItemText>
         </MenuItem>
+        {canViewFinance && (
+          <MenuItem onClick={(e) => { void handleArtistSettlement(e) }} disabled={busy}>
+            <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t($ => $.documentMenu.artistSettlement)}</ListItemText>
+          </MenuItem>
+        )}
       </Menu>
     </>
   )

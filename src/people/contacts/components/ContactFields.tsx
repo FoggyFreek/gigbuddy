@@ -6,7 +6,7 @@ import MenuItem from '@mui/material/MenuItem'
 import Select from '@mui/material/Select'
 import TextField from '@mui/material/TextField'
 import CopyAdornment from '../../../components/CopyAdornment.tsx'
-import { ALL_CONTACT_CATEGORIES, SUPPLIER_CATEGORY, useContactCategoryLabel } from '../contactCategories.ts'
+import { ALL_CONTACT_CATEGORIES, contactIsSupplierLike, useContactCategoryLabel } from '../contactCategories.ts'
 
 interface ContactFieldsProps {
   form: {
@@ -75,7 +75,7 @@ export default function ContactFields({ form, onChange, errors = {}, categories 
           slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.phone} /> } }}
         />
       </Grid>
-      {form.category === SUPPLIER_CATEGORY && (
+      {contactIsSupplierLike(form) && (
         <>
           <Grid size={12}>
             <TextField

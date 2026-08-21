@@ -34,6 +34,14 @@ describe('ContactFields business identifiers', () => {
     expect(screen.getByLabelText('VAT ID')).toBeInTheDocument()
   })
 
+  it('shows optional finance identifiers for bookers', () => {
+    wrap('booker')
+
+    expect(screen.getByLabelText('IBAN')).toBeInTheDocument()
+    expect(screen.getByLabelText('Chamber of Commerce number')).toBeInTheDocument()
+    expect(screen.getByLabelText('VAT ID')).toBeInTheDocument()
+  })
+
   it('keeps supplier-only financial fields out of ordinary contact forms', () => {
     wrap('press')
 

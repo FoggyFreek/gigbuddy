@@ -42,6 +42,7 @@ export interface GigDealTerms {
   subject_to_vat: boolean
   vat_percentage: number | string | null
   ticket_vat_percentage: number | string | null
+  copyright_percentage: number | string | null
 }
 
 export interface ArtistStatement {
@@ -66,6 +67,7 @@ export interface TicketScenario {
   tickets: number
   ticketRevenueCents: number
   ticketVatCents: number
+  copyrightCents?: number
   artistShareCents: number
 }
 
@@ -74,6 +76,8 @@ export interface TicketUpside {
   venuePercentage: number
   ticketVatPercentage: number
   ticketPriceExVatCents: number
+  copyrightPercentage: number
+  ticketPriceAfterCopyrightCents: number
   breakEvenCents: number | null
   breakEvenTickets: number | null
   sold: TicketScenario | null

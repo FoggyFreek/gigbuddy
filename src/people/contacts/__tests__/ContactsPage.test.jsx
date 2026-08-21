@@ -39,6 +39,7 @@ const writerAuth = { user: { isSuperAdmin: true } }
 const NOTE = { id: 10, contact_id: 1, tenant_id: 1, note: 'Test note', created_at: '2026-01-01T12:00:00Z' }
 const CONTACT = { id: 1, name: 'Alice', email: '', phone: '', category: 'press', notes: [] }
 const SUPPLIER = { id: 2, name: 'Studio X', email: '', phone: '', category: 'supplier', notes: [] }
+const BOOKER = { id: 3, name: 'Bookings BV', email: '', phone: '', category: 'booker', notes: [] }
 
 function wrapWithRoutes({ initialEntries }) {
   return render(
@@ -80,12 +81,13 @@ describe('ContactsPage — split-view list refresh', () => {
   })
 
   it('loads suppliers through their own route and navigates inside /suppliers', async () => {
-    listContacts.mockResolvedValue([SUPPLIER])
+    listContacts.mockResolvedValue([SUPPLIER, BOOKER])
     getContact.mockResolvedValue(SUPPLIER)
     const user = userEvent.setup()
     wrapWithRoutes({ initialEntries: ['/suppliers'] })
 
-    await waitFor(() => expect(listContacts).toHaveBeenCalledWith({ category: 'supplier' }))
+    await waitFor(() => expect(listContacts).toHaveBeenCalledWith({ categoryIn: ['supplier', 'booker'] }))
+    expect(screen.getByText('Bookings BV')).toBeInTheDocument()
     await user.click(await screen.findByText('Studio X'))
 
     await waitFor(() => expect(screen.getByDisplayValue('Studio X')).toBeInTheDocument())

@@ -8,13 +8,14 @@ vi.mock('../../../server/platform/files/storageService.js', async (importOrigina
   deleteTenantObjects: vi.fn(async () => undefined),
 }))
 
-let app, pool, runMigrations, truncateAll, seedTwoTenants, deleteTenantObjects
+let app, pool, runMigrations, truncateAll, seedTwoTenants, deleteTenantObjects, billing
 let seed
 
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
   const appMod = await import('./_app.js')
   const storageMod = await import('../../../server/platform/files/storageService.js')
+  billing = await import('./_billing.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
@@ -199,13 +200,11 @@ describe('DELETE /api/tenants/:id (self-service)', () => {
        VALUES ($1, '2026-09-01', '2026-09-01', 'unavailable')`,
       [seed.userA.id],
     )
-    await pool.query(
-      `INSERT INTO subscriptions (user_id, plan_id, audience, status, billing_interval, price_cents)
-       SELECT $1, id, audience, 'active', 'month', 0
-         FROM subscription_plans
-        WHERE audience = 'artist' AND is_fallback = TRUE`,
-      [seed.userA.id],
-    )
+    await billing.createSubscription({
+      userId: seed.userA.id,
+      planSlug: 'artist_gold',
+      total_cents: 0,
+    })
 
     await request(app)
       .delete(`/api/tenants/${workspace.id}`)

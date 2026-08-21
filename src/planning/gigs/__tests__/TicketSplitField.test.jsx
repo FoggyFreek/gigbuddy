@@ -42,6 +42,7 @@ describe('TicketSplitField', () => {
     expect(screen.getByLabelText('Venue / promoter')).toHaveValue(30)
     // The divider is decoration; it must not be read out between the two.
     expect(screen.getByText('/')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.queryByText('%')).not.toBeInTheDocument()
   })
 
   it('reports what was typed in the first box', async () => {

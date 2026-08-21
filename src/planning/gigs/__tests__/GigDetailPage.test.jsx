@@ -67,6 +67,7 @@ vi.mock('../gigs.ts', () => ({
   deleteTask: vi.fn().mockResolvedValue(undefined),
   uploadGigAttachment: vi.fn().mockResolvedValue({}),
   deleteGigAttachment: vi.fn().mockResolvedValue(undefined),
+  downloadGigArtistSettlement: vi.fn().mockResolvedValue({ blob: new Blob(['%PDF-']), filename: 'artist-settlement.pdf' }),
   downloadGigItinerary: vi.fn().mockResolvedValue({ blob: new Blob(['%PDF-']), filename: 'itinerary.pdf' }),
 }))
 

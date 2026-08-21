@@ -64,4 +64,5 @@ export interface GigDetailForm {
   subject_to_vat: boolean
   vat_percentage: string
   ticket_vat_percentage: string
+  copyright_percentage: string
 }
