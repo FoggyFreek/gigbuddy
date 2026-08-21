@@ -164,6 +164,7 @@
     "tabs": {
       "event": "Event",
       "terms": "Terms",
+      "finance": "Finance",
       "participants": "Participants",
       "tasks": "Tasks"
     },
@@ -374,15 +375,15 @@
         "toBreakEven": "Tickets to break even",
         "expectedUpside": "Expected upside",
         "potentialUpside": "Potential upside",
-        "actualUpside": "Upside on tickets sold so far: {{amount}}.",
-        "vatCorrectedPrice": "Ticket VAT of {{percentage}}% comes off first, so every calculation runs on {{price}} a ticket.",
-        "copyrightCorrectedPrice": "Copyright / PRS of {{percentage}}% comes off after ticket VAT, leaving {{price}} a ticket for the deal calculation.",
+        "soldCaption": "{{price}} / {{revenue}}",
         "atAttendance_one": "at {{count}} ticket",
         "atAttendance_other": "at {{count}} tickets",
         "unknown": "—",
         "flatFeeNote": "A flat fee takes no share of ticket revenue.",
         "breakdown": {
-          "sold": "Tickets sold so far, against the venue capacity.",
+          "sold": "Tickets sold so far, against the venue capacity. The price is per ticket after deductions; the revenue is what's been earned from tickets sold.",
+          "soldVat": "VAT of {{percentage}}% comes off the ticket price first.",
+          "soldCopyright": "Copyright / PRS of {{percentage}}% comes off after VAT.",
           "expected": "The artist’s {{percentage}}% share at the expected number of visitors.",
           "potential": "The artist’s {{percentage}}% share at full capacity — the ceiling for this deal.",
           "flat_fee": "A flat fee has no break-even point.",

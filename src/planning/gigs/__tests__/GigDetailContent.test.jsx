@@ -588,6 +588,7 @@ describe('GigDetailContent — Terms role gating', () => {
     expect(screen.queryByLabelText(/guaranteed fee/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/venue costs/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/ticket link/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Finance' })).not.toBeInTheDocument()
     expect(screen.queryByText(/merchandise sold/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/related invoices/i)).not.toBeInTheDocument()
     expect(getGigMerchSummary).not.toHaveBeenCalled()
@@ -754,22 +755,30 @@ describe('GigDetailContent — merch sold summary', () => {
   })
 
   it('shows the card with units and excl-VAT total when there are sales', async () => {
+    const user = userEvent.setup()
     getGigMerchSummary.mockResolvedValueOnce({ unitsSold: 37, netCents: 12345, grossCents: 14937 })
     wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
+    await openTab(user, 'Finance')
     await waitFor(() => expect(screen.getByText(/merchandise sold/i)).toBeInTheDocument())
     expect(screen.getByText(/37 items · excl\. VAT/i)).toBeInTheDocument()
     expect(screen.getByText(/123,45/)).toBeInTheDocument()
   })
 
   it('renders "1 item" (singular) for a single unit', async () => {
+    const user = userEvent.setup()
     getGigMerchSummary.mockResolvedValueOnce({ unitsSold: 1, netCents: 1000, grossCents: 1210 })
     wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
+    await openTab(user, 'Finance')
     await waitFor(() => expect(screen.getByText(/1 item · excl\. VAT/i)).toBeInTheDocument())
   })
 
   it('hides the card when there are no sales', async () => {
+    const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/ticket link/i))
+    await openTab(user, 'Finance')
     expect(screen.queryByText(/merchandise sold/i)).not.toBeInTheDocument()
   })
 
@@ -919,7 +928,7 @@ describe('GigDetailContent — location map', () => {
   })
 })
 
-describe('GigDetailContent — create invoice from Terms tab', () => {
+describe('GigDetailContent — create invoice from Finance tab', () => {
   const FINANCE_USER = {
     id: 9,
     activeTenantRole: 'financial_admin',
@@ -963,9 +972,9 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
     navigate.mockClear()
   })
 
-  async function openTerms(user) {
+  async function openFinance(user) {
     await waitFor(() => screen.getByLabelText(/ticket link/i))
-    await openTab(user, 'Terms')
+    await openTab(user, 'Finance')
   }
 
   it('creates a draft invoice after confirmation and navigates to it', async () => {
@@ -982,7 +991,7 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
     createInvoice.mockResolvedValue({ id: 55 })
 
     wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     // The button lives under the "Related invoices" section heading
     const createButton = await screen.findByRole('button', { name: /create invoice/i })
@@ -1005,7 +1014,7 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
     getGig.mockResolvedValueOnce(GIG_WITH_ORG)
 
     wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     await user.click(await screen.findByRole('button', { name: /create invoice/i }))
     const dialog = await screen.findByRole('dialog')
@@ -1023,7 +1032,7 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
     })
 
     wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     await user.click(await screen.findByRole('button', { name: /create invoice/i }))
     const dialog = await screen.findByRole('dialog')
@@ -1038,7 +1047,7 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
     getGig.mockResolvedValueOnce(GIG_WITH_ORG)
 
     wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     await screen.findByText('#2026-001')
     expect(screen.queryByRole('button', { name: /create invoice/i })).not.toBeInTheDocument()
@@ -1049,7 +1058,7 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
     // default getGig venue has no organization_name
 
     wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     await waitFor(() => expect(listInvoicesByGig).toHaveBeenCalled())
     expect(screen.queryByRole('button', { name: /create invoice/i })).not.toBeInTheDocument()
@@ -1061,7 +1070,7 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
     const viewer = { ...FINANCE_USER, activeTenantRole: 'contributor', permissions: ['app.view', 'planning.write', 'finance.view'] }
 
     wrapAs(viewer, <GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     await waitFor(() => expect(listInvoicesByGig).toHaveBeenCalled())
     expect(screen.queryByRole('button', { name: /create invoice/i })).not.toBeInTheDocument()
@@ -1183,6 +1192,7 @@ describe('GigDetailContent — personal workspace', () => {
     expect(screen.getByRole('button', { name: 'Event' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tasks' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Terms' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Finance' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Participants' })).not.toBeInTheDocument()
 
     // The Terms/Participants panels are unmounted, not merely hidden, so their

@@ -80,6 +80,26 @@ export default function TicketUpside({ terms }: Readonly<Props>) {
         capacity: upside.potential === null ? '?' : upside.potential.tickets,
       })
 
+  // The per-ticket price after VAT and copyright, next to what has actually
+  // been earned from the tickets sold so far — folded into one caption rather
+  // than spelled out as separate paragraphs below the grid.
+  const soldCaption = t($ => $.detail.deal.tickets.soldCaption, {
+    price: formatEur(upside.ticketPriceAfterCopyrightCents),
+    revenue: upside.sold === null ? unknown : formatEur(upside.sold.artistShareCents),
+  })
+
+  // The VAT/copyright corrections behind that price, kept as a short aside
+  // in the tile's tooltip rather than their own paragraphs below the grid.
+  const soldBreakdown = [
+    t($ => $.detail.deal.tickets.breakdown.sold),
+    upside.ticketVatPercentage > 0
+      ? t($ => $.detail.deal.tickets.breakdown.soldVat, { percentage: upside.ticketVatPercentage })
+      : null,
+    upside.copyrightPercentage > 0
+      ? t($ => $.detail.deal.tickets.breakdown.soldCopyright, { percentage: upside.copyrightPercentage })
+      : null,
+  ].filter(Boolean).join(' ')
+
   if (!dealTypeHasTicketShare(terms.deal_type)) {
     return (
       <Grid size={12} data-testid="ticket-upside">
@@ -112,7 +132,8 @@ export default function TicketUpside({ terms }: Readonly<Props>) {
           <UpsideTile
             label={t($ => $.detail.deal.tickets.sold)}
             value={soldValue}
-            breakdown={t($ => $.detail.deal.tickets.breakdown.sold)}
+            caption={soldCaption}
+            breakdown={soldBreakdown}
           />
           <UpsideTile
             label={t($ => $.detail.deal.tickets.toBreakEven)}
@@ -135,31 +156,6 @@ export default function TicketUpside({ terms }: Readonly<Props>) {
           />
         </Grid>
       </Box>
-
-      {/* Prose, not a figure — it stays outside the grid. */}
-      {upside.ticketVatPercentage > 0 && (
-        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-          {t($ => $.detail.deal.tickets.vatCorrectedPrice, {
-            percentage: upside.ticketVatPercentage,
-            price: formatEur(upside.ticketPriceExVatCents),
-          })}
-        </Typography>
-      )}
-
-      {upside.copyrightPercentage > 0 && (
-        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-          {t($ => $.detail.deal.tickets.copyrightCorrectedPrice, {
-            percentage: upside.copyrightPercentage,
-            price: formatEur(upside.ticketPriceAfterCopyrightCents),
-          })}
-        </Typography>
-      )}
-
-      <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-        {t($ => $.detail.deal.tickets.actualUpside, {
-          amount: upside.sold === null ? unknown : formatEur(upside.sold.artistShareCents),
-        })}
-      </Typography>
     </Grid>
   )
 }

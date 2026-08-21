@@ -145,6 +145,13 @@ async function openTerms(user) {
   await user.click(screen.getByRole('button', { name: 'Terms' }))
 }
 
+// The artist statement moved to the Finance tab; Terms keeps the editable
+// deal fields and the ticket upside simulation.
+async function openFinance(user) {
+  await waitFor(() => screen.getByLabelText(/ticket link/i))
+  await user.click(screen.getByRole('button', { name: 'Finance' }))
+}
+
 // Intl separates the € from the amount with a non-breaking space.
 function normalizeSpaces(text) {
   return text.replace(/[\u00a0\u202f]/g, ' ')
@@ -162,6 +169,11 @@ function tileValue(sectionTestId, label) {
 
 const statementValue = (label) => tileValue('artist-statement', label)
 const upsideValue = (label) => tileValue('ticket-upside', label)
+
+// The "Tickets sold" tile's card, for reading its folded caption/tooltip.
+function soldTicketsCard() {
+  return within(screen.getByTestId('ticket-upside')).getByText('Tickets sold').closest('.MuiPaper-root')
+}
 
 // Every explanation hangs off the field it explains, so its icon is found
 // through that field rather than by a name of its own.
@@ -185,7 +197,7 @@ describe('artist statement', () => {
   it('reads the deal back as money', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     // 120 of 300 sold at € 20,00 nett, € 1.800,00 recouped first, 70% of the
     // rest: € 420,00 ticket revenue folded into the € 1.420,00 gross fee.
@@ -204,7 +216,7 @@ describe('artist statement', () => {
   it('spells out how the guarantee and the door add up to the gross fee', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     const statement = screen.getByTestId('artist-statement')
     const gross = within(statement).getByText('Gross fee').closest('.MuiPaper-root')
@@ -222,6 +234,7 @@ describe('artist statement', () => {
 
     await user.clear(screen.getByLabelText(/tickets sold/i))
     await user.type(screen.getByLabelText(/tickets sold/i), '200')
+    await openFinance(user)
 
     // 200 × € 20,00 = € 4.000,00 − € 1.800,00 = € 2.200,00 × 70% = € 1.540,00
     // ticket revenue, folded into a € 2.540,00 gross fee.
@@ -234,7 +247,7 @@ describe('artist statement', () => {
     getGig.mockResolvedValue({ ...GUARANTEE_GIG, tickets_sold: null })
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     expect(statementValue('Gross fee')).toBe('€ 1.000,00')
     const gross = within(screen.getByTestId('artist-statement'))
@@ -246,7 +259,7 @@ describe('artist statement', () => {
   it('spells out each figure in a description rather than replacing its label', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     const statement = screen.getByTestId('artist-statement')
     const tile = within(statement).getByText('Nett. fee').closest('.MuiPaper-root')
@@ -271,7 +284,7 @@ describe('artist statement', () => {
     })
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     // The € 2.000,00 cost outruns the € 1.000,00 fee, so the shared base
     // goes to -€ 1.000,00: the booking fee floors at zero, but the
@@ -293,6 +306,7 @@ describe('artist statement', () => {
 
     await user.clear(screen.getByLabelText(/guaranteed fee/i))
     await user.type(screen.getByLabelText(/guaranteed fee/i), '2000')
+    await openFinance(user)
 
     // A bigger guarantee is a higher break-even: € 2.800,00 now has to be
     // recouped, which the 120 tickets sold no longer reach, so the door adds
@@ -421,7 +435,10 @@ describe('taxes', () => {
     wrap(<GigDetailContent gigId={1} />)
     await openTerms(user)
 
-    expect(screen.getByText(/every calculation runs on .*18,35 a ticket/i)).toBeInTheDocument()
+    // The corrected per-ticket price is folded into the "Tickets sold" tile's
+    // caption, next to what has actually been earned so far.
+    expect(within(soldTicketsCard()).getByText(/€\s18,35\s\/\s€\s281,28/)).toBeInTheDocument()
+    expect(soldTicketsCard()).toHaveAccessibleDescription(/VAT of 9% comes off the ticket price first\./i)
     // Each ticket brings in less, so break-even takes 99 of them instead of 90.
     expect(upsideValue('Tickets to break even')).toBe('99')
     expect(upsideValue('Expected upside')).toBe('€ 1.308,80')
@@ -433,7 +450,7 @@ describe('taxes', () => {
     wrap(<GigDetailContent gigId={1} />)
     await openTerms(user)
 
-    expect(screen.queryByText(/a ticket/i)).not.toBeInTheDocument()
+    expect(soldTicketsCard()).not.toHaveAccessibleDescription(/vat/i)
     expect(upsideValue('Tickets to break even')).toBe('90')
   })
 
@@ -459,7 +476,7 @@ describe('taxes', () => {
 
     await user.type(screen.getByLabelText('Copyright / PRS %'), '10')
 
-    expect(screen.getByText(/copyright \/ prs of 10% comes off after ticket vat/i)).toBeInTheDocument()
+    await waitFor(() => expect(soldTicketsCard()).toHaveAccessibleDescription(/copyright \/ prs of 10% comes off after vat\./i))
     await waitFor(
       () => expect(updateGig).toHaveBeenCalledWith(1, { copyright_percentage: 10 }),
       { timeout: 3000 },
@@ -517,6 +534,7 @@ describe('cost lines', () => {
     await waitFor(() => expect(addGigCost).toHaveBeenCalledWith(
       1, { label: 'Backline', amount_cents: 7500, paid_by: 'artist' }
     ))
+    await openFinance(user)
     await waitFor(() => expect(statementValue('Costs')).toBe('€ 225,00'))
     // Unaffected — the new cost defaults to paid_by artist.
     expect(statementValue('Nett. fee')).toBe('€ 1.420,00')
@@ -622,6 +640,7 @@ describe('cost lines', () => {
     await waitFor(() => expect(screen.getByText('Invalid label')).toBeInTheDocument())
     expect(screen.getByDisplayValue('Travel')).toBeInTheDocument()
     // The statement keeps the stored figure rather than the rejected one.
+    await openFinance(user)
     expect(statementValue('Costs')).toBe('€ 150,00')
   })
 
@@ -670,6 +689,7 @@ describe('cost lines', () => {
     await user.click(within(reopened).getByRole('button', { name: /delete/i }))
 
     await waitFor(() => expect(deleteGigCost).toHaveBeenCalledWith(1, 41))
+    await openFinance(user)
     await waitFor(() => expect(statementValue('Costs')).toBe('€ 25,00'))
   })
 })

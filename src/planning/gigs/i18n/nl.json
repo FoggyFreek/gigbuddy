@@ -164,6 +164,7 @@
     "tabs": {
       "event": "Evenement",
       "terms": "Afspraken",
+      "finance": "Financiën",
       "participants": "Deelnemers",
       "tasks": "Taken"
     },
@@ -374,15 +375,15 @@
         "toBreakEven": "Kaarten tot break-even",
         "expectedUpside": "Verwachte opbrengst",
         "potentialUpside": "Mogelijke opbrengst",
-        "actualUpside": "Opbrengst op de tot nu toe verkochte kaarten: {{amount}}.",
-        "vatCorrectedPrice": "Er gaat eerst {{percentage}}% ticket-btw af, dus alle berekeningen gaan over {{price}} per kaart.",
-        "copyrightCorrectedPrice": "Daarna gaat {{percentage}}% auteursrecht / Buma eraf, waardoor {{price}} per kaart overblijft voor de dealberekening.",
+        "soldCaption": "{{price}} / {{revenue}}",
         "atAttendance_one": "bij {{count}} kaart",
         "atAttendance_other": "bij {{count}} kaarten",
         "unknown": "—",
         "flatFeeNote": "Bij een vaste gage is er geen aandeel in de kaartopbrengst.",
         "breakdown": {
-          "sold": "Tot nu toe verkochte kaarten, afgezet tegen de zaalcapaciteit.",
+          "sold": "Tot nu toe verkochte kaarten, afgezet tegen de zaalcapaciteit. De prijs is per kaart na aftrek; de opbrengst is wat er tot nu toe is verdiend aan verkochte kaarten.",
+          "soldVat": "Er gaat eerst {{percentage}}% btw af van de kaartprijs.",
+          "soldCopyright": "Daarna gaat {{percentage}}% auteursrecht / Buma eraf.",
           "expected": "Het aandeel van {{percentage}}% voor de artiest bij het verwachte aantal bezoekers.",
           "potential": "Het aandeel van {{percentage}}% voor de artiest bij volle zaal — het maximum voor deze deal.",
           "flat_fee": "Een vaste gage heeft geen break-evenpunt.",

@@ -22,7 +22,9 @@
     "coverage": "vitest run --exclude src/tests/server --coverage",
     "coverage:server": "vitest run --config vitest.server.config.js src/tests/server --coverage",
     "build:schematron": "node scripts/build-schematron.mjs",
-    "build:ubl-goldens": "node scripts/build-ubl-goldens.mjs"
+    "build:ubl-goldens": "node scripts/build-ubl-goldens.mjs",
+    "build:gig-deal-phase-a-golden": "node scripts/build-gig-deal-phase-a-golden.mjs",
+    "test:gig-deal-phase-a": "npm run build:gig-deal-phase-a-golden && vitest run src/planning/gigs/__tests__/gigDealPhaseAGolden.test.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -14,6 +14,7 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import FestivalIcon from '@mui/icons-material/Festival'
 import HandshakeIcon from '@mui/icons-material/Handshake'
 import ImageIcon from '@mui/icons-material/Image'
+import PaymentsIcon from '@mui/icons-material/Payments'
 import PeopleIcon from '@mui/icons-material/People'
 import type { SvgIconComponent } from '@mui/icons-material'
 import { useTranslation } from 'react-i18next'
@@ -26,6 +27,7 @@ import { SourceTenantSwitch } from '../../../../components/SourceTenantIdentity.
 import MyBandSelect from '../../../../people/my-bands/components/MyBandSelect.tsx'
 import GigAvailability from './GigAvailability.tsx'
 import GigEventDetails from './GigEventDetails.tsx'
+import GigFinance from './GigFinance.tsx'
 import GigTasksSection from './GigTasksSection.tsx'
 import GigTerms from './GigTerms.tsx'
 import { feeToDisplay, numberToInput, patchForGigField } from './gigFormFields.ts'
@@ -33,6 +35,7 @@ import type { GigDetail, GigDetailForm, GigDetailTabKey } from './types.ts'
 import useDebouncedSave from '../../../../hooks/useDebouncedSave.ts'
 import { useCrossTenantRow } from '../../../shared/useCrossTenantRow.ts'
 import { usePlanningSource } from '../../../shared/usePlanningSource.ts'
+import { usePermissions } from '../../../../hooks/usePermissions.ts'
 import { useTenantKind } from '../../../../hooks/useTenantKind.ts'
 import { TENANT_CAPABILITIES } from '../../../../auth/tenantCapabilities.ts'
 import { useAuth } from '../../../../contexts/authContext.ts'
@@ -59,6 +62,7 @@ export type TabKey = GigDetailTabKey
 const TABS: { key: TabKey; Icon: SvgIconComponent }[] = [
   { key: 'event', Icon: FestivalIcon },
   { key: 'terms', Icon: HandshakeIcon },
+  { key: 'finance', Icon: PaymentsIcon },
   { key: 'participants', Icon: PeopleIcon },
   { key: 'tasks', Icon: ChecklistIcon },
 ]
@@ -220,6 +224,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   // workspace outright — gate on both like the create-form panels do.
   const tenantKind = useTenantKind()
   const showAvailability = !isCrossBand && tenantKind.supports(TENANT_CAPABILITIES.BAND_AVAILABILITY)
+  const { canViewFinance } = usePermissions()
 
   useEffect(() => {
     const ac = new AbortController()
@@ -402,7 +407,8 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   }
 
   const requiredErrors = getRequiredErrors(form, REQUIRED_FIELDS)
-  const visibleTabs = ownRow ? TABS : TABS.filter(({ key }) => key === 'event' || key === 'tasks')
+  const visibleTabs = (ownRow ? TABS : TABS.filter(({ key }) => key === 'event' || key === 'tasks'))
+    .filter(({ key }) => key !== 'finance' || canViewFinance)
   const openTaskCount = initialTasks.filter((task) => !task.done).length
   // Derived, not synced: an initialTab (or a stale selection) pointing at a tab
   // this gig doesn't have falls back to the event tab without a render-phase set.
@@ -652,16 +658,25 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
         <GigTerms
           active={shownTab === 'terms'}
           editable={editable}
+          form={form}
+          costs={costs}
+          onChange={handleChange}
+          onAddCost={handleAddCost}
+          onUpdateCost={handleUpdateCost}
+          onDeleteCost={handleDeleteCost}
+        />
+      )}
+
+      {ownRow && canViewFinance && (
+        <GigFinance
+          active={shownTab === 'finance'}
+          editable={editable}
           gigId={gigId}
           gigLoaded={ownRow}
           form={form}
           costs={costs}
           selectedVenue={selectedVenue}
           selectedFestival={selectedFestival}
-          onChange={handleChange}
-          onAddCost={handleAddCost}
-          onUpdateCost={handleUpdateCost}
-          onDeleteCost={handleDeleteCost}
         />
       )}
 
