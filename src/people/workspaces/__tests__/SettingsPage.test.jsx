@@ -162,11 +162,11 @@ describe('SettingsPage — nav gating', () => {
 
   it('keeps Manage account inside band settings, before the finance group', async () => {
     wrap('/settings')
-    await screen.findByText('Finance and accounting settings')
+    await screen.findByText('Finance settings')
     const texts = [...document.querySelectorAll('.MuiListSubheader-root, .MuiListItemText-primary')]
       .map((el) => el.textContent)
-    expect(texts.slice(texts.indexOf('Finance and accounting settings'))).toEqual([
-      'Finance and accounting settings',
+    expect(texts.slice(texts.indexOf('Finance settings'))).toEqual([
+      'Finance settings',
       'Financial profile',
       'Accounting profile',
       'Invoice mode',
@@ -174,19 +174,19 @@ describe('SettingsPage — nav gating', () => {
       'Chart of accounts',
     ])
     expect(texts.indexOf('Band settings')).toBeLessThan(texts.indexOf('Manage band account'))
-    expect(texts.indexOf('Manage band account')).toBeLessThan(texts.indexOf('Finance and accounting settings'))
+    expect(texts.indexOf('Manage band account')).toBeLessThan(texts.indexOf('Finance settings'))
     expect(screen.queryByText('Delete account (permanent)')).not.toBeInTheDocument()
   })
 
   it('hides the finance subheader when the member cannot manage finance', async () => {
     wrap('/settings', { role: 'contributor' })
     expect(await screen.findByText('My preferences')).toBeInTheDocument()
-    expect(screen.queryByText('Finance and accounting settings')).not.toBeInTheDocument()
+    expect(screen.queryByText('Finance settings')).not.toBeInTheDocument()
   })
 
   it('gives a financial_admin the whole finance group but no band settings', async () => {
     wrap('/settings', { role: 'financial_admin' })
-    expect(await screen.findByText('Finance and accounting settings')).toBeInTheDocument()
+    expect(await screen.findByText('Finance settings')).toBeInTheDocument()
     for (const label of ['Financial profile', 'Accounting profile', 'Invoice mode', 'Accounting Settings', 'Chart of accounts']) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
@@ -249,7 +249,7 @@ describe('SettingsPage — plan gating', () => {
     })
 
     expect(await screen.findAllByText('My preferences')).not.toHaveLength(0)
-    expect(screen.queryByText('Finance and accounting settings')).not.toBeInTheDocument()
+    expect(screen.queryByText('Finance settings')).not.toBeInTheDocument()
     for (const label of ['Financial profile', 'Accounting profile', 'Invoice mode', 'Accounting Settings', 'Chart of accounts']) {
       expect(screen.queryByText(label)).not.toBeInTheDocument()
     }
@@ -265,7 +265,7 @@ describe('SettingsPage — plan gating', () => {
       activeTenantKind,
     })
 
-    expect(await screen.findByText('Finance and accounting settings')).toBeInTheDocument()
+    expect(await screen.findByText('Finance settings')).toBeInTheDocument()
     for (const label of ['Financial profile', 'Accounting profile', 'Invoice mode', 'Accounting Settings', 'Chart of accounts']) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
