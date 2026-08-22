@@ -28,7 +28,8 @@ export default function CampaignComposerPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
-    void listOutreachTemplates().then(({ items }) => {
+    // Venue-context only: an invoice template's fields cannot resolve here.
+    void listOutreachTemplates(100, 'venue').then(({ items }) => {
       setTemplates(items); setTemplateId(Number(items[0]?.id) || '')
     }).catch((caught) => setError(caught instanceof Error ? caught.message : String(caught)))
   }, [])
@@ -42,7 +43,7 @@ export default function CampaignComposerPage() {
   async function send() {
     if (!campaign) return
     setBusy(true); setError(null)
-    try { await sendOutreachCampaign(campaign.id); navigate('/outreach/campaigns') }
+    try { await sendOutreachCampaign(campaign.id); navigate('/outreach/templates') }
     catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); setBusy(false) }
   }
   const columns: GridColDef<OutreachRecipient>[] = [

@@ -62,8 +62,20 @@ export default function TemplatesPage() {
     en: t($ => $.locales.en),
     nl: t($ => $.locales.nl),
   }
+  const contextLabels = {
+    venue: t($ => $.contexts.venue),
+    invoice: t($ => $.contexts.invoice),
+  }
   const columns: GridColDef<OutreachTemplate>[] = [
     { field: 'name', headerName: t($ => $.table.name), flex: 1, minWidth: 180 },
+    {
+      // Two kinds of template share this list, and they offer different merge
+      // fields, so the kind has to be visible.
+      field: 'context',
+      headerName: t($ => $.table.context),
+      width: 140,
+      renderCell: ({ row }) => contextLabels[row.context],
+    },
     {
       field: 'locale',
       headerName: t($ => $.table.locale),
@@ -109,7 +121,6 @@ export default function TemplatesPage() {
   ]
   return <>
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}><Typography variant="h5" sx={{ fontWeight: 600, flexGrow: 1 }}>{t($ => $.title)}</Typography>
-      <Button onClick={() => navigate('/outreach/campaigns')}>{t($ => $.campaigns.button)}</Button>
       {canWritePlanning && <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreating(true)}>{t($ => $.create.button)}</Button>}
     </Box>
     {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress /></Box> : <DataGrid rows={rows} columns={columns} disableRowSelectionOnClick onRowClick={({ row }) => navigate(`/outreach/templates/${row.id}`)} sx={{ minHeight: 420 }} />}

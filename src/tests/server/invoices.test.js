@@ -959,12 +959,83 @@ describe('invoices — PATCH gig_id + recompute', () => {
 })
 
 describe('invoices — .eml header sanitization', () => {
-  async function emlFor(overrides) {
+  // The email body now comes from an outreach template with context 'invoice';
+  // the header-safety guarantees below must survive that path unchanged.
+  // Per-test, because truncateAll() wipes it between cases.
+  beforeEach(async () => {
+    // The stored PDF must be readable: an invoice email without its invoice is a
+    // hard error now, so the default throwing getObject stub would 409.
+    const storage = await import('../../../server/utils/storage.js')
+    storage.storageClient.getObject.mockImplementation(async () =>
+      Readable.from([Buffer.from('%PDF-1.7 stored invoice')]))
+    await asUserA(request(app).post('/api/outreach/templates')).send({
+      name: 'Invoice email',
+      context: 'invoice',
+      subject: 'Factuur {{invoice.number}}',
+      body_html: '<p>{{customer.greeting}}</p>{{#message}}{{#invoice.payment_block}}',
+      body_text: '{{customer.greeting}}',
+    }).expect(201)
+  })
+
+  async function emlFor(overrides, body = {}) {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload(overrides)).expect(201)
-    const res = await asUserA(request(app).post(`/api/invoices/${r.body.id}/eml`)).send({})
+    const res = await asUserA(request(app).post(`/api/invoices/${r.body.id}/eml`)).send(body)
     expect(res.status).toBe(200)
     return res.text
   }
+
+  const htmlOf = (text) => {
+    const marker = 'Content-Transfer-Encoding: base64'
+    const body = text.slice(text.indexOf(marker) + marker.length)
+    const b64 = /[A-Za-z0-9+/=\s]+/.exec(body)[0].replaceAll(/\s/g, '')
+    return Buffer.from(b64, 'base64').toString('utf8')
+  }
+
+  it('renders the subject and greeting from the template', async () => {
+    const text = await emlFor({ customer_contact_family_name: 'Jansen', customer_contact_title: 'dhr.' })
+    const subject = /Subject: =\?UTF-8\?B\?([^?]+)\?=/.exec(text)
+    expect(Buffer.from(subject[1], 'base64').toString('utf8')).toMatch(/^Factuur /)
+    expect(htmlOf(text)).toContain('Geachte dhr. Jansen,')
+  })
+
+  it('escapes the custom message and keeps its line breaks', async () => {
+    const html = htmlOf(await emlFor({}, { message: '<script>x</script>\nsecond line' }))
+    expect(html).toContain('&lt;script&gt;')
+    expect(html).not.toContain('<script>')
+    expect(html).toContain('second line')
+    expect(html).toContain('<br>')
+  })
+
+  it('sends an invoice with a blank message and no payment link', async () => {
+    expect(await emlFor({}, { message: '' })).toContain('Content-Type: application/pdf')
+  })
+
+  it('attaches the e-invoice XML when asked, and embeds the PDF on request', async () => {
+    expect(await emlFor({}, { attachments: 'pdf_xml' })).toContain('Content-Type: application/xml')
+    expect(await emlFor({}, { attachments: 'pdf_xml_embedded' })).toContain('Content-Type: application/xml')
+  })
+
+  it('rejects an unknown attachments option', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    await asUserA(request(app).post(`/api/invoices/${r.body.id}/eml`)).send({ attachments: 'zip' }).expect(400)
+  })
+
+  it('refuses to build an email when the stored PDF cannot be read', async () => {
+    const storage = await import('../../../server/utils/storage.js')
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    storage.storageClient.getObject.mockImplementation(async () => { throw new Error('no such key') })
+    const res = await asUserA(request(app).post(`/api/invoices/${r.body.id}/eml`)).send({})
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('invoice_pdf_unavailable')
+  })
+
+  it('refuses to build an email when no invoice template exists', async () => {
+    await pool.query('DELETE FROM outreach_templates')
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).post(`/api/invoices/${r.body.id}/eml`)).send({})
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('invoice_template_missing')
+  })
 
   it('rejects CRLF header injection via customer_email (no To, no injected header)', async () => {
     const text = await emlFor({

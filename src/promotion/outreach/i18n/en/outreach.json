@@ -1,44 +1,115 @@
 {
   "title": "Templates",
-  "locales": { "en": "English", "nl": "Dutch" },
-  "table": { "name": "Name", "subject": "Subject", "locale": "Language" },
+  "locales": {
+    "en": "English",
+    "nl": "Dutch"
+  },
+  "table": {
+    "name": "Name",
+    "subject": "Subject",
+    "locale": "Language",
+    "context": "Type"
+  },
   "actions": {
-    "copy": "Copy template", "delete": "Delete template",
-    "copyTitle": "Copy \"{{name}}\"?", "copyBody": "A new copy of this template will be created.", "copyConfirm": "Copy",
+    "copy": "Copy template",
+    "delete": "Delete template",
+    "copyTitle": "Copy \"{{name}}\"?",
+    "copyBody": "A new copy of this template will be created.",
+    "copyConfirm": "Copy",
     "deleteTitle": "Delete \"{{name}}\"?"
   },
   "create": {
-    "button": "New template", "title": "Create template", "name": "Name", "nameRequired": "Name is required",
-    "startingPoint": "Starting point", "blank": "Blank"
+    "button": "New template",
+    "title": "Create template",
+    "name": "Name",
+    "nameRequired": "Name is required",
+    "startingPoint": "Starting point",
+    "blank": "Blank"
   },
   "editor": {
-    "name": "Name", "locale": "Language", "subject": "Subject", "edit": "Edit", "preview": "Preview", "mode": "Editor mode", "designProperties": "Design properties",
-    "alignment": { "left": "Align left", "center": "Align center", "right": "Align right" },
+    "name": "Name",
+    "locale": "Language",
+    "subject": "Subject",
+    "edit": "Edit",
+    "preview": "Preview",
+    "mode": "Editor mode",
+    "designProperties": "Design properties",
+    "alignment": {
+      "left": "Align left",
+      "center": "Align center",
+      "right": "Align right"
+    },
     "images": {
-      "library": "Template content", "mergeFields": "Merge fields", "title": "Images", "branding": "Branding", "social": "Social icons",
-      "color": "Icon color", "black": "Black", "white": "White", "configure": "Configure in Profile",
+      "library": "Template content",
+      "mergeFields": "Merge fields",
+      "title": "Images",
+      "branding": "Branding",
+      "social": "Social icons",
+      "color": "Icon color",
+      "black": "Black",
+      "white": "White",
+      "configure": "Configure in Profile",
       "items": {
-        "banner": "Band banner", "logo-light": "Light-theme logo", "logo-dark": "Dark-theme logo", "avatar": "Band avatar",
-        "facebook": "Facebook", "instagram": "Instagram", "tiktok": "TikTok", "youtube": "YouTube", "spotify": "Spotify", "bandsintown": "Bandsintown"
+        "banner": "Band banner",
+        "logo-light": "Light-theme logo",
+        "logo-dark": "Dark-theme logo",
+        "avatar": "Band avatar",
+        "facebook": "Facebook",
+        "instagram": "Instagram",
+        "tiktok": "TikTok",
+        "youtube": "YouTube",
+        "spotify": "Spotify",
+        "bandsintown": "Bandsintown"
       }
     }
   },
   "deleteTitle": "Delete this template?",
   "campaigns": {
-    "button": "History & suppressions", "title": "Outreach campaigns", "history": "History", "suppressions": "Suppressions",
-    "id": "Campaign", "status": "Status", "created": "Created", "recipient": "Recipient", "email": "Email address",
-    "issue": "Issue", "review": "Recipient review", "addSuppression": "Suppress address", "removeSuppression": "Remove suppression"
+    "title": "Outreach campaigns",
+    "suppressions": "Suppressions",
+    "id": "Campaign",
+    "status": "Status",
+    "created": "Created",
+    "recipient": "Recipient",
+    "email": "Email address",
+    "issue": "Issue",
+    "review": "Recipient review",
+    "addSuppression": "Suppress address",
+    "removeSuppression": "Remove suppression",
+    "type": "Type",
+    "types": {
+      "all": "All",
+      "outreach": "Outreach",
+      "invoice": "Invoice"
+    },
+    "logTitle": "Email log",
+    "logDescription": "Everything sent through Resend, newest first. Select a row to see the recipients and any delivery errors.",
+    "activityTitle": "Email activity",
+    "suppressionsDescription": "Addresses outreach will never mail again. Invoices are transactional and are still delivered to a suppressed address.",
+    "noSuppressions": "No suppressed addresses."
   },
   "composer": {
-    "title": "Compose outreach", "template": "Email template", "review": "Review recipients",
+    "title": "Compose outreach",
+    "template": "Email template",
+    "review": "Review recipients",
     "reviewNotice": "Review every resolved subject and any skipped recipients before sending.",
-    "send": "Send campaign", "noRecipients": "Select at least one venue with a primary contact."
+    "send": "Send campaign",
+    "noRecipients": "Select at least one venue with a primary contact."
   },
   "venueDialog": {
-    "title": "Email selected venues", "selection_one": "Prepare an email for {{count}} selected venue.", "selection_other": "Prepare an email for {{count}} selected venues.",
-    "addressSource": "Use the email address of", "primaryContact": "Primary contact", "venueAddress": "Venue / festival email address",
-    "noTemplates": "Create a venue email template before sending a campaign.", "sent": "Campaign sent.",
+    "title": "Email selected venues",
+    "selection_one": "Prepare an email for {{count}} selected venue.",
+    "selection_other": "Prepare an email for {{count}} selected venues.",
+    "addressSource": "Use the email address of",
+    "primaryContact": "Primary contact",
+    "venueAddress": "Venue / festival email address",
+    "noTemplates": "Create a venue email template before sending a campaign.",
+    "sent": "Campaign sent.",
     "partial": "Campaign partially sent. Review the recipients that failed or were skipped.",
     "failed": "Campaign failed. Review the recipient errors and try again."
+  },
+  "contexts": {
+    "venue": "Venue outreach",
+    "invoice": "Invoice email"
   }
 }

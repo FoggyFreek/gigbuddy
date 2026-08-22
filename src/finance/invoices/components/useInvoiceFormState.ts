@@ -56,6 +56,7 @@ export interface UseInvoiceFormStateResult {
   sentDialogOpen: boolean
   setSentDialogOpen: (open: boolean) => void
   confirmSent: () => Promise<void>
+  applyStatusChangeOrThrow: (status: InvoiceStatus) => Promise<void>
   paidDialogOpen: boolean
   setPaidDialogOpen: (open: boolean) => void
   confirmPaid: () => Promise<void>
@@ -236,10 +237,31 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
     try {
       setSaving(true)
       setError(null)
-      await updateInvoice(invoiceId, buildInvoicePayload(form))
-      onClose(true)
+      // Stay on the invoice after saving. Re-seed from the response rather than
+      // keeping the submitted form: the server recomputes totals and can
+      // normalize lines, so the editor must show what was actually stored.
+      const updated = await updateInvoice(invoiceId, buildInvoicePayload(form))
+      setInvoice(updated)
+      setForm(invoiceToForm(updated as unknown as Record<string, unknown>))
+      onInvoiceUpdate?.(invoiceId, updated)
     } catch (e: unknown) {
       setError(describeError(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Throwing variant: callers that chain another action onto a successful
+  // finalization (the email dialog's "mark as sent") must be able to stop when it
+  // fails, which the error-swallowing wrapper below cannot tell them.
+  async function applyStatusChangeOrThrow(newStatus: InvoiceStatus) {
+    if (!canWrite) throw new Error('Permission denied')
+    try {
+      setSaving(true)
+      setError(null)
+      const updated = await updateInvoice(invoiceId, { status: newStatus })
+      setInvoice(updated)
+      onInvoiceUpdate?.(invoiceId, { status: updated.status })
     } finally {
       setSaving(false)
     }
@@ -248,15 +270,9 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
   async function applyStatusChange(newStatus: InvoiceStatus) {
     if (!canWrite) return
     try {
-      setSaving(true)
-      setError(null)
-      const updated = await updateInvoice(invoiceId, { status: newStatus })
-      setInvoice(updated)
-      onInvoiceUpdate?.(invoiceId, { status: updated.status })
+      await applyStatusChangeOrThrow(newStatus)
     } catch (e: unknown) {
       setError(describeError(e))
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -333,6 +349,7 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
     sentDialogOpen,
     setSentDialogOpen,
     confirmSent,
+    applyStatusChangeOrThrow,
     paidDialogOpen,
     setPaidDialogOpen,
     confirmPaid,

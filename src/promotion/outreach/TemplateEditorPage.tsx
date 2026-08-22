@@ -57,7 +57,7 @@ export default function TemplateEditorPage() {
     let cancelled = false
     getOutreachTemplate(templateId).then(async (value) => {
       const [nextFields, nextImages] = await Promise.all([
-        listOutreachFields(value.locale),
+        listOutreachFields(value.locale, value.context),
         listOutreachImages(),
       ])
       if (!cancelled) { setTemplate(value); setFields(nextFields); setImages(nextImages) }
@@ -96,7 +96,7 @@ export default function TemplateEditorPage() {
     </Box>
     <Paper variant="outlined" sx={{ p: 2, mb: 2 }}><Grid container spacing={2}>
       <Grid size={{ xs: 12, md: 6 }}><TextField fullWidth label={t($ => $.editor.name)} value={template.name} disabled={!canWrite} onChange={(e) => change('name', e.target.value)} /></Grid>
-      <Grid size={{ xs: 6, md: 3 }}><TextField select fullWidth label={t($ => $.editor.locale)} value={template.locale} disabled={!canWrite} onChange={async (e) => { const locale = e.target.value as 'nl' | 'en'; change('locale', locale); setFields(await listOutreachFields(locale)) }}><MenuItem value="nl">Nederlands</MenuItem><MenuItem value="en">English</MenuItem></TextField></Grid>
+      <Grid size={{ xs: 6, md: 3 }}><TextField select fullWidth label={t($ => $.editor.locale)} value={template.locale} disabled={!canWrite} onChange={async (e) => { const locale = e.target.value as 'nl' | 'en'; change('locale', locale); setFields(await listOutreachFields(locale, template.context)) }}><MenuItem value="nl">Nederlands</MenuItem><MenuItem value="en">English</MenuItem></TextField></Grid>
       <Grid size={12}><TextField fullWidth label={t($ => $.editor.subject)} value={template.subject} disabled={!canWrite} onChange={(e) => change('subject', e.target.value)} /></Grid>
     </Grid></Paper>
     <TemplateEditor

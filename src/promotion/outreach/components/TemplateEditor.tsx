@@ -33,7 +33,7 @@ import { PluginKey } from '@tiptap/pm/state'
 import { EditorContent, EditorContext, useCurrentEditor, useEditor, useEditorState } from '@tiptap/react'
 import DOMPurify from 'dompurify'
 import { useTranslation } from 'react-i18next'
-import { mergeBlocks, mergeTokens } from '../../../../shared/outreachMerge.js'
+import { mergeBlocks, mergeTokens, normalizeTokenCase } from '../../../../shared/outreachMerge.js'
 import { useThemeMode } from '../../../contexts/themeModeContext.ts'
 import type { OutreachField, OutreachImageOption } from '../outreachTemplates.ts'
 import { withImageAlignment } from '../editor/alignedImageExtension.tsx'
@@ -307,10 +307,12 @@ const TemplateEditor = forwardRef<TemplateEditorRef, Readonly<Props>>(function T
   const getSerializedContent = useCallback(async (): Promise<SerializedTemplateContent | null> => {
     if (!editor) return null
     const email = await composeReactEmail({ editor })
+    // The plain-text pass uppercases heading content, so a merge field placed in
+    // a heading would serialize as {{INVOICE.NUMBER}} and never resolve.
     return {
       body_json: editor.getJSON() as Record<string, unknown>,
-      body_html: email.html,
-      body_text: email.text,
+      body_html: normalizeTokenCase(email.html),
+      body_text: normalizeTokenCase(email.text),
     }
   }, [editor])
 

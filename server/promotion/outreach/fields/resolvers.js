@@ -1,4 +1,7 @@
-export function resolveOutreachRawValues({ tenant = {}, venue = {}, contact = {} } = {}, { locale = 'nl' } = {}) {
+export function resolveOutreachRawValues(
+  { tenant = {}, venue = {}, contact = {}, invoice = {}, customer = {} } = {},
+  { locale = 'nl' } = {},
+) {
   return {
     'band.name': tenant.display_name ?? tenant.band_name,
     'band.short_bio': tenant.short_bio,
@@ -22,5 +25,19 @@ export function resolveOutreachRawValues({ tenant = {}, venue = {}, contact = {}
     'venue.tax_id': venue.tax_id,
     'contact.name': contact.name,
     'contact.first_name': contact.first_name || (locale === 'nl' ? 'daar' : 'there'),
+    'invoice.number': invoice.invoice_number,
+    'invoice.issue_date': invoice.issue_date,
+    'invoice.due_date': invoice.due_date,
+    'invoice.total': invoice.total_cents,
+    'invoice.total_excl_vat': invoice.subtotal_cents,
+    'invoice.vat_amount': invoice.tax_cents,
+    'invoice.payment_url': invoice.mollie_payment_link_url,
+    'invoice.event_date': invoice.event_date,
+    'invoice.event_description': invoice.event_description,
+    'customer.name': customer.name,
+    'customer.email': customer.email,
+    'customer.contact_title': customer.contact_title,
+    'customer.contact_family_name': customer.contact_family_name,
+    'customer.greeting': customer.greeting,
   }
 }

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
-import { useCompactLayout } from '../../../hooks/useCompactLayout.ts'
 import type { Id, Invoice, InvoiceStatus } from '../../../types/entities.ts'
 import { useTranslation } from 'react-i18next'
+import { useCompactLayout } from '../../../hooks/useCompactLayout.ts'
 import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -9,6 +9,7 @@ import Chip from '@mui/material/Chip'
 import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import IconButton from '@mui/material/IconButton'
+import SendOutlinedIcon from '@mui/icons-material/SendOutlined'
 import Tooltip from '@mui/material/Tooltip'
 import DownloadIcon from '@mui/icons-material/Download'
 import EmailIcon from '@mui/icons-material/Email'
@@ -26,9 +27,9 @@ import InvoicePaidDialog from './InvoicePaidDialog.tsx'
 import InvoiceSentDialog from './InvoiceSentDialog.tsx'
 import InvoiceVoidDialog from './InvoiceVoidDialog.tsx'
 import InvoiceStatusActions from './InvoiceStatusActions.tsx'
-import InvoiceEmlDialog from './InvoiceEmlDialog.tsx'
+import InvoiceEmailDialog from './InvoiceEmailDialog.tsx'
 import PaymentLinkPanel from './PaymentLinkPanel.tsx'
-import InvoiceDownloadMenu from './InvoiceDownloadMenu.tsx'
+import InvoiceDocumentActions from './InvoiceDocumentActions.tsx'
 import { useProfile } from '../../../contexts/profileContext.ts'
 
 interface InvoiceDetailsProps {
@@ -42,8 +43,8 @@ interface InvoiceDetailsProps {
 
 export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, onTitleReady, canWrite = true }: Readonly<InvoiceDetailsProps>) {
   const { t } = useTranslation(['invoices', 'common'])
-  const s = useInvoiceDetailsState({ invoiceId, onClose, onInvoiceUpdate, canWrite })
   const isCompact = useCompactLayout()
+  const s = useInvoiceDetailsState({ invoiceId, onClose, onInvoiceUpdate, canWrite })
   const { isIntegrationConfigured } = useProfile()
   const mollieConfigured = isIntegrationConfigured('mollie')
 
@@ -67,37 +68,30 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
     || undefined
   const bandHeading = s.tenant?.formal_name || s.tenant?.band_name || ''
 
-  // Every way the invoice leaves the app sits behind one control. All three are
-  // reads, so they stay available to every finance viewer.
+  // Every DOWNLOAD is a read, so it stays available to every finance viewer,
+  // while emailing and re-generating the PDF are finance.manage mutations.
+  // Re-generating never touches the invoice *data*, so it stays available on a
+  // finalized invoice — a rendering fix lands without voiding and re-issuing.
   //
-  // Re-generating the PDF is deliberately NOT in that menu: it is a mutation
-  // behind finance.manage, not a download. It never touches the invoice *data*,
-  // so it stays available on a finalized invoice — a rendering fix lands without
-  // voiding and re-issuing.
+  // InvoiceDocumentActions decides how they are presented: a labelled button
+  // each on a wide screen, one overflow menu on a compact one.
   const documentActions = s.invoice ? (
-    <>
-      <InvoiceDownloadMenu
-        pdfPath={s.invoice.pdf_path}
-        onDownloadUbl={s.handleUblDownload}
-        onDownloadUblWithPdf={s.handleUblWithPdfDownload}
-        ublBusy={s.ublBusy}
-        onOpenEmailDialog={s.openEmlDialog}
-        peppolBlockers={s.peppolWarnings.filter((w) => w.severity === 'blocking')}
-      />
-      {s.invoice.pdf_path && canWrite && (
-        <Tooltip title={t($ => $.pdf.rerender)}>
-          <IconButton
-            size="small"
-            color="primary"
-            onClick={s.handlePdfRerender}
-            disabled={s.pdfRerenderBusy}
-            aria-label={t($ => $.pdf.rerenderAria)}
-          >
-            {s.pdfRerenderBusy ? <CircularProgress size={16} /> : <RefreshIcon fontSize="small" />}
-          </IconButton>
-        </Tooltip>
-      )}
-    </>
+    <InvoiceDocumentActions
+      pdfPath={s.invoice.pdf_path}
+      onDownloadUbl={s.handleUblDownload}
+      onDownloadUblWithPdf={s.handleUblWithPdfDownload}
+      ublBusy={s.ublBusy}
+      peppolBlockers={s.peppolWarnings.filter((w) => w.severity === 'blocking')}
+      canWrite={canWrite}
+      onOpenEmailDialog={() => { void s.openEmailDialog() }}
+      onRerenderPdf={s.handlePdfRerender}
+      pdfRerenderBusy={s.pdfRerenderBusy}
+      canDelete={canWrite && !s.finalized}
+      onDelete={() => { void s.handleDelete() }}
+      canSave={!s.readOnly}
+      onSave={s.handleSave}
+      saving={s.saving}
+    />
   ) : null
 
   const dialogs = (
@@ -124,15 +118,10 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
         onCancel={() => s.setVoidDialogOpen(false)}
         onConfirm={s.confirmVoid}
       />
-      <InvoiceEmlDialog
-        open={s.emlDialogOpen}
-        loading={s.emlLoading}
-        busy={s.emlBusy}
-        error={s.emlError ?? undefined}
-        message={s.emlMessage}
-        onMessageChange={s.setEmlMessage}
-        onClose={() => s.setEmlDialogOpen(false)}
-        onDownload={s.handleEmlDownload}
+      <InvoiceEmailDialog
+        {...s}
+        isDraft={s.invoice?.status === 'draft'}
+        peppolBlockers={s.peppolWarnings.filter((w) => w.severity === 'blocking')}
       />
     </>
   )
@@ -141,6 +130,14 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
     <>
       <Box>
         <Box>
+          {/* Wide: the labelled document buttons get a row of their own above the
+              status actions. Compact: they collapse to one overflow button that
+              rides along at the end of the status row instead. */}
+          {documentActions && !isCompact && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              {documentActions}
+            </Box>
+          )}
           {s.invoice && (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5, mb: 2 }}>
               {s.invoice.status && (
@@ -150,15 +147,16 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
                   label={t($ => $.rawStatus[s.invoice!.status as InvoiceStatus])}
                 />
               )}
-              {canWrite && (
-                <Box sx={{ ml: 'auto' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 'auto' }}>
+                {canWrite && (
                   <InvoiceStatusActions
                     status={s.invoice.status ?? 'draft'}
                     disabled={s.saving}
                     onStatusChange={s.handleStatusChange}
                   />
-                </Box>
-              )}
+                )}
+                {isCompact && documentActions}
+              </Box>
             </Box>
           )}
           {s.finalized && (
@@ -228,51 +226,19 @@ export default function InvoiceDetails({ invoiceId, onClose, onInvoiceUpdate, on
           )}
         </Box>
 
-        <Divider sx={{ mt: 3, mb: 2 }} />
-        {isCompact ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {documentActions && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>{documentActions}</Box>
-            )}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', alignItems: 'center' }}>
-              <Box>
-                {canWrite && !s.finalized && (
-                  <Button color="error" onClick={() => { void s.handleDelete() }} startIcon={<DeleteIcon />}>
-                    {t($ => $.common.actions.delete)}
-                  </Button>
-                )}
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                <Button onClick={() => onClose(false)}>{t($ => $.common.actions.close)}</Button>
-              </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                {!s.readOnly && (
-                  <Button variant="contained" onClick={s.handleSave} disabled={s.saving}>
-                    {s.saving ? t($ => $.detail.saving) : t($ => $.detail.saveChanges)}
-                  </Button>
-                )}
-              </Box>
+
+        {/* Deleting sits alone at the foot of the page, away from the routine
+            actions. On compact it is in the overflow menu instead, so this row
+            would duplicate it. */}
+        {canWrite && !s.finalized && !isCompact && (
+          <>
+            <Divider sx={{ mt: 3, mb: 2 }} />
+            <Box sx={{ display: 'flex' }}>
+              <Button color="error" onClick={() => { void s.handleDelete() }} startIcon={<DeleteIcon />}>
+                {t($ => $.common.actions.delete)}
+              </Button>
             </Box>
-          </Box>
-        ) : (
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Box>
-              {canWrite && !s.finalized && (
-                <Button color="error" onClick={() => { void s.handleDelete() }} startIcon={<DeleteIcon />}>
-                  {t($ => $.common.actions.delete)}
-                </Button>
-              )}
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              {documentActions}
-              <Button onClick={() => onClose(false)}>{t($ => $.common.actions.close)}</Button>
-              {!s.readOnly && (
-                <Button variant="contained" onClick={s.handleSave} disabled={s.saving}>
-                  {s.saving ? t($ => $.detail.saving) : t($ => $.detail.saveChanges)}
-                </Button>
-              )}
-            </Box>
-          </Box>
+          </>
         )}
       </Box>
       {dialogs}

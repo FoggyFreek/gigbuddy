@@ -14,9 +14,10 @@ export async function fetchVenueForCampaign(executor, tenantId, venueId) {
 export async function insertCampaign(executor, tenantId, data) {
   const { rows } = await executor.query(
     `INSERT INTO outreach_campaigns (tenant_id, template_id, subject_snapshot, body_html_snapshot, body_text_snapshot,
-      from_name, from_email, reply_to, created_by_user_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-    [tenantId, data.templateId, data.subject, data.bodyHtml, data.bodyText, data.fromName, data.fromEmail, data.replyTo, data.userId],
+      from_name, from_email, reply_to, created_by_user_id, type, invoice_id, attachments)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
+    [tenantId, data.templateId, data.subject, data.bodyHtml, data.bodyText, data.fromName, data.fromEmail, data.replyTo, data.userId,
+      data.type ?? 'outreach', data.invoiceId ?? null, data.attachments ?? 'pdf'],
   )
   return rows[0]
 }
@@ -33,8 +34,10 @@ export async function insertRecipient(executor, tenantId, campaignId, data, inde
   await executor.query('UPDATE outreach_recipients SET idempotency_key = $2 WHERE id = $1', [recipient.id, key])
   return { ...recipient, idempotency_key: key }
 }
-export async function listCampaignRows(executor, tenantId, limit) {
-  const { rows } = await executor.query('SELECT * FROM outreach_campaigns WHERE tenant_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2', [tenantId, limit])
+export async function listCampaignRows(executor, tenantId, limit, type = null) {
+  const { rows } = await executor.query(
+    `SELECT * FROM outreach_campaigns WHERE tenant_id = $1 AND ($3::text IS NULL OR type = $3)
+      ORDER BY created_at DESC, id DESC LIMIT $2`, [tenantId, limit, type])
   return rows
 }
 export async function fetchCampaign(executor, tenantId, campaignId) {
@@ -44,6 +47,17 @@ export async function fetchCampaign(executor, tenantId, campaignId) {
 export async function listCampaignRecipients(executor, tenantId, campaignId) {
   const { rows } = await executor.query('SELECT * FROM outreach_recipients WHERE campaign_id = $1 AND tenant_id = $2 ORDER BY id', [campaignId, tenantId])
   return rows
+}
+// Atomically claims a campaign for sending. Returns null when another request
+// already claimed it or it reached a terminal status — the status check and the
+// write must not be two statements, or two concurrent sends both dispatch.
+export async function claimCampaignForSend(executor, tenantId, campaignId) {
+  const { rows } = await executor.query(
+    `UPDATE outreach_campaigns SET status = 'sending'
+      WHERE id = $1 AND tenant_id = $2 AND status = 'draft' RETURNING *`,
+    [campaignId, tenantId],
+  )
+  return rows[0] ?? null
 }
 export async function setCampaignStatus(executor, tenantId, campaignId, status, sent = false) {
   const { rows } = await executor.query(`UPDATE outreach_campaigns SET status = $3${sent ? ', sent_at = NOW()' : ''} WHERE id = $1 AND tenant_id = $2 RETURNING *`, [campaignId, tenantId, status])

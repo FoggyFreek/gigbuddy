@@ -50,6 +50,9 @@ export default function CreateTemplateDialog({ onClose, onCreated }: Readonly<Pr
         name: name.trim(), subject: selected?.subject ?? '', preview_text: null,
         body_json: selected?.doc ?? {}, body_html: rendered.html, body_text: rendered.text,
         origin_key: selected?.key ?? null, locale: selected?.locale ?? 'nl',
+        // The chosen starter decides the context, and it is fixed from here on:
+        // a template's merge-field vocabulary must not shift under its body.
+        context: selected?.context ?? 'venue',
       })
       onCreated(template)
     } catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)); setBusy(false) }

@@ -26,7 +26,6 @@ const SetlistEditorPage = lazy(() => import('../music/setlists/SetlistEditorPage
 const PerformancePage = lazy(() => import('../music/setlists/PerformancePage.tsx'))
 const TemplatesPage = lazy(() => import('../promotion/outreach/TemplatesPage.tsx'))
 const TemplateEditorPage = lazy(() => import('../promotion/outreach/TemplateEditorPage.tsx'))
-const CampaignsPage = lazy(() => import('../promotion/outreach/CampaignsPage.tsx'))
 const CampaignComposerPage = lazy(() => import('../promotion/outreach/CampaignComposerPage.tsx'))
 const MyBandsPage = lazy(() => import('../people/my-bands/MyBandsPage.tsx'))
 const BandProfileClaimsPage = lazy(() => import('../admin/band-profile-claims/BandProfileClaimsPage.tsx'))
@@ -171,7 +170,6 @@ export default function App() {
             </Route>
             <Route path="/outreach/templates" element={<TemplatesPage />} />
             <Route path="/outreach/templates/:id" element={<TemplateEditorPage />} />
-            <Route path="/outreach/campaigns" element={<CampaignsPage />} />
             <Route path="/outreach/compose" element={<CampaignComposerPage />} />
             <Route element={<RequireTenantCapability capability={TENANT_CAPABILITIES.MY_BANDS} />}>
               <Route path="/my-bands" element={<MyBandsPage />} />

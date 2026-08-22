@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { rateLimit } from 'express-rate-limit'
 import multer from 'multer'
 import pool from '../../db/index.js'
 import { requirePermission } from '../../middleware/permissions.js'
@@ -26,10 +27,21 @@ import {
   removeInvoicePaymentLink,
   syncInvoicePaymentLink,
 } from './invoiceService.js'
-import { getEmlDefaults, buildInvoiceEml } from './invoiceEmailService.js'
+import { getInvoiceEmailDefaults, buildInvoiceEml, previewInvoiceEmail } from './invoiceEmailService.js'
+import { createInvoiceEmailCampaign, sendInvoiceEmailCampaign } from './invoiceEmailSendService.js'
 import { buildInvoiceUbl } from './invoiceUblService.js'
 
 const router = Router()
+
+const caller = (req) => ({ role: req.membership?.role, isSuperAdmin: Boolean(req.user?.is_super_admin) })
+// Same per-tenant budget the outreach send uses.
+const emailSendLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  keyGenerator: (req) => `tenant:${req.tenantId}`,
+})
 
 const LOGO_ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const logoUpload = multer({
@@ -176,22 +188,68 @@ router.post('/:id/payment-link/sync', requirePermission(PERMISSIONS.FINANCE_MANA
   res.json(result.sync)
 })
 
-// Pre-filled defaults for the email compose dialog
-router.get('/:id/eml-defaults', async (req, res) => {
+// Pre-filled defaults for the email compose dialog: the invoice-context
+// templates that exist (possibly none) and the default message.
+router.get('/:id/email/defaults', async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
-  const result = await getEmlDefaults(pool, req.tenantId, id)
+  const result = await getInvoiceEmailDefaults(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
   res.json(result.defaults)
+})
+
+// Deprecated alias, kept for one deploy: during a rolling deploy the previous
+// SPA bundle is still served and calls this path.
+router.get('/:id/eml-defaults', async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await getInvoiceEmailDefaults(pool, req.tenantId, id)
+  if (result.error) return sendError(res, result.error)
+  res.json({ ...result.defaults, personalMessage: result.defaults.message })
+})
+
+// Merged HTML for the compose dialog's preview pane.
+router.post('/:id/email/preview', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await previewInvoiceEmail(pool, req.tenantId, id, {
+    templateId: req.body?.templateId, message: req.body?.message,
+  })
+  if (result.error) return sendError(res, result.error)
+  res.json(result.preview)
 })
 
 // Generates and streams the .eml file.
 router.post('/:id/eml', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
-  const result = await buildInvoiceEml(pool, req.tenantId, id, req.body?.personalMessage)
+  const result = await buildInvoiceEml(pool, req.tenantId, id, {
+    templateId: req.body?.templateId,
+    message: req.body?.message ?? req.body?.personalMessage,
+    attachments: req.body?.attachments,
+  })
   if (result.error) return sendError(res, result.error)
   res.setHeader('Content-Type', 'message/rfc822')
   res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`)
   res.send(result.content)
+})
+
+// Creates the (unsent) campaign that a later send dispatches. Splitting create
+// from send is what makes the send retry-safe.
+router.post('/:id/email/campaign', requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await createInvoiceEmailCampaign(pool, req.tenantId, req.user.id, id, req.body ?? {})
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.campaign)
+})
+
+// Dispatches a previously created invoice campaign via Resend. Deliberately not
+// entitlement-gated: an invoice is transactional, not marketing.
+router.post('/:id/email/send', emailSendLimiter, requirePermission(PERMISSIONS.FINANCE_MANAGE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const campaignId = Number(req.body?.campaignId)
+  if (!Number.isInteger(campaignId) || campaignId < 1) {
+    return sendError(res, { status: 400, body: { error: 'campaignId is required' } })
+  }
+  const result = await sendInvoiceEmailCampaign(pool, req.tenantId, id, campaignId, caller(req))
+  if (result.error) return sendError(res, result.error)
+  res.json(result.campaign)
 })
 
 // Generates and streams the UBL/Peppol XML. `?embedPdf=true` includes the

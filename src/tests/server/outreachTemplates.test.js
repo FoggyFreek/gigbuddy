@@ -193,4 +193,55 @@ describe('outreach campaigns', () => {
     await asUserA(request(app).delete(`/api/outreach/campaigns/suppressions/list/${other.id}`)).expect(404)
     await asUserA(request(app).delete(`/api/outreach/campaigns/suppressions/list/${created.body.id}`)).expect(204)
   })
+
+  it('scopes merge fields to the template context', async () => {
+    const venue = await asUserA(request(app).get('/api/outreach/fields?context=venue')).expect(200)
+    const invoice = await asUserA(request(app).get('/api/outreach/fields?context=invoice')).expect(200)
+    const keys = (res) => res.body.map((field) => field.key)
+    expect(keys(venue)).toContain('venue.name')
+    expect(keys(venue)).not.toContain('invoice.total')
+    expect(keys(invoice)).toContain('invoice.total')
+    expect(keys(invoice)).not.toContain('venue.name')
+  })
+
+  it('creates and filters invoice-context templates', async () => {
+    await asUserA(request(app).post('/api/outreach/templates').send({
+      name: 'Venue pitch', body_html: '<p>{{venue.name}}</p>',
+    })).expect(201)
+    const created = await asUserA(request(app).post('/api/outreach/templates').send({
+      name: 'Invoice mail', context: 'invoice', subject: 'Factuur {{invoice.number}}',
+      body_html: '<p>{{customer.greeting}}</p>', body_text: '{{customer.greeting}}',
+    })).expect(201)
+    expect(created.body.context).toBe('invoice')
+
+    const listed = await asUserA(request(app).get('/api/outreach/templates?context=invoice')).expect(200)
+    expect(listed.body.items.map((row) => row.name)).toEqual(['Invoice mail'])
+  })
+
+  it('rejects merge fields that belong to another context', async () => {
+    await asUserA(request(app).post('/api/outreach/templates').send({
+      name: 'Leaky venue mail', body_html: '<p>{{invoice.total}}</p>',
+    })).expect(400)
+    await asUserA(request(app).post('/api/outreach/templates').send({
+      name: 'Leaky invoice mail', context: 'invoice', body_html: '<p>{{venue.name}}</p>',
+    })).expect(400)
+  })
+
+  it('rejects a foreign token introduced by an update', async () => {
+    const created = await asUserA(request(app).post('/api/outreach/templates').send({
+      name: 'Invoice mail', context: 'invoice', body_html: '<p>{{invoice.number}}</p>',
+    })).expect(201)
+    await asUserA(request(app).patch(`/api/outreach/templates/${created.body.id}`)
+      .send({ body_html: '<p>{{venue.name}}</p>' })).expect(400)
+  })
+
+  it('refuses to change a template context', async () => {
+    const created = await asUserA(request(app).post('/api/outreach/templates').send({
+      name: 'Invoice mail', context: 'invoice', body_html: '<p>{{invoice.number}}</p>',
+    })).expect(201)
+    await asUserA(request(app).patch(`/api/outreach/templates/${created.body.id}`)
+      .send({ context: 'venue' })).expect(400)
+    const after = await asUserA(request(app).get(`/api/outreach/templates/${created.body.id}`)).expect(200)
+    expect(after.body.context).toBe('invoice')
+  })
 })

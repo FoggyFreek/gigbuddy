@@ -1,5 +1,9 @@
+import { invoiceDefault } from './invoiceDefaults.ts'
+import type { TemplateContext } from '../outreachTemplates.ts'
+
 export interface OutreachDefault {
   key: string
+  context: TemplateContext
   locale: 'nl' | 'en'
   tenantKinds: readonly ('band' | 'personal')[]
   label: string
@@ -103,10 +107,12 @@ const visualPitchNl = visualPitch('nl')
 const visualPitchEn = visualPitch('en')
 
 export const OUTREACH_DEFAULTS: readonly OutreachDefault[] = Object.freeze([
-  { key: 'venue-booking-pitch', locale: 'nl', tenantKinds: ['band', 'personal'], label: 'Visual venue booking pitch', description: 'A colorful, section-based introduction with cards and a call to action.', subject: '{{band.name}} × {{venue.name}}', ...visualPitchNl },
-  { key: 'venue-follow-up', locale: 'nl', tenantKinds: ['band', 'personal'], label: 'Venue follow-up', description: 'Follow up on an earlier introduction.', subject: 'Even terugkomend op {{band.name}}', doc: doc('Hoi {{contact.first_name}}, ik kom graag even terug op mijn eerdere bericht over {{band.name}}.') },
-  { key: 'festival-pitch', locale: 'nl', tenantKinds: ['band'], label: 'Festival pitch', description: 'Pitch a band to a festival.', subject: '{{band.name}} voor {{venue.name}}', doc: doc('Hoi {{contact.first_name}}, wij zijn {{band.name}} en stellen ons graag voor aan {{venue.name}}.') },
-  { key: 'venue-booking-pitch-en', locale: 'en', tenantKinds: ['band', 'personal'], label: 'Visual venue booking pitch (English)', description: 'A colorful, section-based introduction with cards and a call to action.', subject: '{{band.name}} × {{venue.name}}', ...visualPitchEn },
-  { key: 'venue-follow-up-en', locale: 'en', tenantKinds: ['band', 'personal'], label: 'Venue follow-up (English)', description: 'Follow up on an earlier introduction.', subject: 'Following up about {{band.name}}', doc: doc('Hi {{contact.first_name}}, I wanted to follow up on my earlier message about {{band.name}}.') },
-  { key: 'festival-pitch-en', locale: 'en', tenantKinds: ['band'], label: 'Festival pitch (English)', description: 'Pitch a band to a festival.', subject: '{{band.name}} for {{venue.name}}', doc: doc('Hi {{contact.first_name}}, we are {{band.name}} and would love to introduce ourselves to {{venue.name}}.') },
+  { key: 'venue-booking-pitch', context: 'venue', locale: 'nl', tenantKinds: ['band', 'personal'], label: 'Visual venue booking pitch', description: 'A colorful, section-based introduction with cards and a call to action.', subject: '{{band.name}} × {{venue.name}}', ...visualPitchNl },
+  { key: 'venue-follow-up', context: 'venue', locale: 'nl', tenantKinds: ['band', 'personal'], label: 'Venue follow-up', description: 'Follow up on an earlier introduction.', subject: 'Even terugkomend op {{band.name}}', doc: doc('Hoi {{contact.first_name}}, ik kom graag even terug op mijn eerdere bericht over {{band.name}}.') },
+  { key: 'festival-pitch', context: 'venue', locale: 'nl', tenantKinds: ['band'], label: 'Festival pitch', description: 'Pitch a band to a festival.', subject: '{{band.name}} voor {{venue.name}}', doc: doc('Hoi {{contact.first_name}}, wij zijn {{band.name}} en stellen ons graag voor aan {{venue.name}}.') },
+  { key: 'venue-booking-pitch-en', context: 'venue', locale: 'en', tenantKinds: ['band', 'personal'], label: 'Visual venue booking pitch (English)', description: 'A colorful, section-based introduction with cards and a call to action.', subject: '{{band.name}} × {{venue.name}}', ...visualPitchEn },
+  { key: 'venue-follow-up-en', context: 'venue', locale: 'en', tenantKinds: ['band', 'personal'], label: 'Venue follow-up (English)', description: 'Follow up on an earlier introduction.', subject: 'Following up about {{band.name}}', doc: doc('Hi {{contact.first_name}}, I wanted to follow up on my earlier message about {{band.name}}.') },
+  { key: 'festival-pitch-en', context: 'venue', locale: 'en', tenantKinds: ['band'], label: 'Festival pitch (English)', description: 'Pitch a band to a festival.', subject: '{{band.name}} for {{venue.name}}', doc: doc('Hi {{contact.first_name}}, we are {{band.name}} and would love to introduce ourselves to {{venue.name}}.') },
+  { key: 'invoice-standard', context: 'invoice', locale: 'nl', tenantKinds: ['band', 'personal'], ...invoiceDefault('nl') },
+  { key: 'invoice-standard-en', context: 'invoice', locale: 'en', tenantKinds: ['band', 'personal'], ...invoiceDefault('en') },
 ])

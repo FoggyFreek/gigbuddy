@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import HistoryIcon from '@mui/icons-material/History'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -27,6 +28,7 @@ import { useProfile } from '../../../../contexts/profileContext.ts'
 import type { IntegrationName } from '../../../../utils/integrations.ts'
 import { TENANT_CAPABILITIES } from '../../../../auth/tenantCapabilities.ts'
 import SenderIdentitySection from '../../../../promotion/outreach/components/SenderIdentitySection.tsx'
+import ResendActivityDialog from '../../../../promotion/outreach/components/ResendActivityDialog.tsx'
 
 // Shopify client ids aren't secret but are long; collapse the middle so the
 // display value doesn't eat the card's horizontal space.
@@ -824,8 +826,24 @@ export function ResendKeySection() {
         remove: t($ => $.resend.remove),
       }}
       mt={3}
-      additionalContent={<SenderIdentitySection />}
+      // Key, then the sender identity, then a way into what was sent with them.
+      additionalContent={<><SenderIdentitySection /><ResendActivitySection /></>}
     />
+  )
+}
+
+// The log and the suppression list are browsing surfaces, not settings, so they
+// open in a dialog instead of stretching the integrations list.
+function ResendActivitySection() {
+  const { t } = useTranslation('outreach')
+  const [open, setOpen] = useState(false)
+  return (
+    <Box sx={{ mt: 2 }}>
+      <Button variant="outlined" startIcon={<HistoryIcon />} onClick={() => setOpen(true)}>
+        {t($ => $.campaigns.activityTitle)}
+      </Button>
+      <ResendActivityDialog open={open} onClose={() => setOpen(false)} />
+    </Box>
   )
 }
 

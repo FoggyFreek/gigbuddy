@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { extractTokens, findUnresolvable, mergeBlocks, mergeTokens } from '../../../../shared/outreachMerge.js'
-import { fieldsForTemplate } from '../../../../shared/outreachFields.js'
+import { fieldsForContext } from '../../../../shared/outreachContexts.js'
+import { normalizeTokenCase } from '../../../../shared/outreachMerge.js'
 import { formatOutreachValue } from '../../../../server/promotion/outreach/fields/formatters.js'
 import { resolveOutreachRawValues } from '../../../../server/promotion/outreach/fields/resolvers.js'
 
@@ -30,8 +31,31 @@ describe('outreach merge pipeline', () => {
     expect(formatOutreachValue('2027-03-14', 'date', { locale: 'en' })).toContain('14 March 2027')
   })
 
+  // html-to-text uppercases h1-h6 when building the plain-text body, so a merge
+  // field dropped into a heading comes back as {{INVOICE.NUMBER}}.
+  it('restores token case mangled by the plain-text renderer', () => {
+    expect(normalizeTokenCase('FACTUURNUMMER: {{INVOICE.NUMBER}}'))
+      .toBe('FACTUURNUMMER: {{invoice.number}}')
+    expect(normalizeTokenCase('{{#MESSAGE}}')).toBe('{{#message}}')
+    expect(normalizeTokenCase('{{band.name}}')).toBe('{{band.name}}')
+    // Only the token is touched; surrounding copy keeps its casing.
+    expect(normalizeTokenCase('SHOUTING {{Band.Name}}')).toBe('SHOUTING {{band.name}}')
+  })
+
+  it('keeps invoice fields out of venue templates and vice versa', () => {
+    const venue = fieldsForContext('venue').map((entry) => entry.key)
+    const invoice = fieldsForContext('invoice').map((entry) => entry.key)
+    expect(venue).not.toContain('invoice.total')
+    expect(venue).not.toContain('customer.greeting')
+    expect(invoice).not.toContain('venue.name')
+    expect(invoice).toContain('invoice.total')
+    // Band fields belong to both contexts.
+    expect(venue).toContain('band.name')
+    expect(invoice).toContain('band.name')
+  })
+
   it('drives the venue-email picker from the catalogue', () => {
-    const keys = fieldsForTemplate().map((entry) => entry.key)
+    const keys = fieldsForContext('venue').map((entry) => entry.key)
     expect(keys).toContain('band.name')
     expect(keys).toContain('venue.name')
     expect(keys).not.toContain('gig.date')
@@ -47,7 +71,7 @@ describe('outreach merge pipeline', () => {
       'band.facebook_handle',
       'band.bandsintown_artist_id',
     ]
-    const keys = fieldsForTemplate().map((entry) => entry.key)
+    const keys = fieldsForContext('venue').map((entry) => entry.key)
     expect(keys).toEqual(expect.arrayContaining(profileFields))
     expect(keys).not.toContain('band.spotify')
     expect(keys).not.toContain('band.website')

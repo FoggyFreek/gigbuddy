@@ -689,6 +689,9 @@ describe('cost lines', () => {
     await user.click(within(reopened).getByRole('button', { name: /delete/i }))
 
     await waitFor(() => expect(deleteGigCost).toHaveBeenCalledWith(1, 41))
+    // Same close transition as above: the confirmation still aria-hides the app
+    // right after Delete, so the tab buttons are not reachable until it is gone.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     await openFinance(user)
     await waitFor(() => expect(statementValue('Costs')).toBe('€ 25,00'))
   })

@@ -9,6 +9,15 @@ export function escapeHtml(value) {
     .replaceAll("'", '&#39;')
 }
 
+// The plain-text renderer uppercases heading content (html-to-text does this for
+// h1-h6 by default), so a merge field dropped into a heading serializes as
+// {{INVOICE.NUMBER}} — a token that matches no catalogue key and would silently
+// never merge. Every key is lowercase, so restoring the case is safe and makes
+// the editor's output canonical whatever the author wrapped the field in.
+export function normalizeTokenCase(input = '') {
+  return String(input).replace(TOKEN_PATTERN, (_original, token) => `{{${token.toLowerCase()}}}`)
+}
+
 export function extractTokens(input = '') {
   const tokens = []
   const seen = new Set()

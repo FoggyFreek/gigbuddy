@@ -1,8 +1,11 @@
 import { renderBandAddress, renderVenueAddress } from './address.js'
+import { renderInvoicePaymentBlock, renderMessageBlock } from './invoicePayment.js'
 
 export const BLOCK_RENDERERS = Object.freeze({
   'band.address': renderBandAddress,
   'venue.address': renderVenueAddress,
+  'invoice.payment_block': renderInvoicePaymentBlock,
+  message: renderMessageBlock,
 })
 
 export function renderOutreachBlocks(keys, context, { onUnknown } = {}) {

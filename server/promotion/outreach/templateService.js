@@ -1,7 +1,7 @@
 import { hasPermission, PERMISSIONS } from '../../auth/permissions.js'
 import { limitedCollection } from '../../platform/collections/limitedCollectionService.js'
 import { badRequest, conflict, forbidden, notFound } from '../../platform/http/serviceErrors.js'
-import { fieldsForTemplate } from '../../../shared/outreachFields.js'
+import { fieldsForContext, isTemplateContext, normalizeTemplateContext } from '../../../shared/outreachContexts.js'
 import { formatOutreachValue } from './fields/formatters.js'
 import { resolveOutreachRawValues } from './fields/resolvers.js'
 import { fetchProfileTenant } from '../../people/profiles/profileRepository.js'
@@ -30,7 +30,9 @@ function copyName(name, attempt) {
 }
 
 export async function listOutreachTemplates(db, tenantId, query = {}) {
-  return limitedCollection(query.limit, (limit) => listTemplates(db, tenantId, limit))
+  if (query.context !== undefined && !isTemplateContext(query.context)) return badRequest('Invalid context')
+  const context = query.context ?? null
+  return limitedCollection(query.limit, (limit) => listTemplates(db, tenantId, limit, context))
 }
 
 export async function getOutreachTemplate(db, tenantId, templateId) {
@@ -54,7 +56,7 @@ export async function patchOutreachTemplate(db, tenantId, templateId, body, call
   const current = await fetchTemplate(db, templateId, tenantId)
   if (!current) return NOT_FOUND
   if (!canWrite(caller)) return permissionDenied()
-  const built = buildTemplateUpdateFields(body)
+  const built = buildTemplateUpdateFields(body, current.context)
   if (built.error) return badRequest(built.error)
   if (!built.fields.length) return badRequest('No valid fields to update')
   try {
@@ -88,9 +90,10 @@ export async function deleteOutreachTemplate(db, tenantId, templateId, caller) {
 }
 
 export async function listOutreachFields(db, tenantId, query = {}) {
+  if (query.context !== undefined && !isTemplateContext(query.context)) return badRequest('Invalid context')
   const tenant = await fetchProfileTenant(db, tenantId) ?? {}
   const raw = resolveOutreachRawValues({ tenant }, { locale: query.locale === 'en' ? 'en' : 'nl' })
-  const fields = fieldsForTemplate().map((entry) => ({
+  const fields = fieldsForContext(normalizeTemplateContext(query.context)).map((entry) => ({
     key: entry.key,
     token: `{{${entry.block ? '#' : ''}${entry.key}}}`,
     label: entry.key,

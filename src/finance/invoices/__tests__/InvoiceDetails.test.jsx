@@ -12,7 +12,10 @@ vi.mock('../invoices.ts', () => ({
   downloadInvoiceUbl: vi.fn(),
   downloadInvoiceUblWithPdf: vi.fn(),
   getInvoice: vi.fn(),
-  getInvoiceEmlDefaults: vi.fn(),
+  getInvoiceEmailDefaults: vi.fn(),
+  previewInvoiceEmail: vi.fn(),
+  createInvoiceEmailCampaign: vi.fn(),
+  sendInvoiceEmailCampaign: vi.fn(),
   removeInvoiceLogo: vi.fn(),
   renderInvoice: vi.fn(),
   syncInvoicePaymentLink: vi.fn(),
@@ -148,20 +151,28 @@ afterEach(async () => {
 })
 
 describe('InvoiceDetails', () => {
-  it('saves invoice changes via updateInvoice and closes', async () => {
+  it('saves invoice changes via updateInvoice and stays on the invoice', async () => {
     const onClose = vi.fn()
+    const onInvoiceUpdate = vi.fn()
     invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
-    wrap(<InvoiceDetails invoiceId={7} onClose={onClose} />)
+    invoicesApi.updateInvoice.mockResolvedValueOnce({ ...EDIT_INVOICE, customer_name: 'Venue BV' })
+    wrap(<InvoiceDetails invoiceId={7} onClose={onClose} onInvoiceUpdate={onInvoiceUpdate} />)
     await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
-    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(invoicesApi.updateInvoice).toHaveBeenCalledTimes(1))
     expect(invoicesApi.updateInvoice).toHaveBeenCalledWith(
       7,
       expect.objectContaining({ customer_name: 'Venue BV' }),
     )
-    expect(onClose).toHaveBeenCalledWith(true)
+    // Saving keeps the editor open; only delete and the close control leave it.
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+    // The list still learns about the change.
+    await waitFor(() => expect(onInvoiceUpdate).toHaveBeenCalledWith(
+      7, expect.objectContaining({ customer_name: 'Venue BV' }),
+    ))
   })
 
   it('loads and renders an existing invoice in edit mode', async () => {
@@ -218,7 +229,7 @@ describe('InvoiceDetails', () => {
 
     await userEvent.clear(vatId)
     await userEvent.type(vatId, 'NL819789471B01')
-    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(invoicesApi.updateInvoice).toHaveBeenCalledWith(
       7,
@@ -299,7 +310,7 @@ describe('InvoiceDetails', () => {
     await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
     expect(screen.getByText(/This invoice is finalized/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
     expect(screen.getByDisplayValue('Venue BV')).toBeDisabled()
   })
 
@@ -314,7 +325,7 @@ describe('InvoiceDetails', () => {
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
-    await userEvent.click(screen.getByRole('button', { name: 'Re-generate PDF' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Regenerate' }))
 
     await waitFor(() => expect(invoicesApi.renderInvoice).toHaveBeenCalledWith(7))
     // The download entry follows the newly stored key (the old one is deleted server-side).
@@ -335,7 +346,7 @@ describe('InvoiceDetails', () => {
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText(/This invoice is finalized/)).toBeInTheDocument())
 
-    await userEvent.click(screen.getByRole('button', { name: 'Re-generate PDF' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Regenerate' }))
     await waitFor(() => expect(invoicesApi.renderInvoice).toHaveBeenCalledWith(7))
 
     // Everything derived from the loaded invoice must survive: read-only mode,
@@ -344,7 +355,7 @@ describe('InvoiceDetails', () => {
     expect(await screen.findByText(/This invoice is finalized/)).toBeInTheDocument()
     expect(screen.getByText('sent')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Venue BV')).toBeDisabled()
-    expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
   })
 
   it('surfaces an error when re-generating the PDF fails', async () => {
@@ -353,7 +364,7 @@ describe('InvoiceDetails', () => {
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
-    await userEvent.click(screen.getByRole('button', { name: 'Re-generate PDF' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Regenerate' }))
 
     expect(await screen.findByText('render boom')).toBeInTheDocument()
     // The previously stored PDF is still downloadable.
@@ -362,12 +373,31 @@ describe('InvoiceDetails', () => {
       .toHaveAttribute('href', '/api/files/tenants/1/invoices/old-key.pdf')
   })
 
+  it('keeps deleting at the foot of the page, apart from the action row', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    const buttons = screen.getAllByRole('button').map((button) => button.textContent)
+    expect(buttons).toContain('Delete')
+    // It trails the row actions rather than sitting among them.
+    expect(buttons.indexOf('Delete')).toBeGreaterThan(buttons.indexOf('Save'))
+  })
+
+  it('offers no delete on a finalized invoice', async () => {
+    invoicesApi.getInvoice.mockResolvedValueOnce({ ...EDIT_INVOICE, finalized_at: '2026-03-01T00:00:00Z', status: 'sent' })
+    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
+  })
+
   it('offers no re-generate control before a PDF has been rendered', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
-    expect(screen.queryByRole('button', { name: 'Re-generate PDF' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Regenerate' })).toBeNull()
     await openDownloadMenu()
     expect(screen.queryByRole('menuitem', { name: /Download PDF/ })).toBeNull()
   })
@@ -380,12 +410,19 @@ describe('InvoiceDetails', () => {
       wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
       await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
-      expect(screen.queryByRole('button', { name: 'Re-generate PDF' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Regenerate' })).toBeNull()
       // Downloads are read affordances — those routes carry no finance.manage gate.
       await openDownloadMenu()
       expect(screen.getByRole('menuitem', { name: /Download PDF/ }))
         .toHaveAttribute('href', '/api/files/tenants/1/invoices/old-key.pdf')
-      expect(screen.getByRole('menuitem', { name: 'Download email' })).toBeInTheDocument()
+    })
+
+    it('withholds the send-email action, which is a mutation', async () => {
+      invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+      wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
+      await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+      expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
     })
 
     it('renders an editable draft read-only and withholds save/delete/status actions', async () => {
@@ -394,7 +431,7 @@ describe('InvoiceDetails', () => {
       await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
       expect(screen.getByDisplayValue('Venue BV')).toBeDisabled()
-      expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
       expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
       expect(screen.queryByRole('button', { name: 'Mark as sent' })).toBeNull()
       // The lines editor disables rather than hides its controls — the existing
@@ -435,7 +472,7 @@ describe('InvoiceDetails', () => {
       rerender(
         <InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />,
       )
-      expect(screen.queryByRole('button', { name: 'Re-generate PDF' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Regenerate' })).toBeNull()
       expect(invoicesApi.renderInvoice).not.toHaveBeenCalled()
     })
   })
@@ -596,16 +633,21 @@ describe('InvoiceDetails', () => {
     expect(screen.getByAltText('Invoice logo').src).toContain('/api/files/logo/dark.png')
   })
 
-  it('loads the default personal message into the EML dialog', async () => {
+  it('loads the default message into the email dialog from its own button', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
-    invoicesApi.getInvoiceEmlDefaults.mockResolvedValueOnce({ personalMessage: 'Hartelijk dank voor de samenwerking.' })
+    invoicesApi.getInvoiceEmailDefaults.mockResolvedValueOnce({
+      templates: [{ id: 3, name: 'Invoice email', locale: 'nl' }],
+      message: 'Hartelijk dank voor de samenwerking.',
+      to: 'klant@example.com',
+      status: 'draft',
+    })
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
-    await openDownloadMenu()
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Download email' }))
+    // Emailing has its own control now; it is not in the download menu.
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }))
     expect(await screen.findByDisplayValue('Hartelijk dank voor de samenwerking.')).toBeInTheDocument()
-    expect(invoicesApi.getInvoiceEmlDefaults).toHaveBeenCalledWith(7)
+    expect(invoicesApi.getInvoiceEmailDefaults).toHaveBeenCalledWith(7)
   })
 
   it('renders the invoice editor in Dutch', async () => {
@@ -617,7 +659,7 @@ describe('InvoiceDetails', () => {
     expect(screen.getByLabelText('Factuurdatum')).toBeInTheDocument()
     expect(screen.getByText('Klant')).toBeInTheDocument()
     expect(screen.getByText('Regels')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Wijzigingen opslaan' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Opslaan' })).toBeInTheDocument()
     expect(screen.getByText('Betaallink')).toBeInTheDocument()
   })
 })
@@ -724,7 +766,6 @@ describe('InvoiceDetails — UBL/Peppol download', () => {
     await openDownloadMenu('Downloaden')
     expect(screen.getByRole('menuitem', { name: /UBL downloaden \(XML\)/ })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'UBL met ingesloten pdf-factuur' })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: 'E-mail downloaden' })).toBeInTheDocument()
   })
 
   it('groups all download variants under one menu', async () => {
@@ -739,7 +780,6 @@ describe('InvoiceDetails — UBL/Peppol download', () => {
     expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       'Download UBL (XML)',
       'UBL with embedded PDF invoice',
-      'Download email',
     ])
   })
 
@@ -758,7 +798,6 @@ describe('InvoiceDetails — UBL/Peppol download', () => {
       'Download PDF',
       'Download UBL (XML)',
       'UBL with embedded PDF invoice',
-      'Download email',
     ])
   })
 })

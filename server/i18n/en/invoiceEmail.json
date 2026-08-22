@@ -1,0 +1,21 @@
+{
+  "subject": "Invoice {{number}} – {{band}}",
+  "greeting": {
+    "named": "Dear {{title}}{{familyName}},",
+    "fallback": "Dear Sir or Madam,"
+  },
+  "defaultMessage": "Thank you for the pleasant collaboration{{gigPart}}.\n\nPlease find our invoice attached.",
+  "gigPart": " during the performance by {{band}} on {{date}}",
+  "payment": {
+    "title": "Payment link",
+    "intro": "You can pay your invoice using the payment link below:",
+    "button": "Pay invoice {{number}}",
+    "qrAlt": "Payment link QR code",
+    "qrCaption": "Scan to pay"
+  },
+  "file": {
+    "pdf": "invoice-{{number}}.pdf",
+    "xml": "invoice-{{number}}.xml",
+    "eml": "invoice-{{number}}.eml"
+  }
+}
