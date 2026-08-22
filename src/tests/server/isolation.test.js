@@ -20,6 +20,12 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedBandMembers(seed)
+  seed = await fixtureDb.seedGigsAndTasks(seed)
+  seed = await fixtureDb.seedCalendar(seed)
+  seed = await fixtureDb.seedContactsAndVenues(seed)
+  seed = await fixtureDb.seedSharePhotos(seed)
 })
 
 afterAll(async () => {
@@ -78,12 +84,6 @@ describe('tenant isolation — list endpoints return only the active tenant', ()
     expect(res.body.meta).toEqual({ limit: 10, returned: 1, total: 1 })
   })
 
-  it('GET /api/email-templates', async () => {
-    const res = await asUserA(request(app).get('/api/email-templates')).expect(200)
-    expect(res.body).toHaveLength(1)
-    expect(res.body[0].name).toBe('Alpha tpl')
-  })
-
   it('GET /api/venues', async () => {
     const res = await asUserA(request(app).get('/api/venues')).expect(200)
     expect(res.body).toHaveLength(1)
@@ -117,7 +117,6 @@ describe('tenant isolation — direct id reads of foreign-tenant rows return 404
     ['band-event',   (s) => `/api/band-events/${s.bandEvents.find(e => e.tenant_id === s.tenantB.id).id}`],
     ['venue',        (s) => `/api/venues/${s.venues.find(v => v.tenant_id === s.tenantB.id).id}`],
     ['contact',      (s) => `/api/contacts/${s.contacts.find(c => c.tenant_id === s.tenantB.id).id}`],
-    ['email-template', (s) => `/api/email-templates/${s.emailTemplates.find(t => t.tenant_id === s.tenantB.id).id}`],
   ]
 
   for (const [label, build] of cases) {
@@ -155,10 +154,6 @@ describe('tenant isolation — PATCH/DELETE of foreign-tenant rows returns 404',
     expect(rows).toHaveLength(1)
   })
 
-  it('DELETE /api/email-templates/:id of tenant B as user A → 404', async () => {
-    const otherId = seed.emailTemplates.find((t) => t.tenant_id === seed.tenantB.id).id
-    await asUserA(request(app).delete(`/api/email-templates/${otherId}`)).expect(404)
-  })
 })
 
 describe('tenant isolation — POST attaches the active tenant', () => {

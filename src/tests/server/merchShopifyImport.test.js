@@ -32,6 +32,8 @@ beforeEach(async () => {
   vi.unstubAllGlobals()
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedAccountingForTenants(seed)
   resetShopifyTokenCacheForTests()
 })
 

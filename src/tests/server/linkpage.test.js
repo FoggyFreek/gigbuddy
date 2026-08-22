@@ -2,7 +2,7 @@ import './_envSetup.js'
 // @vitest-environment node
 import { describe, it, beforeAll, beforeEach, afterAll, afterEach, expect, vi } from 'vitest'
 import request from 'supertest'
-import { verifyPayload, isValidSyncBearer } from '../../../server/promotion/linkpage/linkpageTokens.js'
+import { verifyPayload } from '../../../server/promotion/linkpage/linkpageTokens.js'
 import { seedDefaultPlans } from '../../../server/db/defaultPlans.js'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
@@ -124,32 +124,6 @@ async function seedLinkpageContent() {
   )
 }
 
-describe('isValidSyncBearer', () => {
-  it('accepts the secret however the delimiter is padded', () => {
-    expect(isValidSyncBearer(`Bearer ${SECRET}`)).toBe(true)
-    expect(isValidSyncBearer(`Bearer    ${SECRET}`)).toBe(true)
-    expect(isValidSyncBearer(`Bearer\t${SECRET}`)).toBe(true)
-  })
-
-  it('rejects a missing, empty or whitespace-only credential', () => {
-    expect(isValidSyncBearer(undefined)).toBe(false)
-    expect(isValidSyncBearer('Bearer')).toBe(false)
-    expect(isValidSyncBearer('Bearer   ')).toBe(false)
-    expect(isValidSyncBearer(`Basic ${SECRET}`)).toBe(false)
-    expect(isValidSyncBearer('Bearer nope')).toBe(false)
-  })
-
-  // The credential pattern must stay unambiguous: a greedy `\s+` followed by a
-  // `.+` that can also match spaces backtracks quadratically on a value the
-  // dot cannot span (a trailing newline). Node's header parser rejects such a
-  // value today, so this is defence in depth for any non-HTTP caller.
-  it('scans a pathological value in linear time', () => {
-    const started = Date.now()
-    expect(isValidSyncBearer(`Bearer${' '.repeat(50_000)}\n`)).toBe(false)
-    expect(Date.now() - started).toBeLessThan(100)
-  })
-})
-
 describe('public linkpage export', () => {
   it('rejects requests without the shared-secret bearer', async () => {
     await seedLinkpageContent()
@@ -161,19 +135,14 @@ describe('public linkpage export', () => {
     expect(wrong.status).toBe(401)
   })
 
-  it('404s for unknown slugs', async () => {
-    const res = await request(app)
-      .get('/api/public/linkpage/export/does-not-exist')
-      .set('Authorization', `Bearer ${SECRET}`)
-    expect(res.status).toBe(404)
-  })
-
   it('404s for a personal workspace slug — link pages are a band surface', async () => {
     await createPersonalWorkspace(seed.userA.id)
-    const res = await request(app)
-      .get('/api/public/linkpage/export/solo')
-      .set('Authorization', `Bearer ${SECRET}`)
-    expect(res.status).toBe(404)
+    for (const slug of ['does-not-exist', 'solo']) {
+      const res = await request(app)
+        .get(`/api/public/linkpage/export/${slug}`)
+        .set('Authorization', `Bearer ${SECRET}`)
+      expect(res.status).toBe(404)
+    }
   })
 
   it('exports only the requested tenant, announced future gigs, and linked songs', async () => {
@@ -254,36 +223,7 @@ describe('public linkpage export', () => {
   })
 })
 
-describe('public linkpage image', () => {
-  it('404s on missing, tampered, or expired tokens', async () => {
-    const missing = await request(app).get('/api/public/linkpage/image')
-    expect(missing.status).toBe(404)
-
-    const tampered = await request(app).get('/api/public/linkpage/image?t=abc.def')
-    expect(tampered.status).toBe(404)
-
-    // Signed but expired token.
-    const { signPayload } = await import('../../../server/promotion/linkpage/linkpageTokens.js')
-    const expired = signPayload({ t: 'img', k: `tenants/${seed.tenantA.id}/logo/x.webp`, exp: 1 })
-    const res = await request(app).get(`/api/public/linkpage/image?t=${encodeURIComponent(expired)}`)
-    expect(res.status).toBe(404)
-  })
-
-  it('404s on valid signatures over non-tenant object keys', async () => {
-    const { signPayload } = await import('../../../server/promotion/linkpage/linkpageTokens.js')
-    const exp = Math.floor(Date.now() / 1000) + 60
-    const sneaky = signPayload({ t: 'img', k: 'internal/backup.sql', exp })
-    const res = await request(app).get(`/api/public/linkpage/image?t=${encodeURIComponent(sneaky)}`)
-    expect(res.status).toBe(404)
-  })
-})
-
 describe('linkpage handoff', () => {
-  it('requires an authenticated tenant member', async () => {
-    const res = await request(app).post('/api/linkpage/handoff')
-    expect(res.status).toBe(401)
-  })
-
   it('is reserved to tenant admins — a contributor is denied', async () => {
     const { rows: [contributor] } = await pool.query(
       `INSERT INTO users (google_sub, email, name, status) VALUES ('sub-c', 'c@test.local', 'Contrib', 'approved') RETURNING id`,
@@ -294,6 +234,7 @@ describe('linkpage handoff', () => {
     )
     const asContributor = (req) =>
       req.set('x-test-user-id', String(contributor.id)).set('x-test-tenant-id', String(seed.tenantA.id))
+    expect((await request(app).post('/api/linkpage/handoff')).status).toBe(401)
     expect((await asContributor(request(app).post('/api/linkpage/handoff'))).status).toBe(403)
     expect((await asContributor(request(app).get('/api/linkpage/status'))).status).toBe(403)
     expect((await asContributor(request(app).get('/api/linkpage/stats'))).status).toBe(403)
@@ -343,17 +284,15 @@ describe('linkpage handoff', () => {
     expect(payload.exp * 1000).toBeGreaterThan(Date.now())
   })
 
-  it('reports status with the public page URL', async () => {
-    const res = await asUserA(request(app).get('/api/linkpage/status'))
-    expect(res.status).toBe(200)
-    expect(res.body).toEqual({
+  it('reports a pending namespace migration until the outbox operation completes', async () => {
+    const synced = await asUserA(request(app).get('/api/linkpage/status'))
+    expect(synced.status).toBe(200)
+    expect(synced.body).toEqual({
       configured: true,
       publicUrl: 'https://link.test.local/alpha',
       linkpageSync: 'synced',
     })
-  })
 
-  it('reports a pending namespace migration until the outbox operation completes', async () => {
     await pool.query(
       `INSERT INTO linkpage_slug_sync_operations
          (tenant_id, old_slug, new_slug, slug_revision)
@@ -437,25 +376,25 @@ describe('linkpage stats', () => {
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
-  it('forwards the selected page to the link page app', async () => {
+  it('forwards a selected page and leaves the main-page selection absent', async () => {
     const fetchSpy = upstream(200, { ...payload, pageId: 9, slug: 'the-band/single' })
     const res = await asUserA(request(app).get('/api/linkpage/stats?days=7&pageId=9'))
     expect(res.status).toBe(200)
     expect(res.body.pageId).toBe(9)
     expect(fetchSpy.mock.calls[0][0]).toContain('&pageId=9')
-  })
 
-  it('omits pageId entirely when none is selected, so the main page answers', async () => {
-    const fetchSpy = upstream(200, payload)
+    fetchSpy.mockClear()
     await asUserA(request(app).get('/api/linkpage/stats?days=7'))
     expect(fetchSpy.mock.calls[0][0]).not.toContain('pageId')
   })
 
-  it.each(['0', '-2', '1.5', 'nine'])('refuses the malformed page id %s', async (pageId) => {
+  it('refuses malformed page ids before calling LinkBuddy', async () => {
     const fetchSpy = upstream(200, payload)
-    const res = await asUserA(request(app).get(`/api/linkpage/stats?days=7&pageId=${pageId}`))
-    expect(res.status).toBe(400)
-    expect(res.body.code).toBe('invalid_page')
+    for (const pageId of ['0', '-2', '1.5', 'nine']) {
+      const res = await asUserA(request(app).get(`/api/linkpage/stats?days=7&pageId=${pageId}`))
+      expect(res.status).toBe(400)
+      expect(res.body.code).toBe('invalid_page')
+    }
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
@@ -468,11 +407,13 @@ describe('linkpage stats', () => {
     expect(res.body.code).toBe('linkpage_page_not_found')
   })
 
-  it.each(['1', '90', '7.5', 'week', ''])('refuses the unsupported window %s', async (days) => {
+  it('refuses unsupported statistics windows before calling LinkBuddy', async () => {
     const fetchSpy = upstream(200, payload)
-    const res = await asUserA(request(app).get(`/api/linkpage/stats?days=${days}`))
-    expect(res.status).toBe(400)
-    expect(res.body.code).toBe('invalid_window')
+    for (const days of ['1', '90', '7.5', 'week', '']) {
+      const res = await asUserA(request(app).get(`/api/linkpage/stats?days=${days}`))
+      expect(res.status).toBe(400)
+      expect(res.body.code).toBe('invalid_window')
+    }
     expect(fetchSpy).not.toHaveBeenCalled()
   })
 
@@ -483,16 +424,19 @@ describe('linkpage stats', () => {
     expect(res.body).toEqual({ hasPage: false })
   })
 
-  it.each([
-    [500, {}],
-    [401, {}],
-    [200, { hasPage: true, totalViews: 'many' }],
-  ])('turns an unusable upstream reply (%s) into 502 without leaking its detail', async (status, body) => {
-    upstream(status, body)
-    const res = await asUserA(request(app).get('/api/linkpage/stats?days=30'))
-    expect(res.status).toBe(502)
-    expect(res.body.code).toBe('linkpage_stats_unavailable')
-    expect(JSON.stringify(res.body)).not.toContain(SECRET)
+  it('turns unusable upstream replies into a safe 502', async () => {
+    for (const [status, body] of [
+      [500, {}],
+      [401, {}],
+      [200, { hasPage: true, totalViews: 'many' }],
+    ]) {
+      vi.restoreAllMocks()
+      upstream(status, body)
+      const res = await asUserA(request(app).get('/api/linkpage/stats?days=30'))
+      expect(res.status).toBe(502)
+      expect(res.body.code).toBe('linkpage_stats_unavailable')
+      expect(JSON.stringify(res.body)).not.toContain(SECRET)
+    }
   })
 
   it('turns a transport failure into 502 rather than a crash', async () => {

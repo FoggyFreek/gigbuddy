@@ -71,6 +71,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedAccountingForTenants(seed)
   const { rows } = await pool.query(
     'SELECT * FROM tenant_accounting_settings WHERE tenant_id = $1', [seed.tenantA.id],
   )

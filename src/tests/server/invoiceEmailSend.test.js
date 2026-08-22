@@ -50,6 +50,8 @@ beforeEach(async () => {
   sent.length = 0
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedAccountingForTenants(seed)
 })
 
 afterAll(async () => { await pool.end() })

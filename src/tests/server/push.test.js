@@ -36,6 +36,8 @@ beforeEach(async () => {
   mockSendNotification.mockClear()
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedBandMembers(seed)
 
   // Two subscriptions for tenant A's user, one for tenant B's user.
   await pool.query(

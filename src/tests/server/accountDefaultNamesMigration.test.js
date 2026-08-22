@@ -38,6 +38,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedAccountingForTenants(seed)
   // seedTwoTenants gives both tenants an nl profile; move B to a country with no
   // label pack so "kept the English base" is distinguishable from "untouched".
   await pool.query(

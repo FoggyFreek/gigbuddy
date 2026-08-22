@@ -29,6 +29,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedAccountingForTenants(seed)
   await pool.query(
     `UPDATE tenants SET formal_name = 'The Woods BV', address_street = 'Straat 1',
        address_postal_code = '9751TG', address_city = 'Haren', address_country = 'Netherlands',

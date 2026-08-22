@@ -71,6 +71,11 @@ describe('ownerless tenants bypass every gate', () => {
 })
 
 describe('finance read-only mode (fallback-locked tenant)', () => {
+  beforeEach(async () => {
+    const fixtureDb = await import('./_db.js')
+    seed = await fixtureDb.seedAccountingForTenants(seed)
+  })
+
   it('blocks finance writes with entitlement_required', async () => {
     await lockTenantA()
     expectEntitlementDenied(await asUserA(request(app).post('/api/accounts').send({})), 'finance')

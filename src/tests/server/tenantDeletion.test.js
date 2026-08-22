@@ -28,6 +28,9 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedGigsAndTasks(seed)
+  seed = await fixtureDb.seedSharePhotos(seed)
   deleteTenantObjects.mockReset().mockResolvedValue(undefined)
 })
 

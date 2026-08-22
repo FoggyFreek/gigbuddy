@@ -22,7 +22,7 @@ const entitlements = (features = {}, limits = {}) => ({
   features: {
     finance: false, integrations: false, customization: false,
     song_files: false, chordpro: false, public_promotion: false, linkpage: false,
-    custom_slug: false, calendar_sync: false,
+    custom_slug: false, calendar_sync: false, outreach: false,
     ...features,
   },
   limits: {

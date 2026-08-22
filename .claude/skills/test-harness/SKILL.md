@@ -31,7 +31,14 @@ or seeding — **never weaken that check**; it is the only thing standing betwee
 - `_envSetup.js` stays the **first import** in every backend test file.
 - `_app.js` builds a real Express app with `x-test-user-id` / `x-test-tenant-id` standing in
   for OIDC, and CSRF short-circuited.
-- `_db.js` exposes `runMigrations`, `truncateAll`, `seedTwoTenants`.
+- `_db.js` exposes `runMigrations`, `truncateAll`, and a lean `seedTwoTenants` that
+  creates only tenants, users, and memberships. Compose only the rows a suite needs:
+  `seedBandMembers`, `seedGigsAndTasks`, `seedCalendar`, `seedContactsAndVenues`,
+  `seedSharePhotos`, and `seedAccountingForTenants`.
+- There is deliberately no full-fixture helper. A finance suite explicitly applies
+  `seedAccountingForTenants`; a mixed suite applies it in the narrowest `describe` whose
+  code path reads accounts, accounting settings, or the accounting profile. Platform
+  subscription billing is not tenant accounting and stays lean.
 - Billing tests: `_fakeProvider.js` (injected via `setPaymentProviderForTests`) and
   subscription-row helpers in `_billing.js`.
 - Test users get terms auto-accepted via a column DEFAULT in `_db.js` — clear both columns

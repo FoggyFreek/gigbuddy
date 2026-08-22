@@ -53,6 +53,8 @@ async function createPersonalTenant(slug, userId) {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedSharePhotos(seed)
   await isolateProfileIds(pool)
   personalA = await createPersonalTenant('personal-a', seed.userA.id)
   personalB = await createPersonalTenant('personal-b', seed.userB.id)

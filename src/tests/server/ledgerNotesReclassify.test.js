@@ -31,6 +31,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedAccountingForTenants(seed)
 })
 
 afterAll(async () => {
@@ -478,6 +480,8 @@ describe('reclassification — POST /api/ledger/:id/reclassify', () => {
     // Reversed original (closed period).
     await truncateAll()
     seed = await seedTwoTenants()
+    const fixtureDb = await import('./_db.js')
+    seed = await fixtureDb.seedAccountingForTenants(seed)
     const reversedDetail = await purchaseLedgerDetail('2026-02-15')
     await closeBooksThrough('2026-05-31')
     await asUserA(request(app).post(`/api/ledger/${reversedDetail.id}/reverse`)).expect(200)

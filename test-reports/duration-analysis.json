@@ -1,0 +1,736 @@
+﻿{
+    "generated_at":  "2026-08-22T16:52:07.9981171+02:00",
+    "run_results":  [
+                        {
+                            "check":  "type-check",
+                            "status":  "passed",
+                            "duration":  "00:00:14.430",
+                            "exit_code":  0
+                        },
+                        {
+                            "check":  "lint",
+                            "status":  "passed",
+                            "duration":  "00:00:18.978",
+                            "exit_code":  0
+                        },
+                        {
+                            "check":  "frontend-tests",
+                            "status":  "passed",
+                            "tests":  2958,
+                            "files":  766,
+                            "duration":  "00:01:58.1398916",
+                            "exit_code":  0
+                        },
+                        {
+                            "check":  "backend-tests",
+                            "status":  "passed",
+                            "tests":  2621,
+                            "files":  701,
+                            "duration":  "00:24:52.679",
+                            "exit_code":  0
+                        }
+                    ],
+    "test_totals":  [
+                        {
+                            "suite":  "frontend",
+                            "tests":  2958,
+                            "passed":  2958,
+                            "failed":  0,
+                            "total_test_ms":  629150.1,
+                            "tests_over_1s":  145,
+                            "tests_over_5s":  1,
+                            "tests_over_7s":  0
+                        },
+                        {
+                            "suite":  "backend",
+                            "tests":  2621,
+                            "passed":  2621,
+                            "failed":  0,
+                            "total_test_ms":  11315852.1,
+                            "tests_over_1s":  2301,
+                            "tests_over_5s":  1417,
+                            "tests_over_7s":  103
+                        }
+                    ],
+    "slowest_tests":  [
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/ledgerNotesReclassify.test.js",
+                              "status":  "passed",
+                              "duration_ms":  13467.972,
+                              "test":  "reclassification â€” POST /api/ledger/:id/reclassify rejects voided, reversed, and correction transactions"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/notifications.test.js",
+                              "status":  "passed",
+                              "duration_ms":  12556.058,
+                              "test":  "dispatchNotification â€” fan-out targets a single member via bandMemberId, tenant-matched"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/billingLifecycle.test.js",
+                              "status":  "passed",
+                              "duration_ms":  8164.789,
+                              "test":  "the free trial refuses when no trial tier is configured"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/meHub.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7995.459,
+                              "test":  "GET /api/me/agenda drops a tenant\u0027s rows while the membership is only pending"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/gigDealTerms.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7950.582,
+                              "test":  "PATCH /api/gigs/:id â€” deal terms rejects an out-of-vocabulary breakeven_includes_venue_costs"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/tenantSelfCreate.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7894.631,
+                              "test":  "POST /api/tenants (self-service creation) a generated slug keeps the requested country through every retry"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/billingLifecycle.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7871.203,
+                              "test":  "the free trial grants entitlements immediately, with no payment at all"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/accounts.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7831.558,
+                              "test":  "accounts â€” country default names falls back to the English base when no country is supplied"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/purchaseImport.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7806.531,
+                              "test":  "POST /purchases/import matches an existing supplier by registration number when its other details differ"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/gigs.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7780.207,
+                              "test":  "gig admission â€” PATCH PATCH can set admission=paid and ticket_link together"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/invoices.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7742.288,
+                              "test":  "invoices â€” gig search does not expose another tenant gig or its invoice state"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/invoices.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7576.654,
+                              "test":  "invoices â€” isolation cross-tenant gig_id rejected with 400"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/gigDealTerms.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7571.311,
+                              "test":  "PATCH /api/gigs/:id â€” deal terms clears a nullable money field with null"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/gigs_import.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7501.709,
+                              "test":  "POST /api/gigs/import â€” basic skips rows missing event_description"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/reimbursements.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7487.761,
+                              "test":  "reimbursements â€” register settles selected purchases and posts a balanced journal"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/purchaseImport.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7480.796,
+                              "test":  "POST /purchases/import imports as a draft even for a finance manager â€” approving stays a human step"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/tenantSelfCreate.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7458.101,
+                              "test":  "POST /api/tenants (self-service creation) creates the accounting profile in the same transaction as the tenant"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/invoices.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7438.78,
+                              "test":  "invoices â€” isolation cross-tenant get returns 404"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/purchaseImport.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7431.084,
+                              "test":  "POST /purchases/import stores the embedded PDF as a readable rendering beside the source XML"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/myBandEventLinks.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7429.318,
+                              "test":  "linking an event to a band carries the band on a patched \u0027rehearsal\u0027"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/achievements.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7425.218,
+                              "test":  "GET /api/achievements unlocks the personal-note and configured-integration achievements"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/billingLifecycle.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7420.849,
+                              "test":  "the free trial keeps Gold trial access while selecting Band Silver for the paid period"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/linkpage.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7401.299,
+                              "test":  "linkpage stats requires an authenticated tenant member"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/accountingProfile.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7387.585,
+                              "test":  "accounting profile â€” country change blocks drafts and does not inspect another tenant"
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/ledgerCompliance.test.js",
+                              "status":  "passed",
+                              "duration_ms":  7381.165,
+                              "test":  "forward-only invoice status transitions blocks sent â†’ draft with 409 invalid_status_transition"
+                          }
+                      ],
+    "slowest_files":  [
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/purchases.test.js",
+                              "tests":  54,
+                              "failed":  0,
+                              "test_ms":  348100,
+                              "file_ms":  348104,
+                              "overhead_ms":  4,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/invoices.test.js",
+                              "tests":  98,
+                              "failed":  0,
+                              "test_ms":  288116.6,
+                              "file_ms":  288120.1,
+                              "overhead_ms":  3,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/adminBilling.test.js",
+                              "tests":  40,
+                              "failed":  0,
+                              "test_ms":  256498.8,
+                              "file_ms":  256499.6,
+                              "overhead_ms":  1,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/accounts.test.js",
+                              "tests":  71,
+                              "failed":  0,
+                              "test_ms":  225074.1,
+                              "file_ms":  225075.7,
+                              "overhead_ms":  2,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/accountingProfile.test.js",
+                              "tests":  34,
+                              "failed":  0,
+                              "test_ms":  221195.3,
+                              "file_ms":  221204.3,
+                              "overhead_ms":  9,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/linkpage.test.js",
+                              "tests":  34,
+                              "failed":  0,
+                              "test_ms":  220455.2,
+                              "file_ms":  220455.3,
+                              "overhead_ms":  0,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/taxSchemeEnrolments.test.js",
+                              "tests":  34,
+                              "failed":  0,
+                              "test_ms":  218176.4,
+                              "file_ms":  218176.7,
+                              "overhead_ms":  0,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/venues.test.js",
+                              "tests":  32,
+                              "failed":  0,
+                              "test_ms":  205773.9,
+                              "file_ms":  205775.4,
+                              "overhead_ms":  1,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/planAudiences.test.js",
+                              "tests":  31,
+                              "failed":  0,
+                              "test_ms":  199820.7,
+                              "file_ms":  199821.5,
+                              "overhead_ms":  1,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/setlists.test.js",
+                              "tests":  31,
+                              "failed":  0,
+                              "test_ms":  198216.4,
+                              "file_ms":  198217.8,
+                              "overhead_ms":  1,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/ledgerBrowser.test.js",
+                              "tests":  30,
+                              "failed":  0,
+                              "test_ms":  194556.4,
+                              "file_ms":  194557.1,
+                              "overhead_ms":  1,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/ledgerCompliance.test.js",
+                              "tests":  29,
+                              "failed":  0,
+                              "test_ms":  188416.4,
+                              "file_ms":  188416.4,
+                              "overhead_ms":  0,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/songs.test.js",
+                              "tests":  44,
+                              "failed":  0,
+                              "test_ms":  182098.3,
+                              "file_ms":  182100.6,
+                              "overhead_ms":  2,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/subscriptionModules.test.js",
+                              "tests":  28,
+                              "failed":  0,
+                              "test_ms":  181180.6,
+                              "file_ms":  181182,
+                              "overhead_ms":  1,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/bandDirectory.test.js",
+                              "tests":  28,
+                              "failed":  0,
+                              "test_ms":  180205,
+                              "file_ms":  180205.9,
+                              "overhead_ms":  1,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/isolation.test.js",
+                              "tests":  28,
+                              "failed":  0,
+                              "test_ms":  178732.4,
+                              "file_ms":  178733.8,
+                              "overhead_ms":  1,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/tenantSelfCreate.test.js",
+                              "tests":  49,
+                              "failed":  0,
+                              "test_ms":  178597.2,
+                              "file_ms":  178598.7,
+                              "overhead_ms":  1,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/ledgerNotesReclassify.test.js",
+                              "tests":  26,
+                              "failed":  0,
+                              "test_ms":  175296.3,
+                              "file_ms":  175296.8,
+                              "overhead_ms":  1,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/ledger.test.js",
+                              "tests":  27,
+                              "failed":  0,
+                              "test_ms":  175023.1,
+                              "file_ms":  175023.9,
+                              "overhead_ms":  1,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/gigDealTerms.test.js",
+                              "tests":  46,
+                              "failed":  0,
+                              "test_ms":  169824.2,
+                              "file_ms":  169824.5,
+                              "overhead_ms":  0,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/meHub.test.js",
+                              "tests":  44,
+                              "failed":  0,
+                              "test_ms":  165609.6,
+                              "file_ms":  165611.1,
+                              "overhead_ms":  1,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/gigs.test.js",
+                              "tests":  43,
+                              "failed":  0,
+                              "test_ms":  163208.7,
+                              "file_ms":  163210.7,
+                              "overhead_ms":  2,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/purchaseImport.test.js",
+                              "tests":  39,
+                              "failed":  0,
+                              "test_ms":  155070.8,
+                              "file_ms":  155072,
+                              "overhead_ms":  1,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/gigs_import.test.js",
+                              "tests":  24,
+                              "failed":  0,
+                              "test_ms":  154924.7,
+                              "file_ms":  154925.4,
+                              "overhead_ms":  1,
+                              "overhead_pct":  0
+                          },
+                          {
+                              "suite":  "backend",
+                              "file":  "F:/devprojects/gigbuddy/src/tests/server/billingLifecycle.test.js",
+                              "tests":  37,
+                              "failed":  0,
+                              "test_ms":  154189,
+                              "file_ms":  154191.5,
+                              "overhead_ms":  2,
+                              "overhead_pct":  0
+                          }
+                      ],
+    "highest_overhead_files":  [
+                                   {
+                                       "suite":  "frontend",
+                                       "file":  "F:/devprojects/gigbuddy/src/app/__tests__/security.test.js",
+                                       "tests":  37,
+                                       "failed":  0,
+                                       "test_ms":  67.8,
+                                       "file_ms":  6783.3,
+                                       "overhead_ms":  6716,
+                                       "overhead_pct":  99
+                                   },
+                                   {
+                                       "suite":  "backend",
+                                       "file":  "F:/devprojects/gigbuddy/src/tests/server/accountingProfile.test.js",
+                                       "tests":  34,
+                                       "failed":  0,
+                                       "test_ms":  221195.3,
+                                       "file_ms":  221204.3,
+                                       "overhead_ms":  9,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "backend",
+                                       "file":  "F:/devprojects/gigbuddy/src/tests/server/purchases.test.js",
+                                       "tests":  54,
+                                       "failed":  0,
+                                       "test_ms":  348100,
+                                       "file_ms":  348104,
+                                       "overhead_ms":  4,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "frontend",
+                                       "file":  "F:/devprojects/gigbuddy/src/planning/availability/__tests__/ArtistCalendarSection.test.jsx",
+                                       "tests":  10,
+                                       "failed":  0,
+                                       "test_ms":  4927.4,
+                                       "file_ms":  4931.1,
+                                       "overhead_ms":  4,
+                                       "overhead_pct":  0.1
+                                   },
+                                   {
+                                       "suite":  "frontend",
+                                       "file":  "F:/devprojects/gigbuddy/src/commerce/merch/__tests__/MerchPage.test.jsx",
+                                       "tests":  13,
+                                       "failed":  0,
+                                       "test_ms":  3804.7,
+                                       "file_ms":  3807.4,
+                                       "overhead_ms":  3,
+                                       "overhead_pct":  0.1
+                                   },
+                                   {
+                                       "suite":  "frontend",
+                                       "file":  "F:/devprojects/gigbuddy/src/planning/gigs/__tests__/GigDetailContent.test.jsx",
+                                       "tests":  74,
+                                       "failed":  0,
+                                       "test_ms":  108202.8,
+                                       "file_ms":  108205.9,
+                                       "overhead_ms":  3,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "backend",
+                                       "file":  "F:/devprojects/gigbuddy/src/tests/server/invoices.test.js",
+                                       "tests":  98,
+                                       "failed":  0,
+                                       "test_ms":  288116.6,
+                                       "file_ms":  288120.1,
+                                       "overhead_ms":  3,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "backend",
+                                       "file":  "F:/devprojects/gigbuddy/src/tests/server/billingRefunds.test.js",
+                                       "tests":  21,
+                                       "failed":  0,
+                                       "test_ms":  136019.7,
+                                       "file_ms":  136021.4,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "backend",
+                                       "file":  "F:/devprojects/gigbuddy/src/tests/server/contacts.test.js",
+                                       "tests":  28,
+                                       "failed":  0,
+                                       "test_ms":  62211.8,
+                                       "file_ms":  62213.4,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "backend",
+                                       "file":  "F:/devprojects/gigbuddy/src/tests/server/gigInfoBlocks.test.js",
+                                       "tests":  23,
+                                       "failed":  0,
+                                       "test_ms":  77467.6,
+                                       "file_ms":  77469.2,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "backend",
+                                       "file":  "F:/devprojects/gigbuddy/src/tests/server/merch.test.js",
+                                       "tests":  58,
+                                       "failed":  0,
+                                       "test_ms":  131339.8,
+                                       "file_ms":  131342.3,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "backend",
+                                       "file":  "F:/devprojects/gigbuddy/src/tests/server/journal.test.js",
+                                       "tests":  26,
+                                       "failed":  0,
+                                       "test_ms":  71490.3,
+                                       "file_ms":  71492.3,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "backend",
+                                       "file":  "F:/devprojects/gigbuddy/src/tests/server/gigs.test.js",
+                                       "tests":  43,
+                                       "failed":  0,
+                                       "test_ms":  163208.7,
+                                       "file_ms":  163210.7,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "backend",
+                                       "file":  "F:/devprojects/gigbuddy/src/tests/server/imageProcess.test.js",
+                                       "tests":  28,
+                                       "failed":  0,
+                                       "test_ms":  1053.4,
+                                       "file_ms":  1054.9,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0.2
+                                   },
+                                   {
+                                       "suite":  "backend",
+                                       "file":  "F:/devprojects/gigbuddy/src/tests/server/billingLifecycle.test.js",
+                                       "tests":  37,
+                                       "failed":  0,
+                                       "test_ms":  154189,
+                                       "file_ms":  154191.5,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "frontend",
+                                       "file":  "F:/devprojects/gigbuddy/src/planning/availability/__tests__/AvailabilityPage.test.jsx",
+                                       "tests":  9,
+                                       "failed":  0,
+                                       "test_ms":  2580.8,
+                                       "file_ms":  2582.8,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0.1
+                                   },
+                                   {
+                                       "suite":  "frontend",
+                                       "file":  "F:/devprojects/gigbuddy/src/finance/ledger/__tests__/LedgerEntryDetailPage.test.jsx",
+                                       "tests":  25,
+                                       "failed":  0,
+                                       "test_ms":  5516.9,
+                                       "file_ms":  5519,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "frontend",
+                                       "file":  "F:/devprojects/gigbuddy/src/planning/gigs/__tests__/GigTerms.test.jsx",
+                                       "tests":  30,
+                                       "failed":  0,
+                                       "test_ms":  87016.6,
+                                       "file_ms":  87018.1,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "frontend",
+                                       "file":  "F:/devprojects/gigbuddy/src/planning/gigs/__tests__/dealTerms.test.js",
+                                       "tests":  72,
+                                       "failed":  0,
+                                       "test_ms":  17.3,
+                                       "file_ms":  19.1,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  10.5
+                                   },
+                                   {
+                                       "suite":  "frontend",
+                                       "file":  "F:/devprojects/gigbuddy/src/music/songs/__tests__/chordpro.test.js",
+                                       "tests":  107,
+                                       "failed":  0,
+                                       "test_ms":  144.6,
+                                       "file_ms":  146.6,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  1.4
+                                   },
+                                   {
+                                       "suite":  "frontend",
+                                       "file":  "F:/devprojects/gigbuddy/src/user/identity/__tests__/OnboardingPage.test.jsx",
+                                       "tests":  33,
+                                       "failed":  0,
+                                       "test_ms":  12278.9,
+                                       "file_ms":  12280.7,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "backend",
+                                       "file":  "F:/devprojects/gigbuddy/src/tests/server/bandProfiles.test.js",
+                                       "tests":  23,
+                                       "failed":  0,
+                                       "test_ms":  148379.4,
+                                       "file_ms":  148381.2,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "backend",
+                                       "file":  "F:/devprojects/gigbuddy/src/tests/server/bandsintown.test.js",
+                                       "tests":  28,
+                                       "failed":  0,
+                                       "test_ms":  62224.5,
+                                       "file_ms":  62226.6,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "backend",
+                                       "file":  "F:/devprojects/gigbuddy/src/tests/server/admin.test.js",
+                                       "tests":  47,
+                                       "failed":  0,
+                                       "test_ms":  104497.1,
+                                       "file_ms":  104498.6,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  0
+                                   },
+                                   {
+                                       "suite":  "frontend",
+                                       "file":  "F:/devprojects/gigbuddy/src/finance/invoices/__tests__/renderInvoiceUbl.test.js",
+                                       "tests":  162,
+                                       "failed":  0,
+                                       "test_ms":  58.9,
+                                       "file_ms":  61,
+                                       "overhead_ms":  2,
+                                       "overhead_pct":  3.3
+                                   }
+                               ]
+}

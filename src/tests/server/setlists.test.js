@@ -59,9 +59,7 @@ describe('POST /api/setlists', () => {
     expect(tree.body.sets).toHaveLength(1)
     expect(tree.body.sets[0].name).toBe('Set 1')
     expect(tree.body.sets[0].items).toEqual([])
-  })
 
-  it('400 on blank name', async () => {
     await asUserA(request(app).post('/api/setlists').send({ name: '  ' })).expect(400)
   })
 })
@@ -124,19 +122,10 @@ describe('Items reorder + cross-set move', () => {
     const s2 = after.body.sets.find((s) => s.id === set2)
     expect(s1.items.map((x) => x.id)).toEqual([i2.id])
     expect(s2.items.map((x) => x.id)).toEqual([i1.id])
-  })
-
-  it('rejects a reorder payload that drops or injects items (400)', async () => {
-    const song1 = await createSong(seed.tenantA.id, 'A', 100)
-    const setlist = await createSetlistA()
-    const tree = await asUserA(request(app).get(`/api/setlists/${setlist.id}`)).expect(200)
-    const set1 = tree.body.sets[0].id
-    const i1 = (await asUserA(request(app).post(`/api/setlists/${setlist.id}/sets/${set1}/items`)
-      .send({ item_type: 'song', song_id: song1.id })).expect(201)).body
 
     // Inject a non-existent item id.
     await asUserA(request(app).patch(`/api/setlists/${setlist.id}/items/reorder`).send({
-      sets: [{ setId: set1, itemIds: [i1.id, 99999] }],
+      sets: [{ setId: set1, itemIds: [i2.id, 99999] }],
     })).expect(400)
   })
 })
@@ -174,19 +163,14 @@ describe('Song transitions (segue links)', () => {
     const stored = tree.body.sets[0].items.find((it) => it.id === a.id)
     expect(stored.linked_to_next).toBe(true)
     expect(stored.transition_note).toBe('key change to A')
-  })
 
-  it('unlinking clears the note even when the client omits it', async () => {
-    const { setlistId, items: [a] } = await setupSongs(2)
-    await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${a.id}`)
-      .send({ linked_to_next: true, transition_note: 'segue' })).expect(200)
     await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${a.id}`)
       .send({ linked_to_next: false })).expect(200)
 
-    const tree = await getTree(setlistId)
-    const stored = tree.body.sets[0].items.find((it) => it.id === a.id)
-    expect(stored.linked_to_next).toBe(false)
-    expect(stored.transition_note).toBeNull()
+    const unlinked = await getTree(setlistId)
+    const cleared = unlinked.body.sets[0].items.find((it) => it.id === a.id)
+    expect(cleared.linked_to_next).toBe(false)
+    expect(cleared.transition_note).toBeNull()
   })
 
   it('rejects link fields on a non-song item (400)', async () => {
@@ -276,16 +260,17 @@ describe('Song transitions (segue links)', () => {
     const stored = tree.body.sets[0].items.find((it) => it.id === a.id)
     expect(stored.linked_to_next).toBe(false)
     expect(stored.transition_note).toBeNull()
-  })
 
-  it('does not clear unrelated links when a non-follower is deleted', async () => {
-    const { setlistId, items: [a, , c] } = await setupSongs(3)
-    await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${a.id}`)
+    const unrelated = await setupSongs(3)
+    const [upper, , nonFollower] = unrelated.items
+    await asUserA(request(app).patch(`/api/setlists/${unrelated.setlistId}/items/${upper.id}`)
       .send({ linked_to_next: true })).expect(200)
-    const res = await asUserA(request(app).delete(`/api/setlists/${setlistId}/items/${c.id}`)).expect(200)
-    expect(res.body.clearedIds).toEqual([])
-    const tree = await getTree(setlistId)
-    expect(tree.body.sets[0].items.find((it) => it.id === a.id).linked_to_next).toBe(true)
+    const unrelatedResult = await asUserA(
+      request(app).delete(`/api/setlists/${unrelated.setlistId}/items/${nonFollower.id}`),
+    ).expect(200)
+    expect(unrelatedResult.body.clearedIds).toEqual([])
+    const unrelatedTree = await getTree(unrelated.setlistId)
+    expect(unrelatedTree.body.sets[0].items.find((it) => it.id === upper.id).linked_to_next).toBe(true)
   })
 })
 
@@ -373,12 +358,7 @@ describe('Per-member song notes', () => {
     await asUserA(request(app).put(`/api/setlists/${setlistId}/items/${item.id}/note`)
       .send({ note: 'second' })).expect(200)
     expect(await noteFor(seed.userA.id, setlistId, item.id)).toBe('second')
-  })
 
-  it('clears the note on an empty/whitespace body and returns null', async () => {
-    const { setlistId, item } = await setupSongItem()
-    await asUserA(request(app).put(`/api/setlists/${setlistId}/items/${item.id}/note`)
-      .send({ note: 'temp' })).expect(200)
     const res = await asUserA(request(app).put(`/api/setlists/${setlistId}/items/${item.id}/note`)
       .send({ note: '   ' })).expect(200)
     expect(res.body).toEqual({ my_note: null })
@@ -455,46 +435,33 @@ describe('Performance sources', () => {
     expect(stored.chart_id).toBe(chart.id)
     expect(stored.chart_name).toBe('Guitar')
     expect(stored.document_id).toBeNull()
-  })
 
-  it('assigning a document clears a previously assigned chart', async () => {
-    const { song, setlistId, item } = await setupSongItem()
-    const chart = await createChart(seed.tenantA.id, song.id, 'Guitar')
     const doc = await createDocument(seed.tenantA.id, song.id, 'sheet.pdf')
-
-    await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
-      .send({ chart_id: chart.id })).expect(200)
-    const res = await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
+    const document = await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
       .send({ document_id: doc.id })).expect(200)
+    expect(document.body.document_id).toBe(doc.id)
+    expect(document.body.chart_id).toBeNull()
+    expect((await getTree(setlistId)).body.sets[0].items[0].document_filename).toBe('sheet.pdf')
 
-    expect(res.body.document_id).toBe(doc.id)
-    expect(res.body.chart_id).toBeNull()
-    const stored = (await getTree(setlistId)).body.sets[0].items[0]
-    expect(stored.document_filename).toBe('sheet.pdf')
-  })
+    const cleared = await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
+      .send({ chart_id: null })).expect(200)
+    expect(cleared.body.chart_id).toBeNull()
 
-  it('clears the source with null', async () => {
-    const { song, setlistId, item } = await setupSongItem()
-    const chart = await createChart(seed.tenantA.id, song.id, 'Guitar')
     await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
       .send({ chart_id: chart.id })).expect(200)
-
-    const res = await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
-      .send({ chart_id: null })).expect(200)
-    expect(res.body.chart_id).toBeNull()
+    await pool.query('DELETE FROM song_chordpro_charts WHERE id = $1', [chart.id])
+    const items = (await getTree(setlistId)).body.sets[0].items
+    expect(items).toHaveLength(1)
+    expect(items[0].chart_id).toBeNull()
   })
 
   it('rejects assigning both a chart and a document at once (400)', async () => {
-    const { song, setlistId, item } = await setupSongItem()
+    const { song, setlistId, set1, item } = await setupSongItem()
     const chart = await createChart(seed.tenantA.id, song.id, 'Guitar')
     const doc = await createDocument(seed.tenantA.id, song.id, 'sheet.pdf')
     await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
       .send({ chart_id: chart.id, document_id: doc.id })).expect(400)
-  })
 
-  it('rejects a source on a non-song item (400)', async () => {
-    const { song, setlistId, set1 } = await setupSongItem()
-    const chart = await createChart(seed.tenantA.id, song.id, 'Guitar')
     const pause = (await asUserA(request(app).post(`/api/setlists/${setlistId}/sets/${set1}/items`)
       .send({ item_type: 'pause', duration_seconds: 30 })).expect(201)).body
     await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${pause.id}`)
@@ -507,37 +474,18 @@ describe('Performance sources', () => {
     const chart = await createChart(seed.tenantA.id, other.id, 'Wrong song')
     await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
       .send({ chart_id: chart.id })).expect(404)
-  })
 
-  it('404s (no leak) on a chart owned by another tenant', async () => {
-    const { setlistId, item } = await setupSongItem()
     const songB = await createSong(seed.tenantB.id, 'B song', 100)
     const chartB = await createChart(seed.tenantB.id, songB.id, 'B chart')
     const res = await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
       .send({ chart_id: chartB.id })).expect(404)
     expect(JSON.stringify(res.body)).not.toContain('B chart')
-  })
 
-  it('404s (no leak) on a document owned by another tenant', async () => {
-    const { setlistId, item } = await setupSongItem()
-    const songB = await createSong(seed.tenantB.id, 'B song', 100)
     const docB = await createDocument(seed.tenantB.id, songB.id, 'secret.pdf')
     await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
       .send({ document_id: docB.id })).expect(404)
   })
 
-  it('keeps the setlist item when its assigned chart is deleted, clearing the source', async () => {
-    const { song, setlistId, item } = await setupSongItem()
-    const chart = await createChart(seed.tenantA.id, song.id, 'Guitar')
-    await asUserA(request(app).patch(`/api/setlists/${setlistId}/items/${item.id}`)
-      .send({ chart_id: chart.id })).expect(200)
-
-    await pool.query('DELETE FROM song_chordpro_charts WHERE id = $1', [chart.id])
-
-    const items = (await getTree(setlistId)).body.sets[0].items
-    expect(items).toHaveLength(1)
-    expect(items[0].chart_id).toBeNull()
-  })
 })
 
 describe('GET /api/setlists/:id/performance', () => {
@@ -594,7 +542,7 @@ describe('GET /api/setlists/:id/performance', () => {
   }
 
   it('returns every row in running order with its resolved source', async () => {
-    const { setlistId, chart, doc } = await setupSetlist()
+    const { setlistId, first, chart, doc } = await setupSetlist()
     const res = await asUserA(request(app).get(`/api/setlists/${setlistId}/performance`)).expect(200)
 
     expect(res.body.name).toBe('Show')
@@ -615,10 +563,7 @@ describe('GET /api/setlists/:id/performance', () => {
     expect(closer.document_content_type).toBe('application/pdf')
     expect(closer.chart_id).toBeNull()
     expect(opener.chart_id).toBe(chart.id)
-  })
 
-  it('carries the requesting member\'s own note, and only theirs', async () => {
-    const { setlistId, first } = await setupSetlist()
     // superUser is a second approved member of tenant A, with their own note.
     await asUser(request(app).put(`/api/setlists/${setlistId}/items/${first.item.id}/note`)
       .send({ note: 'drop D' }), seed.superUser.id, seed.tenantA.id).expect(200)
@@ -633,18 +578,16 @@ describe('GET /api/setlists/:id/performance', () => {
     expect(mine.body.slides[1].my_note).toBeNull()
   })
 
-  it('404s for another tenant\'s setlist', async () => {
+  it('returns an empty slide list and hides another tenant\'s setlist', async () => {
+    const empty = await createSetlistA('Empty')
+    const res = await asUserA(request(app).get(`/api/setlists/${empty.id}/performance`)).expect(200)
+    expect(res.body.slides).toEqual([])
+
     const { rows } = await pool.query(
       'INSERT INTO setlists (tenant_id, name) VALUES ($1, $2) RETURNING id',
       [seed.tenantB.id, 'B list'],
     )
     await asUserA(request(app).get(`/api/setlists/${rows[0].id}/performance`)).expect(404)
-  })
-
-  it('returns an empty slide list for an empty setlist', async () => {
-    const setlist = await createSetlistA('Empty')
-    const res = await asUserA(request(app).get(`/api/setlists/${setlist.id}/performance`)).expect(200)
-    expect(res.body.slides).toEqual([])
   })
 })
 
@@ -656,19 +599,14 @@ describe('GET /api/setlists/search', () => {
     await createSetlistA('Acoustic Evening')
     const res = await asUserA(request(app).get('/api/setlists/search').query({ q: 'Summer' })).expect(200)
     expect(names(res)).toEqual(['Summer Tour Set'])
-  })
 
-  it('returns nothing for queries shorter than 3 characters', async () => {
-    await createSetlistA('Summer Tour Set')
-    const res = await asUserA(request(app).get('/api/setlists/search').query({ q: 'Su' })).expect(200)
-    expect(res.body).toEqual([])
-  })
+    const short = await asUserA(request(app).get('/api/setlists/search').query({ q: 'Su' })).expect(200)
+    expect(short.body).toEqual([])
 
-  it('isolates tenants: userA cannot find tenant B setlists', async () => {
     await pool.query('INSERT INTO setlists (tenant_id, name) VALUES ($1, $2)',
       [seed.tenantB.id, 'Beta Secret Set'])
-    const res = await asUserA(request(app).get('/api/setlists/search').query({ q: 'Beta Secret' })).expect(200)
-    expect(res.body).toEqual([])
+    const isolated = await asUserA(request(app).get('/api/setlists/search').query({ q: 'Beta Secret' })).expect(200)
+    expect(isolated.body).toEqual([])
   })
 })
 
@@ -698,13 +636,22 @@ describe('POST /api/setlists/:id/copy', () => {
     await asUserA(request(app).patch(`/api/setlists/${setlist.id}/sets/${set2.id}`)
       .send({ include_in_total: false })).expect(200)
 
-    return { setlist, set1, items }
+    return { setlist, set1, songs, items }
   }
 
   const copy = (id) => asUserA(request(app).post(`/api/setlists/${id}/copy`))
 
   it('names the copy "{name} Copy" and duplicates sets and items', async () => {
-    const { setlist } = await setupRichSetlist()
+    const { setlist, songs, items } = await setupRichSetlist()
+    const chart = (await pool.query(
+      `INSERT INTO song_chordpro_charts (song_id, tenant_id, name, source)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [songs[0].id, seed.tenantA.id, 'Live version', '{title: One}'],
+    )).rows[0]
+    await asUserA(request(app).patch(`/api/setlists/${setlist.id}/items/${items[0].id}`)
+      .send({ chart_id: chart.id })).expect(200)
+    await asUserA(request(app).put(`/api/setlists/${setlist.id}/items/${items[0].id}/note`)
+      .send({ note: 'capo 2' })).expect(200)
     const created = (await copy(setlist.id).expect(201)).body
     expect(created.name).toBe('Main Set Copy')
     expect(created.id).not.toBe(setlist.id)
@@ -731,6 +678,8 @@ describe('POST /api/setlists/:id/copy', () => {
     const sourceItemIds = source.sets.flatMap((s) => s.items.map((i) => i.id))
     const cloneItemIds = clone.sets.flatMap((s) => s.items.map((i) => i.id))
     expect(cloneItemIds.some((id) => sourceItemIds.includes(id))).toBe(false)
+    expect(clone.sets[0].items[0].chart_id).toBe(chart.id)
+    expect(clone.sets[0].items.every((i) => i.my_note === null)).toBe(true)
   })
 
   it('numbers consecutive copies of the same setlist', async () => {
@@ -744,26 +693,6 @@ describe('POST /api/setlists/:id/copy', () => {
     const setlist = await createSetlistA('Main Set')
     const first = (await copy(setlist.id).expect(201)).body
     expect((await copy(first.id).expect(201)).body.name).toBe('Main Set Copy(1)')
-  })
-
-  it('carries the assigned chart across to the copy', async () => {
-    const song = await createSong(seed.tenantA.id, 'Charted', 100)
-    const chart = (await pool.query(
-      `INSERT INTO song_chordpro_charts (song_id, tenant_id, name, source)
-       VALUES ($1, $2, $3, $4) RETURNING id`,
-      [song.id, seed.tenantA.id, 'Live version', '{title: Charted}'],
-    )).rows[0]
-    const setlist = await createSetlistA('Charted Set')
-    const tree = await asUserA(request(app).get(`/api/setlists/${setlist.id}`)).expect(200)
-    const item = (await asUserA(request(app).post(`/api/setlists/${setlist.id}/sets/${tree.body.sets[0].id}/items`)
-      .send({ item_type: 'song', song_id: song.id })).expect(201)).body
-    await asUserA(request(app).patch(`/api/setlists/${setlist.id}/items/${item.id}`)
-      .send({ chart_id: chart.id })).expect(200)
-
-    const created = (await copy(setlist.id).expect(201)).body
-    const clone = (await asUserA(request(app).get(`/api/setlists/${created.id}`)).expect(200)).body
-    expect(clone.sets[0].items[0].chart_id).toBe(chart.id)
-    expect(clone.sets[0].items[0].chart_name).toBe('Live version')
   })
 
   it('leaves personal notes behind — a copy starts with none', async () => {

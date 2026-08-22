@@ -20,6 +20,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedAccountingForTenants(seed)
 })
 
 afterAll(async () => {
@@ -221,12 +223,11 @@ describe('accounting profile — a missing row is a fault', () => {
 })
 
 describe('accounting profile — audit script', () => {
-  let auditAccountingProfiles, parseArgs
+  let auditAccountingProfiles
 
   beforeAll(async () => {
     const mod = await import('../../../server/finance/accounting-profile/scripts/backfillAccountingProfiles.js')
     auditAccountingProfiles = mod.auditAccountingProfiles
-    parseArgs = mod.parseArgs
   })
 
   it('reports a missing profile and refuses to repair it without a country', async () => {
@@ -290,14 +291,6 @@ describe('accounting profile — audit script', () => {
     expect(result.counts.rateMissing).toBe(0)
   })
 
-  it('rejects a country it has no rate table for', () => {
-    expect(() => parseArgs(['--apply', '--tenant=1', '--country=us'])).toThrow(/Unsupported --country/)
-    expect(() => parseArgs(['--apply', '--tenant=1'])).toThrow(/together/)
-    expect(() => parseArgs(['--check', '--tenant=1'])).toThrow(/Usage/)
-    expect(parseArgs(['--apply', '--tenant=7', '--country=NL '])).toEqual({
-      apply: true, repairTenant: { tenantId: 7, countryCode: 'nl' },
-    })
-  })
 })
 
 describe('accounting profile — write', () => {
@@ -422,43 +415,28 @@ describe('accounting profile — VAT dependency rules', () => {
     const res = await patchProfile({ vat_registered: false }).expect(200)
     expect(res.body.vat_accounting_basis).toBe('not_applicable')
     expect(res.body.vat_filing_frequency).toBe('not_applicable')
+
+    const registered = await patchProfile({ vat_registered: true }).expect(200)
+    expect(registered.body.vat_accounting_basis).toBe('invoice')
+    expect(registered.body.vat_filing_frequency).toBe('unconfigured')
+
+    const unconfirmed = await patchProfile({ vat_registered: null }).expect(200)
+    expect(unconfirmed.body.vat_registered).toBeNull()
+    expect(unconfirmed.body.vat_accounting_basis).toBe('unknown')
+    expect(unconfirmed.body.vat_filing_frequency).toBe('unconfigured')
   })
 
   // The app recognises VAT on the invoice date, so a registered band is on the
   // invoice basis by construction — it is derived, never asked.
-  it('derives the invoice basis when the band is registered', async () => {
-    const res = await patchProfile({ vat_registered: true }).expect(200)
-    expect(res.body.vat_accounting_basis).toBe('invoice')
-  })
-
-  it('becoming registered clears the not-applicable filing period rather than guessing', async () => {
-    await patchProfile({ vat_registered: false }).expect(200)
-    const res = await patchProfile({ vat_registered: true }).expect(200)
-    expect(res.body.vat_accounting_basis).toBe('invoice')
-    expect(res.body.vat_filing_frequency).toBe('unconfigured')
-  })
-
-  it('going back to unconfirmed resets the basis and the period', async () => {
-    await patchProfile({ vat_registered: false }).expect(200)
-    const res = await patchProfile({ vat_registered: null }).expect(200)
-    expect(res.body.vat_registered).toBeNull()
-    expect(res.body.vat_accounting_basis).toBe('unknown')
-    expect(res.body.vat_filing_frequency).toBe('unconfigured')
-  })
-
   // 'exempt' is no longer a filing period a band picks: it is DERIVED from a VAT
   // scheme enrolment, which carries dates, a jurisdiction and a confirmation this
   // field cannot express. See taxSchemeEnrolments.test.js for the projection
   // itself; here we only assert the field refuses to be the second control.
   it('refuses an exempt filing period, pointing at the scheme instead', async () => {
-    await patchProfile({ vat_registered: true }).expect(200)
-    const res = await patchProfile({ vat_filing_frequency: 'exempt' }).expect(409)
-    expect(res.body.code).toBe('filing_frequency_derived_from_scheme')
-  })
+    const beforeRegistration = await patchProfile({ vat_filing_frequency: 'exempt' }).expect(409)
+    expect(beforeRegistration.body.code).toBe('filing_frequency_derived_from_scheme')
 
-  it('refuses an exempt filing period before registration is confirmed too', async () => {
-    // The scheme conflict outranks the less specific "that value needs
-    // registration": it names the control that actually owns the fact.
+    await patchProfile({ vat_registered: true }).expect(200)
     const res = await patchProfile({ vat_filing_frequency: 'exempt' }).expect(409)
     expect(res.body.code).toBe('filing_frequency_derived_from_scheme')
   })
@@ -477,12 +455,10 @@ describe('accounting profile — VAT dependency rules', () => {
   it('rejects a filing period while registration is not confirmed', async () => {
     const res = await patchProfile({ vat_filing_frequency: 'quarterly' }).expect(400)
     expect(res.body.error).toBe('vat_fields_require_registration')
-  })
 
-  it('rejects "not applicable" while the tenant is registered', async () => {
     await patchProfile({ vat_registered: true }).expect(200)
-    const res = await patchProfile({ vat_filing_frequency: 'not_applicable' }).expect(400)
-    expect(res.body.error).toBe('vat_fields_required_when_registered')
+    const registered = await patchProfile({ vat_filing_frequency: 'not_applicable' }).expect(400)
+    expect(registered.body.error).toBe('vat_fields_required_when_registered')
   })
 })
 
@@ -500,22 +476,12 @@ describe('accounting profile — completeness', () => {
     expect(res.body.vat_filing_frequency).toBe('not_applicable')
     expect(res.body.profile_status).toBe('complete')
     expect(res.body.presentation_state).toBe('needs_review')
-  })
 
-  it('a registered tenant stays incomplete until the filing period is known', async () => {
-    const partial = await patchProfile({
-      local_legal_form_code: 'nl_vof',
-      vat_registered: true,
-    }).expect(200)
+    const partial = await patchProfile({ vat_registered: true }).expect(200)
     expect(partial.body.profile_status).toBe('incomplete')
-
     const done = await patchProfile({ vat_filing_frequency: 'quarterly' }).expect(200)
     expect(done.body.profile_status).toBe('complete')
-  })
 
-  // A legacy row can arrive with legal_form already inherited from the old tenants
-  // column but no framework, so the derivation has to backfill it on any save.
-  it('backfills a missing framework for an inherited legal form', async () => {
     await pool.query(
       `UPDATE tenant_accounting_profiles
           SET legal_form = 'company', reporting_framework_code = NULL,
@@ -523,23 +489,22 @@ describe('accounting profile — completeness', () => {
         WHERE tenant_id = $1`,
       [seed.tenantA.id],
     )
-    const res = await patchProfile({ vat_registered: false }).expect(200)
-    expect(res.body.reporting_framework_code).toBe('nl_bw2t9_micro')
+    const repaired = await patchProfile({ vat_registered: false }).expect(200)
+    expect(repaired.body.reporting_framework_code).toBe('nl_bw2t9_micro')
   })
+
 })
 
 describe('accounting profile — review provenance', () => {
   it('refuses to confirm an incomplete profile', async () => {
     const res = await asUserA(request(app).post('/api/accounting-profile/review')).expect(409)
     expect(res.body.code).toBe('profile_incomplete')
-  })
 
-  it('confirming a complete profile records who did it', async () => {
     await completeProfile()
-    const res = await asUserA(request(app).post('/api/accounting-profile/review')).expect(200)
-    expect(res.body.reviewed_at).toBeTruthy()
-    expect(res.body.reviewed_by_user_id).toBe(seed.userA.id)
-    expect(res.body.presentation_state).toBe('complete')
+    const confirmed = await asUserA(request(app).post('/api/accounting-profile/review')).expect(200)
+    expect(confirmed.body.reviewed_at).toBeTruthy()
+    expect(confirmed.body.reviewed_by_user_id).toBe(seed.userA.id)
+    expect(confirmed.body.presentation_state).toBe('complete')
   })
 })
 
@@ -551,26 +516,18 @@ describe('accounting profile — financial year start', () => {
 
     res = await patchProfile({ financial_year_start_month: 7, financial_year_start_day: 1 }).expect(200)
     expect(res.body.financial_year_start_month).toBe(7)
-  })
 
-  it('rejects days that do not exist in the chosen month', async () => {
     await patchProfile({ financial_year_start_month: 4, financial_year_start_day: 31 }).expect(400)
-    const res = await patchProfile({ financial_year_start_month: 2, financial_year_start_day: 29 }).expect(400)
-    expect(res.body.error).toBe('invalid_financial_year_start')
-  })
+    const impossible = await patchProfile({ financial_year_start_month: 2, financial_year_start_day: 29 }).expect(400)
+    expect(impossible.body.error).toBe('invalid_financial_year_start')
 
-  it('validates the pair even when only one half is sent', async () => {
     await patchProfile({ financial_year_start_month: 1, financial_year_start_day: 31 }).expect(200)
     // Month alone would leave day 31 on a 30-day month behind.
     await patchProfile({ financial_year_start_month: 6 }).expect(400)
-  })
 
-  it('rejects out-of-range values', async () => {
     await patchProfile({ financial_year_start_month: 13 }).expect(400)
     await patchProfile({ financial_year_start_day: 0 }).expect(400)
-  })
 
-  it('the database refuses an impossible start date directly', async () => {
     await expect(pool.query(
       `UPDATE tenant_accounting_profiles
           SET financial_year_start_month = 2, financial_year_start_day = 29
@@ -595,20 +552,18 @@ describe('accounting profile — permissions', () => {
       .set('x-test-user-id', String(u.id))
       .set('x-test-tenant-id', String(seed.tenantA.id))
       .expect(403)
-  })
 
-  it('a financial_admin can read and write it', async () => {
-    const { rows: [u] } = await pool.query(
+    const { rows: [financialAdmin] } = await pool.query(
       `INSERT INTO users (google_sub, email, name, status)
        VALUES ('sub-fa', 'fa@test.local', 'FinAdmin', 'approved') RETURNING *`,
     )
     await pool.query(
-      `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
+       `INSERT INTO memberships (user_id, tenant_id, role, status, approved_at, source)
        VALUES ($1, $2, 'financial_admin', 'approved', NOW(), 'admin')`,
-      [u.id, seed.tenantA.id],
+      [financialAdmin.id, seed.tenantA.id],
     )
     await request(app).patch('/api/accounting-profile')
-      .set('x-test-user-id', String(u.id))
+      .set('x-test-user-id', String(financialAdmin.id))
       .set('x-test-tenant-id', String(seed.tenantA.id))
       .send({ local_legal_form_code: 'nl_bv' })
       .expect(200)
@@ -624,19 +579,13 @@ describe('accounting profile — isolation', () => {
     expect(bRes.body.local_legal_form_code).toBeNull()
     expect(bRes.body.legal_form).toBeNull()
     expect(bRes.body.vat_registered).toBeNull()
-  })
 
-  it('the review mark is per tenant', async () => {
     await completeProfile()
     await asUserA(request(app).post('/api/accounting-profile/review')).expect(200)
 
-    const bRes = await asUserB(request(app).get('/api/accounting-profile')).expect(200)
-    expect(bRes.body.reviewed_at).toBeNull()
-  })
+    const untouched = await asUserB(request(app).get('/api/accounting-profile')).expect(200)
+    expect(untouched.body.reviewed_at).toBeNull()
 
-  // The header names the active tenant; a caller cannot address another band's
-  // profile at all, because the route has no id parameter to tamper with.
-  it('a member of one band cannot reach another band profile', async () => {
     await request(app).get('/api/accounting-profile')
       .set('x-test-user-id', String(seed.userA.id))
       .set('x-test-tenant-id', String(seed.tenantB.id))

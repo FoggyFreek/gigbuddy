@@ -16,7 +16,7 @@
     "server:debug": "nodemon --inspect-brk server/index.js",
     "migrate": "node server/db/migrate.js",
     "rotate:integration-secrets": "node server/platform/integrations/scripts/rotateIntegrationSecrets.js",
-    "test": "vitest --exclude src/tests/server",
+    "test": "npm run build:gig-deal-phase-a-golden && vitest --exclude src/tests/server",
     "test:server": "vitest run --config vitest.server.config.js src/tests/server",
     "test:ui": "vitest --ui",
     "coverage": "vitest run --exclude src/tests/server --coverage",
