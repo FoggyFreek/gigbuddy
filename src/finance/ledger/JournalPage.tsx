@@ -1,17 +1,14 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
 import CircularProgress from '@mui/material/CircularProgress'
-import Dialog from '@mui/material/Dialog'
-import DialogActions from '@mui/material/DialogActions'
-import DialogContent from '@mui/material/DialogContent'
-import DialogTitle from '@mui/material/DialogTitle'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import DesktopWindowsOutlinedIcon from '@mui/icons-material/DesktopWindowsOutlined'
 import { useSetWideContent } from '../../contexts/contentWidthContext.ts'
+import { useDialog } from '../../contexts/dialogContext.ts'
 import type { Id } from '../../types/entities.ts'
 import { useCompactLayout } from '../../hooks/useCompactLayout.ts'
 import JournalEntryRow from '../journal/components/JournalEntryRow.tsx'
@@ -23,6 +20,7 @@ import type { JournalForm } from '../journal/components/journalFormHelpers.ts'
 
 export default function JournalPage() {
   const { t } = useTranslation(['journal', 'common'])
+  const { confirmDelete } = useDialog()
   const compact = useCompactLayout()
   const setWideContent = useSetWideContent()
   useEffect(() => {
@@ -39,7 +37,6 @@ export default function JournalPage() {
     addEntry, approveAll, approveSelected, deleteSelected,
   } = useJournalListState()
 
-  const [confirmDelete, setConfirmDelete] = useState(false)
 
   // Ledger-effect preview of the selected entries only (live form state, so it
   // tracks unsaved edits); nothing selected → no overlay.
@@ -84,6 +81,14 @@ export default function JournalPage() {
   const allSelected = draftIds.length > 0 && draftIds.every((id) => selected.has(id))
   const someSelected = hasSelection && !allSelected
 
+  async function handleDeleteSelected() {
+    const confirmed = await confirmDelete({
+      title: t($ => $.deleteDialog.title),
+      body: t($ => $.deleteDialog.body, { count: selectionCount }),
+    })
+    if (confirmed) deleteSelected()
+  }
+
   return (
     <Box sx={{ pb: showEffects ? 14 : 0 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
@@ -111,7 +116,7 @@ export default function JournalPage() {
             >
               {t($ => $.toolbar.approveSelected)}
             </Button>
-            <Button variant="contained" size="small" color="error" onClick={() => setConfirmDelete(true)}>
+            <Button variant="contained" size="small" color="error" onClick={() => { void handleDeleteSelected() }}>
               {t($ => $.toolbar.deleteSelected)}
             </Button>
           </>
@@ -167,22 +172,6 @@ export default function JournalPage() {
         onClose={clearApprovalErrors}
       />
 
-      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <DialogTitle>{t($ => $.deleteDialog.title)}</DialogTitle>
-        <DialogContent>
-          {t($ => $.deleteDialog.body, { count: selectionCount })}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
-          <Button
-            color="error"
-            variant="contained"
-            onClick={() => { setConfirmDelete(false); deleteSelected() }}
-          >
-            {t($ => $.actions.delete, { ns: 'common' })}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 }

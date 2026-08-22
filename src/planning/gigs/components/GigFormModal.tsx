@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -32,6 +32,7 @@ interface _VenuePickerProps {
 }
 const VenuePicker = _VenuePickerRaw as React.ComponentType<_VenuePickerProps>
 import { createGig } from '../gigs.ts'
+import type { SaveStatus } from '../../../hooks/useDebouncedSave.ts'
 import { dayjsToTimeString, timeStringToDayjs } from '../../events/eventFormUtils.ts'
 import { usePermissions } from '../../../hooks/usePermissions.ts'
 import { useTenantKind } from '../../../hooks/useTenantKind.ts'
@@ -95,15 +96,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
   const [confirmCreate, setConfirmCreate] = useState(false)
 
   // ── Edit mode state ────────────────────────────────────────────────────────
-  const [polledStatus, setPolledStatus] = useState('idle')
-
-  useEffect(() => {
-    if (mode !== 'edit') return
-    const interval = setInterval(() => {
-      setPolledStatus(contentRef.current?.saveStatus ?? 'idle')
-    }, 100)
-    return () => clearInterval(interval)
-  }, [mode])
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
 
   function handleChange(field: string, value: unknown) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -162,7 +155,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
 
       <DialogContent>
         {mode === 'edit' ? (
-          <GigDetailContent ref={contentRef} gigId={gigId!} canWrite={canWrite} />
+          <GigDetailContent ref={contentRef} gigId={gigId!} canWrite={canWrite} onSaveStatusChange={setSaveStatus} />
         ) : (
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid size={{ xs: 12, sm: 6 }}>
@@ -264,7 +257,7 @@ export default function GigFormModal({ mode, gigId, onClose, initialDate }: Read
       </DialogContent>
 
       <Box sx={{ px: 3, pb: 1, minHeight: 24 }}>
-        {mode === 'edit' && <SaveStatusLabel status={polledStatus} />}
+        {mode === 'edit' && <SaveStatusLabel status={saveStatus} />}
       </Box>
 
       <DialogActions sx={{ px: 3, pb: 2 }}>

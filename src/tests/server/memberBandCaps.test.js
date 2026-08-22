@@ -17,7 +17,7 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   app = appMod.createTestApp()
-  const entMod = await import('../../../server/commerce/billing/entitlementService.js')
+  const entMod = await import('../../../server/entitlements/entitlementResolver.js')
   clearEntitlementCaches = entMod.clearEntitlementCaches
   billing = await import('./_billing.js')
   await runMigrations()
@@ -26,6 +26,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedBandMembers(seed)
   await pool.query('DELETE FROM subscription_plans')
   await seedDefaultPlans(pool)
   clearEntitlementCaches()

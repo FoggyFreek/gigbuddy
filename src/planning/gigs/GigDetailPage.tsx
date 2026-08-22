@@ -1,32 +1,31 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import Dialog from '@mui/material/Dialog'
-import DialogActions from '@mui/material/DialogActions'
-import DialogContent from '@mui/material/DialogContent'
-import DialogContentText from '@mui/material/DialogContentText'
-import DialogTitle from '@mui/material/DialogTitle'
 import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
-import GigDetailContent, { type TabKey } from './components/gigdetails/GigDetailContent.tsx'
+import GigDetailContent, { type GigDetailHandle, type TabKey } from './components/gigdetails/GigDetailContent.tsx'
+import GigDocumentMenu from './components/gigdetails/GigDocumentMenu.tsx'
 import GigShareMenu from './components/gigdetails/GigShareMenu.tsx'
 import PastEventAlert from '../../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../../components/SaveStatusLabel.tsx'
 import { deleteGig } from './gigs.ts'
+import type { SaveStatus } from '../../hooks/useDebouncedSave.ts'
 import { usePermissions } from '../../hooks/usePermissions.ts'
+import { useDialog } from '../../contexts/dialogContext.ts'
 import type { Gig, Id } from '../../types/entities.ts'
 import type { MaybeCrossTenant } from '../../types/api.ts'
 import { useCrossTenantRow } from '../shared/useCrossTenantRow.ts'
 
 export default function GigDetailPage() {
   const { t } = useTranslation(['gigs', 'common'])
+  const { confirmDelete } = useDialog()
   const { id } = useParams()
   const gigId = Number(id)
-  const { canWritePlanning } = usePermissions()
+  const { canWritePlanning, canViewFinance } = usePermissions()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const TAB_KEYS: TabKey[] = ['event', 'terms', 'participants', 'tasks']
@@ -35,9 +34,8 @@ export default function GigDetailPage() {
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
   const insideSplitView = !!outletCtx.insideSplitView
 
-  const contentRef = useRef<{ saveStatus: string; flush: () => Promise<void> }>(null)
-  const [polledStatus, setPolledStatus] = useState('idle')
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const contentRef = useRef<GigDetailHandle>(null)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [gig, setGig] = useState<MaybeCrossTenant<Gig> | null>(null)
 
   // The lifted gig lags during async loads / split-view id changes, so a gig
@@ -55,12 +53,13 @@ export default function GigDetailPage() {
     onGigDetailLoaded?.(g)
   }, [onGigDetailLoaded])
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPolledStatus(contentRef.current?.saveStatus ?? 'idle')
-    }, 100)
-    return () => clearInterval(interval)
-  }, [])
+  async function handleDelete() {
+    if (!await confirmDelete({ title: t($ => $.page.deleteConfirmTitle) })) return
+    await deleteGig(gigId)
+    if (typeof outletCtx.onGigDelete === 'function') outletCtx.onGigDelete(gigId)
+    if (typeof outletCtx.onClose === 'function') outletCtx.onClose()
+    else navigate(-1)
+  }
 
   async function handleBack() {
     await contentRef.current?.flush()
@@ -81,8 +80,9 @@ export default function GigDetailPage() {
         </Typography>
         <Box sx={{ flexGrow: 1 }} />
         {/* Identity gate: the lifted gig lags during async loads / split-view id
-            changes, so only share once it matches the current id. Sharing is a
-            tenant-scoped write, so a cross-band gig doesn't get it at all. */}
+            changes, so only offer these once it matches the current id. Both
+            read through the active tenant, so a cross-band gig gets neither. */}
+        {loaded && !isCrossBand && <GigDocumentMenu gig={gig} canViewFinance={canViewFinance} />}
         {loaded && !isCrossBand && <GigShareMenu gig={gig} />}
         {insideSplitView && (
           <IconButton onClick={handleBack} aria-label={t($ => $.aria.close, { ns: 'common' })}>
@@ -101,44 +101,23 @@ export default function GigDetailPage() {
         onBannerUpdate={outletCtx.onGigUpdate as ((gigId: Id, patch: Record<string, unknown>) => void) | undefined}
         onGigLoaded={handleGigLoaded}
         onGigLoadError={onGigDetailLoadError}
+        onSaveStatusChange={setSaveStatus}
       />
 
       {detailCanWrite && (
         <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-          <SaveStatusLabel status={polledStatus} />
+          <SaveStatusLabel status={saveStatus} />
         </Box>
       )}
 
       {detailCanWrite && (
         <Box sx={{ mt: 4 }}>
-          <Button color="error" variant="contained" onClick={() => setConfirmDelete(true)}>
+          <Button color="error" variant="contained" onClick={() => { void handleDelete() }}>
             {t($ => $.actions.delete, { ns: 'common' })}
           </Button>
         </Box>
       )}
 
-      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
-        <DialogTitle>{t($ => $.page.deleteConfirmTitle)}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmDelete(false)}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
-          <Button
-            color="error"
-            variant="contained"
-            onClick={async () => {
-              setConfirmDelete(false)
-              await deleteGig(gigId)
-              if (typeof outletCtx.onGigDelete === 'function') outletCtx.onGigDelete(gigId)
-              if (typeof outletCtx.onClose === 'function') outletCtx.onClose()
-              else navigate(-1)
-            }}
-          >
-            {t($ => $.actions.delete, { ns: 'common' })}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   )
 }

@@ -7,6 +7,7 @@ import {
 } from '../invoices.ts'
 import { computeInvoiceTotals } from '../invoiceTotals.ts'
 import { useAccountingProfile } from '../../../contexts/accountingProfileContext.ts'
+import { getReducedVatRate } from '../../vat/vatRates.ts'
 import { checkInvoiceReadyForIssue, isInvoiceIssueErrorCode } from '../invoiceReadiness.ts'
 import { checkPeppolReadiness } from '../peppolReadiness.ts'
 import type { PeppolWarning } from '../peppolReadiness.ts'
@@ -19,6 +20,7 @@ import {
 } from './invoiceFormHelpers.ts'
 import type { InvoiceForm, InvoiceFormLine } from './invoiceFormHelpers.ts'
 import { commonVatSelection } from '../../../../shared/taxCategories.js'
+import { useDialog } from '../../../contexts/dialogContext.ts'
 
 interface UseInvoiceFormStateArgs {
   invoiceId: Id
@@ -48,14 +50,13 @@ export interface UseInvoiceFormStateResult {
   setMemoOpen: (open: boolean) => void
   discountOpen: boolean
   setDiscountOpen: (open: boolean) => void
-  deleteDialogOpen: boolean
-  setDeleteDialogOpen: (open: boolean) => void
   voidDialogOpen: boolean
   setVoidDialogOpen: (open: boolean) => void
   confirmVoid: () => Promise<void>
   sentDialogOpen: boolean
   setSentDialogOpen: (open: boolean) => void
   confirmSent: () => Promise<void>
+  applyStatusChangeOrThrow: (status: InvoiceStatus) => Promise<void>
   paidDialogOpen: boolean
   setPaidDialogOpen: (open: boolean) => void
   confirmPaid: () => Promise<void>
@@ -65,8 +66,7 @@ export interface UseInvoiceFormStateResult {
   removeLine: (index: number) => void
   handleSave: () => Promise<void>
   handleStatusChange: (newStatus: InvoiceStatus) => void | Promise<void>
-  handleDelete: () => void
-  confirmDelete: () => Promise<void>
+  handleDelete: () => Promise<void>
 }
 
 // Owns the editable invoice form: data loading, derived totals, line/field
@@ -74,15 +74,15 @@ export interface UseInvoiceFormStateResult {
 // live in their own hooks (see useInvoiceDetailsState).
 export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWrite = true }: UseInvoiceFormStateArgs): UseInvoiceFormStateResult {
   const { t } = useTranslation('invoices')
+  const { confirmDelete } = useDialog()
   const { profile: accountingProfile, accountingCountry } = useAccountingProfile()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [voidDialogOpen, setVoidDialogOpen] = useState(false)
   const [sentDialogOpen, setSentDialogOpen] = useState(false)
   const [paidDialogOpen, setPaidDialogOpen] = useState(false)
-  const [form, setForm] = useState<InvoiceForm>(() => emptyDraft(9, accountingCountry))
+  const [form, setForm] = useState<InvoiceForm>(() => emptyDraft(accountingCountry))
   const [tenant, setTenant] = useState<Tenant | null>(null)
   const [invoice, setInvoice] = useState<Invoice | null>(null)
   const [memoOpen, setMemoOpen] = useState(false)
@@ -198,7 +198,9 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
   }
 
   function addLine() {
-    const taxRate = appliesKor ? 0 : Number(accountingProfile?.default_vat_rate ?? 9)
+    // The reduced rate, like every other new invoice line — the profile's
+    // default_vat_rate is the standard rate, which belongs on what they buy.
+    const taxRate = appliesKor ? 0 : getReducedVatRate(accountingCountry)
     const taxSelection = appliesKor ? null : commonVatSelection(accountingCountry, taxRate)
     setForm((prev) => ({
       ...prev,
@@ -235,10 +237,31 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
     try {
       setSaving(true)
       setError(null)
-      await updateInvoice(invoiceId, buildInvoicePayload(form))
-      onClose(true)
+      // Stay on the invoice after saving. Re-seed from the response rather than
+      // keeping the submitted form: the server recomputes totals and can
+      // normalize lines, so the editor must show what was actually stored.
+      const updated = await updateInvoice(invoiceId, buildInvoicePayload(form))
+      setInvoice(updated)
+      setForm(invoiceToForm(updated as unknown as Record<string, unknown>))
+      onInvoiceUpdate?.(invoiceId, updated)
     } catch (e: unknown) {
       setError(describeError(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Throwing variant: callers that chain another action onto a successful
+  // finalization (the email dialog's "mark as sent") must be able to stop when it
+  // fails, which the error-swallowing wrapper below cannot tell them.
+  async function applyStatusChangeOrThrow(newStatus: InvoiceStatus) {
+    if (!canWrite) throw new Error('Permission denied')
+    try {
+      setSaving(true)
+      setError(null)
+      const updated = await updateInvoice(invoiceId, { status: newStatus })
+      setInvoice(updated)
+      onInvoiceUpdate?.(invoiceId, { status: updated.status })
     } finally {
       setSaving(false)
     }
@@ -247,15 +270,9 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
   async function applyStatusChange(newStatus: InvoiceStatus) {
     if (!canWrite) return
     try {
-      setSaving(true)
-      setError(null)
-      const updated = await updateInvoice(invoiceId, { status: newStatus })
-      setInvoice(updated)
-      onInvoiceUpdate?.(invoiceId, { status: updated.status })
+      await applyStatusChangeOrThrow(newStatus)
     } catch (e: unknown) {
       setError(describeError(e))
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -292,13 +309,13 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
     await applyStatusChange('paid')
   }
 
-  function handleDelete() {
-    setDeleteDialogOpen(true)
-  }
-
-  async function confirmDelete() {
-    setDeleteDialogOpen(false)
+  async function handleDelete() {
     if (!canWrite) return
+    const confirmed = await confirmDelete({
+      title: t($ => $.deleteDialog.title),
+      body: t($ => $.deleteDialog.body, { number: invoice?.invoice_number ?? '' }),
+    })
+    if (!confirmed) return
     try {
       await deleteInvoice(invoiceId)
       onClose(true)
@@ -326,14 +343,13 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
     setMemoOpen,
     discountOpen,
     setDiscountOpen,
-    deleteDialogOpen,
-    setDeleteDialogOpen,
     voidDialogOpen,
     setVoidDialogOpen,
     confirmVoid,
     sentDialogOpen,
     setSentDialogOpen,
     confirmSent,
+    applyStatusChangeOrThrow,
     paidDialogOpen,
     setPaidDialogOpen,
     confirmPaid,
@@ -344,6 +360,5 @@ export function useInvoiceFormState({ invoiceId, onClose, onInvoiceUpdate, canWr
     handleSave,
     handleStatusChange,
     handleDelete,
-    confirmDelete,
   }
 }

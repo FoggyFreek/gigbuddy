@@ -11,7 +11,7 @@ import {
 } from './linkpageRepository.js'
 import { signPayload, verifyPayload, linkpageConfigured, linkpageEditorUrl } from './linkpageTokens.js'
 import { TENANT_CAPABILITIES, tenantKindSupports } from '../../../shared/tenantCapabilities.js'
-import { resolveTenantEntitlements } from '../../commerce/billing/entitlementService.js'
+import { resolveTenantEntitlements } from '../../entitlements/entitlementResolver.js'
 import { FEATURES, LIMITS } from '../../auth/entitlements.js'
 import { badRequest, notFound, serviceError } from '../../platform/http/serviceErrors.js'
 import { hasPendingSlugSync } from './linkpageSlugSyncRepository.js'

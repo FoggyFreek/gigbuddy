@@ -16,6 +16,7 @@
   "fields": {
     "category": "Category",
     "name": "Name",
+    "firstName": "First name",
     "email": "Email",
     "phone": "Phone",
     "iban": "IBAN",

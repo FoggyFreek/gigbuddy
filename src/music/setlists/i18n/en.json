@@ -5,7 +5,14 @@
     "setCount_one": "{{count}} set",
     "setCount_other": "{{count}} sets",
     "songCount_one": "{{count}} song",
-    "songCount_other": "{{count}} songs"
+    "songCount_other": "{{count}} songs",
+    "copy": "Copy",
+    "copyAria": "copy setlist {{name}}"
+  },
+  "copyConfirm": {
+    "title": "Copy this setlist?",
+    "body": "A copy of “{{name}}” with all its sets and songs will be added to your setlists.",
+    "confirm": "Copy"
   },
   "create": {
     "title": "New setlist",
@@ -115,6 +122,7 @@
     "addItem": "Failed to add item",
     "deleteItem": "Failed to delete item",
     "saveChanges": "Failed to save changes",
-    "saveNote": "Failed to save note"
+    "saveNote": "Failed to save note",
+    "copySetlist": "Failed to copy the setlist"
   }
 }

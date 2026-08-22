@@ -16,6 +16,7 @@
   "fields": {
     "category": "Categorie",
     "name": "Naam",
+    "firstName": "Voornaam",
     "email": "E-mail",
     "phone": "Telefoon",
     "iban": "IBAN",

@@ -1,3 +1,4 @@
+import { DialogProvider } from '../../../contexts/DialogContext.tsx'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
@@ -92,7 +93,7 @@ const integrationProfile = (configured = true) => ({
 
 function wrap(ui, { initialEntries = ['/'], integrationsConfigured = true, auth = writerAuth } = {}) {
   return render(
-    <MemoryRouter initialEntries={initialEntries}>
+    <MemoryRouter initialEntries={initialEntries}><DialogProvider>
       <ThemeProvider theme={theme}>
         <AuthContext.Provider value={auth}>
           <ProfileContext.Provider value={integrationProfile(integrationsConfigured)}>
@@ -100,13 +101,13 @@ function wrap(ui, { initialEntries = ['/'], integrationsConfigured = true, auth 
           </ProfileContext.Provider>
         </AuthContext.Provider>
       </ThemeProvider>
-    </MemoryRouter>
+    </DialogProvider></MemoryRouter>
   )
 }
 
 function wrapWithRoutes({ initialEntries }) {
   return render(
-    <MemoryRouter initialEntries={initialEntries}>
+    <MemoryRouter initialEntries={initialEntries}><DialogProvider>
       <ThemeProvider theme={theme}>
         <AuthContext.Provider value={writerAuth}>
           <LocalizationProvider dateAdapter={AdapterDayjs}>
@@ -118,7 +119,7 @@ function wrapWithRoutes({ initialEntries }) {
           </LocalizationProvider>
         </AuthContext.Provider>
       </ThemeProvider>
-    </MemoryRouter>
+    </DialogProvider></MemoryRouter>
   )
 }
 
@@ -260,7 +261,7 @@ describe('GigsPage', () => {
 describe('GigsPage — split-view detail route', () => {
   const GIG_DETAIL = {
     ...GIGS[0],
-    booking_fee_cents: null,
+    guaranteed_fee_cents: null,
     notes: '',
     tasks: [],
     participants: [],

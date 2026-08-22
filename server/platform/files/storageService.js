@@ -6,7 +6,7 @@ import {
   reserveStorageUsage,
   releaseStorageUsage,
 } from '../../people/workspaces/statisticsService.js'
-import { resolveTenantEntitlements } from '../../commerce/billing/entitlementService.js'
+import { resolveTenantEntitlements } from '../../entitlements/entitlementResolver.js'
 import { LIMITS } from '../../auth/entitlements.js'
 import { enqueueCleanup } from './storageCleanupRepository.js'
 import { logger } from '../../utils/logger.js'
@@ -69,6 +69,16 @@ export const getObject = (key) => storageClient.getObject(BUCKET, key)
 // a seek costs its tail, not a whole re-download.
 export const getPartialObject = (key, offset, length) =>
   storageClient.getPartialObject(BUCKET, key, offset, length)
+
+// The whole object in memory. Only for things a generator has to hold anyway —
+// a logo being drawn into a PDF, an attachment being base64-encoded — never for
+// streaming a file to a client, which belongs on getObject().
+export async function readObjectBuffer(key) {
+  const stream = await getObject(key)
+  const chunks = []
+  for await (const chunk of stream) chunks.push(Buffer.from(chunk))
+  return Buffer.concat(chunks)
+}
 
 // ---------- mutations ----------
 

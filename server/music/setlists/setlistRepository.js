@@ -160,6 +160,17 @@ export async function insertSetlist(executor, tenantId, name) {
   return rows[0]
 }
 
+// Existing names that could occupy a copy slot for `base`: "base Copy" and
+// "base Copy(N)". The LIKE pattern is built by the caller, which escapes the
+// wildcards a user-chosen name may contain.
+export async function listNamesLike(executor, tenantId, likePattern) {
+  const { rows } = await executor.query(
+    `SELECT name FROM setlists WHERE tenant_id = $1 AND name LIKE $2 ESCAPE '\\'`,
+    [tenantId, likePattern],
+  )
+  return rows.map((r) => r.name)
+}
+
 export async function updateSetlistName(executor, tenantId, setlistId, name) {
   const { rows } = await executor.query(
     'UPDATE setlists SET name = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3 RETURNING *',
@@ -182,6 +193,42 @@ export async function insertSet(executor, setlistId, tenantId, name, sortOrder) 
   await executor.query(
     'INSERT INTO setlist_sets (setlist_id, tenant_id, name, sort_order) VALUES ($1, $2, $3, $4)',
     [setlistId, tenantId, name, sortOrder],
+  )
+}
+
+// Sets of one setlist in running order, with everything a copy has to carry.
+export async function listSetsForCopy(executor, setlistId, tenantId) {
+  const { rows } = await executor.query(
+    `SELECT id, name, include_in_total, sort_order
+       FROM setlist_sets
+      WHERE setlist_id = $1 AND tenant_id = $2
+      ORDER BY sort_order ASC, id ASC`,
+    [setlistId, tenantId],
+  )
+  return rows
+}
+
+export async function insertSetCopy(executor, setlistId, tenantId, set) {
+  const { rows } = await executor.query(
+    `INSERT INTO setlist_sets (setlist_id, tenant_id, name, include_in_total, sort_order)
+     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+    [setlistId, tenantId, set.name, set.include_in_total, set.sort_order],
+  )
+  return rows[0].id
+}
+
+// Clones every item of one set into another, keeping order, transitions and the
+// assigned performance source. Per-member notes are deliberately not copied.
+export async function copyItemsIntoSet(executor, tenantId, sourceSetId, targetSetId) {
+  await executor.query(
+    `INSERT INTO setlist_items
+       (set_id, tenant_id, item_type, song_id, duration_seconds, label, sort_order,
+        linked_to_next, transition_note, chart_id, document_id)
+     SELECT $2, tenant_id, item_type, song_id, duration_seconds, label, sort_order,
+            linked_to_next, transition_note, chart_id, document_id
+       FROM setlist_items
+      WHERE set_id = $1 AND tenant_id = $3`,
+    [sourceSetId, targetSetId, tenantId],
   )
 }
 

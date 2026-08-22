@@ -1,6 +1,7 @@
-import { request, requestBlob, requestForm } from '../../api/_client.ts'
+import { request, requestBlob, requestBlobWithHeaders, requestForm } from '../../api/_client.ts'
 import type { Gig, Invoice, Id, Period } from '../../types/entities.ts'
 import { periodQueryString } from './invoicePeriod.ts'
+import type { OutreachCampaign } from '../../promotion/outreach/outreachCampaigns.ts'
 
 interface InvoicePeriod {
   label?: string
@@ -10,11 +11,30 @@ interface InvoicePeriod {
   mode?: string
 }
 
-interface EmlDefaults {
-  to?: string
-  subject?: string
-  body?: string
-  personalMessage?: string
+export type InvoiceAttachmentMode = 'pdf' | 'pdf_xml' | 'pdf_xml_embedded'
+
+export interface InvoiceEmailTemplateOption {
+  id: Id
+  name: string
+  locale: 'nl' | 'en'
+}
+
+export interface InvoiceEmailDefaults {
+  templates: InvoiceEmailTemplateOption[]
+  message: string
+  to: string | null
+  status: Invoice['status']
+}
+
+export interface InvoiceEmailPreview {
+  subject: string
+  html: string
+}
+
+export interface InvoiceEmailRequest {
+  templateId?: Id
+  message?: string
+  attachments?: InvoiceAttachmentMode
 }
 
 interface PaymentLinkSyncResult {
@@ -91,7 +111,18 @@ export const syncInvoicePaymentLink = (id: Id) =>
 export const deleteInvoicePaymentLink = (id: Id) =>
   api<Invoice>(`/${id}/payment-link`, { method: 'DELETE' })
 
-export const getInvoiceEmlDefaults = (id: Id) => api<EmlDefaults>(`/${id}/eml-defaults`)
+export const getInvoiceEmailDefaults = (id: Id) => api<InvoiceEmailDefaults>(`/${id}/email/defaults`)
+
+export const previewInvoiceEmail = (id: Id, body: InvoiceEmailRequest) =>
+  api<InvoiceEmailPreview>(`/${id}/email/preview`, { method: 'POST', body: JSON.stringify(body) })
+
+// Two calls on purpose: creating the campaign first gives the send a stable id,
+// so a retried send cannot deliver the invoice twice.
+export const createInvoiceEmailCampaign = (id: Id, body: InvoiceEmailRequest) =>
+  api<OutreachCampaign>(`/${id}/email/campaign`, { method: 'POST', body: JSON.stringify(body) })
+
+export const sendInvoiceEmailCampaign = (id: Id, campaignId: Id) =>
+  api<OutreachCampaign>(`/${id}/email/send`, { method: 'POST', body: JSON.stringify({ campaignId }) })
 
 // UBL 2.1 / Peppol BIS Billing 3.0 XML. A blob rather than a plain link so a
 // failure surfaces as an in-app error instead of raw JSON in a new tab.
@@ -101,8 +132,7 @@ export const downloadInvoiceUbl = (id: Id) =>
 export const downloadInvoiceUblWithPdf = (id: Id) =>
   requestBlob(`/api/invoices/${id}/ubl?embedPdf=true`, { method: 'GET' })
 
-export const downloadInvoiceEml = (id: Id, personalMessage?: string) =>
-  requestBlob(`/api/invoices/${id}/eml`, {
-    method: 'POST',
-    body: JSON.stringify({ personalMessage }),
-  })
+// With headers: the server names the file (locale-dependent), so the client
+// should not re-derive it.
+export const downloadInvoiceEml = (id: Id, body: InvoiceEmailRequest) =>
+  requestBlobWithHeaders(`/api/invoices/${id}/eml`, { method: 'POST', body: JSON.stringify(body) })

@@ -27,16 +27,14 @@ const mockPaymentLinksGet = vi.fn()
 const mockPaymentLinksDelete = vi.fn()
 const mockPaymentLinksUpdate = vi.fn()
 
-vi.mock('../../../server/utils/mollieClient.js', async (importOriginal) => {
+vi.mock('../../../server/finance/invoices/molliePaymentLinkGateway.js', async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,
-    createTenantMollieClient: vi.fn(() => ({
-      paymentLinks: {
-        get: mockPaymentLinksGet,
-        delete: mockPaymentLinksDelete,
-        update: mockPaymentLinksUpdate,
-      },
+    createTenantMolliePaymentLinkGateway: vi.fn(() => ({
+      getPaymentSnapshot: mockPaymentLinksGet,
+      deletePaymentLink: mockPaymentLinksDelete,
+      archivePaymentLink: mockPaymentLinksUpdate,
     })),
   }
 })
@@ -48,11 +46,7 @@ function mollieError(statusCode) {
 function paymentLink(status, payments = []) {
   return {
     status,
-    getPayments: () => ({
-      take: () => ({
-        [Symbol.asyncIterator]: async function* iterator() { yield* payments },
-      }),
-    }),
+    latestPayment: payments[0] ?? null,
   }
 }
 
@@ -77,6 +71,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedAccountingForTenants(seed)
   const { rows } = await pool.query(
     'SELECT * FROM tenant_accounting_settings WHERE tenant_id = $1', [seed.tenantA.id],
   )

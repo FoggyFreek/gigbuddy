@@ -12,19 +12,39 @@
 // ever set on first insert; later updates touch status/paid_at only.
 export async function upsertPaymentOutcome(executor, {
   subscriptionId, molliePaymentId, kind, amountCents, status, paidAt = null, mollieCreatedAt = null,
+  priceSnapshot = null,
 }) {
   const { rows } = await executor.query(
     `INSERT INTO subscription_payments
-       (subscription_id, mollie_payment_id, kind, amount_cents, status, paid_at, mollie_created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (subscription_id, mollie_payment_id, kind, amount_cents, status, paid_at, mollie_created_at,
+        price_snapshot)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (mollie_payment_id) DO UPDATE
        SET status = EXCLUDED.status,
            paid_at = COALESCE(EXCLUDED.paid_at, subscription_payments.paid_at),
            updated_at = NOW()
        WHERE billing_payment_transition_allowed(subscription_payments.status, EXCLUDED.status)
      RETURNING id, subscription_id, kind, amount_cents, status, paid_at, mollie_created_at,
-               (xmax = 0) AS inserted`,
-    [subscriptionId, molliePaymentId, kind, amountCents, status, paidAt, mollieCreatedAt],
+               price_snapshot, (xmax = 0) AS inserted`,
+    [subscriptionId, molliePaymentId, kind, amountCents, status, paidAt, mollieCreatedAt, priceSnapshot],
+  )
+  return rows[0] ?? null
+}
+
+// The charge that opened the current period — the conversion or renewal that
+// the withdrawal window is measured from, and the only payment a self-service
+// immediate cancellation refunds.
+export async function fetchPaymentById(executor, id) {
+  const { rows } = await executor.query('SELECT * FROM subscription_payments WHERE id = $1', [id])
+  return rows[0] ?? null
+}
+
+// Locked, so the "already refunded ≤ amount" check and the refund row insert
+// cannot interleave with a second refund request.
+export async function fetchPaymentByMollieIdForUpdate(executor, molliePaymentId) {
+  const { rows } = await executor.query(
+    'SELECT * FROM subscription_payments WHERE mollie_payment_id = $1 FOR UPDATE',
+    [molliePaymentId],
   )
   return rows[0] ?? null
 }

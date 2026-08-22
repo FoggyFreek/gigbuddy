@@ -31,10 +31,10 @@ vi.mock('../gigs.ts', () => ({
     start_time: '20:00:00',
     end_time: '23:00:00',
     status: 'option',
-    booking_fee_cents: 15000,
+    guaranteed_fee_cents: 15000,
     admission: 'free',
     ticket_link: null,
-    notes: 'Bring own PA',
+    info_blocks: [{ id: 9, label: 'remarks', label_is_custom: false, content: 'Bring own PA', position: 0 }],
     tasks: [],
     attachments: [],
     participants: [],
@@ -59,6 +59,13 @@ vi.mock('../gigs.ts', () => ({
   deleteTask: vi.fn().mockResolvedValue(undefined),
   uploadGigAttachment: vi.fn().mockResolvedValue({}),
   deleteGigAttachment: vi.fn().mockResolvedValue(undefined),
+  addGigInfoBlock: vi.fn().mockResolvedValue({ id: 9, label: 'remarks', label_is_custom: false, content: '', position: 0 }),
+  updateGigInfoBlock: vi.fn().mockResolvedValue({}),
+  deleteGigInfoBlock: vi.fn().mockResolvedValue(undefined),
+  listGigCosts: vi.fn().mockResolvedValue([]),
+  addGigCost: vi.fn().mockResolvedValue({ id: 1, label: 'Travel', amount_cents: 12500, position: 0 }),
+  updateGigCost: vi.fn().mockResolvedValue({ id: 1, label: 'Travel', amount_cents: 15000, position: 0 }),
+  deleteGigCost: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock('../../availability/me.ts', () => ({
@@ -115,7 +122,7 @@ vi.mock('../components/map/GigLocationMap.tsx', () => ({
   ),
 }))
 
-import { getGig, getGigMerchSummary, listGigContacts, setGigTags, setGigVote, updateGig, updateTask } from '../gigs.ts'
+import { getGig, getGigMerchSummary, listGigContacts, setGigTags, setGigVote, updateGig, updateGigInfoBlock, updateTask } from '../gigs.ts'
 import { createInvoice, draftFromGig, listInvoicesByGig } from '../../../finance/invoices/invoices.ts'
 import { evaluateEventAvailability, getAvailabilityOn } from '../../availability/availability.ts'
 import { listMembers } from '../../../people/memberships/bandMembers.ts'
@@ -133,7 +140,7 @@ const GIG_PAID = {
   start_time: '20:00:00',
   end_time: '23:00:00',
   status: 'option',
-  booking_fee_cents: 15000,
+  guaranteed_fee_cents: 15000,
   admission: 'paid',
   ticket_link: 'https://tickets.example.com',
   notes: '',
@@ -142,6 +149,8 @@ const GIG_PAID = {
   participants: [],
   tags: [],
 }
+
+const GIG_FREE = { ...GIG_PAID, admission: 'free', ticket_link: null }
 
 const DEFAULT_USER = {
   id: 9,
@@ -190,10 +199,11 @@ function wrapAsRole(user, ui) {
   )
 }
 
-// The detail body is split across tabbed panels (Event/Terms/Participants/
-// Tasks). Panels stay mounted but inactive ones are display:none, so a test
-// must activate the owning tab before interacting with (or role-querying) its
-// fields. Label/text/display-value queries still match across hidden panels.
+// The detail body is split across tabbed panels (Event/Terms/Finance/
+// Participants/Tasks). Most stay mounted under display:none, so a test must
+// activate the owning tab before interacting with (or role-querying) its
+// fields; label/text/display-value queries still match across those. Finance
+// renders nothing while hidden, so its content needs the tab open at all.
 async function openTab(user, label) {
   await user.click(screen.getByRole('button', { name: label }))
 }
@@ -210,45 +220,62 @@ describe('GigDetailContent — field rendering', () => {
     expect(screen.getByDisplayValue('Bimhuis — Amsterdam')).toBeInTheDocument()
   })
 
-  it('renders the Paid admission switch', async () => {
-    wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
-    expect(screen.getByLabelText(/paid admission/i)).toBeInTheDocument()
-  })
-
-  it('switch is unchecked by default when admission is free', async () => {
-    wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
-    expect(screen.getByLabelText(/paid admission/i)).not.toBeChecked()
-  })
-
-  it('does not show ticket link field when admission is free', async () => {
-    wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
-    expect(screen.queryByLabelText(/ticket link/i)).not.toBeInTheDocument()
-  })
-
-  it('loads with switch checked and ticket link populated when gig has admission=paid', async () => {
-    getGig.mockResolvedValueOnce(GIG_PAID)
-    wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => expect(screen.getByLabelText(/paid admission/i)).toBeChecked())
-    expect(screen.getByDisplayValue('https://tickets.example.com')).toBeInTheDocument()
-  })
-
-  it('renders Guaranteed fee and Ticket link on the same row when admission=paid', async () => {
-    getGig.mockResolvedValueOnce(GIG_PAID)
+  // The deal type carries what the paid-admission switch used to say, so the
+  // switch is gone and the ticket link no longer hides behind it.
+  it('has no paid admission switch', async () => {
     wrap(<GigDetailContent gigId={1} />)
     await waitFor(() => screen.getByLabelText(/ticket link/i))
-    expect(screen.getByLabelText(/guaranteed fee/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/paid admission/i)).not.toBeInTheDocument()
+  })
+
+  it('always shows the ticket link field', async () => {
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     expect(screen.getByLabelText(/ticket link/i)).toBeInTheDocument()
   })
 
-  it('renders the Terms section heading', async () => {
+  it('populates the ticket link when the gig has one', async () => {
+    getGig.mockResolvedValueOnce(GIG_PAID)
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
+    expect(screen.getByDisplayValue('https://tickets.example.com')).toBeInTheDocument()
+    expect(screen.getByLabelText(/guaranteed fee/i)).toBeInTheDocument()
+  })
+
+  // The old free-text notes field became the Remarks block of the Additional
+  // information section, which migration 190 carried the content into.
+  it('shows the migrated notes as the Remarks block on the Tasks tab', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
+    await openTab(user, 'Tasks')
+
+    expect(screen.getByText('Additional information')).toBeInTheDocument()
+    expect(screen.getByLabelText('Remarks / Notes')).toHaveValue('Bring own PA')
+  })
+
+  it('saves an edited information block against its own endpoint', async () => {
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
+    await openTab(user, 'Tasks')
+    await user.type(screen.getByLabelText('Remarks / Notes'), ' + DI')
+
+    await waitFor(
+      () => expect(updateGigInfoBlock).toHaveBeenCalledWith(1, 9, { content: 'Bring own PA + DI' }),
+      { timeout: 3000 },
+    )
+    // The gig's own PATCH is untouched: blocks are a sub-resource now.
+    expect(updateGig).not.toHaveBeenCalled()
+  })
+
+  it('renders the deal sections when the Terms tab is selected', async () => {
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
-    expect(screen.getByRole('heading', { name: /^terms$/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /^deal$/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /^booking fee$/i })).toBeInTheDocument()
   })
 
   it('renames Band fee to Guaranteed fee', async () => {
@@ -257,23 +284,44 @@ describe('GigDetailContent — field rendering', () => {
     expect(screen.queryByLabelText(/band fee/i)).not.toBeInTheDocument()
   })
 
-  it('shows Merchandise cut regardless of admission', async () => {
+  // The ticket share hangs off the deal type, not off admission: a door deal
+  // can be agreed before ticketing is, and free admission must not wipe it.
+  it('hides the ticket share on a flat fee', async () => {
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
-    expect(screen.getByLabelText(/merchandise cut/i)).toBeInTheDocument()
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
+    expect(screen.queryByLabelText(/ticket percentage/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/venue \/ promoter/i)).not.toBeInTheDocument()
   })
 
-  it('does not show Percentage of sales when admission is free', async () => {
+  it('shows the ticket share on a guarantee, free admission or not', async () => {
+    getGig.mockResolvedValueOnce({ ...GIG_FREE, deal_type: 'guarantee', percentage_of_sales: 70 })
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
-    expect(screen.queryByLabelText(/percentage of net sales/i)).not.toBeInTheDocument()
+    await waitFor(() => screen.getByLabelText(/ticket percentage/i))
+    expect(screen.getByLabelText(/ticket percentage/i)).toHaveValue(70)
+    // The venue's half of the split is derived, never stored.
+    expect(screen.getByLabelText(/venue \/ promoter/i)).toHaveValue(30)
   })
 
-  it('shows Percentage of sales when admission=paid', async () => {
-    getGig.mockResolvedValueOnce(GIG_PAID)
+  // One label for the pair, whatever the deal type: whether the share is taken
+  // before or after break-even is the deal type's own business.
+  it('names the share the same way on a guarantee vs.', async () => {
+    getGig.mockResolvedValueOnce({
+      ...GIG_FREE,
+      deal_type: 'guarantee',
+      guarantee_variant: 'versus',
+      percentage_of_sales: 50,
+    })
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/percentage of net sales/i))
-    expect(screen.getByLabelText(/percentage of net sales/i)).toBeInTheDocument()
+    await waitFor(() => screen.getByLabelText(/ticket percentage/i))
+    expect(screen.getByLabelText(/ticket percentage/i)).toHaveValue(50)
+    expect(screen.getByLabelText(/venue \/ promoter/i)).toHaveValue(50)
+  })
+
+  it('drops the guaranteed fee on a door deal', async () => {
+    getGig.mockResolvedValueOnce({ ...GIG_FREE, deal_type: 'door_deal', percentage_of_sales: 70 })
+    wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/ticket percentage/i))
+    expect(screen.queryByLabelText(/guaranteed fee/i)).not.toBeInTheDocument()
   })
 
   // A band's own gigs are already the band's, so there is nothing to pick and
@@ -359,44 +407,32 @@ describe('GigDetailContent — Terms field saving', () => {
     updateGig.mockClear()
   })
 
-  it('saves Merchandise cut as a number', async () => {
+  // Editing the venue's half writes the artist's, so the pair cannot drift
+  // off 100 — there is only ever one stored number.
+  it('saves the complement when the venue share is edited', async () => {
+    getGig.mockResolvedValueOnce({ ...GIG_PAID, deal_type: 'guarantee' })
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/merchandise cut/i))
+    await waitFor(() => screen.getByLabelText(/venue \/ promoter/i))
     await openTab(user, 'Terms')
-    await user.type(screen.getByLabelText(/merchandise cut/i), '15')
+    await user.type(screen.getByLabelText(/venue \/ promoter/i), '30')
     await waitFor(
-      () => expect(updateGig).toHaveBeenCalledWith(1, { merchandise_cut: 15 })
+      () => expect(updateGig).toHaveBeenCalledWith(1, { percentage_of_sales: 70 })
     )
   })
 
-  it('saves Percentage of sales as a number when admission=paid', async () => {
-    getGig.mockResolvedValueOnce(GIG_PAID)
+  it('saves the deal type on its own when it is switched', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/percentage of net sales/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
-    await user.type(screen.getByLabelText(/percentage of net sales/i), '20')
-    await waitFor(
-      () => expect(updateGig).toHaveBeenCalledWith(1, { percentage_of_sales: 20 })
-    )
-  })
-
-  it('clears Percentage of sales when admission switched to free', async () => {
-    getGig.mockResolvedValueOnce(GIG_PAID)
-    const user = userEvent.setup()
-    wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => expect(screen.getByLabelText(/paid admission/i)).toBeChecked())
-    await openTab(user, 'Terms')
-    await user.click(screen.getByLabelText(/paid admission/i))
-    await waitFor(
-      () =>
-        expect(updateGig).toHaveBeenCalledWith(1, {
-          admission: 'free',
-          ticket_link: null,
-          percentage_of_sales: null,
-        })
-    )
+    // Exact: the field's help icon is named "About this deal type".
+    await user.click(screen.getByLabelText('Deal type'))
+    await user.click(screen.getByRole('option', { name: 'Door deal' }))
+    await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, {
+      deal_type: 'door_deal',
+      guarantee_variant: null,
+    }))
   })
 })
 
@@ -411,27 +447,37 @@ describe('GigDetailContent — reader mode (canWrite=false)', () => {
     await waitFor(() => expect(screen.getByDisplayValue('Jazz Night')).toBeInTheDocument())
     expect(screen.getByLabelText(/event description/i)).toHaveAttribute('readonly')
     expect(screen.getByLabelText(/event description/i)).not.toBeDisabled()
-    expect(screen.getByLabelText(/paid admission/i)).toBeDisabled()
     expect(screen.getByLabelText(/guaranteed fee/i)).toHaveAttribute('readonly')
+    expect(screen.getByLabelText(/venue costs/i)).toHaveAttribute('readonly')
     expect(screen.getByLabelText(/notes/i)).toHaveAttribute('readonly')
     expect(screen.getByText(/you have read-only access/i)).toBeInTheDocument()
   })
 
   it('hides the banner upload control', async () => {
     wrap(<GigDetailContent gigId={1} canWrite={false} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     expect(screen.queryByRole('button', { name: /upload banner/i })).not.toBeInTheDocument()
   })
 
   it('does not auto-save when a disabled control is clicked', async () => {
     // pointerEventsCheck:0 lets us drive the click through the disabled control;
-    // because the input is disabled its onChange never fires, so nothing saves.
+    // because the select is disabled its onChange never fires, so nothing saves.
     const user = userEvent.setup({ pointerEventsCheck: 0 })
     wrap(<GigDetailContent gigId={1} canWrite={false} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
-    await user.click(screen.getByLabelText(/paid admission/i))
+    expect(screen.getByLabelText('Deal type')).toHaveAttribute('aria-disabled', 'true')
+    await user.click(screen.getByLabelText('Deal type'))
     expect(updateGig).not.toHaveBeenCalled()
+  })
+
+  it('offers no way to add or remove a cost line', async () => {
+    const user = userEvent.setup()
+    wrap(<GigDetailContent gigId={1} canWrite={false} />)
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
+    await openTab(user, 'Terms')
+    expect(screen.queryByRole('button', { name: /^add$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /delete cost/i })).not.toBeInTheDocument()
   })
 })
 
@@ -487,10 +533,7 @@ describe('GigDetailContent — Terms role gating', () => {
     ['contributor', ['app.view', 'task.complete.self', 'rehearsal.respond.self', 'availability.write.self', 'planning.write', 'purchase.create'], true],
   ])('hides financial terms and related invoices for %s', async (role, permissions, canWrite) => {
     const user = userEvent.setup()
-    getGig.mockResolvedValueOnce({
-      ...GIG_PAID,
-      equipment: [{ item: 'pa_system', provider: 'venue' }],
-    })
+    getGig.mockResolvedValueOnce({ ...GIG_PAID })
     wrapAsRole(
       { id: 9, activeTenantRole: role, permissions, bandMemberId: 3 },
       <GigDetailContent gigId={1} canWrite={canWrite} />,
@@ -500,14 +543,12 @@ describe('GigDetailContent — Terms role gating', () => {
     await openTab(user, 'Terms')
 
     expect(screen.queryByRole('heading', { name: /^terms$/i })).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/paid admission/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/guaranteed fee/i)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/merchandise cut/i)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/percentage of net sales/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/venue costs/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/ticket link/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Finance' })).not.toBeInTheDocument()
     expect(screen.queryByText(/merchandise sold/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/related invoices/i)).not.toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /equipment/i })).toBeInTheDocument()
     expect(getGigMerchSummary).not.toHaveBeenCalled()
     expect(listInvoicesByGig).not.toHaveBeenCalled()
   })
@@ -523,7 +564,7 @@ describe('GigDetailContent — participants voting', () => {
     start_time: '20:00:00',
     end_time: '23:00:00',
     status: 'option',
-    booking_fee_cents: 15000,
+    guaranteed_fee_cents: 15000,
     admission: 'free',
     ticket_link: null,
     notes: '',
@@ -672,85 +713,38 @@ describe('GigDetailContent — merch sold summary', () => {
   })
 
   it('shows the card with units and excl-VAT total when there are sales', async () => {
+    const user = userEvent.setup()
     getGigMerchSummary.mockResolvedValueOnce({ unitsSold: 37, netCents: 12345, grossCents: 14937 })
     wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
+    await openTab(user, 'Finance')
     await waitFor(() => expect(screen.getByText(/merchandise sold/i)).toBeInTheDocument())
     expect(screen.getByText(/37 items · excl\. VAT/i)).toBeInTheDocument()
     expect(screen.getByText(/123,45/)).toBeInTheDocument()
   })
 
   it('renders "1 item" (singular) for a single unit', async () => {
+    const user = userEvent.setup()
     getGigMerchSummary.mockResolvedValueOnce({ unitsSold: 1, netCents: 1000, grossCents: 1210 })
     wrap(<GigDetailContent gigId={1} />)
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
+    await openTab(user, 'Finance')
     await waitFor(() => expect(screen.getByText(/1 item · excl\. VAT/i)).toBeInTheDocument())
   })
 
   it('hides the card when there are no sales', async () => {
+    const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
+    await openTab(user, 'Finance')
     expect(screen.queryByText(/merchandise sold/i)).not.toBeInTheDocument()
   })
 
   it('does not render the card or fetch the summary for readers', async () => {
     wrap(<GigDetailContent gigId={1} canWrite={false} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     expect(screen.queryByText(/merchandise sold/i)).not.toBeInTheDocument()
     expect(getGigMerchSummary).not.toHaveBeenCalled()
-  })
-})
-
-describe('GigDetailContent — admission toggle', () => {
-  beforeEach(() => {
-    getGig.mockClear()
-    updateGig.mockClear()
-  })
-
-  it('shows ticket link field after toggling to paid', async () => {
-    const user = userEvent.setup()
-    wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
-    await openTab(user, 'Terms')
-    await user.click(screen.getByLabelText(/paid admission/i))
-    expect(screen.getByLabelText(/ticket link/i)).toBeInTheDocument()
-  })
-
-  it('auto-saves admission=paid when toggled on', async () => {
-    const user = userEvent.setup()
-    wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
-    await openTab(user, 'Terms')
-    await user.click(screen.getByLabelText(/paid admission/i))
-    await waitFor(
-      () => expect(updateGig).toHaveBeenCalledWith(1, { admission: 'paid' })
-    )
-  })
-
-  it('hides ticket link field after toggling back to free', async () => {
-    const user = userEvent.setup()
-    wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
-    await openTab(user, 'Terms')
-    await user.click(screen.getByLabelText(/paid admission/i))
-    expect(screen.getByLabelText(/ticket link/i)).toBeInTheDocument()
-    await user.click(screen.getByLabelText(/paid admission/i))
-    expect(screen.queryByLabelText(/ticket link/i)).not.toBeInTheDocument()
-  })
-
-  it('auto-saves admission=free and ticket_link=null when toggled off', async () => {
-    const user = userEvent.setup()
-    wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
-    await openTab(user, 'Terms')
-    await user.click(screen.getByLabelText(/paid admission/i))
-    await user.click(screen.getByLabelText(/paid admission/i))
-    await waitFor(
-      () =>
-        expect(updateGig).toHaveBeenCalledWith(1, {
-          admission: 'free',
-          ticket_link: null,
-          percentage_of_sales: null,
-        })
-    )
   })
 })
 
@@ -763,9 +757,8 @@ describe('GigDetailContent — ticket link field', () => {
   it('auto-saves ticket_link when typed', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
-    await user.click(screen.getByLabelText(/paid admission/i))
     // Paste the whole URL in one event rather than typing it character by
     // character: each keystroke re-renders the (heavy) detail body, and ~20 of
     // those under load is what made this test flake past the 5s budget.
@@ -793,9 +786,8 @@ describe('GigDetailContent — ticket link field', () => {
   it('does not show open-link anchor when ticket_link is empty', async () => {
     const user = userEvent.setup()
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     await openTab(user, 'Terms')
-    await user.click(screen.getByLabelText(/paid admission/i))
     // ticket_link is empty — no anchor with a ticket URL should exist
     const links = screen.queryAllByRole('link')
     expect(links.every((l) => !l.getAttribute('href')?.startsWith('https://'))).toBe(true)
@@ -811,7 +803,7 @@ describe('GigDetailContent — location map', () => {
     start_time: '20:00:00',
     end_time: '23:00:00',
     status: 'option',
-    booking_fee_cents: 15000,
+    guaranteed_fee_cents: 15000,
     admission: 'free',
     ticket_link: null,
     notes: '',
@@ -878,7 +870,7 @@ describe('GigDetailContent — location map', () => {
   it('hides the map and does not geocode when neither venue nor festival has a city', async () => {
     getGig.mockResolvedValueOnce(gigWith({ venue: { id: 11, name: 'TBD', category: 'venue' }, festival: null }))
     wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     expect(geocodePlace).not.toHaveBeenCalled()
     expect(screen.queryByTestId('gig-location-map')).not.toBeInTheDocument()
   })
@@ -887,14 +879,14 @@ describe('GigDetailContent — location map', () => {
     let resolve
     geocodePlace.mockReturnValueOnce(new Promise((r) => { resolve = r }))
     const { unmount } = wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
     unmount()
     await act(async () => { resolve({ lat: 1, lon: 2 }) })
     expect(screen.queryByTestId('gig-location-map')).not.toBeInTheDocument()
   })
 })
 
-describe('GigDetailContent — create invoice from Terms tab', () => {
+describe('GigDetailContent — create invoice from Finance tab', () => {
   const FINANCE_USER = {
     id: 9,
     activeTenantRole: 'financial_admin',
@@ -938,9 +930,9 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
     navigate.mockClear()
   })
 
-  async function openTerms(user) {
-    await waitFor(() => screen.getByLabelText(/paid admission/i))
-    await openTab(user, 'Terms')
+  async function openFinance(user) {
+    await waitFor(() => screen.getByLabelText(/ticket link/i))
+    await openTab(user, 'Finance')
   }
 
   it('creates a draft invoice after confirmation and navigates to it', async () => {
@@ -957,7 +949,7 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
     createInvoice.mockResolvedValue({ id: 55 })
 
     wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     // The button lives under the "Related invoices" section heading
     const createButton = await screen.findByRole('button', { name: /create invoice/i })
@@ -980,7 +972,7 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
     getGig.mockResolvedValueOnce(GIG_WITH_ORG)
 
     wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     await user.click(await screen.findByRole('button', { name: /create invoice/i }))
     const dialog = await screen.findByRole('dialog')
@@ -998,7 +990,7 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
     })
 
     wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     await user.click(await screen.findByRole('button', { name: /create invoice/i }))
     const dialog = await screen.findByRole('dialog')
@@ -1013,7 +1005,7 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
     getGig.mockResolvedValueOnce(GIG_WITH_ORG)
 
     wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     await screen.findByText('#2026-001')
     expect(screen.queryByRole('button', { name: /create invoice/i })).not.toBeInTheDocument()
@@ -1024,7 +1016,7 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
     // default getGig venue has no organization_name
 
     wrapAs(FINANCE_USER, <GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     await waitFor(() => expect(listInvoicesByGig).toHaveBeenCalled())
     expect(screen.queryByRole('button', { name: /create invoice/i })).not.toBeInTheDocument()
@@ -1036,7 +1028,7 @@ describe('GigDetailContent — create invoice from Terms tab', () => {
     const viewer = { ...FINANCE_USER, activeTenantRole: 'contributor', permissions: ['app.view', 'planning.write', 'finance.view'] }
 
     wrapAs(viewer, <GigDetailContent gigId={1} />)
-    await openTerms(user)
+    await openFinance(user)
 
     await waitFor(() => expect(listInvoicesByGig).toHaveBeenCalled())
     expect(screen.queryByRole('button', { name: /create invoice/i })).not.toBeInTheDocument()
@@ -1073,10 +1065,10 @@ describe('GigDetailContent — personal workspace', () => {
     // BandParticipantsSection, whose inline availability is gated on tenant
     // kind/cross-band rather than status.
     status: 'confirmed',
-    booking_fee_cents: 15000,
+    guaranteed_fee_cents: 15000,
     admission: 'free',
     ticket_link: null,
-    notes: 'Bring own PA',
+    info_blocks: [{ id: 9, label: 'remarks', label_is_custom: false, content: 'Bring own PA', position: 0 }],
     viewerBandMemberId: 22,
     tasks: [{ id: 5, title: 'Bring charts', assigned_to: 22, done: false }],
     attachments: [{ id: 6, original_filename: 'rider.pdf', file_size: 10 }],
@@ -1158,12 +1150,13 @@ describe('GigDetailContent — personal workspace', () => {
     expect(screen.getByRole('button', { name: 'Event' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tasks' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Terms' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Finance' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Participants' })).not.toBeInTheDocument()
 
     // The Terms/Participants panels are unmounted, not merely hidden, so their
     // fields are gone too. The Event tab's band-availability panel is gated on
     // tenant kind (personal here) regardless, so it never mounts either.
-    expect(screen.queryByLabelText(/paid admission/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/ticket link/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/guaranteed fee/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/member availability/i)).not.toBeInTheDocument()
     expect(getAvailabilityOn).not.toHaveBeenCalled()
@@ -1250,8 +1243,8 @@ describe('GigDetailContent — personal workspace', () => {
     expect(listMembers).not.toHaveBeenCalled()
 
     await openTab(user, 'Terms')
-    await user.type(screen.getByLabelText(/merchandise cut/i), '15')
-    await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, { merchandise_cut: 15 }))
+    await user.type(screen.getByLabelText(/venue capacity/i), '15')
+    await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, { venue_capacity: 15 }))
   })
 
   // The band switcher takes the event-banner slot for a gigbuddy band's gig; a

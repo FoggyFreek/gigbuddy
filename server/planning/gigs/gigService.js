@@ -6,11 +6,17 @@ import path from 'node:path'
 import { withTransaction, abortTransaction } from '../../db/withTransaction.js'
 import { PERMISSIONS } from '../../auth/permissions.js'
 import { computePurchaseLineTotals } from '../../../shared/purchaseTotals.js'
+import { MAX_GIG_INFO_BLOCKS } from '../../../shared/gigInfoLabels.js'
 import { uploadObjectWithQuota, removeObject, safeRemove, gigBannerKey, gigAttachmentKey } from '../../platform/files/storageService.js'
 import { IMAGE_PROCESSING_PRESETS, validateAndReencodeImage, extensionForImageMime } from '../../utils/imageProcess.js'
 import { verifyDocumentContent } from '../../utils/verifyFileContent.js'
 import { dispatchNotification } from '../../user/notifications/notificationService.js'
 import { logger } from '../../utils/logger.js'
+import { renderGigItineraryPdf } from '../../utils/renderGigItineraryPdf.js'
+import { renderGigArtistSettlementPdf } from '../../utils/renderGigArtistSettlementPdf.js'
+import { renderGigContractPdf } from '../../utils/renderGigContractPdf.js'
+import { loadTenantLogoBuffer } from '../../utils/tenantLogo.js'
+import { sanitizeFilename } from '../../utils/sanitizeFilename.js'
 import { createTask as createTaskService, patchTask as patchTaskService, removeTask as removeTaskService } from '../tasks/taskService.js'
 import { loadAvailabilityMatrix } from '../availability/availabilityService.js'
 import { prepareMatrix, summarizeSpan, withMembers } from '../../domain/availabilitySpan.js'
@@ -24,9 +30,15 @@ import {
   normalizeImportRow,
   buildGigUpdateFields,
   normalizeGigTagNames,
+  normalizeGigCost,
+  normalizeGigInfoBlock,
+  normalizeGigInfoBlockPatch,
+  normalizeGigTimetableEntry,
+  normalizeGigTimetableEntryPatch,
   MAX_GIG_TAGS,
   MAX_GIG_TAG_LENGTH,
-  parseGigEquipmentPayload,
+  MAX_GIG_COSTS,
+  MAX_GIG_TIMETABLE_ENTRIES,
 } from './gigValidators.js'
 import {
   assertVenueInTenant,
@@ -41,12 +53,13 @@ import {
   listGigsInRange as listGigsInRangeRows,
   listGigMapData as listGigMapRows,
   listGigTasks,
+  listGigTasksWithAssignees,
   listGigAttachments,
   insertGigForImport,
   insertGigWithRelations,
   insertGigParticipant,
   deleteGigParticipant,
-  lockGigForParticipantRemoval,
+  lockGig,
   getGigParticipantRemovalState,
   updateParticipantVote,
   lockGigOptionResponseState,
@@ -60,6 +73,23 @@ import {
   clearGigBannerPath,
   insertGigAttachment,
   deleteGigAttachment as deleteGigAttachmentRow,
+  listGigCosts as listGigCostRows,
+  countGigCosts,
+  insertGigCost,
+  updateGigCost,
+  deleteGigCost as deleteGigCostRow,
+  listGigInfoBlocks as listGigInfoBlockRows,
+  countGigInfoBlocks,
+  insertGigInfoBlock,
+  updateGigInfoBlock,
+  deleteGigInfoBlock as deleteGigInfoBlockRow,
+  listGigTimetable as listGigTimetableRows,
+  countGigTimetableEntries,
+  listGigTimetableIds,
+  insertGigTimetableEntry,
+  updateGigTimetableEntry,
+  moveGigTimetableEntry,
+  deleteGigTimetableEntry as deleteGigTimetableEntryRow,
   getContactInTenant,
   listGigContacts as listGigContactRows,
   insertGigContact,
@@ -73,15 +103,14 @@ import {
   upsertGigTag,
   deleteGigTagLinks,
   insertGigTagLink,
-  loadGigEquipment,
-  deleteGigEquipment,
-  insertGigEquipment,
 } from './gigRepository.js'
 import {
   bandMemberExistsInTenant,
   listLeadMemberIds,
 } from '../../people/roster/bandMemberRepository.js'
 import { getTaskById } from '../tasks/taskRepository.js'
+import { fetchTenant } from '../../people/workspaces/tenantRepository.js'
+import { fetchVenue, listVenueContacts as listVenueContactRows } from '../../people/venues/venueRepository.js'
 import { INVALID_CURSOR, INVALID_TODAY, MAX_RANGE_DAYS, parseLocalDate, parseListCursor } from '../../platform/http/requestValidators.js'
 import { badRequest, notFound } from '../../platform/http/serviceErrors.js'
 import { assertMyBandWritable } from '../../people/my-bands/myBandService.js'
@@ -300,8 +329,164 @@ export async function getGig(db, tenantId, gigId) {
 
   const tasks = await listGigTasks(db, gigId, tenantId)
   const attachments = await listGigAttachments(db, gigId, tenantId)
+  const costs = await listGigCostRows(db, gigId, tenantId)
+  const infoBlocks = await listGigInfoBlockRows(db, gigId, tenantId)
+  const timetable = await listGigTimetableRows(db, gigId, tenantId)
   const byGig = await loadParticipants(db, [gigId], tenantId)
-  return { gig: { ...gig, tasks, participants: byGig.get(gigId) || [], attachments } }
+  return {
+    gig: {
+      ...gig, tasks, participants: byGig.get(gigId) || [], attachments, costs,
+      info_blocks: infoBlocks, timetable,
+    },
+  }
+}
+
+// The itinerary PDF a band sends round before the show. Read-only and
+// tenant-scoped like every other gig read, so a cross-tenant id 404s here
+// rather than leaking that the gig exists.
+//
+// Contacts are NOT part of the gig detail payload (they have their own
+// endpoint) and come from three places — see mergeItineraryContacts. Tasks are
+// re-read with their assignee names resolved, because a server-rendered
+// document has no roster to look them up in.
+export async function getGigItineraryPdf(db, tenantId, gigId, { lng = 'en' } = {}) {
+  const gig = await fetchGigWithRelations(db, gigId, tenantId)
+  if (!gig) return NOT_FOUND
+
+  const [gigContacts, venueContacts, festivalContacts, tasks, timetable, infoBlocks, tenant] =
+    await Promise.all([
+      listGigContactRows(db, gigId, tenantId),
+      gig.venue_id ? listVenueContactRows(db, gig.venue_id, tenantId) : [],
+      gig.festival_id ? listVenueContactRows(db, gig.festival_id, tenantId) : [],
+      listGigTasksWithAssignees(db, gigId, tenantId),
+      listGigTimetableRows(db, gigId, tenantId),
+      listGigInfoBlockRows(db, gigId, tenantId),
+      fetchTenant(db, tenantId),
+    ])
+  const contacts = mergeItineraryContacts({ gigContacts, venueContacts, festivalContacts })
+  // The page is white, so this takes the ordinary light-background logo —
+  // logo_dark_path is the variant for dark surfaces and would disappear here.
+  const logoBuffer = await loadTenantLogoBuffer(tenant)
+
+  const buffer = await renderGigItineraryPdf({
+    gig, contacts, tasks, timetable, infoBlocks, logoBuffer, lng,
+    // Signs the header when the tenant has no logo. display_name is the
+    // kind-neutral name, so a personal workspace signs with its own.
+    bandName: tenant?.display_name || tenant?.band_name || '',
+  })
+  return { pdf: { buffer, filename: itineraryFilename(gig) } }
+}
+
+// A live, post-show statement of the finalized ticket and cost terms. Finance
+// permission is enforced by the route; this service owns tenant isolation and
+// passes one coherent gig/cost/tenant snapshot to the pure renderer.
+export async function getGigArtistSettlementPdf(
+  db,
+  tenantId,
+  gigId,
+  { lng = 'en', generatedAt = new Date() } = {},
+) {
+  const gig = await fetchGigWithRelations(db, gigId, tenantId)
+  if (!gig) return NOT_FOUND
+
+  const [costs, tenant] = await Promise.all([
+    listGigCostRows(db, gigId, tenantId),
+    fetchTenant(db, tenantId),
+  ])
+  const logoBuffer = await loadTenantLogoBuffer(tenant)
+  const buffer = await renderGigArtistSettlementPdf({
+    gig,
+    costs,
+    logoBuffer,
+    lng,
+    generatedAt,
+    bandName: tenant?.display_name || tenant?.band_name || '',
+  })
+  return { pdf: { buffer, filename: artistSettlementFilename(gig) } }
+}
+
+// A live agreement assembled from the gig's current deal facts. Like the
+// itinerary and settlement it is derived on request: there is no stored copy
+// to become stale and no document lifecycle to maintain.
+export async function getGigContractPdf(
+  db,
+  tenantId,
+  gigId,
+  { lng = 'en', generatedAt = new Date() } = {},
+) {
+  const gig = await fetchGigWithRelations(db, gigId, tenantId)
+  if (!gig) return NOT_FOUND
+  if (!gig.venue_id) return badRequest('The gig needs a venue before a contract can be generated')
+
+  const [costs, tenant, venue] = await Promise.all([
+    listGigCostRows(db, gigId, tenantId),
+    fetchTenant(db, tenantId),
+    fetchVenue(db, gig.venue_id, tenantId),
+  ])
+  if (!tenant || !venue) return NOT_FOUND
+
+  const logoBuffer = await loadTenantLogoBuffer(tenant)
+  const buffer = await renderGigContractPdf({
+    gig,
+    costs,
+    tenant,
+    venue,
+    logoBuffer,
+    lng,
+    generatedAt,
+    bandName: tenant.display_name || tenant.band_name || '',
+  })
+  return { pdf: { buffer, filename: contractFilename(gig) } }
+}
+
+// The Contacts tab reads three sources — the gig's own linked contacts plus the
+// ones inherited from its venue and its festival — so the itinerary carries the
+// same three, in the same order. Each contact appears once: a person linked
+// both to the gig and to its venue is kept under the gig link, which is the one
+// carrying the gig's own primary flag. `source` is null for those, matching the
+// tab, where only inherited rows are tagged with where they came from.
+function mergeItineraryContacts({ gigContacts, venueContacts, festivalContacts }) {
+  const seen = new Set(gigContacts.map((contact) => contact.id))
+  const inherited = (rows, source) => rows.flatMap((contact) => {
+    if (seen.has(contact.id)) return []
+    seen.add(contact.id)
+    return [{ ...contact, source, is_primary: false }]
+  })
+  return [
+    ...inherited(venueContacts, 'venue'),
+    ...inherited(festivalContacts, 'festival'),
+    ...gigContacts.map((contact) => ({ ...contact, source: null })),
+  ]
+}
+
+// "itinerary-paradiso-night-09122026.pdf". sanitizeFilename is the
+// Content-Disposition backstop; the slugging here is what keeps the name
+// readable. Either half may be missing — an unnamed gig or one without a date
+// still gets a valid name.
+function itineraryFilename(gig) {
+  return gigDocumentFilename('itinerary', gig)
+}
+
+function artistSettlementFilename(gig) {
+  return gigDocumentFilename('artist-settlement', gig)
+}
+
+function contractFilename(gig) {
+  return gigDocumentFilename('contract', gig)
+}
+
+function gigDocumentFilename(prefix, gig) {
+  const slug = String(gig.event_description || '')
+    .normalize('NFKD')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+    .slice(0, 60)
+  // MMddYYYY, read off the 'YYYY-MM-DD' a DATE column returns.
+  const date = toDateStr(gig.event_date)
+  const stamp = date ? `${date.slice(5, 7)}${date.slice(8, 10)}${date.slice(0, 4)}` : null
+  const parts = [prefix, slug, stamp].filter(Boolean)
+  return sanitizeFilename(`${parts.join('-')}.pdf`)
 }
 
 // Total merch sold *at this gig*: units and the net (Excl. VAT) amount. Sales
@@ -477,24 +662,6 @@ export async function setGigTags(db, tenantId, gigId, body) {
   }, { db })
 }
 
-// Replaces a gig's complete equipment set: which catalogue items are involved
-// and, per item, whether the venue provides it or the band brings it.
-export async function setGigEquipment(db, tenantId, gigId, body) {
-  const parsed = parseGigEquipmentPayload(body)
-  if (parsed.error) return { error: { status: 400, body: { error: parsed.error } } }
-
-  return withTransaction(async (client) => {
-    if (!(await gigExistsInTenant(client, gigId, tenantId))) abortTransaction(NOT_FOUND)
-
-    await deleteGigEquipment(client, gigId, tenantId)
-    for (const { item, provider } of parsed.items) {
-      await insertGigEquipment(client, gigId, tenantId, item, provider)
-    }
-    await touchGig(client, gigId, tenantId)
-    return { equipment: await loadGigEquipment(client, gigId, tenantId) }
-  }, { db })
-}
-
 // Deletes the gig and reclaims every object it owns — the banner and each
 // attachment, whose rows cascade away with the gig and whose keys are therefore
 // unreachable once it is gone.
@@ -568,7 +735,7 @@ export async function addParticipant(db, tenantId, userId, gigId, memberId) {
 
 export async function removeParticipant(db, tenantId, gigId, memberId) {
   return withTransaction(async (client) => {
-    if (!(await lockGigForParticipantRemoval(client, gigId, tenantId))) abortTransaction(NOT_FOUND)
+    if (!(await lockGig(client, gigId, tenantId))) abortTransaction(NOT_FOUND)
     const state = await getGigParticipantRemovalState(client, gigId, memberId, tenantId)
     if (!state.target_exists) abortTransaction(NOT_FOUND)
     if (state.participant_count <= 1) abortTransaction(LAST_PARTICIPANT)
@@ -696,6 +863,159 @@ export async function deleteGigAttachment(db, tenantId, gigId, attachmentId) {
 }
 
 // ---------- gig contacts (mirrors venue_contacts; links are informational) ----------
+
+// ---------- costs ----------
+
+// The artist's own costs for a gig, itemised. Their sum is the "Costs" row of
+// the artist statement; the statement itself is derived on the frontend.
+
+export async function listGigCosts(db, tenantId, gigId) {
+  if (!(await gigExistsInTenant(db, gigId, tenantId))) return NOT_FOUND
+  return { costs: await listGigCostRows(db, gigId, tenantId) }
+}
+
+export async function addGigCost(db, tenantId, gigId, body) {
+  const parsed = normalizeGigCost(body)
+  if (parsed.error) return badRequest(parsed.error)
+
+  return withTransaction(async (client) => {
+    // Locked read-then-insert: two concurrent adds must not both see room for
+    // the last line and push the gig one over the cap.
+    if (!(await lockGig(client, gigId, tenantId))) abortTransaction(NOT_FOUND)
+    if (await countGigCosts(client, gigId, tenantId) >= MAX_GIG_COSTS) {
+      abortTransaction(badRequest(`A gig can have at most ${MAX_GIG_COSTS} cost lines`))
+    }
+    const cost = await insertGigCost(client, gigId, tenantId, parsed.data)
+    await touchGig(client, gigId, tenantId)
+    return { cost }
+  }, { db })
+}
+
+export async function patchGigCost(db, tenantId, gigId, costId, body) {
+  const parsed = normalizeGigCost(body)
+  if (parsed.error) return badRequest(parsed.error)
+
+  const cost = await updateGigCost(db, gigId, costId, tenantId, parsed.data)
+  if (!cost) return NOT_FOUND
+  await touchGig(db, gigId, tenantId)
+  return { cost }
+}
+
+export async function removeGigCost(db, tenantId, gigId, costId) {
+  if (!(await deleteGigCostRow(db, gigId, costId, tenantId))) return NOT_FOUND
+  await touchGig(db, gigId, tenantId)
+  return {}
+}
+
+// ---------- info blocks ----------
+
+// The gig's "Additional information": labelled multi-line text blocks shown on
+// the Tasks tab. The Remarks block every gig starts with is rendered by the
+// frontend whether or not a row exists yet, and created on first keystroke.
+
+export async function listGigInfoBlocks(db, tenantId, gigId) {
+  if (!(await gigExistsInTenant(db, gigId, tenantId))) return NOT_FOUND
+  return { infoBlocks: await listGigInfoBlockRows(db, gigId, tenantId) }
+}
+
+export async function addGigInfoBlock(db, tenantId, gigId, body) {
+  const parsed = normalizeGigInfoBlock(body)
+  if (parsed.error) return badRequest(parsed.error)
+
+  return withTransaction(async (client) => {
+    // Locked read-then-insert: two concurrent adds must not both see room for
+    // the last block and push the gig one over the cap.
+    if (!(await lockGig(client, gigId, tenantId))) abortTransaction(NOT_FOUND)
+    if (await countGigInfoBlocks(client, gigId, tenantId) >= MAX_GIG_INFO_BLOCKS) {
+      abortTransaction(badRequest(`A gig can have at most ${MAX_GIG_INFO_BLOCKS} information blocks`))
+    }
+    const infoBlock = await insertGigInfoBlock(client, gigId, tenantId, parsed.data)
+    await touchGig(client, gigId, tenantId)
+    return { infoBlock }
+  }, { db })
+}
+
+export async function patchGigInfoBlock(db, tenantId, gigId, blockId, body) {
+  const parsed = normalizeGigInfoBlockPatch(body)
+  if (parsed.error) return badRequest(parsed.error)
+
+  const infoBlock = await updateGigInfoBlock(db, gigId, blockId, tenantId, parsed.data)
+  if (!infoBlock) return NOT_FOUND
+  await touchGig(db, gigId, tenantId)
+  return { infoBlock }
+}
+
+export async function removeGigInfoBlock(db, tenantId, gigId, blockId) {
+  if (!(await deleteGigInfoBlockRow(db, gigId, blockId, tenantId))) return NOT_FOUND
+  await touchGig(db, gigId, tenantId)
+  return {}
+}
+
+// ---------- timetable ----------
+
+// The gig day's running order: get-in, soundcheck, doors, stage time, … Each
+// line is a row so it can be dragged into place; a blank line is legitimate,
+// because the UI persists a line the moment it is added.
+
+export async function listGigTimetable(db, tenantId, gigId) {
+  if (!(await gigExistsInTenant(db, gigId, tenantId))) return NOT_FOUND
+  return { timetable: await listGigTimetableRows(db, gigId, tenantId) }
+}
+
+export async function addGigTimetableEntry(db, tenantId, gigId, body) {
+  const parsed = normalizeGigTimetableEntry(body)
+  if (parsed.error) return badRequest(parsed.error)
+
+  return withTransaction(async (client) => {
+    // Locked read-then-insert: two concurrent adds must not both see room for
+    // the last line and push the gig one over the cap.
+    if (!(await lockGig(client, gigId, tenantId))) abortTransaction(NOT_FOUND)
+    if (await countGigTimetableEntries(client, gigId, tenantId) >= MAX_GIG_TIMETABLE_ENTRIES) {
+      abortTransaction(badRequest(`A gig can have at most ${MAX_GIG_TIMETABLE_ENTRIES} timetable lines`))
+    }
+    const entry = await insertGigTimetableEntry(client, gigId, tenantId, parsed.data)
+    await touchGig(client, gigId, tenantId)
+    return { entry }
+  }, { db })
+}
+
+export async function patchGigTimetableEntry(db, tenantId, gigId, entryId, body) {
+  const parsed = normalizeGigTimetableEntryPatch(body)
+  if (parsed.error) return badRequest(parsed.error)
+
+  const entry = await updateGigTimetableEntry(db, gigId, entryId, tenantId, parsed.data)
+  if (!entry) return NOT_FOUND
+  await touchGig(db, gigId, tenantId)
+  return { entry }
+}
+
+export async function removeGigTimetableEntry(db, tenantId, gigId, entryId) {
+  if (!(await deleteGigTimetableEntryRow(db, gigId, entryId, tenantId))) return NOT_FOUND
+  await touchGig(db, gigId, tenantId)
+  return {}
+}
+
+// The client sends the whole order it now shows. Anything but an exact
+// permutation of the stored lines means it was working from a stale list, so
+// the write is refused rather than half-applied.
+export async function reorderGigTimetable(db, tenantId, gigId, orderedEntryIds) {
+  return withTransaction(async (client) => {
+    if (!(await lockGig(client, gigId, tenantId))) abortTransaction(NOT_FOUND)
+    const current = await listGigTimetableIds(client, gigId, tenantId)
+    const currentIds = new Set(current)
+    const unique = new Set(orderedEntryIds)
+    if (unique.size !== orderedEntryIds.length
+      || currentIds.size !== orderedEntryIds.length
+      || orderedEntryIds.some((id) => !currentIds.has(id))) {
+      abortTransaction(badRequest('Timetable ids do not match current state'))
+    }
+    for (let idx = 0; idx < orderedEntryIds.length; idx++) {
+      await moveGigTimetableEntry(client, orderedEntryIds[idx], idx, gigId, tenantId)
+    }
+    await touchGig(client, gigId, tenantId)
+    return {}
+  }, { db })
+}
 
 export async function listGigContacts(db, tenantId, gigId) {
   if (!(await gigExistsInTenant(db, gigId, tenantId))) return NOT_FOUND

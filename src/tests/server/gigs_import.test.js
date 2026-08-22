@@ -20,6 +20,9 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedBandMembers(seed)
+  seed = await fixtureDb.seedContactsAndVenues(seed)
 })
 
 afterAll(async () => {

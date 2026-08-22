@@ -40,6 +40,8 @@ beforeEach(async () => {
   mockSendNotification.mockClear()
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedBandMembers(seed)
 })
 
 afterAll(async () => {
@@ -183,6 +185,8 @@ describe('dispatchNotification — fan-out', () => {
     // mismatched (band_member, tenant) pair → nothing
     await truncateAll()
     seed = await seedTwoTenants()
+    const fixtureDb = await import('./_db.js')
+    seed = await fixtureDb.seedBandMembers(seed)
     await dispatchNotification(gigNew({
       tenantId: seed.tenantB.id,
       type: 'task-assigned',

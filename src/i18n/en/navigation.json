@@ -22,7 +22,7 @@
     "suppliers": "Suppliers",
     "venues": "Venues",
     "myBands": "My bands",
-    "emailTemplates": "Email Templates",
+    "outreachTemplates": "Templates",
     "invoices": "Invoices",
     "purchases": "Purchases",
     "merch": "Merchandise",
@@ -34,10 +34,20 @@
     "reports": "Reports"
   },
   "admin": {
-    "tenants": "Tenants",
-    "allUsers": "All Users",
+    "tenants": "Organisations",
+    "allUsers": "All users",
+    "bandProfileClaims": "Band profiles (claims)",
+    "planCatalog": "Plan catalog",
+    "pricingRules": "Pricing rules",
+    "complimentaryAccess": "Complimentary access",
+    "operations": "Operations dashboard",
     "members": "Members",
     "bandSettings": "Band Settings"
+  },
+  "adminSections": {
+    "operations": "Monitoring",
+    "management": "Management",
+    "billing": "Billing configuration"
   },
   "headers": {
     "tenantAdmin": "Tenant admin",
@@ -51,6 +61,7 @@
     "openNav": "open navigation",
     "openSearch": "open search",
     "openSettings": "open settings menu",
+    "openAdmin": "open super-admin menu",
     "openUserMenu": "open user menu",
     "search": "Search",
     "searchPlaceholder": "Search for contacts, gigs or files…",

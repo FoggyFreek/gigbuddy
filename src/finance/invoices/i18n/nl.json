@@ -46,9 +46,11 @@
     "download": "Downloaden",
     "downloadMenuAria": "Downloadopties",
     "finalizedNotice": "Deze factuur is definitief. Om correcties aan te brengen, moet je de factuur laten vervallen en opnieuw uitgeven.",
-    "downloadEmail": "E-mail downloaden",
     "saving": "Opslaan...",
-    "saveChanges": "Wijzigingen opslaan"
+    "saveChanges": "Opslaan",
+    "send": "Versturen",
+    "regenerate": "Opnieuw maken",
+    "documentActions": "Factuuracties"
   },
   "customerFields": {
     "issueDate": "Factuurdatum",
@@ -141,8 +143,22 @@
     "confirm": "Factuur laten vervallen"
   },
   "emailDialog": {
-    "title": "Pas het persoonlijk bericht aan",
-    "helperText": "Dit is de persoonlijke begeleidende tekst in het e-mailbericht."
+    "title": "Factuur per e-mail versturen",
+    "template": "Sjabloon",
+    "message": "Persoonlijk bericht",
+    "helperText": "Dit is de persoonlijke begeleidende tekst in het e-mailbericht.",
+    "preview": "Voorbeeld van de e-mail",
+    "noTemplate": "Deze werkruimte heeft nog geen factuurmailsjabloon. Maak er eerst een aan.",
+    "noTemplateLink": "Naar sjablonen",
+    "download": ".eml downloaden",
+    "send": "Versturen",
+    "markSent": "Markeer als verzonden",
+    "attachments": {
+      "label": "Bijlagen",
+      "pdf": "Alleen PDF",
+      "pdf_xml": "PDF en e-factuur (XML)",
+      "pdf_xml_embedded": "PDF en e-factuur (XML met ingesloten PDF)"
+    }
   },
   "newDialog": {
     "title": "Nieuwe factuur",

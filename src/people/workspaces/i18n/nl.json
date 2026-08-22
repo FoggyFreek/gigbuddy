@@ -3,7 +3,7 @@
   "nav": {
     "accountSettings": "Accountinstellingen",
     "bandSettings": "Bandinstellingen",
-    "financeSettings": "Financiën en boekhouding",
+    "financeSettings": "Financiële instellingen",
     "backAria": "Terug naar instellingen",
     "items": {
       "preferences": "Mijn voorkeuren",
@@ -18,6 +18,7 @@
       "defaultAccounts": "Boekhoudinstellingen",
       "financialProfile": "Financieel profiel",
       "accountingProfile": "Boekhoudprofiel",
+      "invoiceMode": "Factuurmodus",
       "manageAccounts": "Bandtoegang en beheer"
     },
     "workspaceSettings": "Werkruimte-instellingen"
@@ -57,6 +58,27 @@
     "title": "Financiële setup-wizard",
     "help": "Doorloop je beginsaldo, financiële profiel en standaardrekeningen.",
     "cta": "Starten"
+  },
+  "invoiceMode": {
+    "title": "Voorkeursmodus voor facturen",
+    "description": "Kies hoe boekingskosten worden getoond wanneer van een optreden een conceptfactuur wordt gemaakt.",
+    "options": {
+      "combined": {
+        "label": "Gecombineerd",
+        "description": "Neem de boekingskosten op in de artiestenvergoeding."
+      },
+      "specified": {
+        "label": "Gespecificeerd",
+        "description": "Toon de boekingskosten als aparte regel op dezelfde factuur."
+      }
+    },
+    "example": {
+      "title": "Voorbeeld: € 1.000 inclusief € 150 boekingskosten",
+      "combined": "Gecombineerd: € 1.000 artiestenvergoeding",
+      "specified": "Gespecificeerd: € 850 artiestenvergoeding + € 150 boekingskosten",
+      "total": "Het factuurtotaal blijft in beide modi € 1.000."
+    },
+    "error": "De factuurmodus kon niet worden geladen of opgeslagen."
   },
   "members": {
     "title": "Leden",
@@ -255,11 +277,20 @@
     "description": "Koppel Resend voor het versturen van e-mail vanuit je eigen domein binnen GigBuddy. De sleutel wordt veilig opgeslagen en na het opslaan nooit volledig getoond.",
     "label": "Resend-API-sleutel",
     "placeholder": "re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "helper": "Gebruik een Resend-sleutel met alleen verzendrechten en beperk deze waar mogelijk tot je geverifieerde verzenddomein.",
+    "helper": "Gebruik een sleutel met alleen verzendrechten die beperkt is tot je geverifieerde verzenddomein.",
     "invalidFormat": "Ongeldig sleutelformaat. Resend-API-sleutels beginnen met re_.",
     "saveFailed": "De sleutel kon niet worden opgeslagen. Probeer het opnieuw.",
     "replace": "Sleutel vervangen",
-    "remove": "Sleutel verwijderen"
+    "remove": "Sleutel verwijderen",
+    "sender": {
+      "title": "Afzenderidentiteit",
+      "description": "Sla een adres van je geverifieerde Resend-domein op. Resend valideert het domein wanneer elke e-mail wordt verzonden.",
+      "fromName": "Naam afzender",
+      "fromEmail": "E-mailadres afzender",
+      "replyTo": "Antwoordadres (optioneel)",
+      "saved": "Afzenderconfiguratie opgeslagen",
+      "save": "Afzender opslaan"
+    }
   },
   "accounting": {
     "title": "Boekhoudinstellingen",

@@ -55,6 +55,7 @@ function completeEntitlements() {
       linkpage: true,
       custom_slug: true,
       calendar_sync: true,
+      outreach: true,
     },
     limits: { storage_mb: 250, members: 10, bands: 2, linkpage_pages: 5, linkpage_stats_days: 30 },
   }
@@ -155,14 +156,17 @@ describe('seeded default plans', () => {
     for (const key of FEATURE_KEYS) expect(bronze.entitlements.features[key]).toBe(false)
   })
 
-  it('silver and gold are unpriced (NULL = unavailable) until an admin sets prices', async () => {
+  it('seeds Band Silver as selectable while Gold remains admin-priced', async () => {
     const res = await asSuper(request(app).get('/api/admin/plans')).expect(200)
-    for (const slug of ['silver', 'gold']) {
-      const plan = res.body.find((p) => p.slug === slug)
-      expect(plan.is_fallback).toBe(false)
-      expect(plan.monthly_price_cents).toBeNull()
-      expect(plan.yearly_price_cents).toBeNull()
-    }
+    const silver = res.body.find((p) => p.slug === 'silver')
+    expect(silver.is_fallback).toBe(false)
+    expect(silver.monthly_price_cents).toBe(999)
+    expect(silver.yearly_price_cents).toBe(9999)
+
+    const gold = res.body.find((p) => p.slug === 'gold')
+    expect(gold.is_fallback).toBe(false)
+    expect(gold.monthly_price_cents).toBeNull()
+    expect(gold.yearly_price_cents).toBeNull()
   })
 
   it('every seeded plan carries complete, valid entitlements', async () => {

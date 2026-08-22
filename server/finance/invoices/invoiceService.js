@@ -5,7 +5,7 @@
 //   { error: { status, body } }   — caller should respond with that status/body
 //   anything else                 — success payload (see each function)
 import { randomUUID } from 'node:crypto'
-import { getObject, uploadObjectWithQuota, removeObject, safeRemove, invoicePdfKey, invoiceLogoKey } from '../../platform/files/storageService.js'
+import { uploadObjectWithQuota, removeObject, safeRemove, invoicePdfKey, invoiceLogoKey } from '../../platform/files/storageService.js'
 import { computeInvoiceTotals } from '../../utils/computeInvoiceTotals.js'
 import { renderInvoicePdf } from '../../utils/renderInvoicePdf.js'
 import {
@@ -15,6 +15,9 @@ import {
   isIssuedInvoiceStatus,
 } from '../vat/vatTreatmentService.js'
 import { normalizeVatNumber } from '../../../shared/vatRates.js'
+import { gigInvoiceVatPercentage } from '../../../shared/gigDealVat.js'
+import { resolveEffectiveMode } from '../../../shared/invoiceModes.js'
+import { isKnownDealConfiguration } from '../../../shared/gigDealEngine.js'
 import {
   checkInvoiceReadyForIssue,
   checkReverseCharge,
@@ -25,13 +28,14 @@ import { buildPeriodWhere } from '../../utils/periodQuery.js'
 import { loadAccountingBehavior, loadAccountingProfile } from '../accounting-profile/accountingProfileService.js'
 import {
   createMolliePaymentLink,
-  getMollieClientForTenant,
+  getMolliePaymentLinksForTenant,
   removeMolliePaymentLink,
   syncInvoicePaymentStatus,
 } from './molliePaymentLinkService.js'
 import { dispatchNotification } from '../../user/notifications/notificationService.js'
 import { PERMISSIONS } from '../../auth/permissions.js'
 import { logger } from '../../utils/logger.js'
+import { loadTenantLogoBuffer } from '../../utils/tenantLogo.js'
 import {
   acquireSessionLock,
   releaseSessionLock,
@@ -61,7 +65,9 @@ import {
   confirmInvoiceVatSnapshot,
 } from './invoiceRepository.js'
 import { searchGigs as searchGigRows } from '../../planning/gigs/gigRepository.js'
-import { fetchTenant } from '../../people/workspaces/tenantRepository.js'
+import { buildGigDraftLines } from './gigDraftLines.js'
+import { resolveInvoiceLng } from '../../utils/invoiceI18n.js'
+import { fetchPreferredInvoiceMode, fetchTenant } from '../../people/workspaces/tenantRepository.js'
 import {
   SIMPLE_PATCH_FIELDS,
   CONTENT_FIELDS_SET,
@@ -160,26 +166,15 @@ export function computeAndApply(invoiceFields, lines, treatment) {
 
 // ---------- PDF ----------
 
-async function loadLogoBuffer(tenant, customLogoPath, useDarkLogo = false) {
-  const key = customLogoPath || (useDarkLogo && tenant.logo_dark_path ? tenant.logo_dark_path : tenant.logo_path)
-  if (!key) return null
-  try {
-    const stream = await getObject(key)
-    const chunks = []
-    for await (const chunk of stream) chunks.push(chunk)
-    return Buffer.concat(chunks)
-  } catch (err) {
-    logger.error('invoice.logo_load_failed', { err })
-    return null
-  }
-}
-
 export async function renderAndStorePdf(pool, invoiceId, tenantId) {
   const invoice = await fetchInvoice(pool, tenantId, invoiceId)
   if (!invoice) return null
   const tenant = await fetchTenant(pool, tenantId)
   const lines = await fetchLines(pool, invoiceId, tenantId)
-  const logoBuffer = await loadLogoBuffer(tenant, invoice.custom_logo_path, !!invoice.invert_logo)
+  const logoBuffer = await loadTenantLogoBuffer(tenant, {
+    customLogoPath: invoice.custom_logo_path,
+    preferDark: !!invoice.invert_logo,
+  })
 
   // An ISSUED invoice renders from its snapshot, so re-rendering one (including
   // via POST /:id/render, which has no finalization guard) reproduces the
@@ -700,12 +695,21 @@ function buildBillingTarget(type, row) {
 export async function buildDraftFromGig(pool, tenantId, gigId) {
   const gig = await fetchGig(pool, tenantId, gigId)
   if (!gig) return { error: { status: 404, body: { error: 'Gig not found' } } }
+  if (!isKnownDealConfiguration(gig.deal_type, gig.guarantee_variant)) {
+    logger.warn('invoice.gig_deal_unknown', {
+      tenantId,
+      gigId,
+      dealType: gig.deal_type,
+      guaranteeVariant: gig.guarantee_variant,
+    })
+  }
 
   const venue = gig.venue_id ? await fetchVenue(pool, tenantId, gig.venue_id) : null
   const festival = gig.festival_id ? await fetchVenue(pool, tenantId, gig.festival_id) : null
 
   const tenant = await fetchTenant(pool, tenantId)
   if (!tenant) return { error: { status: 404, body: { error: 'Tenant not found' } } }
+  const preferredInvoiceMode = await fetchPreferredInvoiceMode(pool, tenantId)
   const behavior = await loadAccountingBehavior(pool, tenantId)
 
   const issueDate = new Date().toISOString().slice(0, 10)
@@ -713,7 +717,15 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
   // Date-aware: prefilling a draft dated after a scheduled scheme change must
   // offer that scheme's rate, which the legacy flag cannot express.
   const treatment = await resolveLiveTreatment(pool, tenantId, issueDate)
-  const taxPercentage = treatment?.schemeExempt ? 0 : behavior.defaultVatRate
+  // The deal's own General VAT % when it sets one, otherwise the country's
+  // reduced rate: what the tenant invoices is a live performance, which sits
+  // under the reduced tariff (NL 9%). The profile's default_vat_rate is the
+  // standard rate, for what they BUY. An exempt scheme outranks the deal.
+  const taxPercentage = treatment?.schemeExempt
+    ? 0
+    : gigInvoiceVatPercentage(gig, behavior.accountingCountry)
+
+  const invoiceLng = resolveInvoiceLng(behavior.accountingCountry)
 
   const eventDateStr = gig.event_date
     ? new Date(gig.event_date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -734,7 +746,7 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
         id: gig.id,
         event_date: gig.event_date,
         event_description: gig.event_description,
-        booking_fee_cents: gig.booking_fee_cents,
+        guaranteed_fee_cents: gig.guaranteed_fee_cents,
       },
       tenant: {
         id: tenant.id,
@@ -780,15 +792,14 @@ export async function buildDraftFromGig(pool, tenantId, gigId) {
         // Date of supply (art. 226(7)) defaults to the gig's performance date.
         supply_date: gig.event_date ? new Date(gig.event_date).toISOString().slice(0, 10) : null,
         discount_cents: 0,
-        lines: [
-          {
-            description,
-            quantity: 1,
-            unit_price_cents: gig.booking_fee_cents ?? 0,
-            tax_percentage: taxPercentage,
-            position: 0,
-          },
-        ],
+        // Every deal type but a flat fee is billed as the deal itself:
+        // ticket revenue, what the venue recoups, and its share of the rest.
+        lines: buildGigDraftLines(gig, {
+          description,
+          taxPercentage,
+          lng: invoiceLng,
+          mode: resolveEffectiveMode(gig, preferredInvoiceMode),
+        }),
       },
     },
   }
@@ -1106,10 +1117,10 @@ export async function syncInvoicePaymentLink(pool, tenantId, invoiceId) {
 
   // Internal accessor: a retained key (post-integrations-purge, paid links
   // outstanding) must keep sync working for those links.
-  const configured = await getMollieClientForTenant(pool, tenantId, { includeRetained: true })
+  const configured = await getMolliePaymentLinksForTenant(pool, tenantId, { includeRetained: true })
   if (configured.error) return configured
-  const { mollie } = configured
-  const updated = await syncInvoicePaymentStatus(mollie, pool, invoice)
+  const { paymentLinks } = configured
+  const updated = await syncInvoicePaymentStatus(paymentLinks, pool, invoice)
 
   return {
     sync: {

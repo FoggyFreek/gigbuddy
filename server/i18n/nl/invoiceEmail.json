@@ -1,0 +1,21 @@
+{
+  "subject": "Factuur {{number}} – {{band}}",
+  "greeting": {
+    "named": "Geachte {{title}}{{familyName}},",
+    "fallback": "Geachte heer/mevrouw,"
+  },
+  "defaultMessage": "Hartelijk dank voor de prettige samenwerking{{gigPart}}.\n\nIn de bijlage vindt u onze factuur.",
+  "gigPart": " tijdens het optreden van {{band}} op {{date}}",
+  "payment": {
+    "title": "Betaallink",
+    "intro": "U kunt uw factuur voldoen via de onderstaande betaallink:",
+    "button": "Factuur {{number}} betalen",
+    "qrAlt": "QR-code betaallink",
+    "qrCaption": "Scan om te betalen"
+  },
+  "file": {
+    "pdf": "factuur-{{number}}.pdf",
+    "xml": "factuur-{{number}}.xml",
+    "eml": "factuur-{{number}}.eml"
+  }
+}

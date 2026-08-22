@@ -5,6 +5,7 @@ import RequireAuth from '../components/RequireAuth.tsx'
 import RequireSuperAdmin from '../components/RequireSuperAdmin.tsx'
 import RequirePermission from '../components/RequirePermission.tsx'
 import RequireTenantCapability from '../components/RequireTenantCapability.tsx'
+import AppDialogs from '../dialogs/AppDialogs.tsx'
 import { PERMISSIONS } from '../auth/permissions.ts'
 import { TENANT_CAPABILITIES } from '../auth/tenantCapabilities.ts'
 
@@ -23,7 +24,9 @@ const SongDetailPage = lazy(() => import('../music/songs/SongDetailPage.tsx'))
 const SetlistsPage = lazy(() => import('../music/setlists/SetlistsPage.tsx'))
 const SetlistEditorPage = lazy(() => import('../music/setlists/SetlistEditorPage.tsx'))
 const PerformancePage = lazy(() => import('../music/setlists/PerformancePage.tsx'))
-const EmailTemplatesPage = lazy(() => import('../people/profiles/EmailTemplatesPage.tsx'))
+const TemplatesPage = lazy(() => import('../promotion/outreach/TemplatesPage.tsx'))
+const TemplateEditorPage = lazy(() => import('../promotion/outreach/TemplateEditorPage.tsx'))
+const CampaignComposerPage = lazy(() => import('../promotion/outreach/CampaignComposerPage.tsx'))
 const MyBandsPage = lazy(() => import('../people/my-bands/MyBandsPage.tsx'))
 const BandProfileClaimsPage = lazy(() => import('../admin/band-profile-claims/BandProfileClaimsPage.tsx'))
 const GigDetailPage = lazy(() => import('../planning/gigs/GigDetailPage.tsx'))
@@ -59,11 +62,20 @@ const PaymentThanksPage = lazy(() => import('../commerce/billing/PaymentThanksPa
 const LockedFeaturePage = lazy(() => import('../commerce/billing/LockedFeaturePage.tsx'))
 const TenantsPage = lazy(() => import('../admin/tenants/TenantsPage.tsx'))
 const AdminUsersPage = lazy(() => import('../admin/users/AdminUsersPage.tsx'))
-const SubscriptionsPage = lazy(() => import('../admin/subscriptions/SubscriptionsPage.tsx'))
+const ComplimentaryAccessPage = lazy(() => import('../admin/subscriptions/SubscriptionsPage.tsx'))
+const PlanCatalogPage = lazy(() => import('../admin/subscriptions/PlanCatalogPage.tsx'))
+const PricingRulesPage = lazy(() => import('../admin/pricing/PricingRulesPage.tsx'))
+const OperationsDashboardPage = lazy(() => import('../admin/operations/OperationsDashboardPage.tsx'))
+const BillingOperationsPage = lazy(() => import('../admin/operations/BillingOperationsPage.tsx'))
+const WebhookFailuresPage = lazy(() => import('../admin/operations/WebhookFailuresPage.tsx'))
+const StatusDriftPage = lazy(() => import('../admin/operations/StatusDriftPage.tsx'))
 
 export default function App() {
   return (
     <Suspense fallback={null}>
+      {/* State-driven prompts (trial ended, …). Renders nothing itself, and
+          each watcher stays quiet until there is an authenticated user. */}
+      <AppDialogs />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/pending" element={<PendingApprovalPage />} />
@@ -156,7 +168,9 @@ export default function App() {
               <Route path="rehearsals/:id" element={<RehearsalDetailPage />} />
               <Route path="events/:id" element={<BandEventDetailPage />} />
             </Route>
-            <Route path="/email-templates" element={<EmailTemplatesPage />} />
+            <Route path="/outreach/templates" element={<TemplatesPage />} />
+            <Route path="/outreach/templates/:id" element={<TemplateEditorPage />} />
+            <Route path="/outreach/compose" element={<CampaignComposerPage />} />
             <Route element={<RequireTenantCapability capability={TENANT_CAPABILITIES.MY_BANDS} />}>
               <Route path="/my-bands" element={<MyBandsPage />} />
             </Route>
@@ -164,7 +178,14 @@ export default function App() {
               <Route path="/admin/tenants" element={<TenantsPage />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
               <Route path="/admin/band-profile-claims" element={<BandProfileClaimsPage />} />
-              <Route path="/admin/subscriptions" element={<SubscriptionsPage />} />
+              <Route path="/admin/plan-catalog" element={<PlanCatalogPage />} />
+              <Route path="/admin/pricing-rules" element={<PricingRulesPage />} />
+              <Route path="/admin/complimentary-access" element={<ComplimentaryAccessPage />} />
+              <Route path="/admin/subscriptions" element={<Navigate to="/admin/complimentary-access" replace />} />
+              <Route path="/admin/operations" element={<OperationsDashboardPage />} />
+              <Route path="/admin/operations/billing" element={<BillingOperationsPage />} />
+              <Route path="/admin/operations/webhooks" element={<WebhookFailuresPage />} />
+              <Route path="/admin/operations/status" element={<StatusDriftPage />} />
             </Route>
           </Route>
         </Route>

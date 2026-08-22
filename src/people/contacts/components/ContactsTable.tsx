@@ -33,8 +33,12 @@ import type { Contact, Id } from '../../../types/entities.ts'
 const PAGE_SIZE = 25
 const COLUMN_COUNT = 5
 
-const COLUMN_IDS = ['category', 'name', 'email', 'phone'] as const
+const COLUMN_IDS = ['name', 'email', 'phone', 'category'] as const
 type ColumnId = typeof COLUMN_IDS[number]
+
+function displayName(contact: Contact): string {
+  return contact.first_name ? `${contact.first_name} ${contact.name || ''}`.trim() : contact.name || ''
+}
 
 interface CategoryChipProps {
   category?: string
@@ -62,10 +66,10 @@ interface ContactCardProps {
 function sortValue(contact: Contact, col: string): string {
   switch (col) {
     case 'category': return contact.category || ''
-    case 'name':     return contact.name || ''
-    case 'email':    return contact.email || ''
-    case 'phone':    return contact.phone || ''
-    default:         return ''
+    case 'name':      return displayName(contact)
+    case 'email':     return contact.email || ''
+    case 'phone':     return contact.phone || ''
+    default:          return ''
   }
 }
 
@@ -80,7 +84,7 @@ function applySearch(list: Contact[], q: string): Contact[] {
   if (!q) return list
   const lower = q.toLowerCase()
   return list.filter((c) =>
-    [c.name, c.email, c.phone, c.category]
+    [c.first_name, c.name, c.email, c.phone, c.category]
       .some((f) => f && String(f).toLowerCase().includes(lower))
   )
 }
@@ -115,7 +119,7 @@ function ContactCard({ contact, selected, active, onToggle, onClick }: Readonly<
       >
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.25 }}>
           <Typography variant="body2">
-            {contact.name}
+            {displayName(contact)}
           </Typography>
           <CategoryChip category={contact.category} />
         </Box>
@@ -412,10 +416,10 @@ export default function ContactsTable({
                       onClick={(e) => e.stopPropagation()}
                     />
                   </TableCell>
-                  <TableCell><CategoryChip category={c.category} /></TableCell>
-                  <TableCell>{c.name}</TableCell>
+                  <TableCell>{displayName(c)}</TableCell>
                   <TableCell>{c.email || '—'}</TableCell>
                   <TableCell>{c.phone || '—'}</TableCell>
+                  <TableCell><CategoryChip category={c.category} /></TableCell>
                 </TableRow>
               ))}
             </TableBody>

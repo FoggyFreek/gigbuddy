@@ -62,8 +62,8 @@ import {
   setIntegrationCredential,
 } from '../../platform/integrations/integrationCredentialService.js'
 import { invalidateToken } from '../../commerce/merch/shopifyTokenService.js'
-import { withFeatureWriteGuard, withIntegrationWriteLock } from '../../commerce/billing/featureGuards.js'
-import { resolveTenantEntitlements } from '../../commerce/billing/entitlementService.js'
+import { withFeatureWriteGuard, withIntegrationWriteLock } from '../../entitlements/featureGuards.js'
+import { resolveTenantEntitlements } from '../../entitlements/entitlementResolver.js'
 import { FEATURES } from '../../auth/entitlements.js'
 import { isKnownJoinPolicy } from '../../domain/membership.js'
 import { badRequest, notFound } from '../../platform/http/serviceErrors.js'

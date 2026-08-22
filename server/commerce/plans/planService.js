@@ -17,7 +17,7 @@ import {
   deletePlan as deletePlanRow,
 } from './planRepository.js'
 import { validateEntitlements } from '../../auth/entitlements.js'
-import { invalidatePlanCache } from '../billing/entitlementService.js'
+import { invalidatePlanCache } from '../../entitlements/entitlementResolver.js'
 import {
   isValidSlug,
   isValidName,
@@ -62,8 +62,9 @@ function validatePlanFields(body, plan) {
   if ('is_fallback' in body) {
     return badRequest('The fallback designation cannot be changed')
   }
-  // Create-only, like is_fallback: subscriptions.audience is derived from the
-  // plan, so moving a plan between ladders would desync every live row.
+  // Create-only, like is_fallback: subscription_modules.audience is derived
+  // from the plan, so moving a plan between ladders would desync every module
+  // bound to it (the DB trigger refuses it too).
   if (plan !== null && 'audience' in body) {
     return badRequest('The plan audience cannot be changed')
   }

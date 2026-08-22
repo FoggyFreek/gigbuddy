@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation } from 'react-router'
 import AppBar from '@mui/material/AppBar'
@@ -19,6 +19,7 @@ import type { SvgIconComponent } from '@mui/icons-material'
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft'
 import ChevronRightIcon from '@mui/icons-material/ChevronRight'
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
+import AdminPanelSettingsOutlined from '@mui/icons-material/AdminPanelSettingsOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
 import SearchIcon from '@mui/icons-material/Search'
 // Group headers use TwoTone icons (slightly larger); children use Outlined.
@@ -68,6 +69,7 @@ import NotificationsBell from './appShell/NotificationsBell.tsx'
 import TutorialHost from '../tutorials/TutorialHost.tsx'
 import SearchPanel from './appShell/SearchPanel.tsx'
 import SettingsMenu from './appShell/SettingsMenu.tsx'
+import AdminMenu from './appShell/AdminMenu.tsx'
 import UserMenu from './appShell/UserMenu.tsx'
 import { useTenantKind } from '../hooks/useTenantKind.ts'
 import { TENANT_CAPABILITIES, type TenantCapability } from '../auth/tenantCapabilities.ts'
@@ -84,7 +86,7 @@ type NavGroupKey = 'overview' | 'planning' | 'repertoire' | 'network' | 'financi
 type NavItemKey =
   | 'dashboard' | 'financial' | 'profile' | 'availability' | 'gigs' | 'rehearsals'
   | 'bandEvents' | 'tasks' | 'songs' | 'setlists' | 'contacts' | 'suppliers'
-  | 'venues' | 'myBands' | 'emailTemplates' | 'invoices' | 'purchases' | 'merch' | 'reimbursements'
+  | 'venues' | 'myBands' | 'outreachTemplates' | 'invoices' | 'purchases' | 'merch' | 'reimbursements'
   | 'journal' | 'ledger' | 'ledgerEntries' | 'vatReturns' | 'reports'
 
 interface NavChildEntry {
@@ -151,7 +153,7 @@ const NAV_GROUPS: NavGroupEntry[] = [
       { to: '/contacts', i18nKey: 'contacts', icon: ContactsOutlined },
       { to: '/suppliers', i18nKey: 'suppliers', icon: StorefrontOutlined },
       { to: '/venues', i18nKey: 'venues', icon: LocationOnOutlined },
-      { to: '/email-templates', i18nKey: 'emailTemplates', icon: EmailOutlined },
+      { to: '/outreach/templates', i18nKey: 'outreachTemplates', icon: EmailOutlined, feature: FEATURES.OUTREACH },
     ],
   },
   {
@@ -185,24 +187,55 @@ export default function AppShell() {
   const { user, logout, switchTenant, refreshUser } = useAuth()
   const { mode, toggleTheme } = useThemeMode()
   const theme = useTheme()
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
+  const isBelowLarge = useMediaQuery(theme.breakpoints.down('lg'))
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
   const [navCollapsed, setNavCollapsed] = useState(false)
+  const navCollapsedRef = useRef(navCollapsed)
+  const restoreExpandedNavRef = useRef(false)
   const [userMenuAnchor, setUserMenuAnchor] = useState<HTMLElement | null>(null)
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
   const [createBandOpen, setCreateBandOpen] = useState(false)
   const [settingsMenuAnchor, setSettingsMenuAnchor] = useState<HTMLElement | null>(null)
+  const [adminMenuAnchor, setAdminMenuAnchor] = useState<HTMLElement | null>(null)
   // When a SplitView opens its master-detail layout it asks for full width;
   // otherwise content stays capped and centered (see CONTENT_MAX_WIDTH).
   const [wideContent, setWideContent] = useState(false)
   const requestWideContent = useCallback((wide: boolean) => setWideContent(wide), [])
 
+  useEffect(() => {
+    if (isBelowLarge) {
+      restoreExpandedNavRef.current = !navCollapsedRef.current
+      if (!navCollapsedRef.current) {
+        navCollapsedRef.current = true
+        setNavCollapsed(true)
+      }
+      return
+    }
+
+    if (restoreExpandedNavRef.current) {
+      restoreExpandedNavRef.current = false
+      if (navCollapsedRef.current) {
+        navCollapsedRef.current = false
+        setNavCollapsed(false)
+      }
+    }
+  }, [isBelowLarge])
+
   useTenantQuerySync()
 
   const handleNavClick = () => {
     if (isMobile) setMobileOpen(false)
+  }
+
+  const handleToggleNavCollapsed = () => {
+    setNavCollapsed((collapsed) => {
+      const nextCollapsed = !collapsed
+      navCollapsedRef.current = nextCollapsed
+      return nextCollapsed
+    })
   }
 
   const isSuperAdmin = !!user?.isSuperAdmin
@@ -333,7 +366,7 @@ export default function AppShell() {
         <Box sx={{ display: 'flex', justifyContent: isNavCollapsed ? 'center' : 'flex-end', px: 1, py: 0.5 }}>
           <Tooltip title={isNavCollapsed ? t($ => $.shell.expandNav) : t($ => $.shell.collapseNav)}>
             <IconButton
-              onClick={() => setNavCollapsed((collapsed) => !collapsed)}
+              onClick={handleToggleNavCollapsed}
               aria-label={isNavCollapsed ? t($ => $.shell.expandNavAria) : t($ => $.shell.collapseNavAria)}
               size="small"
             >
@@ -440,8 +473,24 @@ export default function AppShell() {
             onClose={() => setSettingsMenuAnchor(null)}
             mode={mode}
             onToggleTheme={() => { toggleTheme(); setSettingsMenuAnchor(null) }}
-            isSuperAdmin={isSuperAdmin}
           />
+          {isSuperAdmin && (
+            <>
+              <Tooltip title={t($ => $.headers.superAdmin)}>
+                <IconButton
+                  onClick={(e) => setAdminMenuAnchor(e.currentTarget)}
+                  aria-label={t($ => $.shell.openAdmin)}
+                >
+                  <AdminPanelSettingsOutlined />
+                </IconButton>
+              </Tooltip>
+              <AdminMenu
+                anchorEl={adminMenuAnchor}
+                open={Boolean(adminMenuAnchor)}
+                onClose={() => setAdminMenuAnchor(null)}
+              />
+            </>
+          )}
           {user && (
             <>
               <Tooltip title={user.name || user.email}>

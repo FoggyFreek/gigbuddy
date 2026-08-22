@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { ThemeProvider } from '@mui/material/styles'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,8 +9,11 @@ vi.mock('../../../commerce/billing/billing.ts', async (importOriginal) => {
   return {
     ...actual,
     getBillingState: vi.fn(),
+    startTrial: vi.fn(),
     subscribe: vi.fn(),
-    changePlan: vi.fn(),
+    checkout: vi.fn(),
+    changeModule: vi.fn(),
+    downgradePreview: vi.fn(),
     downgrade: vi.fn(),
     cancelSubscription: vi.fn(),
     resumeSubscription: vi.fn(),
@@ -28,44 +32,84 @@ const PLANS = [
     id: 1, slug: 'bronze', name: 'Bronze', audience: 'band',
     monthly_price_cents: 0, yearly_price_cents: 0,
     entitlements: { features: {}, limits: { storage_mb: 50, members: 5, bands: 1 } },
-    is_active: true, is_fallback: true, sort_order: 1,
+    is_active: true, is_fallback: true, is_trial_tier: false, sort_order: 1,
   },
   {
     id: 2, slug: 'silver', name: 'Silver', audience: 'band',
     monthly_price_cents: 999, yearly_price_cents: 9999,
     entitlements: { features: { integrations: true }, limits: { storage_mb: 150, members: 10, bands: 3 } },
-    is_active: true, is_fallback: false, sort_order: 2,
+    is_active: true, is_fallback: false, is_trial_tier: false, sort_order: 2,
+  },
+  {
+    id: 5, slug: 'gold', name: 'Gold', audience: 'band',
+    monthly_price_cents: 2000, yearly_price_cents: 20000,
+    entitlements: { features: { integrations: true, chordpro: true }, limits: { storage_mb: 500, members: null, bands: null } },
+    is_active: true, is_fallback: false, is_trial_tier: true, sort_order: 3,
   },
   {
     id: 3, slug: 'artist_bronze', name: 'Artist Bronze', audience: 'artist',
     monthly_price_cents: 0, yearly_price_cents: 0,
     entitlements: { features: {}, limits: { storage_mb: 50, members: 1, bands: 0 } },
-    is_active: true, is_fallback: true, sort_order: 1,
+    is_active: true, is_fallback: true, is_trial_tier: false, sort_order: 1,
   },
   {
     id: 4, slug: 'artist_gold', name: 'Artist Gold', audience: 'artist',
-    monthly_price_cents: 1499, yearly_price_cents: 14999,
+    monthly_price_cents: 1000, yearly_price_cents: 10000,
     entitlements: { features: { chordpro: true }, limits: { storage_mb: 250, members: 1, bands: 0 } },
-    is_active: true, is_fallback: false, sort_order: 2,
+    is_active: true, is_fallback: false, is_trial_tier: true, sort_order: 2,
   },
 ]
 
-function subscription(overrides = {}) {
+function moduleRow(overrides = {}) {
   return {
-    id: 1, planId: 2, planSlug: 'silver', audience: 'band', status: 'active',
-    billingInterval: 'month', priceCents: 999, cancelAtPeriodEnd: false,
-    currentPeriodEnd: '2026-08-01T00:00:00Z', trialEndsAt: null, isComplimentary: false,
-    complimentaryExpiresAt: null, pendingChange: null, downgradeScheduled: false,
-    pendingLimitsSnapshot: null, scheduleStale: false, repairNeeded: false,
+    audience: 'band', planId: 2, planSlug: 'silver', status: 'active',
+    priceCents: 999, isStarter: true,
+    pendingPlanId: null, pendingPlanSlug: null, pendingChangeKind: null,
+    pendingLimitsSnapshot: null,
     ...overrides,
   }
 }
 
-function state({ band = null, artist = null, ownedBandCount = 1, hasPersonalWorkspace = true } = {}) {
+function subscription(overrides = {}) {
   return {
-    subscriptions: { band, artist },
+    id: 1, status: 'active', billingInterval: 'month', cancelAtPeriodEnd: false,
+    currentPeriodStart: '2026-07-01T00:00:00Z',
+    currentPeriodEnd: '2026-08-01T00:00:00Z',
+    trialEndsAt: null, convertedAt: '2026-07-01T00:00:00Z',
+    isComplimentary: false, complimentaryExpiresAt: null,
+    priceSnapshot: {
+      modules: { band: { plan: 'silver', priceCents: 999 } },
+      subtotalCents: 999, discounts: [], totalCents: 999,
+    },
+    totalCents: 999, nextPriceSnapshot: null, nextTotalCents: null,
+    pendingTotalCents: null, refundEligibleUntil: null,
+    scheduleStale: false, repairNeeded: false,
+    paymentMethodReady: false, paymentVerificationPending: false,
+    subscriptionStartsAt: null,
+    modules: [moduleRow()],
+    ...overrides,
+  }
+}
+
+function state({
+  sub = null, trialAvailable = false, ownedBandCount = 1, hasPersonalWorkspace = true,
+} = {}) {
+  return {
+    subscription: sub,
+    trialAvailable,
+    trialDays: 30,
     ownedBandCount,
     hasPersonalWorkspace,
+    checkoutQuotes: {
+      month: {
+        modules: { band: { plan: 'gold', priceCents: 2000 } },
+        subtotalCents: 2000, discounts: [], totalCents: 2000,
+      },
+      year: {
+        modules: { band: { plan: 'gold', priceCents: 20000 } },
+        subtotalCents: 20000, discounts: [], totalCents: 20000,
+      },
+    },
     plans: PLANS,
   }
 }
@@ -87,150 +131,290 @@ function wrap(ui, user, { initialEntry = '/settings/billing' } = {}) {
   )
 }
 
+const ownerUser = { id: 1, email: 'o@test.local', name: 'Owner', memberships: [] }
 const participantUser = {
   id: 7, email: 'p@test.local', name: 'Participant',
   memberships: [{ tenantId: 1, tenantName: 'Alpha', status: 'approved', role: 'contributor' }],
 }
 
-const ladder = (audience) => screen.getByTestId(`plan-ladder-${audience}`)
+const modulePlans = (audience) => screen.getByTestId(`module-plans-${audience}`)
 
 beforeEach(() => {
   vi.clearAllMocks()
+  api.syncSubscription.mockResolvedValue({ subscription: null })
 })
 
-describe('BillingSettingsSection — two ladders', () => {
+describe('BillingSettingsSection — no subscription', () => {
+  it('offers the free trial with a module to start on', async () => {
+    api.getBillingState.mockResolvedValue(state({ trialAvailable: true }))
+    api.startTrial.mockResolvedValue({ subscription: subscription(), trialDays: 30 })
+    const user = userEvent.setup()
+    wrap(<BillingSettingsSection />, ownerUser)
+
+    expect(await screen.findByText(/Try GigBuddy free for 30 days/)).toBeInTheDocument()
+    expect(screen.queryByTestId('module-plans-band')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Band' }))
+    await waitFor(() => expect(api.startTrial).toHaveBeenCalledWith('band'))
+  })
+
+  it('says the trial is spent instead of offering it again', async () => {
+    api.getBillingState.mockResolvedValue(state({ trialAvailable: false }))
+    wrap(<BillingSettingsSection />, ownerUser)
+    expect(await screen.findByText(/already used your free trial/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Band' })).not.toBeInTheDocument()
+  })
+})
+
+describe('BillingSettingsSection — modules', () => {
   it('renders a section per product, each with only its own plans', async () => {
-    api.getBillingState.mockResolvedValue(state())
-    wrap(<BillingSettingsSection />, participantUser)
+    api.getBillingState.mockResolvedValue(state({ sub: subscription() }))
+    wrap(<BillingSettingsSection />, ownerUser)
 
-    await screen.findByText('Your band plan')
-    expect(screen.getByText('Your artist plan')).toBeInTheDocument()
-
-    // Neither ladder renders the other's plans.
-    const band = within(ladder('band'))
-    expect(band.getByText('Silver')).toBeInTheDocument()
-    expect(band.queryByText('Artist Gold')).toBeNull()
-
-    const artist = within(ladder('artist'))
-    expect(artist.getByText('Artist Gold')).toBeInTheDocument()
-    expect(artist.queryByText('Silver')).toBeNull()
+    await screen.findByTestId('module-plans-band')
+    expect(within(modulePlans('band')).getByText('Silver')).toBeInTheDocument()
+    expect(within(modulePlans('band')).queryByText('Artist Gold')).not.toBeInTheDocument()
+    expect(within(modulePlans('artist')).getByText('Artist Gold')).toBeInTheDocument()
+    expect(within(modulePlans('artist')).queryByText('Silver')).not.toBeInTheDocument()
   })
 
-  // A band subscription must not rank the artist ladder. Under the old flat
-  // sort_order comparison, artist_gold read as an "Upgrade" from gold — an
-  // action the API then rejected.
-  it('offers a fresh subscription on the other ladder, never an upgrade', async () => {
-    api.getBillingState.mockResolvedValue(state({ band: subscription() }))
-    wrap(<BillingSettingsSection />, participantUser)
-
-    const artistGold = (await screen.findByText('Artist Gold')).closest('.MuiPaper-root')
-    expect(within(artistGold).getByRole('button')).toHaveTextContent('Subscribe')
-  })
-
-  it('marks the current plan in each ladder independently', async () => {
+  it('marks the plan each module sits on', async () => {
     api.getBillingState.mockResolvedValue(state({
-      band: subscription(),
-      artist: subscription({ id: 2, planId: 4, planSlug: 'artist_gold', audience: 'artist', priceCents: 1499 }),
+      sub: subscription({
+        modules: [moduleRow(), moduleRow({ audience: 'artist', planId: 4, planSlug: 'artist_gold' })],
+      }),
     }))
-    wrap(<BillingSettingsSection />, participantUser)
+    wrap(<BillingSettingsSection />, ownerUser)
 
-    await screen.findByText('Your band plan')
-    expect(within(ladder('band')).getByText('Current')).toBeInTheDocument()
-    expect(within(ladder('artist')).getByText('Current')).toBeInTheDocument()
+    await screen.findByTestId('module-plans-band')
+    expect(within(modulePlans('band')).getAllByText('Current')).toHaveLength(1)
+    expect(within(modulePlans('artist')).getAllByText('Current')).toHaveLength(1)
+  })
+
+  it('adds a module the subscription does not have', async () => {
+    api.getBillingState.mockResolvedValue(state({ sub: subscription() }))
+    api.changeModule.mockResolvedValue({ changed: true, pending: true, amountCents: 500 })
+    const user = userEvent.setup()
+    wrap(<BillingSettingsSection />, ownerUser)
+
+    await screen.findByTestId('module-plans-artist')
+    await user.click(within(modulePlans('artist')).getByRole('button', { name: 'Add module' }))
+    await waitFor(() => expect(api.changeModule).toHaveBeenCalledWith('artist', 4))
+  })
+
+  it('offers the free floor as a REMOVAL, not a downgrade to a plan', async () => {
+    api.getBillingState.mockResolvedValue(state({ sub: subscription() }))
+    api.downgradePreview.mockResolvedValue({
+      isDowngrade: true, isRemoval: true, features: [], limitsSnapshot: {},
+      blockers: [], nextSnapshot: null, effectiveAt: null,
+    })
+    const user = userEvent.setup()
+    wrap(<BillingSettingsSection />, ownerUser)
+
+    await screen.findByTestId('module-plans-band')
+    await user.click(within(modulePlans('band')).getByRole('button', { name: 'Remove module' }))
+    await waitFor(() => expect(api.downgradePreview).toHaveBeenCalledWith({ audience: 'band', remove: true }))
   })
 })
 
-describe('BillingSettingsSection — current plan tier logo', () => {
-  it('shows the tier logo for the active subscription plan', async () => {
-    api.getBillingState.mockResolvedValue(state({ band: subscription() }))
-    const { container } = wrap(<BillingSettingsSection />, participantUser)
-    await screen.findAllByText('Silver')
-    expect(container.querySelector('img[src="/icons/gb_silver.png"]')).toBeTruthy()
+describe('BillingSettingsSection — the price breakdown', () => {
+  it('shows each module line, the discount and the total', async () => {
+    api.getBillingState.mockResolvedValue(state({
+      sub: subscription({
+        priceSnapshot: {
+          modules: {
+            band: { plan: 'gold', priceCents: 2000 },
+            artist: { plan: 'artist_gold', priceCents: 1000 },
+          },
+          subtotalCents: 3000,
+          discounts: [{
+            code: 'dual_module_bundle', name: 'Two-module bundle', version: 1,
+            type: 'percentage', value: 10, amountCents: 300,
+          }],
+          totalCents: 2700,
+        },
+        totalCents: 2700,
+      }),
+    }))
+    wrap(<BillingSettingsSection />, ownerUser)
+
+    expect(await screen.findByText(/Band — gold/)).toBeInTheDocument()
+    expect(screen.getByText(/Artist — artist_gold/)).toBeInTheDocument()
+    expect(screen.getByText('Two-module bundle')).toBeInTheDocument()
+    expect(screen.queryByText('dual_module_bundle')).not.toBeInTheDocument()
+    expect(screen.getByText('Subtotal')).toBeInTheDocument()
   })
 
-  it('shows no tier logo without a subscription', async () => {
-    api.getBillingState.mockResolvedValue(state())
-    wrap(<BillingSettingsSection />, participantUser)
-    // Scope to a current-subscription card only; the plan cards below legitimately
-    // render their own tier logos, so a container-wide query would false-positive.
-    const cards = await screen.findAllByText(/You are on the free plan/)
-    for (const card of cards) {
-      expect(card.closest('.MuiPaper-root')?.querySelector('img[src^="/icons/gb_"]')).toBeNull()
-    }
+  it('warns when the next renewal costs something different', async () => {
+    api.getBillingState.mockResolvedValue(state({
+      sub: subscription({ nextTotalCents: 2000 }),
+    }))
+    wrap(<BillingSettingsSection />, ownerUser)
+    expect(await screen.findByText(/this becomes/)).toBeInTheDocument()
+  })
+})
+
+describe('BillingSettingsSection — trial conversion', () => {
+  it('discloses the delayed charge and starts mandate verification', async () => {
+    api.getBillingState.mockResolvedValue(state({
+      sub: subscription({
+        status: 'trialing', billingInterval: null,
+        trialEndsAt: '2026-08-01T00:00:00Z',
+        currentPeriodStart: null, currentPeriodEnd: null,
+        priceSnapshot: null, totalCents: null,
+      }),
+    }))
+    api.checkout.mockResolvedValue({ checkoutUrl: 'https://pay.test/x', subscriptionId: 1, totalCents: 2000 })
+    const user = userEvent.setup()
+    wrap(<BillingSettingsSection />, ownerUser)
+
+    expect(await screen.findByText(/Trial ends/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Yearly' }))
+    expect(screen.getByText(/first subscription charge.*when your paid subscription starts/i))
+      .toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /verify payment method and schedule/i }))
+    await waitFor(() => expect(api.checkout).toHaveBeenCalledWith('year'))
+  })
+
+  it('allows Band Silver plus Artist Gold before scheduling payment', async () => {
+    api.getBillingState.mockResolvedValue(state({
+      sub: subscription({
+        status: 'trialing', billingInterval: null,
+        trialEndsAt: '2026-08-31T00:00:00Z',
+        currentPeriodStart: null, currentPeriodEnd: null,
+        priceSnapshot: null, totalCents: null,
+        modules: [moduleRow({ planId: 5, planSlug: 'gold', priceCents: 0 })],
+      }),
+    }))
+    api.changeModule.mockResolvedValue({ changed: true, trial: true })
+    const user = userEvent.setup()
+    wrap(<BillingSettingsSection />, ownerUser)
+
+    await screen.findByTestId('module-plans-artist')
+    expect(within(modulePlans('band')).getByText('Silver')).toBeInTheDocument()
+    await user.click(within(modulePlans('band')).getByRole('button', {
+      name: /select for paid subscription/i,
+    }))
+    await waitFor(() => expect(api.changeModule).toHaveBeenCalledWith('band', 2))
+    await user.click(within(modulePlans('artist')).getByRole('button', { name: 'Add module' }))
+    await waitFor(() => expect(api.changeModule).toHaveBeenCalledWith('artist', 4))
+  })
+
+  it('shows the exact charge date after payment has been scheduled', async () => {
+    api.getBillingState.mockResolvedValue(state({
+      sub: subscription({
+        status: 'trialing', billingInterval: 'month',
+        trialEndsAt: '2026-08-31T00:00:00Z', subscriptionStartsAt: '2026-08-31T00:00:00Z',
+        paymentMethodReady: true, nextTotalCents: 2000,
+        currentPeriodStart: null, currentPeriodEnd: null,
+        priceSnapshot: null, totalCents: null,
+      }),
+    }))
+    wrap(<BillingSettingsSection />, ownerUser)
+
+    expect(await screen.findByText(/Payment is scheduled/)).toHaveTextContent(/€\s*20[,.]00/)
+    expect(screen.queryByRole('button', { name: /verify payment method/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('BillingSettingsSection — cancelling', () => {
+  it('offers the refund branch only while the window is open', async () => {
+    api.getBillingState.mockResolvedValue(state({
+      sub: subscription({ refundEligibleUntil: '2099-01-01T00:00:00Z' }),
+    }))
+    api.cancelSubscription.mockResolvedValue({ canceled: true, refunded: true, refundAmountCents: 999 })
+    const user = userEvent.setup()
+    wrap(<BillingSettingsSection />, ownerUser)
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel subscription' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel now with a refund' }))
+    await waitFor(() => expect(api.cancelSubscription).toHaveBeenCalledWith(true))
+  })
+
+  it('offers only the period-end branch once the window has closed', async () => {
+    api.getBillingState.mockResolvedValue(state({
+      sub: subscription({ refundEligibleUntil: null }),
+    }))
+    api.cancelSubscription.mockResolvedValue({ canceled: true, atPeriodEnd: true })
+    const user = userEvent.setup()
+    wrap(<BillingSettingsSection />, ownerUser)
+
+    await user.click(await screen.findByRole('button', { name: 'Cancel subscription' }))
+    expect(screen.queryByRole('button', { name: 'Cancel now with a refund' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancel at period end' }))
+    await waitFor(() => expect(api.cancelSubscription).toHaveBeenCalledWith(false))
   })
 })
 
 describe('BillingSettingsSection — checkout return', () => {
-  it('syncs only the ladder named by the checkout redirect', async () => {
-    api.getBillingState.mockResolvedValue(state())
-    api.syncSubscription.mockResolvedValue({ subscriptions: { band: null, artist: null } })
-    wrap(<BillingSettingsSection />, participantUser, {
-      initialEntry: '/settings/billing?checkout=return&audience=artist',
-    })
-    await waitFor(() => expect(api.syncSubscription).toHaveBeenCalledWith('artist'))
-  })
-
-  it('syncs both ladders when the redirect names none', async () => {
-    api.getBillingState.mockResolvedValue(state())
-    api.syncSubscription.mockResolvedValue({ subscriptions: { band: null, artist: null } })
-    wrap(<BillingSettingsSection />, participantUser, {
-      initialEntry: '/settings/billing?checkout=return',
-    })
-    await waitFor(() => expect(api.syncSubscription).toHaveBeenCalledWith(undefined))
+  it('syncs the subscription when returning from checkout', async () => {
+    api.getBillingState.mockResolvedValue(state({ sub: subscription() }))
+    wrap(<BillingSettingsSection />, ownerUser, { initialEntry: '/settings/billing?checkout=return' })
+    await waitFor(() => expect(api.syncSubscription).toHaveBeenCalled())
   })
 
   it('does not sync on a normal visit', async () => {
-    api.getBillingState.mockResolvedValue(state())
-    wrap(<BillingSettingsSection />, participantUser)
-    await screen.findAllByText(/You are on the free plan/)
+    api.getBillingState.mockResolvedValue(state({ sub: subscription() }))
+    wrap(<BillingSettingsSection />, ownerUser)
+    await screen.findByTestId('module-plans-band')
     expect(api.syncSubscription).not.toHaveBeenCalled()
   })
 })
 
-describe('BillingSettingsSection — scheduled downgrade note', () => {
-  it('shows the pending-downgrade limits note when a downgrade is confirmed', async () => {
+describe('BillingSettingsSection — scheduled change note', () => {
+  it('warns that limits already bind once a change is scheduled', async () => {
     api.getBillingState.mockResolvedValue(state({
-      band: subscription({
-        cancelAtPeriodEnd: true, downgradeScheduled: true, pendingLimitsSnapshot: { storage_mb: 50 },
+      sub: subscription({
+        modules: [moduleRow({
+          pendingPlanId: 1, pendingPlanSlug: 'bronze', pendingChangeKind: 'downgrade',
+          pendingLimitsSnapshot: { storage_mb: 50 },
+        })],
       }),
     }))
-    wrap(<BillingSettingsSection />, participantUser)
-    expect(await screen.findByText(/A downgrade is scheduled/)).toBeInTheDocument()
-    expect(screen.getByText(/no longer add data beyond the new plan's limits/)).toBeInTheDocument()
+    wrap(<BillingSettingsSection />, ownerUser)
+    expect(await screen.findByText(/no longer add data beyond the new limits/)).toBeInTheDocument()
+  })
+
+  it("warns during a trial too — the selected paid plan's limits bind at once", async () => {
+    api.getBillingState.mockResolvedValue(state({
+      sub: subscription({
+        status: 'trialing', trialEndsAt: '2026-09-01T00:00:00Z', convertedAt: null,
+        modules: [moduleRow({
+          planId: 5, planSlug: 'gold',
+          pendingPlanId: 2, pendingPlanSlug: 'silver', pendingChangeKind: 'trial_selection',
+          pendingLimitsSnapshot: { storage_mb: 150 },
+        })],
+      }),
+    }))
+    wrap(<BillingSettingsSection />, ownerUser)
+    expect(await screen.findByText(/no longer add data beyond the new limits/)).toBeInTheDocument()
   })
 })
 
 describe('BillingSettingsSection — empty states per ladder', () => {
-  it('explains there is no subscription and no payment due when the user owns no band', async () => {
-    api.getBillingState.mockResolvedValue(state({ ownedBandCount: 0 }))
+  it('explains there is no payment due for a pure participant', async () => {
+    api.getBillingState.mockResolvedValue(state({ ownedBandCount: 0, trialAvailable: false }))
     wrap(<BillingSettingsSection />, participantUser)
-
-    expect(await screen.findByText('No subscription')).toBeInTheDocument()
-    expect(screen.getByText(/nothing for you to pay/i)).toBeInTheDocument()
-    expect(screen.getByText(/another member's plan/i)).toBeInTheDocument()
+    expect(await screen.findByText(/taking part in your band\(s\) under another member's plan/))
+      .toBeInTheDocument()
   })
 
   it('keeps the free-plan copy for a user who owns a band', async () => {
-    api.getBillingState.mockResolvedValue(state({ ownedBandCount: 1 }))
+    api.getBillingState.mockResolvedValue(state({ ownedBandCount: 1, trialAvailable: false }))
     wrap(<BillingSettingsSection />, participantUser)
-
-    await screen.findByText('Your band plan')
-    expect(within(ladder('band')).getByText(/You are on the free plan/)).toBeInTheDocument()
-    expect(screen.queryByText(/another member's plan/i)).not.toBeInTheDocument()
+    await screen.findByTestId('module-plans-band')
+    expect(screen.queryByText(/taking part in your band\(s\)/)).not.toBeInTheDocument()
   })
 
   it('points a user without an artist workspace at creating one', async () => {
-    api.getBillingState.mockResolvedValue(state({ hasPersonalWorkspace: false }))
-    wrap(<BillingSettingsSection />, participantUser)
-
-    expect(await screen.findByText(/do not have your own artist workspace yet/i)).toBeInTheDocument()
+    api.getBillingState.mockResolvedValue(state({ hasPersonalWorkspace: false, trialAvailable: false }))
+    wrap(<BillingSettingsSection />, ownerUser)
+    expect(await screen.findByText(/do not have your own artist workspace yet/)).toBeInTheDocument()
   })
 
   it('keeps the free-plan copy for a user with no approved memberships', async () => {
-    api.getBillingState.mockResolvedValue(state({ ownedBandCount: 0 }))
-    wrap(<BillingSettingsSection />, { id: 8, email: 'new@test.local', memberships: [] })
-
-    await screen.findAllByText(/You are on the free plan/)
-    expect(screen.queryByText(/another member's plan/i)).not.toBeInTheDocument()
+    api.getBillingState.mockResolvedValue(state({ ownedBandCount: 0, trialAvailable: false }))
+    wrap(<BillingSettingsSection />, ownerUser)
+    await screen.findByTestId('module-plans-band')
+    expect(screen.queryByText(/taking part in your band\(s\)/)).not.toBeInTheDocument()
   })
 })

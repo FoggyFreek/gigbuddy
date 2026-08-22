@@ -3,7 +3,7 @@
   "nav": {
     "accountSettings": "Account settings",
     "bandSettings": "Band settings",
-    "financeSettings": "Finance and accounting settings",
+    "financeSettings": "Finance settings",
     "backAria": "Back to settings",
     "items": {
       "preferences": "My preferences",
@@ -18,6 +18,7 @@
       "defaultAccounts": "Accounting Settings",
       "financialProfile": "Financial profile",
       "accountingProfile": "Accounting profile",
+      "invoiceMode": "Invoice mode",
       "manageAccounts": "Manage band account"
     },
     "workspaceSettings": "Workspace settings"
@@ -57,6 +58,27 @@
     "title": "Finance setup wizard",
     "help": "Walk through your opening balance, financial profile and default accounts.",
     "cta": "Start"
+  },
+  "invoiceMode": {
+    "title": "Preferred invoice mode",
+    "description": "Choose how booking fees are shown when a gig is turned into an invoice draft.",
+    "options": {
+      "combined": {
+        "label": "Combined",
+        "description": "Include the booking fee in the artist fee."
+      },
+      "specified": {
+        "label": "Specified",
+        "description": "Show the booking fee as a separate line on the same invoice."
+      }
+    },
+    "example": {
+      "title": "Example: €1,000 including a €150 booking fee",
+      "combined": "Combined: €1,000 artist fee",
+      "specified": "Specified: €850 artist fee + €150 booking fee",
+      "total": "The invoice total remains €1,000 in both modes."
+    },
+    "error": "The invoice mode could not be loaded or saved."
   },
   "members": {
     "title": "Members",
@@ -255,11 +277,17 @@
     "description": "Connect Resend for email delivery from your own domain from GigBuddy. The key is stored securely and never shown in full after saving.",
     "label": "Resend API key",
     "placeholder": "re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "helper": "Use a sending-access key from Resend, restricted to your verified sending domain when possible.",
+    "helper": "Use a Sending access key restricted to your verified sending domain.",
     "invalidFormat": "Invalid key format. Resend API keys start with re_.",
     "saveFailed": "Failed to save key. Please try again.",
     "replace": "Replace key",
-    "remove": "Remove key"
+    "remove": "Remove key",
+    "sender": {
+      "title": "Sender identity",
+      "description": "Save an address from your verified Resend domain. Resend validates the domain when each email is sent.",
+      "fromName": "From name", "fromEmail": "From email", "replyTo": "Reply-to email (optional)",
+      "saved": "Sender configuration saved", "save": "Save sender"
+    }
   },
   "accounting": {
     "title": "Accounting Settings",

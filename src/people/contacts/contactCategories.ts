@@ -8,6 +8,7 @@ type ChipColor = NonNullable<ChipProps['color']>
 
 export const CONTACT_CATEGORIES: ContactCategory[] = ['press', 'radio & tv', 'booker', 'promotion', 'network']
 export const SUPPLIER_CATEGORY = 'supplier' as const
+export const SUPPLIER_LIKE_CATEGORIES = [SUPPLIER_CATEGORY, 'booker'] as const
 export const ALL_CONTACT_CATEGORIES: AllContactCategory[] = [...CONTACT_CATEGORIES, SUPPLIER_CATEGORY]
 
 export const CONTACT_CATEGORY_LABELS: Record<AllContactCategory, string> = {
@@ -54,11 +55,17 @@ export function useContactCategoryLabel(): (category: string | null | undefined)
 
 interface CategoryFilter {
   category?: string
+  categoryIn?: readonly string[]
   excludeCategory?: string
 }
 
-export function contactMatchesCategoryFilter(contact: Contact, { category, excludeCategory }: CategoryFilter = {}): boolean {
+export function contactIsSupplierLike(contact: Pick<Contact, 'category'>): boolean {
+  return SUPPLIER_LIKE_CATEGORIES.some((category) => category === contact.category)
+}
+
+export function contactMatchesCategoryFilter(contact: Contact, { category, categoryIn, excludeCategory }: CategoryFilter = {}): boolean {
   if (category && contact.category !== category) return false
+  if (categoryIn?.length && !categoryIn.includes(contact.category ?? '')) return false
   if (excludeCategory && contact.category === excludeCategory) return false
   return true
 }

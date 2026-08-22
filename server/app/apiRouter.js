@@ -8,8 +8,9 @@ import availabilityRouter from '../planning/availability/availability.js'
 import rehearsalsRouter from '../planning/rehearsals/rehearsals.js'
 import achievementsRouter from '../user/achievements/achievements.js'
 import bandEventsRouter from '../planning/events/bandEvents.js'
-import emailTemplatesRouter from '../people/profiles/emailTemplates.js'
+import outreachRouter from '../promotion/outreach/outreach.js'
 import venuesRouter from '../people/venues/venues.js'
+import venueGroupsRouter from '../people/venues/venueGroups.js'
 import contactsRouter from '../people/contacts/contacts.js'
 import songsRouter from '../music/songs/songs.js'
 import setlistsRouter from '../music/setlists/setlists.js'
@@ -32,6 +33,7 @@ import usersRouter from '../people/memberships/users.js'
 import tenantsRouter from '../people/workspaces/tenants.js'
 import tenantsSelfRouter from '../people/workspaces/tenantsSelf.js'
 import tenantSettingsRouter from '../people/workspaces/tenantSettings.js'
+import tenantInvoiceModeRouter from '../people/workspaces/tenantInvoiceMode.js'
 import bandDirectoryRouter from '../people/band-directory/bandDirectory.js'
 import meRouter from '../planning/agenda/me.js'
 import meAvailabilityRouter from '../user/availability/meAvailability.js'
@@ -43,8 +45,10 @@ import adminBandProfileClaimsRouter from '../admin/band-profile-claims/adminBand
 import platformSettingsRouter from '../admin/platform-settings/platformSettings.js'
 import adminUsersRouter from '../admin/users/adminUsers.js'
 import adminPlansRouter from '../admin/plans/adminPlans.js'
+import adminPricingRulesRouter from '../admin/pricing/adminPricingRules.js'
 import adminSubscriptionsRouter from '../admin/subscriptions/adminSubscriptions.js'
 import adminStorageRouter from '../admin/storage/adminStorage.js'
+import adminOperationsRouter from '../admin/operations/adminOperations.js'
 import billingRouter from '../commerce/billing/billing.js'
 import publicBillingMollieRouter from '../commerce/billing/publicBillingMollie.js'
 import sharePhotosRouter from '../promotion/sharing/sharePhotos.js'
@@ -58,6 +62,7 @@ import publicMollieRouter from '../finance/invoices/publicMollie.js'
 import publicInvoicesRouter from '../finance/invoices/publicInvoices.js'
 import publicCalendarRouter from '../promotion/calendar-feed/publicCalendar.js'
 import publicLinkpageRouter from '../promotion/linkpage/publicLinkpage.js'
+import publicOutreachImagesRouter from '../promotion/outreach/publicOutreachImages.js'
 import linkpageRouter from '../promotion/linkpage/linkpage.js'
 import calendarFeedRouter from '../promotion/calendar-feed/calendarFeed.js'
 import { loadUser, requireApproved, requireCurrentTerms } from '../middleware/auth.js'
@@ -132,6 +137,18 @@ const publicWebhookLimiter = rateLimit({
   skip: () => isTest,
 })
 
+// Email providers proxy embedded images in bursts, so this public media route
+// needs substantially more headroom than webhooks while still bounding abuse.
+const publicMediaLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5000,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+  keyGenerator,
+  skip: () => isTest,
+})
+
 // The band directory answers questions about tenants the caller has no
 // membership in. The outstanding-request cap governs how many requests may be
 // OPEN; this limiter governs how fast someone may knock — and bounds scraping
@@ -181,6 +198,7 @@ router.use('/public/billing', publicWebhookLimiter, publicBillingMollieRouter)
 router.use('/public/invoices', publicWebhookLimiter, publicInvoicesRouter)
 router.use('/public/calendar', publicWebhookLimiter, publicCalendarRouter)
 router.use('/public/linkpage', publicWebhookLimiter, publicLinkpageRouter)
+router.use('/public/outreach', publicMediaLimiter, publicOutreachImagesRouter)
 
 router.use(apiLimiter)
 router.use(csrf)
@@ -250,13 +268,16 @@ router.use('/admin/tenants', superAdmin, tenantsRouter)
 router.use('/admin/platform-settings', superAdmin, platformSettingsRouter)
 router.use('/admin/users', superAdmin, adminUsersRouter)
 router.use('/admin/plans', superAdmin, adminPlansRouter)
+router.use('/admin/pricing-rules', superAdmin, adminPricingRulesRouter)
 router.use('/admin/subscriptions', superAdmin, adminSubscriptionsRouter)
 router.use('/admin/statistics', superAdmin, adminStatisticsRouter)
 router.use('/admin/storage', superAdmin, adminStorageRouter)
+router.use('/admin/operations', superAdmin, adminOperationsRouter)
 router.use('/admin/band-profile-claims', superAdmin, adminBandProfileClaimsRouter)
 router.use('/invites', membersManage, bandMembershipAdmin, invitesAdminRouter)
 router.use('/users', membersManage, bandMembershipAdmin, usersRouter)
 router.use('/statistics', tenantManage, statisticsRouter)
+router.use('/tenant/invoice-mode', financeView, tenantInvoiceModeRouter)
 router.use(
   '/tenant',
   tenantManage,
@@ -283,8 +304,9 @@ router.use('/band-events', tenantMember, myBandField, bandEventsRouter)
 router.use('/my-bands', tenantMember, myBands, myBandsRouter)
 // Claiming a global band profile: band-only, and an administrative act.
 router.use('/band-profile-claims', tenantManage, bandProfileClaim, bandProfileClaimsRouter)
-router.use('/email-templates', tenantMember, emailTemplatesRouter)
+router.use('/outreach', tenantMember, outreachRouter)
 router.use('/venues', tenantMember, venuesRouter)
+router.use('/venue-groups', tenantMember, venueGroupsRouter)
 router.use('/contacts', tenantMember, contactsRouter)
 router.use('/songs', tenantMember, songsRouter)
 router.use('/setlists', tenantMember, setlists, setlistsRouter)

@@ -12,6 +12,7 @@ import {
   searchSetlists,
   getSetlist,
   createSetlist,
+  copySetlist,
   patchSetlist,
   deleteSetlist,
   reorderSets,
@@ -60,6 +61,14 @@ router.get('/:id/performance', async (req, res) => {
   const result = await getSetlistPerformance(pool, req.tenantId, id, req.user.id)
   if (result.error) return sendError(res, result.error)
   res.json(result.performance)
+})
+
+// Duplicate a setlist with all of its sets and items.
+router.post('/:id/copy', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await copySetlist(req.tenantId, id)
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.setlist)
 })
 
 router.patch('/:id', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {

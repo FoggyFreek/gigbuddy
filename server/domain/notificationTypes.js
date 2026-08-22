@@ -28,9 +28,15 @@ export const NOTIFICATION_TYPES = Object.freeze([
 export const BILLING_NOTIFICATION_TYPES = Object.freeze({
   TRIAL_ENDING: 'billing-trial-ending',
   PAYMENT_FAILED: 'billing-payment-failed',
+  // The first combined charge settled — the trial converted into a paid cycle.
+  ACTIVATED: 'billing-activated',
+  // Advance notice of the combined renewal charge (T-7 and T-1 share the type;
+  // the dedupe key carries the period end and the offset).
+  RENEWAL_UPCOMING: 'billing-renewal-upcoming',
   RENEWED: 'billing-renewed',
   CANCELED: 'billing-canceled',
   PLAN_CHANGED: 'billing-plan-changed',
   DOWNGRADE_SCHEDULED: 'billing-downgrade-scheduled',
   COMPLIMENTARY_GRANTED: 'billing-complimentary-granted',
+  REFUNDED: 'billing-refunded',
 })

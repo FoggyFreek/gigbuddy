@@ -45,3 +45,7 @@ INSTALL_LOG.md
 # Generated from the vendored EN 16931 Schematron (npm run build:schematron)
 external/schematron/*.sef.json
 external/schematron/PEPPOL-EN16931-UBL.xslt
+
+# Generated on demand for the large gig-deal regression test
+src/planning/gigs/__tests__/fixtures/gigDealPhaseA.golden.json
+test-reports/test-durations.csv

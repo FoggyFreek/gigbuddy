@@ -1,3 +1,4 @@
+import { DialogProvider } from '../../../contexts/DialogContext.tsx'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
@@ -38,10 +39,11 @@ const writerAuth = { user: { isSuperAdmin: true } }
 const NOTE = { id: 10, contact_id: 1, tenant_id: 1, note: 'Test note', created_at: '2026-01-01T12:00:00Z' }
 const CONTACT = { id: 1, name: 'Alice', email: '', phone: '', category: 'press', notes: [] }
 const SUPPLIER = { id: 2, name: 'Studio X', email: '', phone: '', category: 'supplier', notes: [] }
+const BOOKER = { id: 3, name: 'Bookings BV', email: '', phone: '', category: 'booker', notes: [] }
 
 function wrapWithRoutes({ initialEntries }) {
   return render(
-    <MemoryRouter initialEntries={initialEntries}>
+    <MemoryRouter initialEntries={initialEntries}><DialogProvider>
       <ThemeProvider theme={theme}>
         <AuthContext.Provider value={writerAuth}>
           <Routes>
@@ -54,7 +56,7 @@ function wrapWithRoutes({ initialEntries }) {
           </Routes>
         </AuthContext.Provider>
       </ThemeProvider>
-    </MemoryRouter>
+    </DialogProvider></MemoryRouter>
   )
 }
 
@@ -79,12 +81,13 @@ describe('ContactsPage — split-view list refresh', () => {
   })
 
   it('loads suppliers through their own route and navigates inside /suppliers', async () => {
-    listContacts.mockResolvedValue([SUPPLIER])
+    listContacts.mockResolvedValue([SUPPLIER, BOOKER])
     getContact.mockResolvedValue(SUPPLIER)
     const user = userEvent.setup()
     wrapWithRoutes({ initialEntries: ['/suppliers'] })
 
-    await waitFor(() => expect(listContacts).toHaveBeenCalledWith({ category: 'supplier' }))
+    await waitFor(() => expect(listContacts).toHaveBeenCalledWith({ categoryIn: ['supplier', 'booker'] }))
+    expect(screen.getByText('Bookings BV')).toBeInTheDocument()
     await user.click(await screen.findByText('Studio X'))
 
     await waitFor(() => expect(screen.getByDisplayValue('Studio X')).toBeInTheDocument())
@@ -100,12 +103,13 @@ describe('ContactsPage — split-view list refresh', () => {
     await screen.findByText(/no suppliers yet/i)
     await user.click(screen.getByRole('button', { name: /^add$/i }))
     const dialog = await screen.findByRole('dialog')
-    await user.type(within(dialog).getByLabelText(/name/i), 'Studio X')
+    await user.type(within(dialog).getByLabelText(/^name/i), 'Studio X')
     await user.click(within(dialog).getByRole('button', { name: /^add supplier$/i }))
 
     await waitFor(() => {
       expect(createContact).toHaveBeenCalledWith({
         name: 'Studio X',
+        first_name: null,
         email: null,
         phone: null,
         category: 'supplier',

@@ -7,13 +7,22 @@
   "welcome": {
     "title": "Welkom bij GigBuddy",
     "subtitle": "Alles wat je band nodig heeft op één plek: optredens, repetities, setlists en financiën.",
-    "trialPitch": "Probeer elk betaald abonnement 7 dagen gratis. Zeg je op tijdens de proefperiode, dan betaal je niets.",
+    "trialPitch": "Kies wat je opzet en probeer Gold 30 dagen gratis.",
     "choosePlan": "Kies je abonnement",
     "haveInvite": "Sluit je aan bij een bestaande band? Verzilver je uitnodigingscode",
-    "startTrial": "Start proefperiode",
+    "startTrial": "Start gratis proefperiode",
+    "addToTrial": "Toevoegen aan je proefperiode",
     "startFree": "Start gratis",
     "selected": "Geselecteerd",
-    "free": "Gratis"
+    "free": "Gratis",
+    "trialOffer": {
+      "badge": "Proefperiode van {{days}} dagen",
+      "onTrial": "In proefperiode",
+      "addToTrial_one": "Toevoegen aan je proefperiode · nog {{count}} dag",
+      "addToTrial_other": "Toevoegen aan je proefperiode · nog {{count}} dagen",
+      "noCard": "Geen creditcard vereist",
+      "remainderNote": "Dit toevoegen is gratis en loopt mee tot het einde van je huidige proefperiode — er start geen nieuwe proefperiode."
+    }
   },
   "terms": {
     "agreeLabel": "Ik ga akkoord met de <termsLink>algemene voorwaarden</termsLink>",
@@ -36,9 +45,16 @@
     "slug": "Webadresnaam",
     "logo": "Logo",
     "noLogo": "Geen logo",
-    "paymentNote": "Je kiest je betaalmethode op de beveiligde pagina van onze betaalprovider. Een eenmalige verificatiebetaling van € 0,01 start je proefperiode.",
+    "goldTrial": "{{plan}} - gratis proefperiode van 30 dagen",
+    "trialEnds": "Proefperiode eindigt",
+    "date": "{{date, datetime}}",
+    "trialNote": "Je hebt geen betaalgegevens nodig om te starten. Je Gold-proefperiode loopt tot {{date, datetime}}; daarna tonen we de abonnementskeuzes en de exacte toekomstige betaaldatum.",
+    "addToTrialNote": "Dit wordt toegevoegd aan je lopende proefperiode en eindigt daarmee op {{date, datetime}}. Er start geen nieuwe proefperiode en je hebt geen betaalgegevens nodig.",
+    "paymentNote": "Je kiest je betaalmethode op de beveiligde pagina van onze betaalprovider. Je betaalde abonnement start zodra die betaling is bevestigd.",
     "freeNote": "Voor het gratis abonnement zijn geen betaalgegevens nodig.",
-    "confirmPaid": "Doorgaan naar betaling"
+    "confirmPaid": "Doorgaan naar betaling",
+    "confirmTrial": "Werkruimte maken en proefperiode starten",
+    "confirmAddToTrial": "Werkruimte maken en toevoegen aan proefperiode"
   },
   "checkout": {
     "processing": "Je betaling wordt bevestigd…",
@@ -51,6 +67,9 @@
     "onboardingDisabled": "Nieuwe tenant-onboarding is momenteel uitgeschakeld. Je kunt nog steeds met een uitnodigingscode aansluiten bij een bestaande band.",
     "bandCapNoPointer": "Je hebt al een band, dus onboarding is niet nodig. Abonnementen beheer je via Instellingen.",
     "bandCapReached": "Je huidige abonnement heeft de bandlimiet bereikt. Upgrade je abonnement om nog een band toe te voegen.",
+    "bothTrialsRunning": "Je bent al een Gold-proefperiode voor zowel band- als artiestenwerkruimtes gestart, dus hier is niets meer te starten. Je kunt extra bands aanmaken in de app.",
+    "trialTierMissing": "Voor dit product is nog geen proefabonnement ingesteld. Neem contact op met support.",
+    "addToTrialFailed": "Je werkruimte is aangemaakt, maar kon niet aan je proefperiode worden toegevoegd. Je kunt dit doen via Instellingen → Facturering.",
     "logoUploadFailed": "Het logo kon niet worden geüpload — je kunt het later toevoegen via Profiel.",
     "generic": "Er ging iets mis. Probeer het opnieuw.",
     "claimFailed": "We konden je bandprofielclaim niet versturen. Probeer het opnieuw via Instellingen."

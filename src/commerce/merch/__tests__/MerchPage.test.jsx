@@ -1,3 +1,4 @@
+import { DialogProvider } from '../../../contexts/DialogContext.tsx'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
@@ -47,7 +48,7 @@ const integrationProfile = (shopify) => ({
 
 function wrap(ui, { compact = false, shopify = true } = {}) {
   return render(
-    <MemoryRouter initialEntries={['/merch']}>
+    <MemoryRouter initialEntries={['/merch']}><DialogProvider>
       <ThemeProvider theme={theme}>
         <ProfileContext.Provider value={integrationProfile(shopify)}>
           <CompactLayoutContext.Provider value={compact}>
@@ -59,7 +60,7 @@ function wrap(ui, { compact = false, shopify = true } = {}) {
           </CompactLayoutContext.Provider>
         </ProfileContext.Provider>
       </ThemeProvider>
-    </MemoryRouter>,
+    </DialogProvider></MemoryRouter>,
   )
 }
 

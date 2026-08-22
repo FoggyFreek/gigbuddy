@@ -1,6 +1,11 @@
 import type {
+  DealType,
+  FeeBasis,
   Gig,
-  GigEquipmentEntry,
+  GigCost,
+  GigInfoBlock,
+  GigTimetableEntry,
+  GuaranteeVariant,
   Id,
   Participant,
   PurchaseAttachment,
@@ -8,20 +13,20 @@ import type {
 } from '../../../../types/entities.ts'
 import type { MaybeCrossTenant } from '../../../../types/api.ts'
 
-export type GigDetailTabKey = 'event' | 'terms' | 'participants' | 'tasks'
+export type GigDetailTabKey = 'event' | 'terms' | 'finance' | 'participants' | 'tasks'
 
 // Read through `/api/me/gigs/:id` when the detail is opened on another band's
 // gig, so the band label fields may be present.
 export interface GigDetail extends MaybeCrossTenant<Gig> {
   event_link?: string
-  booking_fee_cents?: number
   admission?: string
   ticket_link?: string
-  notes?: string
-  equipment?: GigEquipmentEntry[]
   tasks?: Task[]
   attachments?: PurchaseAttachment[]
   participants?: Participant[]
+  costs?: GigCost[]
+  info_blocks?: GigInfoBlock[]
+  timetable?: GigTimetableEntry[]
 }
 
 export interface GigDetailForm {
@@ -35,10 +40,29 @@ export interface GigDetailForm {
   start_time: string
   end_time: string
   status: string
-  booking_fee: string
-  admission: string
   ticket_link: string
-  merchandise_cut: string
+  // Deal terms. Money and counts are held as typed strings and converted on the
+  // way out (see gigFormFields.ts); the vocabulary fields hold the stored value.
+  deal_type: DealType
+  guarantee_variant: GuaranteeVariant | null
+  guaranteed_fee: string
+  /** The artist's share of ticket revenue; the venue takes the remainder of 100. */
   percentage_of_sales: string
-  notes: string
+  breakeven_includes_venue_costs: boolean
+  venue_costs: string
+  venue_capacity: string
+  expected_visitors: string
+  tickets_sold: string
+  ticket_price_net: string
+  ticket_price_gross: string
+  agency_fee_basis: FeeBasis
+  agency_fee_percentage: string
+  agency_fee_amount: string
+  commission_basis: FeeBasis
+  commission_percentage: string
+  commission_amount: string
+  subject_to_vat: boolean
+  vat_percentage: string
+  ticket_vat_percentage: string
+  copyright_percentage: string
 }

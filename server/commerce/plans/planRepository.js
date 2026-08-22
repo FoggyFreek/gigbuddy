@@ -33,6 +33,18 @@ export async function fetchFallbackPlan(executor, audience) {
   return rows[0] ?? null
 }
 
+// The plan a free trial grants on this ladder. Flag-driven, never slug-driven:
+// slugs are admin-editable and have already drifted in the field, and guessing
+// wrong here would hand a trialling customer the wrong product.
+// Guaranteed unique by subscription_plans_single_trial_tier_per_audience_idx.
+export async function fetchTrialTierPlan(executor, audience) {
+  const { rows } = await executor.query(
+    'SELECT * FROM subscription_plans WHERE is_trial_tier AND is_active AND audience = $1',
+    [audience],
+  )
+  return rows[0] ?? null
+}
+
 export async function insertPlan(executor, plan) {
   const { rows } = await executor.query(
     `INSERT INTO subscription_plans

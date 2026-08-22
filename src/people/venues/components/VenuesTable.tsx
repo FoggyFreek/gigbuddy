@@ -1,10 +1,11 @@
-import type { Venue, Id } from '../../../types/entities.ts'
-import { type ReactNode, useState } from 'react'
+import type { Venue, VenueGroup, Id } from '../../../types/entities.ts'
+import { type ReactNode, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Checkbox from '@mui/material/Checkbox'
 import Chip from '@mui/material/Chip'
+import CircularProgress from '@mui/material/CircularProgress'
 import Divider from '@mui/material/Divider'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -22,12 +23,27 @@ import ListPagination from '../../../components/shared/ListPagination.tsx'
 import TableRow from '@mui/material/TableRow'
 import TableSortLabel from '@mui/material/TableSortLabel'
 import TextField from '@mui/material/TextField'
+import ToggleButton from '@mui/material/ToggleButton'
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import FilterListIcon from '@mui/icons-material/FilterList'
 import SearchIcon from '@mui/icons-material/Search'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import { useCompactLayout } from '../../../hooks/useCompactLayout.ts'
+import { usePermissions } from '../../../hooks/usePermissions.ts'
+import { useDialog } from '../../../contexts/dialogContext.ts'
+import { useToast } from '../../../contexts/toastContext.ts'
+import AddToVenueGroupDialogContent from './AddToVenueGroupDialogContent.tsx'
+import VenueGroupNameDialogContent from './VenueGroupNameDialogContent.tsx'
+import {
+  deleteVenueGroup,
+  listVenueGroups,
+  removeVenueGroupMembers,
+  renameVenueGroup,
+} from '../venueGroups.ts'
 
 const PAGE_SIZE = 25
 const COLUMN_COUNT = 6
@@ -35,18 +51,15 @@ const COLUMN_COUNT = 6
 const ALL_CATEGORIES = ['venue', 'festival'] as const
 
 const COLUMNS = [
-  { id: 'category', labelKey: 'category' as const },
   { id: 'name',     labelKey: 'name' as const },
   { id: 'city',     labelKey: 'cityCountry' as const },
   { id: 'contact',  labelKey: 'contact' as const },
+  { id: 'category', labelKey: 'category' as const },
   { id: 'years',    labelKey: 'performed' as const, sortable: false },
 ]
 
-// Extended venue shape used within VenuesTable (email/phone are included in
-// the list endpoint but not in the canonical display Venue type).
 interface VenueRow extends Venue {
-  email?: string
-  phone?: string
+  phone?: string | null
 }
 
 function contactName(venue: VenueRow): string {
@@ -171,13 +184,30 @@ interface VenuesTableProps {
   venues: VenueRow[]
   onRowClick: (venue: VenueRow) => void
   selectedId?: Id | null
+  onEmailSelected?: (venues: VenueRow[]) => void
+  onMembershipsChanged?: (groupId: Id, venueIds: Id[] | null, action: 'add' | 'remove' | 'delete') => void
 }
 
-export default function VenuesTable({ venues, onRowClick, selectedId = null }: Readonly<VenuesTableProps>) {
+export default function VenuesTable({
+  venues,
+  onRowClick,
+  selectedId = null,
+  onEmailSelected,
+  onMembershipsChanged,
+}: Readonly<VenuesTableProps>) {
   const { t } = useTranslation('venues')
+  const { canWritePlanning } = usePermissions()
+  const { closeDialog, confirm, confirmDelete, showDialog } = useDialog()
+  const showToast = useToast()
   const categoryLabel = (category: string) =>
     category === 'festival' ? t($ => $.category.festivalPlural) : t($ => $.category.venuePlural)
   const [selectedCategories, setSelectedCategories] = useState(new Set<string>(ALL_CATEGORIES))
+  const [filterMode, setFilterMode] = useState<'categories' | 'groups'>('categories')
+  const [groupQuery, setGroupQuery] = useState('')
+  const [groups, setGroups] = useState<VenueGroup[]>([])
+  const [groupsLoading, setGroupsLoading] = useState(false)
+  const [groupsReload, setGroupsReload] = useState(0)
+  const [activeGroup, setActiveGroup] = useState<VenueGroup | null>(null)
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null)
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('name')
@@ -186,6 +216,28 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: R
   const [rowsPerPage, setRowsPerPage] = useState(PAGE_SIZE)
   const [selected, setSelected] = useState(new Set<Id>())
   const isCompact = useCompactLayout()
+
+  useEffect(() => {
+    if (!filterAnchor || filterMode !== 'groups') return undefined
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => {
+      setGroupsLoading(true)
+      listVenueGroups(groupQuery, 10, { signal: controller.signal })
+        .then((result) => {
+          setGroups(result.items)
+          setGroupsLoading(false)
+        })
+        .catch((reason: unknown) => {
+          if (controller.signal.aborted) return
+          showToast?.(reason instanceof Error ? reason.message : String(reason))
+          setGroupsLoading(false)
+        })
+    }, groupQuery ? 250 : 0)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [filterAnchor, filterMode, groupQuery, groupsReload, showToast])
 
   function handleSort(col: string) {
     if (sortBy === col) {
@@ -222,6 +274,25 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: R
     setSelected(new Set())
   }
 
+  function switchFilterMode(mode: 'categories' | 'groups') {
+    if (mode === filterMode) return
+    setFilterMode(mode)
+    setSelected(new Set())
+    setPage(0)
+    if (mode === 'categories') {
+      setActiveGroup(null)
+      setGroupQuery('')
+    } else {
+      setSelectedCategories(new Set<string>(ALL_CATEGORIES))
+    }
+  }
+
+  function selectGroup(group: VenueGroup) {
+    setActiveGroup(group)
+    setSelected(new Set())
+    setPage(0)
+  }
+
   function toggleRow(id: Id | undefined) {
     if (id === undefined) return
     setSelected((prev) => {
@@ -239,12 +310,16 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: R
     navigator.clipboard.writeText(emails.join(';'))
   }
 
-  const filtered = applySearch(
-    selectedCategories.size === ALL_CATEGORIES.length
-      ? venues
-      : venues.filter((v) => v.category && selectedCategories.has(v.category)),
-    search
-  )
+  const groupFilterActive = filterMode === 'groups' && activeGroup !== null
+  let structurallyFiltered = venues
+  if (groupFilterActive) {
+    structurallyFiltered = venues.filter((venue) =>
+      (venue.group_ids ?? []).some((groupId) => String(groupId) === String(activeGroup.id)))
+  } else if (filterMode === 'categories' && selectedCategories.size !== ALL_CATEGORIES.length) {
+    structurallyFiltered = venues.filter((venue) =>
+      venue.category && selectedCategories.has(venue.category))
+  }
+  const filtered = applySearch(structurallyFiltered, search)
   const sorted = applySort(filtered, sortBy, sortDir)
   const paged = sorted.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
   const isEmpty = venues.length === 0
@@ -252,6 +327,7 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: R
   const allFilteredIds = sorted.map((v) => v.id).filter((id): id is Id => id !== undefined)
   const allSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selected.has(id))
   const someSelected = !allSelected && allFilteredIds.some((id) => selected.has(id))
+  const selectedVenues = sorted.filter((venue) => venue.id !== undefined && selected.has(venue.id))
 
   function toggleAll() {
     if (allSelected) {
@@ -261,11 +337,109 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: R
     }
   }
 
+  function refreshGroups() {
+    setGroupsReload((value) => value + 1)
+  }
+
+  function openAddToGroup() {
+    const venueIds = selectedVenues.flatMap((venue) => venue.id === undefined ? [] : [venue.id])
+    void showDialog({
+      id: 'venue-add-to-group',
+      title: t($ => $.groups.addDialogTitle),
+      body: (
+        <AddToVenueGroupDialogContent
+          venueIds={venueIds}
+          onCancel={closeDialog}
+          onComplete={(result) => {
+            closeDialog()
+            setSelected(new Set())
+            onMembershipsChanged?.(result.group.id, venueIds, 'add')
+            refreshGroups()
+            const message = result.addedCount > 0
+              ? t($ => $.groups.added, { count: result.addedCount, name: result.group.name })
+              : t($ => $.groups.alreadyPresent, { name: result.group.name })
+            showToast?.(message, 'success')
+          }}
+        />
+      ),
+      actions: [],
+      maxWidth: 'sm',
+    })
+  }
+
+  async function removeFromActiveGroup() {
+    if (!activeGroup) return
+    const approved = await confirm({
+      title: t($ => $.groups.removeTitle),
+      body: t($ => $.groups.removeBody, { count: selectedVenues.length, name: activeGroup.name }),
+      confirmLabel: t($ => $.groups.removeSelected),
+    })
+    if (!approved) return
+    try {
+      const venueIds = selectedVenues.flatMap((venue) => venue.id === undefined ? [] : [venue.id])
+      const result = await removeVenueGroupMembers(activeGroup.id, venueIds)
+      setSelected(new Set())
+      onMembershipsChanged?.(activeGroup.id, venueIds, 'remove')
+      refreshGroups()
+      showToast?.(t($ => $.groups.removed, { count: result.removed_count, name: activeGroup.name }), 'success')
+    } catch (reason) {
+      showToast?.(reason instanceof Error ? reason.message : String(reason))
+    }
+  }
+
+  function openRenameGroup(group: VenueGroup) {
+    setFilterAnchor(null)
+    void showDialog({
+      id: `venue-group-rename:${group.id}`,
+      title: t($ => $.groups.renameTitle),
+      body: (
+        <VenueGroupNameDialogContent
+          initialName={group.name}
+          onCancel={closeDialog}
+          onSave={async (name) => {
+            const updated = await renameVenueGroup(group.id, name)
+            setGroups((current) => current.map((item) =>
+              String(item.id) === String(updated.id) ? updated : item))
+            setActiveGroup((current) =>
+              current && String(current.id) === String(updated.id) ? updated : current)
+            closeDialog()
+            showToast?.(t($ => $.groups.renamed), 'success')
+          }}
+        />
+      ),
+      actions: [],
+      maxWidth: 'xs',
+    })
+  }
+
+  async function removeGroup(group: VenueGroup) {
+    setFilterAnchor(null)
+    const approved = await confirmDelete({
+      title: t($ => $.groups.deleteTitle, { name: group.name }),
+      body: t($ => $.groups.deleteBody),
+    })
+    if (!approved) return
+    try {
+      await deleteVenueGroup(group.id)
+      setGroups((current) => current.filter((item) => String(item.id) !== String(group.id)))
+      if (activeGroup && String(activeGroup.id) === String(group.id)) {
+        setActiveGroup(null)
+        setSelected(new Set())
+        setPage(0)
+      }
+      onMembershipsChanged?.(group.id, null, 'delete')
+      refreshGroups()
+      showToast?.(t($ => $.groups.deleted), 'success')
+    } catch (reason) {
+      showToast?.(reason instanceof Error ? reason.message : String(reason))
+    }
+  }
+
   const selectedCount = selected.size
 
   const selectionBar = selectedCount > 0 && (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
-      <Typography variant="body2" color="primary" sx={{ fontWeight: 600 }}>
+      <Typography variant="body2" sx={{ color: 'primary.main', fontWeight: 600 }}>
         {t($ => $.table.selected, { count: selectedCount })}
       </Typography>
       <Tooltip title={t($ => $.table.copyEmails)}>
@@ -273,11 +447,42 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: R
           <ContentCopyIcon fontSize="small" />
         </IconButton>
       </Tooltip>
+      {onEmailSelected && <Button size="small" variant="contained" onClick={() => onEmailSelected(selectedVenues)}>
+        {t($ => $.table.emailSelected)}
+      </Button>}
+      {canWritePlanning && (
+        <Button size="small" variant="outlined" onClick={openAddToGroup}>
+          {t($ => $.groups.addSelected)}
+        </Button>
+      )}
+      {canWritePlanning && groupFilterActive && (
+        <Button size="small" variant="outlined" onClick={() => { void removeFromActiveGroup() }}>
+          {t($ => $.groups.removeSelected)}
+        </Button>
+      )}
     </Box>
   )
 
   const allCategoriesSelected = selectedCategories.size === ALL_CATEGORIES.length
   const someCategoriesSelected = selectedCategories.size > 0 && !allCategoriesSelected
+  const activeFilterCount = groupFilterActive ? 1 : (someCategoriesSelected ? selectedCategories.size : 0)
+
+  const groupSelectionRow = groupFilterActive && activeGroup && (
+    <Paper variant="outlined">
+      <Box sx={{ display: 'flex', alignItems: 'center', px: 1, py: 0.5 }}>
+        <Checkbox
+          size="small"
+          checked={allSelected}
+          indeterminate={someSelected}
+          onChange={toggleAll}
+          slotProps={{ input: { 'aria-label': t($ => $.groups.selectVisible, { name: activeGroup.name }) } }}
+        />
+        <Typography variant="body2">
+          {t($ => $.groups.selectVisible, { name: activeGroup.name })}
+        </Typography>
+      </Box>
+    </Paper>
+  )
 
   const controls = (
     <Box sx={{ display: 'flex', gap: 1.5, mb: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -299,32 +504,119 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: R
       />
       <Button
         size="small"
-        variant={someCategoriesSelected ? 'contained' : 'outlined'}
+        variant={activeFilterCount > 0 ? 'contained' : 'outlined'}
         startIcon={<FilterListIcon />}
         onClick={(e) => setFilterAnchor(e.currentTarget)}
       >
-        {someCategoriesSelected ? t($ => $.table.filterCount, { count: selectedCategories.size }) : t($ => $.table.filter)}
+        {activeFilterCount > 0
+          ? t($ => $.table.filterCount, { count: activeFilterCount })
+          : t($ => $.table.filter)}
       </Button>
       <Menu
         anchorEl={filterAnchor}
         open={Boolean(filterAnchor)}
         onClose={() => setFilterAnchor(null)}
+        slotProps={{ paper: { sx: { width: 320, maxWidth: 'calc(100vw - 32px)' } } }}
       >
-        <MenuItem dense onClick={toggleAllCategories}>
-          <Checkbox
+        <Box sx={{ px: 1.5, py: 1 }}>
+          <ToggleButtonGroup
+            exclusive
+            fullWidth
             size="small"
-            checked={allCategoriesSelected}
-            indeterminate={someCategoriesSelected}
-          />
-          <ListItemText primary={t($ => $.table.allCategories)} />
-        </MenuItem>
+            value={filterMode}
+            onChange={(_, value: 'categories' | 'groups' | null) => {
+              if (value) switchFilterMode(value)
+            }}
+          >
+            <ToggleButton value="categories">{t($ => $.groups.categoriesToggle)}</ToggleButton>
+            <ToggleButton value="groups">{t($ => $.groups.groupsToggle)}</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
         <Divider />
-        {ALL_CATEGORIES.map((category) => (
-          <MenuItem key={category} dense onClick={() => toggleCategory(category)}>
-            <Checkbox size="small" checked={selectedCategories.has(category)} />
-            <ListItemText primary={categoryLabel(category)} />
-          </MenuItem>
-        ))}
+        {filterMode === 'categories' ? (
+          <>
+            <MenuItem dense onClick={toggleAllCategories}>
+              <Checkbox
+                size="small"
+                checked={allCategoriesSelected}
+                indeterminate={someCategoriesSelected}
+              />
+              <ListItemText primary={t($ => $.table.allCategories)} />
+            </MenuItem>
+            <Divider />
+            {ALL_CATEGORIES.map((category) => (
+              <MenuItem key={category} dense onClick={() => toggleCategory(category)}>
+                <Checkbox size="small" checked={selectedCategories.has(category)} />
+                <ListItemText primary={categoryLabel(category)} />
+              </MenuItem>
+            ))}
+          </>
+        ) : (
+          <>
+            <Box sx={{ p: 1.5 }}>
+              <TextField
+                fullWidth
+                size="small"
+                value={groupQuery}
+                onChange={(event) => setGroupQuery(event.target.value)}
+                onKeyDown={(event) => event.stopPropagation()}
+                placeholder={t($ => $.groups.searchPlaceholder)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Box>
+            {groupsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                <CircularProgress size={22} />
+              </Box>
+            ) : groups.length ? groups.map((group) => (
+              <MenuItem key={String(group.id)} dense onClick={() => selectGroup(group)}>
+                <Checkbox
+                  size="small"
+                  checked={activeGroup !== null && String(activeGroup.id) === String(group.id)}
+                />
+                <ListItemText primary={group.name} />
+                {canWritePlanning && (
+                  <Box sx={{ display: 'flex' }}>
+                    <Tooltip title={t($ => $.groups.rename)}>
+                      <IconButton
+                        size="small"
+                        aria-label={t($ => $.groups.rename)}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          openRenameGroup(group)
+                        }}
+                      >
+                        <EditOutlinedIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title={t($ => $.groups.delete)}>
+                      <IconButton
+                        size="small"
+                        aria-label={t($ => $.groups.delete)}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void removeGroup(group)
+                        }}
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                )}
+              </MenuItem>
+            )) : (
+              <Typography variant="body2" sx={{ color: 'text.secondary', px: 2, py: 1.5 }}>
+                {t($ => $.groups.noGroups)}
+              </Typography>
+            )}
+          </>
+        )}
       </Menu>
     </Box>
   )
@@ -360,6 +652,7 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: R
       <Stack spacing={1.5}>
         {controls}
         {selectionBar}
+        {groupSelectionRow}
         <Paper variant="outlined">
           {compactContent}
         </Paper>
@@ -381,18 +674,21 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: R
     <Stack spacing={1.5}>
       {controls}
       {selectionBar}
+      {groupSelectionRow}
       <Paper variant="outlined">
         <TableContainer>
           <Table size="small">
             <TableHead>
               <TableRow sx={{ '& th': { fontWeight: 600 } }}>
                 <TableCell padding="checkbox">
-                  <Checkbox
-                    size="small"
-                    checked={allSelected}
-                    indeterminate={someSelected}
-                    onChange={toggleAll}
-                  />
+                  {!groupFilterActive && (
+                    <Checkbox
+                      size="small"
+                      checked={allSelected}
+                      indeterminate={someSelected}
+                      onChange={toggleAll}
+                    />
+                  )}
                 </TableCell>
                 {COLUMNS.map((col) =>
                   col.sortable === false ? (
@@ -445,10 +741,10 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: R
                       onClick={(e) => e.stopPropagation()}
                     />
                   </TableCell>
-                  <TableCell><CategoryChip category={v.category} /></TableCell>
                   <TableCell>{displayName(v)}</TableCell>
                   <TableCell>{cityCountry(v)}</TableCell>
                   <TableCell>{contactName(v)}</TableCell>
+                  <TableCell><CategoryChip category={v.category} /></TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                       {(v.years ?? []).map((yr) => (

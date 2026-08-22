@@ -9,7 +9,7 @@ import Typography from '@mui/material/Typography'
 import { getBillingState } from '../../../../commerce/billing/billing.ts'
 import type { BillingState } from '../../../../commerce/billing/billing.ts'
 import { planLogoSrc } from '../../../../commerce/billing/planLogo.ts'
-import { ladderPlans } from '../../../../commerce/billing/planLadder.ts'
+import { ladderPlans, moduleFor } from '../../../../commerce/billing/planLadder.ts'
 import { audienceForTenantKind } from '../../../../auth/planAudiences.ts'
 import { useTenantKind } from '../../../../hooks/useTenantKind.ts'
 import { STATUS_KEYS } from '../../../../finance/accounts/components/subscriptionStatusKeys.ts'
@@ -33,10 +33,14 @@ export default function SubscriptionSummaryCard() {
   if (!state) return null
 
   const audience = audienceForTenantKind(kind)
-  const sub = state.subscriptions?.[audience] ?? null
+  const sub = state.subscription ?? null
+  // The MODULE governing the active workspace, not the subscription as a whole:
+  // a customer can hold a band module and no artist one, and this card must say
+  // what the workspace they are looking at actually runs on.
+  const module = moduleFor(sub, audience)
   const plans = ladderPlans(state.plans ?? [], audience)
   const fallbackPlan = plans.find((p) => p.is_fallback) ?? null
-  const currentPlan = sub ? plans.find((p) => p.id === sub.planId) ?? null : fallbackPlan
+  const currentPlan = module ? plans.find((p) => p.id === module.planId) ?? null : fallbackPlan
   const planName = currentPlan?.name ?? t($ => $.current.freePlanName, { ns: 'billing' })
   const statusLabel = sub && sub.status in STATUS_KEYS
     ? t($ => $.status[STATUS_KEYS[sub.status as keyof typeof STATUS_KEYS]], { ns: 'billing' })
@@ -52,7 +56,7 @@ export default function SubscriptionSummaryCard() {
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{planName}</Typography>
-          {sub && <Chip size="small" label={statusLabel} />}
+          {module && <Chip size="small" label={statusLabel} />}
           {sub?.isComplimentary && (
             <Chip size="small" color="secondary" label={t($ => $.current.complimentary, { ns: 'billing' })} />
           )}

@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Link as RouterLink, useNavigate, useOutletContext, useParams } from 'react-router'
 import Box from '@mui/material/Box'
@@ -10,7 +11,6 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
-import Divider from '@mui/material/Divider'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
@@ -18,11 +18,16 @@ import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 import CloseIcon from '@mui/icons-material/Close'
+import ContactsIcon from '@mui/icons-material/Contacts'
 import DeleteIcon from '@mui/icons-material/Delete'
 import DiamondOutlined from '@mui/icons-material/DiamondOutlined'
+import FestivalIcon from '@mui/icons-material/Festival'
+import InfoIcon from '@mui/icons-material/Info'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
+import ReceiptLongIcon from '@mui/icons-material/ReceiptLong'
 import StarIcon from '@mui/icons-material/Star'
 import StarBorderIcon from '@mui/icons-material/StarBorder'
+import type { SvgIconComponent } from '@mui/icons-material'
 import {
   addVenueContact,
   deleteVenue,
@@ -38,15 +43,19 @@ import useDebouncedSave from '../../hooks/useDebouncedSave.ts'
 import { usePermissions } from '../../hooks/usePermissions.ts'
 import { useEntitlements } from '../../hooks/useEntitlements.ts'
 import { FEATURES } from '../../auth/entitlements.ts'
+import FloatingTabs from '../../components/FloatingTabs.tsx'
 import PlanningReadOnlyAlert from '../../components/PlanningReadOnlyAlert.tsx'
 import { getRequiredErrors, hasRequiredErrors } from '../../utils/requiredFields.ts'
 import ContactPicker from '../contacts/components/ContactPicker.tsx'
 import SaveStatusLabel from '../../components/SaveStatusLabel.tsx'
 import PlaceEnrichDialog from '../../components/shared/PlaceEnrichDialog.tsx'
+import VenueEventsList from './components/VenueEventsList.tsx'
 import VenueFields from './components/VenueFields.tsx'
+import VenueLocationHeader from './components/VenueLocationHeader.tsx'
 import type { VenueForm } from './components/VenueFields.tsx'
 import type { Venue, Contact, Id } from '../../types/entities.ts'
 import type { PlaceSuggestion } from '../../types/api.ts'
+import { useDialog } from '../../contexts/dialogContext.ts'
 
 interface VenueDetailOutletContext {
   insideSplitView?: boolean
@@ -63,8 +72,24 @@ interface CategoryChange {
 
 const REQUIRED_FIELDS = ['name']
 
+type VenueTabKey = 'information' | 'invoicing' | 'contacts' | 'events'
+
+// Each panel repeats its tab's tooltip as a heading, so the section is named
+// once the pill's icon is no longer hovered.
+function TabHeading({ children }: Readonly<{ children: ReactNode }>) {
+  return <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>{children}</Typography>
+}
+
+const TABS: { key: VenueTabKey; Icon: SvgIconComponent }[] = [
+  { key: 'information', Icon: InfoIcon },
+  { key: 'invoicing', Icon: ReceiptLongIcon },
+  { key: 'contacts', Icon: ContactsIcon },
+  { key: 'events', Icon: FestivalIcon },
+]
+
 export default function VenueDetailPage() {
   const { t } = useTranslation(['venues', 'common'])
+  const { confirmDelete } = useDialog()
   const categoryLabel = (category: string) =>
     category === 'festival' ? t($ => $.category.festival) : t($ => $.category.venue)
   const { id } = useParams()
@@ -98,9 +123,15 @@ export default function VenueDetailPage() {
     phone: '',
     email: '',
   })
+  // Stored coordinates, when the venue has them — the header map falls back to
+  // geocoding the address fields otherwise.
+  const [coords, setCoords] = useState<{ latitude: number | null; longitude: number | null }>({
+    latitude: null,
+    longitude: null,
+  })
   const [contacts, setContacts] = useState<(Contact & { is_primary?: boolean })[]>([])
+  const [activeTab, setActiveTab] = useState<VenueTabKey>('information')
   const [loading, setLoading] = useState(true)
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [categoryChange, setCategoryChange] = useState<CategoryChange | null>(null)
   const [categorySaving, setCategorySaving] = useState(false)
   const [enriching, setEnriching] = useState(false)
@@ -135,6 +166,10 @@ export default function VenueDetailPage() {
           website: String(venue.website || ''),
           phone: String(venue.phone || ''),
           email: String(venue.email || ''),
+        })
+        setCoords({
+          latitude: typeof venue.latitude === 'number' ? venue.latitude : Number(venue.latitude) || null,
+          longitude: typeof venue.longitude === 'number' ? venue.longitude : Number(venue.longitude) || null,
         })
       })
       .finally(() => setLoading(false))
@@ -212,6 +247,11 @@ export default function VenueDetailPage() {
     schedule({ [field]: value || null } as Partial<VenueForm>)
   }
 
+  const tabs = useMemo(
+    () => TABS.map(({ key, Icon }) => ({ key, Icon, label: t($ => $.detail.tabs[key]) })),
+    [t],
+  )
+
   // Labels for the generic enrich dialog. Order follows the form's visual order.
   const enrichFields = useMemo(() => [
     { key: 'street_and_number', label: t($ => $.fields.streetAndNumber) },
@@ -240,7 +280,7 @@ export default function VenueDetailPage() {
   }
 
   async function handleDelete() {
-    setConfirmingDelete(false)
+    if (!await confirmDelete({ title: t($ => $.detail.deleteTitle) })) return
     await deleteVenue(venueId)
     outletCtx.onVenueDelete?.(venueId)
     closeView()
@@ -304,21 +344,45 @@ export default function VenueDetailPage() {
         </Box>
       ) : (
         <>
-          <Grid container spacing={2}>
-            <VenueFields
-              form={form}
-              onChange={handleChange}
-              errors={getRequiredErrors(form as Record<string, unknown>, REQUIRED_FIELDS)}
-              disabled={!canWrite}
-            />
-          </Grid>
+          <VenueLocationHeader form={form} latitude={coords.latitude} longitude={coords.longitude} />
 
-          <Divider sx={{ my: 3 }} />
+          {/* Floating pill overlapping the map, splitting the body into three
+              sections. Panels stay mounted (toggled via `display`) so the
+              debounced form and the loaded event page survive a tab switch. */}
+          <FloatingTabs tabs={tabs} value={activeTab} onChange={setActiveTab} />
 
-          <Typography variant="subtitle2" sx={{ fontWeight: 600,  mb: 2  }}>
-            {t($ => $.detail.contactsHeading)}
-          </Typography>
+          <Box sx={{ display: activeTab === 'information' ? 'block' : 'none' }}>
+            <TabHeading>{t($ => $.detail.tabs.information)}</TabHeading>
+            <Grid container spacing={2}>
+              <VenueFields
+                variant="detail"
+                form={form}
+                onChange={handleChange}
+                errors={getRequiredErrors(form as Record<string, unknown>, REQUIRED_FIELDS)}
+                disabled={!canWrite}
+              />
+            </Grid>
+          </Box>
 
+          <Box sx={{ display: activeTab === 'invoicing' ? 'block' : 'none' }}>
+            <TabHeading>{t($ => $.detail.tabs.invoicing)}</TabHeading>
+            <Grid container spacing={2}>
+              <VenueFields
+                variant="invoicing"
+                form={form}
+                onChange={handleChange}
+                disabled={!canWrite}
+              />
+            </Grid>
+          </Box>
+
+          <Box sx={{ display: activeTab === 'events' ? 'block' : 'none' }}>
+            <TabHeading>{t($ => $.detail.tabs.events)}</TabHeading>
+            <VenueEventsList venueId={venueId} active={activeTab === 'events'} onBeforeNavigate={flush} />
+          </Box>
+
+          <Box sx={{ display: activeTab === 'contacts' ? 'block' : 'none' }}>
+          <TabHeading>{t($ => $.detail.tabs.contacts)}</TabHeading>
           {contacts.map((c) => (
             <Box
               key={String(c.id)}
@@ -384,6 +448,7 @@ export default function VenueDetailPage() {
               />
             </Box>
           )}
+          </Box>
         </>
       )}
 
@@ -395,22 +460,12 @@ export default function VenueDetailPage() {
 
       {canWrite && (
         <Box sx={{ mt: 4 }}>
-          <Button color="error" variant="contained" onClick={() => setConfirmingDelete(true)}>
+          <Button color="error" variant="contained" onClick={() => { void handleDelete() }}>
             {t($ => $.common.actions.delete)}
           </Button>
         </Box>
       )}
 
-      <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
-        <DialogTitle>{t($ => $.detail.deleteTitle)}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
-          <Button color="error" variant="contained" onClick={handleDelete}>{t($ => $.common.actions.delete)}</Button>
-        </DialogActions>
-      </Dialog>
     </Box>
 
     {enriching && (

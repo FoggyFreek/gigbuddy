@@ -50,6 +50,10 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedBandMembers(seed)
+  seed = await fixtureDb.seedContactsAndVenues(seed)
+  seed = await fixtureDb.seedAccountingForTenants(seed)
   contactA = seed.contacts.find((c) => c.tenant_id === seed.tenantA.id)
   contactB = seed.contacts.find((c) => c.tenant_id === seed.tenantB.id)
 })

@@ -11,9 +11,14 @@ import {
   cancelSubscriptionNow,
   listSubscriptionsForAdmin,
 } from '../../commerce/billing/subscriptionRepository.js'
+import {
+  insertModule,
+  listModules,
+} from '../../commerce/billing/subscriptionModuleRepository.js'
 import { withTransaction, abortTransaction } from '../../db/withTransaction.js'
-import { serializeSubscription } from '../../commerce/billing/billingService.js'
-import { parseComplimentaryBody } from '../../commerce/billing/billingValidators.js'
+import { serializeSubscription } from '../../commerce/billing/billingReadService.js'
+import { grantAdminRefund, listRefundsForSubscription } from '../../commerce/billing/subscriptionRefundService.js'
+import { parseComplimentaryBody, parseAdminRefund } from '../../commerce/billing/billingValidators.js'
 import { dispatchUserNotification, pushUserNotification } from '../../user/notifications/notificationService.js'
 import { BILLING_NOTIFICATION_TYPES } from '../../domain/notificationTypes.js'
 import { logger } from '../../utils/logger.js'
@@ -43,28 +48,35 @@ export async function grantComplimentary(db, body) {
 
   const plan = await fetchPlan(db, planId)
   if (!plan || !plan.is_active) return { error: { status: 404, body: { error: 'Plan not found' } } }
-  // Per-ladder: a band subscriber can still be granted an artist plan, which is
-  // the point of granting one as a perk.
-  if (await fetchLiveSubscriptionForUser(db, userId, plan.audience)) {
+  if (plan.is_fallback) return badRequest('The free plan needs no grant')
+  // One subscription per user now, so a grant is refused outright rather than
+  // per ladder. To add a second module to a live grant, grant it again after
+  // revoking — the operator path stays deliberately blunt.
+  if (await fetchLiveSubscriptionForUser(db, userId)) {
     return { error: { status: 409, body: { error: 'User already has a subscription', code: 'already_subscribed' } } }
   }
-  try {
-    const sub = await insertSubscription(db, {
+  const conflictResult = {
+    error: { status: 409, body: { error: 'User already has a subscription', code: 'already_subscribed' } },
+  }
+  const result = await withTransaction(async (client) => {
+    const sub = await insertSubscription(client, {
       user_id: userId,
-      plan_id: planId,
       status: 'active',
-      price_cents: 0,
       is_complimentary: true,
       complimentary_expires_at: expiresAt,
+      total_cents: 0,
     })
-    await notifyGranted(userId, plan, expiresAt, sub.id)
-    return { subscription: serializeSubscription({ ...sub, plan_slug: plan.slug }) }
-  } catch (err) {
-    if (err.code === '23505') {
-      return { error: { status: 409, body: { error: 'User already has a subscription', code: 'already_subscribed' } } }
-    }
-    throw err
-  }
+    // A complimentary subscription is still a module subscription — that is what
+    // makes the entitlement resolver treat it like any other.
+    await insertModule(client, {
+      subscription_id: sub.id, plan_id: planId, status: 'active', price_cents: 0, is_starter: true,
+    })
+    return { sub, modules: await listModules(client, sub.id) }
+  }, { db, mapError: (err) => (err.code === '23505' ? conflictResult : null) })
+
+  if (result.error) return result
+  await notifyGranted(userId, plan, expiresAt, result.sub.id)
+  return { subscription: serializeSubscription(result.sub, result.modules) }
 }
 
 // Keyed on the subscription id, not the user: a user may hold a complimentary
@@ -89,11 +101,33 @@ export async function listSubscriptions(db, { repairOnly = false } = {}) {
   const rows = await listSubscriptionsForAdmin(db, { repairOnly })
   return {
     subscriptions: rows.map((row) => ({
+      // The listing query aggregates modules as JSON rather than joining a plan,
+      // so the operator sees the whole product mix in one row.
       ...serializeSubscription(row),
+      modules: row.modules,
       userId: row.user_id,
       userName: row.user_name,
       userEmail: row.user_email,
       createdAt: row.created_at,
     })),
   }
+}
+
+// Partial refunds are the documented support path: the customer reaches out by
+// email or the support desk, and an operator grants what was agreed. The
+// subscription itself is untouched.
+export async function refundSubscription(db, subscriptionId, body, actingUserId) {
+  if (!Number.isInteger(subscriptionId) || subscriptionId <= 0) {
+    return badRequest('subscriptionId must be a positive integer')
+  }
+  const parsed = parseAdminRefund(body)
+  if (parsed.error) return badRequest(parsed.error)
+  return grantAdminRefund(db, subscriptionId, parsed, actingUserId)
+}
+
+export async function listSubscriptionRefunds(db, subscriptionId) {
+  if (!Number.isInteger(subscriptionId) || subscriptionId <= 0) {
+    return badRequest('subscriptionId must be a positive integer')
+  }
+  return { refunds: await listRefundsForSubscription(db, subscriptionId) }
 }

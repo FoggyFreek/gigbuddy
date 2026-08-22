@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { ThemeProvider } from '@mui/material/styles'
@@ -6,7 +6,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthContext } from '../../../contexts/authContext.ts'
 import SettingsPage from '../SettingsPage.tsx'
 import theme from '../../../theme.ts'
-import { clearResendKey, getBandsintownKey, setResendKey } from '../../profiles/profile.ts'
+import {
+  clearResendKey,
+  getBandsintownKey,
+  setBandsintownArtistId,
+  setMollieKey,
+  setResendKey,
+  setShopifyClientId,
+  setShopifyDomain,
+  setShopifySecret,
+} from '../../profiles/profile.ts'
+import { getOutreachSender } from '../../../promotion/outreach/outreachSender.ts'
 import { updateActiveTenantSlug } from '../tenants.ts'
 
 vi.mock('../../../commerce/billing/billing.ts', async (importOriginal) => {
@@ -44,6 +54,12 @@ vi.mock('../../profiles/profile.ts', () => ({
   setShopifySecret: vi.fn(), clearShopifySecret: vi.fn(),
   setShopifyClientId: vi.fn(), clearShopifyClientId: vi.fn(),
   setShopifyDomain: vi.fn(),
+}))
+vi.mock('../../../promotion/outreach/outreachSender.ts', () => ({
+  getOutreachSender: vi.fn().mockResolvedValue({
+    fromName: 'The Testers', fromEmail: 'hello@example.com', replyTo: 'reply@example.com', configured: true,
+  }),
+  saveOutreachSender: vi.fn(),
 }))
 vi.mock('../../memberships/users.ts', async (importOriginal) => {
   const actual = await importOriginal()
@@ -153,6 +169,7 @@ describe('SettingsPage — nav gating', () => {
       'Finance and accounting settings',
       'Financial profile',
       'Accounting profile',
+      'Invoice mode',
       'Accounting Settings',
       'Chart of accounts',
     ])
@@ -170,7 +187,7 @@ describe('SettingsPage — nav gating', () => {
   it('gives a financial_admin the whole finance group but no band settings', async () => {
     wrap('/settings', { role: 'financial_admin' })
     expect(await screen.findByText('Finance and accounting settings')).toBeInTheDocument()
-    for (const label of ['Financial profile', 'Accounting profile', 'Accounting Settings', 'Chart of accounts']) {
+    for (const label of ['Financial profile', 'Accounting profile', 'Invoice mode', 'Accounting Settings', 'Chart of accounts']) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
     expect(screen.queryByText('Band settings')).not.toBeInTheDocument()
@@ -233,7 +250,7 @@ describe('SettingsPage — plan gating', () => {
 
     expect(await screen.findAllByText('My preferences')).not.toHaveLength(0)
     expect(screen.queryByText('Finance and accounting settings')).not.toBeInTheDocument()
-    for (const label of ['Financial profile', 'Accounting profile', 'Accounting Settings', 'Chart of accounts']) {
+    for (const label of ['Financial profile', 'Accounting profile', 'Invoice mode', 'Accounting Settings', 'Chart of accounts']) {
       expect(screen.queryByText(label)).not.toBeInTheDocument()
     }
     expect(screen.queryByText('Finance setup wizard')).not.toBeInTheDocument()
@@ -249,7 +266,7 @@ describe('SettingsPage — plan gating', () => {
     })
 
     expect(await screen.findByText('Finance and accounting settings')).toBeInTheDocument()
-    for (const label of ['Financial profile', 'Accounting profile', 'Accounting Settings', 'Chart of accounts']) {
+    for (const label of ['Financial profile', 'Accounting profile', 'Invoice mode', 'Accounting Settings', 'Chart of accounts']) {
       expect(screen.getByText(label)).toBeInTheDocument()
     }
   })
@@ -273,6 +290,23 @@ describe('SettingsPage — plan gating', () => {
     expect(logo.closest('.MuiPaper-outlined')).not.toBeNull()
   })
 
+  it('keeps compact sender identity controls inside the Resend configuration card', async () => {
+    const user = userEvent.setup()
+    wrap('/settings/integrations', { entitlements: integrationsEntitlements })
+
+    const logo = await screen.findByAltText('Resend')
+    await user.click(within(logo.closest('.MuiPaper-outlined')).getByRole('button', { name: 'Add integration' }))
+    const card = (await screen.findByText('Send emails through Resend')).closest('.MuiPaper-outlined')
+    await getOutreachSender.mock.results[0]?.value
+
+    for (const label of ['From name', 'From email', 'Reply-to email (optional)']) {
+      const field = within(card).getByLabelText(label)
+      expect(field.closest('.MuiInputBase-root')).toHaveClass('MuiInputBase-sizeSmall')
+    }
+    expect(within(card).getByRole('button', { name: 'Save sender' })).toBeInTheDocument()
+    expect(within(card).queryByText('Save sender')).not.toBeInTheDocument()
+  })
+
   it('configures and removes the Resend key without displaying its saved value', async () => {
     setResendKey.mockResolvedValue({ isSet: true, changedAt: '2026-08-04T12:00:00.000Z' })
     clearResendKey.mockResolvedValue({ isSet: false, changedAt: '2026-08-04T12:01:00.000Z' })
@@ -291,6 +325,89 @@ describe('SettingsPage — plan gating', () => {
     expect(within(card).queryByDisplayValue(`re_${'a'.repeat(32)}`)).not.toBeInTheDocument()
     await user.click(within(card).getByRole('button', { name: 'Remove key' }))
     expect(clearResendKey).toHaveBeenCalledOnce()
+  })
+
+  it('cancels a Resend key edit and surfaces an invalid key response', async () => {
+    setResendKey.mockRejectedValueOnce(new Error('invalid_resend_key'))
+    const user = userEvent.setup()
+    wrap('/settings/integrations', { entitlements: integrationsEntitlements })
+
+    const card = (await screen.findByAltText('Resend')).closest('.MuiPaper-outlined')
+    await user.click(within(card).getByRole('button', { name: 'Add integration' }))
+    await user.click(within(card).getByRole('button', { name: 'Configure' }))
+    const keyInput = within(card).getByLabelText('Resend API key')
+    await user.type(keyInput, 'not-a-resend-key')
+    await user.click(within(card).getByRole('button', { name: 'Show key' }))
+    expect(keyInput).toHaveAttribute('type', 'text')
+    await user.click(within(card).getByRole('button', { name: 'Save' }))
+
+    expect(await within(card).findByText('Invalid key format. Resend API keys start with re_.')).toBeInTheDocument()
+    await user.click(within(card).getByRole('button', { name: 'Cancel' }))
+    await user.click(within(card).getByRole('button', { name: 'Configure' }))
+    expect(within(card).getByLabelText('Resend API key')).toHaveValue('')
+  })
+
+  it('saves a trimmed Mollie key and reports an unexpected save failure', async () => {
+    setMollieKey
+      .mockResolvedValueOnce({ isSet: true })
+      .mockRejectedValueOnce(new Error('network_failure'))
+    const user = userEvent.setup()
+    wrap('/settings/integrations', { entitlements: integrationsEntitlements })
+
+    const card = (await screen.findByAltText('Mollie')).closest('.MuiPaper-outlined')
+    await user.click(within(card).getByRole('button', { name: 'Add integration' }))
+    await user.click(within(card).getByRole('button', { name: 'Configure' }))
+    await user.type(within(card).getByLabelText('Mollie API key'), '  test_123  ')
+    await user.click(within(card).getByRole('button', { name: 'Save' }))
+    expect(setMollieKey).toHaveBeenCalledWith('test_123')
+
+    await user.click(within(card).getByRole('button', { name: 'Replace key' }))
+    await user.type(within(card).getByLabelText('Mollie API key'), 'test_456')
+    await user.click(within(card).getByRole('button', { name: 'Save' }))
+    expect(await within(card).findByText('Failed to save key. Please try again.')).toBeInTheDocument()
+  })
+
+  it('edits Shopify client credentials and domain independently', async () => {
+    setShopifyClientId.mockResolvedValue({ clientId: 'client-123' })
+    setShopifySecret.mockResolvedValue({ isSet: true })
+    setShopifyDomain.mockResolvedValue({ domain: 'testers.myshopify.com' })
+    const user = userEvent.setup()
+    wrap('/settings/integrations', { entitlements: integrationsEntitlements })
+
+    const card = (await screen.findByAltText('Shopify')).closest('.MuiPaper-outlined')
+    await user.click(within(card).getByRole('button', { name: 'Add integration' }))
+    await user.click(within(card).getAllByRole('button', { name: 'Configure' })[0])
+    const clientId = within(card).getByLabelText('Client ID')
+    await user.type(clientId, 'will-be-cancelled')
+    await user.click(within(card).getByRole('button', { name: 'Cancel' }))
+    await user.click(within(card).getAllByRole('button', { name: 'Configure' })[0])
+    await user.type(within(card).getByLabelText('Client ID'), '  client-123  ')
+    await user.click(within(within(card).getByLabelText('Client ID').closest('.MuiStack-root')).getByRole('button', { name: 'Save' }))
+    expect(setShopifyClientId).toHaveBeenCalledWith('client-123')
+
+    await user.click(within(card).getByRole('button', { name: 'Configure' }))
+    await user.type(within(card).getByLabelText('App secret'), ' shpss_secret ')
+    await user.click(within(within(card).getByLabelText('App secret').closest('.MuiStack-root')).getByRole('button', { name: 'Save' }))
+    expect(setShopifySecret).toHaveBeenCalledWith('shpss_secret')
+
+    const domain = within(card).getByPlaceholderText('yourband.myshopify.com')
+    await user.type(domain, ' testers.myshopify.com ')
+    await user.click(within(domain.closest('.MuiStack-root')).getByRole('button', { name: 'Save' }))
+    expect(setShopifyDomain).toHaveBeenCalledWith('testers.myshopify.com')
+  })
+
+  it('saves a trimmed Bandsintown artist ID after the card is expanded', async () => {
+    setBandsintownArtistId.mockResolvedValue({ artistId: '12345678' })
+    const user = userEvent.setup()
+    wrap('/settings/integrations', { entitlements: integrationsEntitlements })
+
+    const card = (await screen.findByAltText('Bandsintown')).closest('.MuiPaper-outlined')
+    await user.click(within(card).getByRole('button', { name: 'Add integration' }))
+    const artistId = within(card).getByPlaceholderText('12345678')
+    await user.type(artistId, ' 12345678 ')
+    await user.click(within(artistId.closest('.MuiStack-root')).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(setBandsintownArtistId).toHaveBeenCalledWith('12345678'))
   })
 
   it.each([

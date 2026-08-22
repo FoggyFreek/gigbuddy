@@ -31,6 +31,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedAccountingForTenants(seed)
 })
 
 afterAll(async () => {
@@ -109,7 +111,7 @@ async function insertGig(tenantId, { daysFromToday, status, feeCents }) {
   d.setDate(d.getDate() + daysFromToday)
   const eventDate = d.toISOString().slice(0, 10)
   await pool.query(
-    `INSERT INTO gigs (tenant_id, event_date, event_description, status, booking_fee_cents)
+    `INSERT INTO gigs (tenant_id, event_date, event_description, status, guaranteed_fee_cents)
      VALUES ($1, $2, 'Test gig', $3, $4)`,
     [tenantId, eventDate, status, feeCents],
   )

@@ -19,6 +19,10 @@ import {
   findChartForSong,
   findDocumentForSong,
   insertSetlist,
+  listNamesLike,
+  listSetsForCopy,
+  insertSetCopy,
+  copyItemsIntoSet,
   updateSetlistName,
   deleteSetlist as deleteSetlistRow,
   insertSet,
@@ -112,6 +116,45 @@ export async function createSetlist(tenantId, body) {
   return withTransaction(async (client) => {
     const setlist = await insertSetlist(client, tenantId, name)
     await insertSet(client, setlist.id, tenantId, 'Set 1', 0)
+    return { setlist }
+  })
+}
+
+const COPY_SUFFIX = /\s+Copy(?:\((\d+)\))?$/
+
+// Copying a copy yields the next sibling rather than "X Copy Copy", so a
+// trailing copy suffix is stripped before numbering.
+function copyBaseName(sourceName) {
+  return sourceName.replace(COPY_SUFFIX, '') || sourceName
+}
+
+// Name for a duplicate of `base`: "X Copy", then "X Copy(1)", "X Copy(2)".
+function nextCopyName(base, existingNames) {
+  const taken = new Set(existingNames)
+  let candidate = `${base} Copy`
+  for (let n = 1; taken.has(candidate); n++) candidate = `${base} Copy(${n})`
+  return candidate
+}
+
+function escapeLike(value) {
+  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`)
+}
+
+// Duplicate a setlist with all of its sets and items, in one transaction. The
+// copy belongs to the same tenant; per-member notes stay with the original.
+export async function copySetlist(tenantId, setlistId) {
+  return withTransaction(async (client) => {
+    const source = await fetchSetlistHead(client, tenantId, setlistId)
+    if (!source) abortTransaction(NOT_FOUND)
+
+    const base = copyBaseName(source.name)
+    const existing = await listNamesLike(client, tenantId, `${escapeLike(base)} Copy%`)
+    const setlist = await insertSetlist(client, tenantId, nextCopyName(base, existing))
+
+    for (const set of await listSetsForCopy(client, setlistId, tenantId)) {
+      const newSetId = await insertSetCopy(client, setlist.id, tenantId, set)
+      await copyItemsIntoSet(client, tenantId, set.id, newSetId)
+    }
     return { setlist }
   })
 }

@@ -25,6 +25,25 @@ export async function fetchTenant(executor, tenantId) {
   return rows[0] || null
 }
 
+export async function fetchPreferredInvoiceMode(executor, tenantId) {
+  const { rows } = await executor.query(
+    'SELECT preferred_invoice_mode FROM tenants WHERE id = $1 AND deletion_status IS NULL',
+    [tenantId],
+  )
+  return rows[0]?.preferred_invoice_mode ?? null
+}
+
+export async function updatePreferredInvoiceMode(executor, tenantId, preferredInvoiceMode) {
+  const { rows } = await executor.query(
+    `UPDATE tenants
+        SET preferred_invoice_mode = $2, updated_at = NOW()
+      WHERE id = $1 AND deletion_status IS NULL
+     RETURNING preferred_invoice_mode`,
+    [tenantId, preferredInvoiceMode],
+  )
+  return rows[0]?.preferred_invoice_mode ?? null
+}
+
 // Locks the tenant row FOR UPDATE and returns the safe projection. This is also
 // the first lock in the tenant -> child lock order used by cross-table writes.
 export async function lockTenantRow(executor, tenantId) {

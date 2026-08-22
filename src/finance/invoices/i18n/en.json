@@ -46,9 +46,11 @@
     "download": "Download",
     "downloadMenuAria": "Download options",
     "finalizedNotice": "This invoice is finalized. Voiding and re-issuing is required to make corrections.",
-    "downloadEmail": "Download email",
     "saving": "Saving...",
-    "saveChanges": "Save changes"
+    "saveChanges": "Save",
+    "send": "Send",
+    "regenerate": "Regenerate",
+    "documentActions": "Invoice actions"
   },
   "customerFields": {
     "issueDate": "Issue date",
@@ -141,8 +143,22 @@
     "confirm": "Void invoice"
   },
   "emailDialog": {
-    "title": "Edit the personal message",
-    "helperText": "This is the personal accompanying text in the email message."
+    "title": "Send invoice by email",
+    "template": "Template",
+    "message": "Personal message",
+    "helperText": "This is the personal accompanying text in the email message.",
+    "preview": "Email preview",
+    "noTemplate": "This workspace has no invoice email template yet. Create one first.",
+    "noTemplateLink": "Go to templates",
+    "download": "Download .eml",
+    "send": "Send",
+    "markSent": "Mark invoice as sent",
+    "attachments": {
+      "label": "Attachments",
+      "pdf": "PDF only",
+      "pdf_xml": "PDF and e-invoice (XML)",
+      "pdf_xml_embedded": "PDF and e-invoice (XML with the PDF embedded)"
+    }
   },
   "newDialog": {
     "title": "New invoice",

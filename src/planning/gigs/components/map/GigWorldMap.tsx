@@ -11,7 +11,7 @@ import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
 import { formatShortDate } from '../../../../utils/dateFormat.ts'
-import { OSM_ATTRIBUTION, OSM_URL } from './osm.ts'
+import { OSM_ATTRIBUTION, OSM_URL } from '../../../../components/map/osm.ts'
 import type { MapMarker } from '../../../shared/useGigMapData.ts'
 
 // leaflet has no bundled .d.ts; react-leaflet's types inherit MapOptions from

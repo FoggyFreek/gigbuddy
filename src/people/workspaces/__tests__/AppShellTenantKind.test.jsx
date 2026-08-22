@@ -127,7 +127,7 @@ describe('AppShell — nav filtered by tenant kind', () => {
       'Dashboard', 'Financial', 'Profile', 'My bands',
     ])
     expect(await itemsInGroup(user, 'Network group')).toEqual([
-      'Contacts', 'Suppliers', 'Venues', 'Email Templates',
+      'Contacts', 'Suppliers', 'Venues', 'Templates',
     ])
   })
 

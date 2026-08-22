@@ -20,6 +20,7 @@ import type { Contact } from '../../types/entities.ts'
 
 interface ListFilter {
   category?: string
+  categoryIn?: readonly string[]
   excludeCategory?: string
 }
 
@@ -59,13 +60,14 @@ export default function ContactDirectoryPage({
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
   const [modal, setModal] = useState<{ mode: 'create' } | null>(null)
   const [importOpen, setImportOpen] = useState(false)
-  const { category, excludeCategory } = listFilter
+  const { category, categoryIn, excludeCategory } = listFilter
   const activeFilter = useMemo(() => {
     const filters: ListFilter = {}
     if (category) filters.category = category
+    if (categoryIn?.length) filters.categoryIn = categoryIn
     if (excludeCategory) filters.excludeCategory = excludeCategory
     return filters
-  }, [category, excludeCategory])
+  }, [category, categoryIn, excludeCategory])
 
   // Contacts are tagged with the request they answered — the active filter plus
   // the reload counter — so `loading` and `error` are derived from whether the

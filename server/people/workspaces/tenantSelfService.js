@@ -28,9 +28,13 @@ import {
   fetchTenantDeletionAccess,
   setTenantArchived,
 } from './tenantRepository.js'
-import { lockUserForCapCheck } from '../../commerce/billing/limitRepository.js'
+import { lockUserForCapCheck } from '../../entitlements/limitRepository.js'
 import { setOnboardingTenant } from '../../user/identity/authRepository.js'
-import { enforceBandCap } from '../../commerce/billing/limitService.js'
+import { enforceBandCap } from '../../entitlements/limitService.js'
+import { attachArtistGoldToBandTrial } from '../../commerce/billing/trialModuleService.js'
+import { repriceSubscription } from '../../commerce/billing/subscriptionPricingService.js'
+import { repairSchedule } from '../../commerce/billing/billingSaga.js'
+import { logger } from '../../utils/logger.js'
 import { isTenantOnboardingEnabled } from '../../admin/platform-settings/platformSettingsService.js'
 import { deleteTenant } from './tenantService.js'
 import { badRequest, forbidden, notFound } from '../../platform/http/serviceErrors.js'
@@ -140,7 +144,13 @@ export async function createOwnedTenant(db, userId, body) {
 // Takes the loaded user rather than an id: the workspace is named after them.
 export async function createPersonalTenant(db, user, body) {
   const existing = await fetchPersonalTenant(db, user.id)
-  if (existing) return { tenant: existing, created: false }
+  if (existing) {
+    const subscriptionId = await withTransaction(
+      (client) => attachArtistGoldToBandTrial(client, user.id), { db },
+    )
+    await repairTrialSchedule(db, subscriptionId)
+    return { tenant: existing, created: false }
+  }
 
   const country = parseTenantCountryCode(body)
   if (country.error) return badRequest(country.error)
@@ -148,7 +158,11 @@ export async function createPersonalTenant(db, user, body) {
 
   const displayName = personalWorkspaceName(user, body)
 
-  return withTransaction(async (client) => {
+  const outcome = await withTransaction(async (client) => {
+    // Billing changes lock subscription before user capacity rows. Keep that
+    // global order here too so concurrent module selection cannot deadlock
+    // against personal-workspace creation.
+    const subscriptionId = await attachArtistGoldToBandTrial(client, user.id)
     // Same user-row lock the band cap takes, here to serialize the
     // fetch-then-insert idempotency check against a concurrent create. The
     // partial unique index is the backstop, not the primary defense.
@@ -173,6 +187,7 @@ export async function createPersonalTenant(db, user, body) {
     return {
       tenant,
       created: true,
+      subscriptionId,
       audit: { action: 'tenant.self_create_personal', details: { tenantId: tenant.id } },
     }
   }, {
@@ -183,6 +198,17 @@ export async function createPersonalTenant(db, user, body) {
       ? { error: { status: 409, body: { error: 'Workspace already exists' } } }
       : null),
   })
+
+  if (!outcome.error) await repairTrialSchedule(db, outcome.subscriptionId)
+  return outcome
+}
+
+async function repairTrialSchedule(db, subscriptionId) {
+  if (!subscriptionId) return
+  await repriceSubscription(db, subscriptionId).catch((err) =>
+    logger.error('billing.reprice_failed', { err, subscriptionId }))
+  await repairSchedule(db, subscriptionId).catch((err) =>
+    logger.error('billing.repair_schedule_failed', { err, subscriptionId }))
 }
 
 export async function listOwnedTenants(db, userId) {

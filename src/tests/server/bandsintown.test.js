@@ -39,6 +39,8 @@ async function setAppId(tenantId, value = 'test-app-id') {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedBandMembers(seed)
 })
 
 afterAll(async () => {

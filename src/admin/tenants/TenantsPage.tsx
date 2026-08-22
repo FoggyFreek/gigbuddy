@@ -330,7 +330,7 @@ export default function TenantsPage() {
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Stack direction="row" sx={{ alignItems: 'center' }}>
         <Typography variant="h5" sx={{ fontWeight: 700, flexGrow: 1 }}>
-          Tenants
+          Organisations
         </Typography>
         <Button
           variant="outlined"

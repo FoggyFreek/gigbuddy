@@ -36,19 +36,21 @@ import { usePermissions } from '../../hooks/usePermissions.ts'
 import PlanningReadOnlyAlert from '../../components/PlanningReadOnlyAlert.tsx'
 import { getRequiredErrors, hasRequiredErrors } from '../../utils/requiredFields.ts'
 import { venueHeadline } from '../venues/venueDisplay.ts'
-import { contactMatchesCategoryFilter, SUPPLIER_CATEGORY } from './contactCategories.ts'
+import { contactIsSupplierLike, contactMatchesCategoryFilter } from './contactCategories.ts'
 import ContactFields from './components/ContactFields.tsx'
 import SaveStatusLabel from '../../components/SaveStatusLabel.tsx'
 import SupplierPurchasesSection from './components/SupplierPurchasesSection.tsx'
 import VenuePicker from '../venues/components/VenuePicker.tsx'
 import type { Venue, Id } from '../../types/entities.ts'
 import { isApiError } from '../../types/api.ts'
+import { useDialog } from '../../contexts/dialogContext.ts'
 
 const REQUIRED_FIELDS = ['name']
 
 interface ContactForm {
   [key: string]: unknown
   name: string
+  first_name: string
   email: string
   phone: string
   category: string
@@ -70,13 +72,18 @@ interface LinkedVenue extends Venue {
 
 export default function ContactDetailPage() {
   const { t } = useTranslation(['contacts', 'common'])
+  const { confirmDelete } = useDialog()
   const { id } = useParams()
   const contactId = Number(id)
   const navigate = useNavigate()
   const { canWritePlanning: canWrite, canViewFinance } = usePermissions()
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
   const insideSplitView = !!outletCtx.insideSplitView
-  const contactFilter = outletCtx.contactFilter as Record<string, string> | undefined
+  const contactFilter = outletCtx.contactFilter as {
+    category?: string
+    categoryIn?: readonly string[]
+    excludeCategory?: string
+  } | undefined
   const onClose = outletCtx.onClose as (() => void) | undefined
   const onContactUpdate = outletCtx.onContactUpdate as ((id: Id, patch: Partial<ContactForm>) => void) | undefined
   const onContactDelete = outletCtx.onContactDelete as ((id: Id) => void) | undefined
@@ -88,6 +95,7 @@ export default function ContactDetailPage() {
 
   const [form, setForm] = useState<ContactForm>({
     name: '',
+    first_name: '',
     email: '',
     phone: '',
     category: 'press',
@@ -99,7 +107,6 @@ export default function ContactDetailPage() {
   const [newNote, setNewNote] = useState('')
   const [venues, setVenues] = useState<LinkedVenue[]>([])
   const [loading, setLoading] = useState(true)
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const saveFn = useCallback(
@@ -135,6 +142,7 @@ export default function ContactDetailPage() {
         }
         setForm({
           name:     c.name || '',
+          first_name: c.first_name || '',
           email:    c.email || '',
           phone:    c.phone || '',
           category: c.category || 'press',
@@ -184,7 +192,7 @@ export default function ContactDetailPage() {
   }
 
   async function handleDelete() {
-    setConfirmingDelete(false)
+    if (!await confirmDelete({ title: t($ => $.detail.deleteTitle) })) return
     try {
       await deleteContact(contactId)
       onContactDelete?.(contactId)
@@ -375,7 +383,7 @@ export default function ContactDetailPage() {
             </Box>
           ))}
 
-          {form.category === SUPPLIER_CATEGORY && canViewFinance && (
+          {contactIsSupplierLike(form) && canViewFinance && (
             <SupplierPurchasesSection contactId={contactId} />
           )}
         </>
@@ -389,22 +397,12 @@ export default function ContactDetailPage() {
 
       {canWrite && (
         <Box sx={{ mt: 4 }}>
-          <Button color="error" variant="contained" onClick={() => setConfirmingDelete(true)}>
+          <Button color="error" variant="contained" onClick={() => { void handleDelete() }}>
             {t($ => $.common.actions.delete)}
           </Button>
         </Box>
       )}
 
-      <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
-        <DialogTitle>{t($ => $.detail.deleteTitle)}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
-          <Button color="error" variant="contained" onClick={handleDelete}>{t($ => $.common.actions.delete)}</Button>
-        </DialogActions>
-      </Dialog>
 
       <Dialog open={deleteError !== null} onClose={() => setDeleteError(null)}>
         <DialogTitle>{t($ => $.detail.deleteErrorTitle)}</DialogTitle>

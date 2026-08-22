@@ -313,16 +313,31 @@ function legalMonetaryTotal(totals, currency) {
   ])
 }
 
+// A credit line — a deduction such as a venue's break-even on a gig settlement,
+// which the document states as a positive quantity at a negative amount — has to
+// carry its sign on the QUANTITY here: BR-27 makes a negative item net price
+// (BT-146) fatal, and the CEN Schematron rejects the document over it. Only the
+// two factors swap sign; their product, the line net, is what every total is
+// built from and is untouched, so nothing else in the invoice moves.
+function wireFactors(line, netCents) {
+  const magnitude = Math.abs(Number(line.quantity) || 0)
+  return {
+    quantity: netCents < 0 ? -magnitude : magnitude,
+    priceAmount: unitPriceAmount(Math.abs(netCents), magnitude),
+  }
+}
+
 function invoiceLines(lines, totals, categoryByRate, zeroVat, currency) {
   return lines.map((line, index) => {
     const netCents = totals.perLine[index].netCents
     const rate = zeroVat ? 0 : Number(line.tax_percentage) || 0
     const category = categoryByRate.get(rate)
+    const wire = wireFactors(line, netCents)
     return el('cac:InvoiceLine', null, [
       // A 1-based sequence, not `position`: that starts at 0 and may repeat,
       // while BR-21 requires a unique line identifier.
       leaf('cbc:ID', String(index + 1)),
-      leaf('cbc:InvoicedQuantity', quantity(line.quantity), { unitCode: UNIT_ONE }),
+      leaf('cbc:InvoicedQuantity', quantity(wire.quantity), { unitCode: UNIT_ONE }),
       amount('cbc:LineExtensionAmount', netCents, currency),
       el('cac:Item', null, [
         leaf('cbc:Name', line.description),
@@ -334,7 +349,7 @@ function invoiceLines(lines, totals, categoryByRate, zeroVat, currency) {
         ]),
       ]),
       el('cac:Price', null, [
-        leaf('cbc:PriceAmount', unitPriceAmount(netCents, line.quantity), { currencyID: currency }),
+        leaf('cbc:PriceAmount', wire.priceAmount, { currencyID: currency }),
         // BaseQuantity omitted: it defaults to 1, and leaving it out keeps
         // R121/R130 (unit-code agreement) inert.
       ]),

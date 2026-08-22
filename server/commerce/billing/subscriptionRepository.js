@@ -1,70 +1,56 @@
-// Data-access helpers for subscriptions. Subscriptions are user-owned
+// Data-access helpers for subscriptions. A subscription is user-owned
 // (platform-level), not tenant-scoped; tenant access derives from
 // tenants.owner_user_id via the entitlement resolver.
+//
+// The subscription row owns the CYCLE: status, interval, period, trial, the
+// price snapshots and the provider linkage. Which products it contains lives in
+// subscription_modules (subscriptionModuleRepository.js) — nothing here joins a
+// plan any more.
 
-// The user's one live (non-canceled) subscription in ONE audience, with its
-// plan's slug and entitlements joined in. Band and artist are separate products
-// and a user may hold one of each, so every caller must say which it means —
-// the partial unique index is on (user_id, audience).
-export async function fetchLiveSubscriptionForUser(executor, userId, audience) {
+// The user's one live (non-canceled) subscription.
+export async function fetchLiveSubscriptionForUser(executor, userId) {
   const { rows } = await executor.query(
-    `SELECT s.*, p.slug AS plan_slug, p.entitlements AS plan_entitlements
-     FROM subscriptions s
-     JOIN subscription_plans p ON p.id = s.plan_id
-     WHERE s.user_id = $1 AND s.audience = $2 AND s.status <> 'canceled'`,
-    [userId, audience],
+    "SELECT * FROM subscriptions WHERE user_id = $1 AND status <> 'canceled'",
+    [userId],
   )
   return rows[0] ?? null
 }
 
-// The user's live subscription in one audience, locked FOR UPDATE — the saga
-// entry point (subscribe/cancel/resume/change/ingest) serializes on this row so
-// concurrent webhook + user actions can't interleave. The lock is per-audience,
-// which is correct: the two products have no shared state to protect.
-export async function fetchLiveSubscriptionForUpdate(executor, userId, audience) {
+// The user's live subscription, locked FOR UPDATE — every saga entry point
+// (trial/checkout/module change/cancel/ingest) serializes on this row so
+// concurrent webhook and user actions cannot interleave. One row per user now,
+// so this is also the lock that protects the whole module set.
+export async function fetchLiveSubscriptionForUpdate(executor, userId) {
   const { rows } = await executor.query(
-    `SELECT s.*, p.slug AS plan_slug, p.entitlements AS plan_entitlements
-     FROM subscriptions s
-     JOIN subscription_plans p ON p.id = s.plan_id
-     WHERE s.user_id = $1 AND s.audience = $2 AND s.status <> 'canceled'
-     FOR UPDATE OF s`,
-    [userId, audience],
+    "SELECT * FROM subscriptions WHERE user_id = $1 AND status <> 'canceled' FOR UPDATE",
+    [userId],
   )
   return rows[0] ?? null
 }
 
 export async function fetchSubscriptionById(executor, id) {
-  const { rows } = await executor.query(
-    `SELECT s.*, p.slug AS plan_slug, p.entitlements AS plan_entitlements
-     FROM subscriptions s
-     JOIN subscription_plans p ON p.id = s.plan_id
-     WHERE s.id = $1`,
-    [id],
-  )
+  const { rows } = await executor.query('SELECT * FROM subscriptions WHERE id = $1', [id])
   return rows[0] ?? null
 }
 
-// Locked read by id — used by ingestion (webhook/reconcile) which resolves the
-// subscription from a payment, not from the acting user.
+// Locked read by id — used by ingestion (webhook/reconcile), which resolves the
+// subscription from a payment rather than from the acting user.
 export async function fetchSubscriptionByIdForUpdate(executor, id) {
   const { rows } = await executor.query(
-    `SELECT s.*, p.slug AS plan_slug, p.entitlements AS plan_entitlements
-     FROM subscriptions s
-     JOIN subscription_plans p ON p.id = s.plan_id
-     WHERE s.id = $1
-     FOR UPDATE OF s`,
+    'SELECT * FROM subscriptions WHERE id = $1 FOR UPDATE',
     [id],
   )
   return rows[0] ?? null
 }
 
 // Columns a caller may set at insert time. Anything else is ignored — the DB
-// defaults (status flags, timestamps, empty overrides) take over.
+// defaults (status flags, timestamps) take over.
 const INSERTABLE = [
-  'user_id', 'plan_id', 'status', 'billing_interval', 'price_cents',
+  'user_id', 'status', 'billing_interval',
   'trial_ends_at', 'current_period_start', 'current_period_end',
+  'price_snapshot', 'total_cents', 'next_price_snapshot', 'next_total_cents',
   'is_complimentary', 'complimentary_expires_at',
-  'mollie_customer_id', 'mollie_mandate_id', 'mollie_subscription_id', 'mollie_first_payment_id',
+  'mollie_mandate_id', 'mollie_subscription_id', 'mollie_first_payment_id',
 ]
 
 export async function insertSubscription(executor, fields) {
@@ -92,17 +78,117 @@ export async function setMandateLinkage(executor, id, { mandateId = null, subscr
   )
 }
 
-// Renewal period advance with per-covered-period dedup: a second distinct paid
-// attempt for the SAME period start changes nothing (returns null), so renewal
-// effects/notifications never re-fire. Clears past_due and reactivates.
-export async function advanceSubscriptionPeriod(executor, id, periodStart, periodEnd) {
+// ---- price snapshots ----
+
+// The configuration the CURRENT period was charged at.
+export async function setPriceSnapshot(executor, id, { snapshot, totalCents }) {
+  await executor.query(
+    `UPDATE subscriptions SET price_snapshot = $2, total_cents = $3, updated_at = NOW()
+      WHERE id = $1`,
+    [id, snapshot, totalCents],
+  )
+}
+
+// What the NEXT renewal will charge, and the durable mirror of the provider
+// schedule's amount. Flags the schedule stale whenever the amount actually
+// moves, which is what carries a lapsed promo through to the next charge.
+export async function setNextPriceSnapshot(executor, id, { snapshot, totalCents }) {
   const { rows } = await executor.query(
     `UPDATE subscriptions
-     SET current_period_start = $2, current_period_end = $3,
-         status = 'active', past_due_since = NULL, updated_at = NOW()
-     WHERE id = $1 AND current_period_start IS DISTINCT FROM $2
-     RETURNING id`,
-    [id, periodStart, periodEnd],
+        SET next_price_snapshot = $2, next_total_cents = $3,
+            mollie_schedule_stale = CASE
+              WHEN next_total_cents IS DISTINCT FROM $3 THEN TRUE ELSE mollie_schedule_stale END,
+            updated_at = NOW()
+      WHERE id = $1 RETURNING *`,
+    [id, snapshot, totalCents],
+  )
+  return rows[0] ?? null
+}
+
+// The configuration a mid-cycle module change will install once its prorated
+// charge is paid.
+export async function setPendingPriceSnapshot(executor, id, { snapshot, totalCents }) {
+  await executor.query(
+    `UPDATE subscriptions
+        SET pending_price_snapshot = $2, pending_total_cents = $3, updated_at = NOW()
+      WHERE id = $1`,
+    [id, snapshot, totalCents],
+  )
+}
+
+export async function clearPendingChange(executor, id) {
+  await executor.query(
+    `UPDATE subscriptions
+        SET pending_price_snapshot = NULL, pending_total_cents = NULL,
+            pending_payment_id = NULL, updated_at = NOW()
+      WHERE id = $1`,
+    [id],
+  )
+}
+
+export async function setPendingPaymentId(executor, id, paymentId) {
+  await executor.query(
+    'UPDATE subscriptions SET pending_payment_id = $2, updated_at = NOW() WHERE id = $1',
+    [id, paymentId],
+  )
+}
+
+// ---- lifecycle ----
+
+// Direct-signup conversion: the first full combined charge has been paid. Opens
+// the first paid period and stamps the withdrawal-window anchor. Guarded so a
+// replayed webhook cannot re-open the period.
+export async function applyConversion(executor, id, { periodStart, periodEnd, paymentId }) {
+  const { rows } = await executor.query(
+    `UPDATE subscriptions
+        SET status = 'active', converted_at = COALESCE(converted_at, $2),
+            current_period_start = $2, current_period_end = $3,
+            past_due_since = NULL,
+            last_charge_at = $2, last_charge_payment_id = $4,
+            price_snapshot = COALESCE(pending_price_snapshot, price_snapshot),
+            total_cents = COALESCE(pending_total_cents, total_cents),
+            pending_price_snapshot = NULL, pending_total_cents = NULL, pending_payment_id = NULL,
+            mollie_schedule_stale = TRUE, updated_at = NOW()
+      WHERE id = $1 AND status IN ('trialing','pending_activation')
+      RETURNING *`,
+    [id, periodStart, periodEnd, paymentId],
+  )
+  return rows[0] ?? null
+}
+
+// Renewal period advance with per-covered-period dedup: a second distinct paid
+// attempt for the SAME period start changes nothing (returns null), so renewal
+// effects and notifications never re-fire. Installs the next-period snapshot as
+// the current one, clears past_due, and re-anchors the withdrawal window.
+export async function advanceSubscriptionPeriod(executor, id, periodStart, periodEnd, { paymentId = null } = {}) {
+  const { rows } = await executor.query(
+    `UPDATE subscriptions
+        SET current_period_start = $2, current_period_end = $3,
+            status = 'active', past_due_since = NULL,
+            converted_at = COALESCE(converted_at, $2),
+            price_snapshot = COALESCE(next_price_snapshot, price_snapshot),
+            total_cents = COALESCE(next_total_cents, total_cents),
+            last_charge_at = $2, last_charge_payment_id = $4,
+            updated_at = NOW()
+      WHERE id = $1 AND current_period_start IS DISTINCT FROM $2
+      RETURNING *`,
+    [id, periodStart, periodEnd, paymentId],
+  )
+  return rows[0] ?? null
+}
+
+// Mid-cycle module change activation. Installs the pending snapshot and
+// DELIBERATELY leaves current_period_end alone: the customer paid only the
+// prorated difference, so the renewal date they already have must not move.
+export async function applyModuleChangeActivation(executor, id) {
+  const { rows } = await executor.query(
+    `UPDATE subscriptions
+        SET price_snapshot = COALESCE(pending_price_snapshot, price_snapshot),
+            total_cents = COALESCE(pending_total_cents, total_cents),
+            pending_price_snapshot = NULL, pending_total_cents = NULL, pending_payment_id = NULL,
+            mollie_schedule_stale = TRUE, updated_at = NOW()
+      WHERE id = $1 RETURNING *`,
+    [id],
   )
   return rows[0] ?? null
 }
@@ -118,31 +204,22 @@ export async function markSubscriptionPastDue(executor, id, since) {
   return rows[0] ?? null
 }
 
-// Trial is once per PRODUCT: any subscription in this audience (even canceled)
-// that ever carried a trial_ends_at counts as that ladder's trial used. Band and
-// artist are separate purchases, so sampling one must not spend the other's
-// trial — otherwise the artist product is untrialable for every band customer.
-export async function hasUsedTrial(executor, userId, audience) {
+// The trial is once per USER now — one customer, one trial, whichever module
+// they sampled it with. Any subscription row that ever carried a trial_ends_at
+// counts, canceled ones included.
+export async function hasUsedTrial(executor, userId) {
   const { rowCount } = await executor.query(
-    `SELECT 1 FROM subscriptions
-      WHERE user_id = $1 AND audience = $2 AND trial_ends_at IS NOT NULL LIMIT 1`,
-    [userId, audience],
+    'SELECT 1 FROM subscriptions WHERE user_id = $1 AND trial_ends_at IS NOT NULL LIMIT 1',
+    [userId],
   )
   return rowCount > 0
 }
 
-// Immediate plan switch during a trial (free — no charge). Flags the remote
-// schedule stale so the pending Mollie subscription is recreated at the new
-// amount before the trial ends.
-export async function switchPlanTrial(executor, id, { planId, interval, priceCents }) {
-  const { rows } = await executor.query(
-    `UPDATE subscriptions
-     SET plan_id = $2, billing_interval = $3, price_cents = $4,
-         mollie_schedule_stale = TRUE, updated_at = NOW()
-     WHERE id = $1 RETURNING *`,
-    [id, planId, interval, priceCents],
+export async function setBillingInterval(executor, id, interval) {
+  await executor.query(
+    'UPDATE subscriptions SET billing_interval = $2, updated_at = NOW() WHERE id = $1',
+    [id, interval],
   )
-  return rows[0] ?? null
 }
 
 // ---- users.mollie_customer_id (billing owner ↔ provider customer) ----
@@ -162,7 +239,7 @@ export async function setUserMollieCustomerId(executor, userId, customerId) {
   )
 }
 
-// ---- saga / lifecycle mutations ----
+// ---- saga / status mutations ----
 
 export async function setScheduleStale(executor, id, value) {
   await executor.query(
@@ -178,196 +255,27 @@ export async function setBillingRepairNeeded(executor, id, value) {
   )
 }
 
-// Guarded status flip (e.g. pending_mandate → trialing / pending_activation on
-// mandate confirmation). Returns the row when it moved, null otherwise.
-// Entering pending_activation stamps pending_activation_at so the stale-
-// activation scheduler ages from the flip, not from created_at.
+// Guarded status flip. Returns the row when it moved, null otherwise. Entering
+// pending_activation stamps pending_activation_at so the stale-activation
+// sweep ages from the flip, not from created_at.
+//
+// `canceled` is terminal: nothing flips a canceled subscription back, which is
+// what keeps a post-cancellation refund (paid → refunded at the provider) from
+// reviving the row as past_due.
 export async function setStatusGuarded(executor, id, newStatus, fromStatus) {
   const { rows } = await executor.query(
     `UPDATE subscriptions
      SET status = $2,
          pending_activation_at = CASE WHEN $2 = 'pending_activation' THEN NOW() ELSE pending_activation_at END,
          updated_at = NOW()
-     WHERE id = $1 AND status = $3 RETURNING *`,
+     WHERE id = $1 AND status = $3 AND status <> 'canceled' RETURNING *`,
     [id, newStatus, fromStatus],
   )
   return rows[0] ?? null
 }
 
-export async function setPendingChange(executor, id, { planId, kind, interval, priceCents }) {
-  await executor.query(
-    `UPDATE subscriptions
-     SET pending_plan_id = $2, pending_change_kind = $3,
-         pending_billing_interval = $4, pending_price_cents = $5, updated_at = NOW()
-     WHERE id = $1`,
-    [id, planId, kind, interval, priceCents],
-  )
-}
-
-export async function setPendingPaymentId(executor, id, paymentId) {
-  await executor.query(
-    'UPDATE subscriptions SET pending_payment_id = $2, updated_at = NOW() WHERE id = $1',
-    [id, paymentId],
-  )
-}
-
-// Clears every pending-change / downgrade-bookkeeping column in one shot.
-export async function clearPendingChange(executor, id) {
-  await executor.query(
-    `UPDATE subscriptions
-     SET pending_plan_id = NULL, pending_change_kind = NULL, pending_billing_interval = NULL,
-         pending_price_cents = NULL, pending_payment_id = NULL,
-         pending_purge_manifest = NULL, pending_limits_snapshot = NULL,
-         downgrade_confirmed_at = NULL, downgrade_schedule_pending = FALSE,
-         superseded_mollie_subscription_id = NULL, updated_at = NOW()
-     WHERE id = $1`,
-    [id],
-  )
-}
-
-// Plan-change activate-first stage 0: switch plan/interval/price + set the new
-// period, clear all pending state, and flag the remote schedule stale (repaired
-// asynchronously). One transaction; the customer has paid, so entitlements move
-// now regardless of the remote repair.
-export async function applyPlanChangeActivation(executor, id, { planId, interval, priceCents, periodStart, periodEnd }) {
-  const { rows } = await executor.query(
-    `UPDATE subscriptions
-     SET plan_id = $2, billing_interval = $3, price_cents = $4,
-         current_period_start = $5, current_period_end = $6,
-         status = 'active', past_due_since = NULL,
-         pending_plan_id = NULL, pending_change_kind = NULL, pending_billing_interval = NULL,
-         pending_price_cents = NULL, pending_payment_id = NULL,
-         pending_purge_manifest = NULL, pending_limits_snapshot = NULL, downgrade_confirmed_at = NULL,
-         mollie_schedule_stale = TRUE, updated_at = NOW()
-     WHERE id = $1 RETURNING *`,
-    [id, planId, interval, priceCents, periodStart, periodEnd],
-  )
-  return rows[0] ?? null
-}
-
-// ---- downgrade (phase 6) ----
-
-// Free-fallback downgrade: rides the cancel-at-period-end path (no
-// replacement subscription — honors cancel_xor_pending) with the purge
-// manifest and limits snapshot frozen at confirmation.
-export async function setDowngradeCancel(executor, id, { manifest, snapshot }) {
-  await executor.query(
-    `UPDATE subscriptions
-     SET cancel_at_period_end = TRUE, cancel_reason = 'user_requested',
-         pending_purge_manifest = $2, pending_limits_snapshot = $3,
-         downgrade_confirmed_at = NOW(), updated_at = NOW()
-     WHERE id = $1`,
-    [id, manifest, snapshot],
-  )
-}
-
-// Paid-lower downgrade confirmation: pending change + frozen manifest/snapshot,
-// the durable cancel-old/create-replacement marker, and the old provider
-// subscription id captured immutably so a resumed saga can never cancel the
-// replacement.
-export async function setDowngradePending(executor, id, { planId, interval, priceCents, manifest, snapshot }) {
-  await executor.query(
-    `UPDATE subscriptions
-     SET pending_plan_id = $2, pending_change_kind = 'downgrade',
-         pending_billing_interval = $3, pending_price_cents = $4,
-         pending_purge_manifest = $5, pending_limits_snapshot = $6,
-         downgrade_confirmed_at = NOW(), downgrade_schedule_pending = TRUE,
-         superseded_mollie_subscription_id = mollie_subscription_id,
-         updated_at = NOW()
-     WHERE id = $1`,
-    [id, planId, interval, priceCents, manifest, snapshot],
-  )
-}
-
-// Trial downgrade: only the manifest/snapshot are persisted (the plan switch
-// or cancel happens separately in the same transaction) so the purge that
-// runs immediately after commit has its frozen scope.
-export async function setPurgeManifest(executor, id, { manifest, snapshot }) {
-  await executor.query(
-    `UPDATE subscriptions
-     SET pending_purge_manifest = $2, pending_limits_snapshot = $3,
-         downgrade_confirmed_at = NOW(), updated_at = NOW()
-     WHERE id = $1`,
-    [id, manifest, snapshot],
-  )
-}
-
-// Downgrade activation on the replacement subscription's first paid charge:
-// switch to the pending plan, set the paid period, clear the pending-change
-// bookkeeping — but KEEP the purge manifest (the post-commit purge consumes
-// and clears it) and do NOT flag the schedule stale (the replacement
-// subscription IS the correct schedule). `providerSubscriptionId` is the
-// verified replacement id the charge came from: when the charge beat the
-// saga's repoint, activating also repoints (a no-op after the repoint).
-export async function applyDowngradeActivation(executor, id, {
-  planId, interval, priceCents, periodStart, periodEnd, providerSubscriptionId = null,
-}) {
-  const { rows } = await executor.query(
-    `UPDATE subscriptions
-     SET plan_id = $2, billing_interval = $3, price_cents = $4,
-         current_period_start = $5, current_period_end = $6,
-         status = 'active', past_due_since = NULL,
-         mollie_subscription_id = COALESCE($7, mollie_subscription_id),
-         pending_plan_id = NULL, pending_change_kind = NULL, pending_billing_interval = NULL,
-         pending_price_cents = NULL, pending_payment_id = NULL,
-         pending_activation_at = NULL, downgrade_schedule_pending = FALSE,
-         superseded_mollie_subscription_id = NULL,
-         updated_at = NOW()
-     WHERE id = $1 RETURNING *`,
-    [id, planId, interval, priceCents, periodStart, periodEnd, providerSubscriptionId],
-  )
-  return rows[0] ?? null
-}
-
-// Period-end flip for a pending paid downgrade: access fallback-locks (the
-// resolver already denies an expired period) until the replacement's first
-// charge settles. Guarded so a concurrent activation/cancel wins.
-export async function flipToPendingActivation(executor, id) {
-  const { rows } = await executor.query(
-    `UPDATE subscriptions
-     SET status = 'pending_activation', pending_activation_at = NOW(), updated_at = NOW()
-     WHERE id = $1 AND status = 'active' AND pending_change_kind = 'downgrade'
-     RETURNING *`,
-    [id],
-  )
-  return rows[0] ?? null
-}
-
-// Consumes an executed purge manifest (guarded on presence so a replayed call
-// is a no-op). The limits snapshot goes with it — after activation the plan
-// itself carries the target limits.
-export async function clearPurgeManifest(executor, id) {
-  await executor.query(
-    `UPDATE subscriptions
-     SET pending_purge_manifest = NULL, pending_limits_snapshot = NULL,
-         downgrade_confirmed_at = NULL, updated_at = NOW()
-     WHERE id = $1 AND pending_purge_manifest IS NOT NULL`,
-    [id],
-  )
-}
-
-// Atomic saga repoint: the replacement provider subscription becomes current,
-// the durable schedule marker and the superseded id clear in the same
-// statement (a crash before this leaves both for the scheduler to resume).
-// Guarded on the marker and a live row: a cancellation/finalize (or an
-// activation that already repointed) landing while the saga's remote calls
-// were in flight wins, and the FALSE return tells the saga the replacement
-// is orphaned and must be canceled remotely.
-export async function applyDowngradeSchedule(executor, id, replacementSubscriptionId) {
-  const { rows } = await executor.query(
-    `UPDATE subscriptions
-     SET mollie_subscription_id = $2, downgrade_schedule_pending = FALSE,
-         superseded_mollie_subscription_id = NULL, updated_at = NOW()
-     WHERE id = $1 AND downgrade_schedule_pending = TRUE AND status <> 'canceled'
-     RETURNING id`,
-    [id, replacementSubscriptionId],
-  )
-  return rows.length > 0
-}
-
-// Cancel-at-period-end (resolver locks at period end on its own; scheduler
-// flips durable status later). Does NOT set pending_plan_id, honoring the
-// cancel_xor_pending CHECK.
+// Cancel-at-period-end (the resolver locks at period end on its own; the
+// scheduler flips durable status later).
 export async function setCancelAtPeriodEnd(executor, id, reason) {
   await executor.query(
     `UPDATE subscriptions
@@ -380,8 +288,7 @@ export async function setCancelAtPeriodEnd(executor, id, reason) {
 export async function clearCancelAtPeriodEnd(executor, id) {
   await executor.query(
     `UPDATE subscriptions
-     SET cancel_at_period_end = FALSE, cancel_reason = NULL,
-         pending_purge_manifest = NULL, pending_limits_snapshot = NULL, updated_at = NOW()
+     SET cancel_at_period_end = FALSE, cancel_reason = NULL, updated_at = NOW()
      WHERE id = $1`,
     [id],
   )
@@ -399,14 +306,22 @@ export async function cancelSubscriptionNow(executor, id, reason) {
   return rows[0] ?? null
 }
 
-// Admin listing: all live subscriptions with owner + plan, newest first.
+// Admin listing: all live subscriptions with their owner, newest first.
 // `repairOnly` narrows to those needing operator attention (stale schedule or
-// flagged repair) for the SubscriptionsPage alert surface.
+// flagged repair) for the SubscriptionsPage alert surface. Modules come back as
+// a JSON aggregate so the operator sees the whole product mix in one row.
 export async function listSubscriptionsForAdmin(executor, { repairOnly = false } = {}) {
   const { rows } = await executor.query(
-    `SELECT s.*, p.slug AS plan_slug, u.name AS user_name, u.email AS user_email
+    `SELECT s.*, u.name AS user_name, u.email AS user_email,
+            COALESCE((
+              SELECT json_agg(json_build_object(
+                       'audience', m.audience, 'planSlug', p.slug,
+                       'status', m.status, 'priceCents', m.price_cents)
+                     ORDER BY m.audience)
+                FROM subscription_modules m
+                JOIN subscription_plans p ON p.id = m.plan_id
+               WHERE m.subscription_id = s.id), '[]'::json) AS modules
      FROM subscriptions s
-     JOIN subscription_plans p ON p.id = s.plan_id
      JOIN users u ON u.id = s.user_id
      WHERE s.status <> 'canceled'
        AND ($1 = FALSE OR s.mollie_schedule_stale = TRUE OR s.billing_repair_needed = TRUE)
@@ -418,22 +333,8 @@ export async function listSubscriptionsForAdmin(executor, { repairOnly = false }
 
 // ---- scheduler candidate queries ----
 
-// Stale pending_mandate: mandate never confirmed within the grace window.
-export async function listStalePendingMandate(executor, olderThanMs) {
-  const { rows } = await executor.query(
-    `SELECT * FROM subscriptions
-     WHERE status = 'pending_mandate'
-       AND created_at < NOW() - ($1::bigint * INTERVAL '1 millisecond')`,
-    [olderThanMs],
-  )
-  return rows
-}
-
-// Stale pending_activation: mandate confirmed but the first real charge never
-// settled within the grace window (re-subscribe / trial-used / pending-
-// downgrade path). Ages from the moment the row ENTERED pending_activation
-// (falling back to created_at for pre-105 rows) so a long-lived subscription
-// that just flipped isn't force-canceled instantly.
+// Stale pending_activation: a subscription whose first real charge never
+// settled within the grace window, with nothing in flight.
 export async function listStalePendingActivation(executor, olderThanMs) {
   const { rows } = await executor.query(
     `SELECT * FROM subscriptions
@@ -444,51 +345,20 @@ export async function listStalePendingActivation(executor, olderThanMs) {
   return rows
 }
 
-// Downgrades whose cancel-old/create-replacement saga still needs to run (or
-// resume after a crash).
-export async function listDowngradeSchedulePending(executor) {
+// A trial that ran out without a mandate or payment still settling. A verified
+// mandate means a delayed provider schedule exists (or is being repaired), so
+// it must survive long enough for the trial-end charge to settle or fail.
+export async function listExpiredTrials(executor, graceMs) {
   const { rows } = await executor.query(
-    `SELECT s.*, p.slug AS plan_slug FROM subscriptions s
-     JOIN subscription_plans p ON p.id = s.plan_id
-     WHERE s.downgrade_schedule_pending = TRUE AND s.status <> 'canceled'`,
-  )
-  return rows
-}
-
-// Pending paid downgrades whose paid period has ended → flip to
-// pending_activation (fallback-lock; NO purge until the replacement pays).
-export async function listPendingDowngradesDue(executor) {
-  const { rows } = await executor.query(
-    `SELECT * FROM subscriptions
-     WHERE status = 'active' AND pending_change_kind = 'downgrade'
-       AND current_period_end IS NOT NULL AND current_period_end < NOW()`,
-  )
-  return rows
-}
-
-// Downgrades waiting on their replacement subscription's first charge — the
-// scheduler polls the provider for a terminal (canceled/completed)
-// replacement, which fails the downgrade without purging.
-export async function listPendingActivationDowngrades(executor) {
-  const { rows } = await executor.query(
-    `SELECT * FROM subscriptions
-     WHERE status = 'pending_activation' AND pending_change_kind = 'downgrade'
-       AND downgrade_schedule_pending = FALSE AND mollie_subscription_id IS NOT NULL`,
-  )
-  return rows
-}
-
-// Safety net: manifests whose downgrade already took effect (no pending
-// change, no scheduled cancel — the target plan is real: switched, trial-
-// switched, or canceled to fallback) but whose purge never ran (crash between
-// activation/cancel and the inline purge).
-export async function listPendingPurges(executor) {
-  const { rows } = await executor.query(
-    `SELECT * FROM subscriptions
-     WHERE pending_purge_manifest IS NOT NULL
-       AND pending_plan_id IS NULL
-       AND cancel_at_period_end = FALSE
-       AND status IN ('active', 'trialing', 'canceled')`,
+    `SELECT s.* FROM subscriptions s
+     WHERE s.status = 'trialing' AND s.trial_ends_at IS NOT NULL
+       AND s.trial_ends_at < NOW() - ($1::bigint * INTERVAL '1 millisecond')
+       AND s.mollie_mandate_id IS NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM subscription_payments sp
+          WHERE sp.subscription_id = s.id AND sp.status IN ('open', 'pending')
+       )`,
+    [graceMs],
   )
   return rows
 }
@@ -504,28 +374,31 @@ export async function subscriptionHasNonterminalPayment(executor, subscriptionId
   return rowCount > 0
 }
 
-// Subscriptions whose remote schedule still needs repair (mandate confirmed but
-// Mollie subscription not yet created, or a plan-change repair unfinished).
+// Subscriptions whose remote schedule still needs repair (converted but the
+// provider subscription not yet created, or its amount now out of date).
 export async function listScheduleStale(executor) {
   const { rows } = await executor.query(
-    `SELECT s.*, p.slug AS plan_slug FROM subscriptions s
-     JOIN subscription_plans p ON p.id = s.plan_id
-     WHERE s.mollie_schedule_stale = TRUE AND s.status <> 'canceled'
-       AND s.is_complimentary = FALSE`,
+    `SELECT * FROM subscriptions
+     WHERE mollie_schedule_stale = TRUE AND status <> 'canceled'
+       AND is_complimentary = FALSE`,
   )
   return rows
 }
 
-// trialing subscriptions whose trial has ended (poll → activate/past_due).
-export async function listTrialEnded(executor) {
+// Live subscriptions whose next-period price may have moved — a time-limited
+// discount starting or lapsing changes what the renewal must charge even
+// though nothing about the subscription itself changed.
+export async function listRepriceCandidates(executor) {
   const { rows } = await executor.query(
     `SELECT * FROM subscriptions
-     WHERE status = 'trialing' AND trial_ends_at IS NOT NULL AND trial_ends_at < NOW()`,
+     WHERE status IN ('active','trialing','past_due')
+       AND is_complimentary = FALSE
+       AND cancel_at_period_end = FALSE`,
   )
   return rows
 }
 
-// trialing subscriptions inside the T-2d reminder window, not yet reminded.
+// trialing subscriptions inside a reminder window, not yet reminded.
 export async function listTrialReminderDue(executor, windowMs) {
   const { rows } = await executor.query(
     `SELECT * FROM subscriptions
@@ -543,6 +416,22 @@ export async function markTrialReminderSent(executor, id) {
     'UPDATE subscriptions SET trial_reminder_sent_at = NOW(), updated_at = NOW() WHERE id = $1',
     [id],
   )
+}
+
+// Active subscriptions renewing inside `windowMs`. Deliberately a wide sweep:
+// the notice is made idempotent by its notification dedupe key (which carries
+// the period end), not by narrowing the window to one tick.
+export async function listRenewalNoticeDue(executor, windowMs) {
+  const { rows } = await executor.query(
+    `SELECT * FROM subscriptions
+     WHERE status = 'active' AND cancel_at_period_end = FALSE
+       AND is_complimentary = FALSE
+       AND current_period_end IS NOT NULL
+       AND current_period_end > NOW()
+       AND current_period_end <= NOW() + ($1::bigint * INTERVAL '1 millisecond')`,
+    [windowMs],
+  )
+  return rows
 }
 
 // cancel_at_period_end subscriptions whose period has passed → terminal cancel.
@@ -576,18 +465,3 @@ export async function listExpiredComplimentary(executor) {
   return rows
 }
 
-// True when a recurring charge created after the current period started is
-// still nonterminal at Mollie (open/pending) — the SEPA-in-flight case that
-// extends the resolver's grace window.
-export async function hasNonterminalRecurringPayment(executor, subscriptionId, periodStart) {
-  const { rowCount } = await executor.query(
-    `SELECT 1 FROM subscription_payments
-     WHERE subscription_id = $1
-       AND kind = 'recurring'
-       AND status IN ('open', 'pending')
-       AND mollie_created_at > $2
-     LIMIT 1`,
-    [subscriptionId, periodStart],
-  )
-  return rowCount > 0
-}

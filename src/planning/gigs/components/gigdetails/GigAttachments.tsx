@@ -4,19 +4,16 @@ import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
-import Dialog from '@mui/material/Dialog'
-import DialogActions from '@mui/material/DialogActions'
-import DialogContent from '@mui/material/DialogContent'
-import DialogContentText from '@mui/material/DialogContentText'
-import DialogTitle from '@mui/material/DialogTitle'
 import IconButton from '@mui/material/IconButton'
 import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import AttachFileIcon from '@mui/icons-material/AttachFile'
 import DeleteIcon from '@mui/icons-material/Delete'
+import FilePresentIcon from '@mui/icons-material/FilePresent'
 import { deleteGigAttachment, uploadGigAttachment } from '../../gigs.ts'
 import { formatBytes } from '../../../../utils/formatBytes.ts'
+import { useDialog } from '../../../../contexts/dialogContext.ts'
 import type { Id, PurchaseAttachment } from '../../../../types/entities.ts'
 
 const MAX_BYTES = 1 * 1024 * 1024
@@ -32,13 +29,11 @@ interface GigAttachmentsProps {
 
 export default function GigAttachments({ gigId, initialAttachments = [], canWrite = true, plainText = false }: Readonly<GigAttachmentsProps>) {
   const { t } = useTranslation(['gigs', 'common'])
+  const { confirmDelete } = useDialog()
   const [attachments, setAttachments] = useState<PurchaseAttachment[]>(initialAttachments)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [confirmId, setConfirmId] = useState<Id | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
-
-  const confirmTarget = attachments.find((a) => a.id === confirmId)
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -62,9 +57,13 @@ export default function GigAttachments({ gigId, initialAttachments = [], canWrit
     }
   }
 
-  async function handleConfirmDelete() {
-    const id = confirmId
-    setConfirmId(null)
+  async function handleDelete(attachment: PurchaseAttachment) {
+    const confirmed = await confirmDelete({
+      title: t($ => $.attachments.deleteTitle),
+      body: t($ => $.attachments.deleteBody, { filename: attachment.original_filename ?? '' }),
+    })
+    if (!confirmed) return
+    const id = attachment.id ?? null
     setError(null)
     if (id === null) return
     try {
@@ -99,7 +98,7 @@ export default function GigAttachments({ gigId, initialAttachments = [], canWrit
             bgcolor: 'action.hover',
           }}
         >
-          <AttachFileIcon fontSize="small" color="action" />
+          <FilePresentIcon fontSize="small" color="action" />
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             {plainText ? (
               <Typography sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14 }}>
@@ -120,7 +119,7 @@ export default function GigAttachments({ gigId, initialAttachments = [], canWrit
             </Typography>
           </Box>
           {canWrite && (
-            <IconButton size="small" color="error" onClick={() => setConfirmId(a.id ?? null)}>
+            <IconButton size="small" color="error" onClick={() => { void handleDelete(a) }}>
               <DeleteIcon fontSize="small" />
             </IconButton>
           )}
@@ -147,20 +146,6 @@ export default function GigAttachments({ gigId, initialAttachments = [], canWrit
         </Box>
       )}
 
-      <Dialog open={confirmId !== null} onClose={() => setConfirmId(null)}>
-        <DialogTitle>{t($ => $.attachments.deleteTitle)}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {t($ => $.attachments.deleteBody, { filename: confirmTarget?.original_filename ?? '' })}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmId(null)}>{t($ => $.actions.cancel, { ns: 'common' })}</Button>
-          <Button color="error" variant="contained" onClick={handleConfirmDelete}>
-            {t($ => $.actions.delete, { ns: 'common' })}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Stack>
   )
 }

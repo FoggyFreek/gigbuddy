@@ -25,7 +25,7 @@ import enContacts from '../people/contacts/i18n/en/contacts.json'
 import enSuppliers from '../people/contacts/i18n/en/suppliers.json'
 import enVenues from '../people/venues/i18n/en/venues.json'
 import enPlaces from '../people/venues/i18n/en/places.json'
-import enEmailTemplates from '../people/profiles/i18n/en/emailTemplates.json'
+import enOutreach from '../promotion/outreach/i18n/en/outreach.json'
 import enInvoices from '../finance/invoices/i18n/en.json'
 import enPurchases from '../finance/purchases/i18n/en.json'
 import enMerch from '../commerce/merch/i18n/en.json'
@@ -42,6 +42,8 @@ import enBilling from '../commerce/billing/i18n/en.json'
 import enOnboarding from '../user/identity/i18n/en/onboarding.json'
 import enFinanceOnboarding from '../finance/onboarding/i18n/en.json'
 import enTutorials from '../user/tutorials/i18n/en.json'
+import enAdminOperations from '../admin/operations/i18n/en.json'
+import enDialogs from '../dialogs/i18n/en.json'
 
 import nlAchievements from '../user/achievements/i18n/nl.json'
 import nlCommon from './nl/common.json'
@@ -62,7 +64,7 @@ import nlContacts from '../people/contacts/i18n/nl/contacts.json'
 import nlSuppliers from '../people/contacts/i18n/nl/suppliers.json'
 import nlVenues from '../people/venues/i18n/nl/venues.json'
 import nlPlaces from '../people/venues/i18n/nl/places.json'
-import nlEmailTemplates from '../people/profiles/i18n/nl/emailTemplates.json'
+import nlOutreach from '../promotion/outreach/i18n/nl/outreach.json'
 import nlInvoices from '../finance/invoices/i18n/nl.json'
 import nlPurchases from '../finance/purchases/i18n/nl.json'
 import nlMerch from '../commerce/merch/i18n/nl.json'
@@ -79,6 +81,8 @@ import nlBilling from '../commerce/billing/i18n/nl.json'
 import nlOnboarding from '../user/identity/i18n/nl/onboarding.json'
 import nlFinanceOnboarding from '../finance/onboarding/i18n/nl.json'
 import nlTutorials from '../user/tutorials/i18n/nl.json'
+import nlAdminOperations from '../admin/operations/i18n/nl.json'
+import nlDialogs from '../dialogs/i18n/nl.json'
 
 export const defaultNS = 'common'
 
@@ -102,7 +106,7 @@ const en = {
   suppliers: enSuppliers,
   venues: enVenues,
   places: enPlaces,
-  emailTemplates: enEmailTemplates,
+  outreach: enOutreach,
   invoices: enInvoices,
   purchases: enPurchases,
   merch: enMerch,
@@ -119,6 +123,8 @@ const en = {
   onboarding: enOnboarding,
   financeOnboarding: enFinanceOnboarding,
   tutorials: enTutorials,
+  adminOperations: enAdminOperations,
+  dialogs: enDialogs,
 } as const
 
 // Compile-time Dutch parity guard. `DeepKeyShape` turns the canonical English
@@ -149,7 +155,7 @@ const nl = {
   suppliers: nlSuppliers,
   venues: nlVenues,
   places: nlPlaces,
-  emailTemplates: nlEmailTemplates,
+  outreach: nlOutreach,
   invoices: nlInvoices,
   purchases: nlPurchases,
   merch: nlMerch,
@@ -166,6 +172,8 @@ const nl = {
   onboarding: nlOnboarding,
   financeOnboarding: nlFinanceOnboarding,
   tutorials: nlTutorials,
+  adminOperations: nlAdminOperations,
+  dialogs: nlDialogs,
 } satisfies DeepKeyShape<typeof en>
 
 export const resources = { en, nl } as const

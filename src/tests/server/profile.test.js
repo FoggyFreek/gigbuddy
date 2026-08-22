@@ -24,6 +24,9 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedGigsAndTasks(seed)
+  seed = await fixtureDb.seedAccountingForTenants(seed)
   resetShopifyTokenCacheForTests()
   // seedTwoTenants() makes every user a tenant_admin. Downgrade userA in
   // tenantA to a plain contributor so we can test the financial-field gate.

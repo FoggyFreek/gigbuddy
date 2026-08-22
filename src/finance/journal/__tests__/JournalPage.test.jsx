@@ -1,3 +1,4 @@
+import { DialogProvider } from '../../../contexts/DialogContext.tsx'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
@@ -35,11 +36,11 @@ import theme from '../../../theme.ts'
 
 function wrap(ui, { compact = false } = {}) {
   return render(
-    <MemoryRouter initialEntries={['/journal']}>
+    <MemoryRouter initialEntries={['/journal']}><DialogProvider>
       <ThemeProvider theme={theme}>
         <CompactLayoutContext.Provider value={compact}>{ui}</CompactLayoutContext.Provider>
       </ThemeProvider>
-    </MemoryRouter>,
+    </DialogProvider></MemoryRouter>,
   )
 }
 

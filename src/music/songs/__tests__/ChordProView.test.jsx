@@ -6,15 +6,21 @@ import ChordProView from '../components/chordpro/ChordProView.tsx'
 import { CHORDPRO_PRINT_CSS } from '../chordpro.ts'
 import theme from '../../../theme.ts'
 
-function wrap(source) {
+function wrap(source, props = {}) {
   return render(
     <ThemeProvider theme={theme}>
-      <ChordProView source={source} />
+      <ChordProView source={source} {...props} />
     </ThemeProvider>,
   )
 }
 
 describe('ChordProView', () => {
+  it('uses smaller chart text in compact layouts', () => {
+    const { container } = wrap('[C]Hello', { compact: true })
+
+    expect(container.querySelector('.cp-doc')).toHaveStyle({ fontSize: '14px' })
+  })
+
   it('suppresses chord diagrams on screen and in print when diagrams are off', () => {
     const { container } = wrap('{diagrams: off}\n[C]Hello [G]world')
 
@@ -53,8 +59,38 @@ describe('ChordProView', () => {
     expect(below.querySelector('.cp-flow .cp-diagram-placement')).toBeInTheDocument()
 
     const right = wrap('{diagrams: right}\n[C]Line').container
-    expect(right.querySelector('.cp-right-layout > .cp-flow')).toBeInTheDocument()
-    expect(right.querySelector('.cp-right-layout > .cp-diagram-placement')).toBeInTheDocument()
+    expect(right.querySelector('.cp-side-layout > .cp-flow')).toBeInTheDocument()
+    expect(right.querySelector('.cp-side-layout > .cp-diagram-placement')).toBeInTheDocument()
+  })
+
+  it('stacks side diagrams vertically, with left placing them before the flow', () => {
+    const right = wrap('{diagrams: right}\n[C]Line [G]two', { diagramsOpen: true }).container
+    const rightLayout = right.querySelector('.cp-side-layout')
+    expect(rightLayout).toHaveClass('cp-side-layout-right')
+    expect(rightLayout.firstElementChild).toHaveClass('cp-flow')
+    expect(right.querySelector('.cp-diagrams')).toHaveClass('cp-diagrams-vertical')
+    expect(right.querySelector('.cp-diagrams-collapsible .cp-diagrams')).toHaveStyle({ flexDirection: 'column', flexWrap: 'nowrap' })
+
+    const left = wrap('{diagrams: left}\n[C]Line [G]two', { diagramsOpen: true }).container
+    const leftLayout = left.querySelector('.cp-side-layout')
+    expect(leftLayout).toHaveClass('cp-side-layout-left')
+    expect(leftLayout.firstElementChild).toHaveClass('cp-diagram-placement')
+    expect(left.querySelector('.cp-diagrams')).toHaveClass('cp-diagrams-vertical')
+
+    const bottom = wrap('{diagrams: bottom}\n[C]Line [G]two', { diagramsOpen: true }).container
+    expect(bottom.querySelector('.cp-diagrams')).not.toHaveClass('cp-diagrams-vertical')
+
+    expect(CHORDPRO_PRINT_CSS).toContain('.cp-diagrams-vertical { flex-direction: column; flex-wrap: nowrap;')
+    expect(CHORDPRO_PRINT_CSS).toContain('.cp-side-layout-left { grid-template-columns: auto minmax(0, 1fr); }')
+  })
+
+  it('collapses a side diagram layout to one wrapping column on compact screens', () => {
+    const { container } = wrap('{diagrams: right}\n[C]Line [G]two', { compact: true, diagramsOpen: true })
+
+    expect(container.querySelector('.cp-side-layout')).toHaveStyle({ gridTemplateColumns: '1fr' })
+    // Print keeps the side column, so the class stays — only the screen grid wraps.
+    expect(container.querySelector('.cp-diagrams')).toHaveClass('cp-diagrams-vertical')
+    expect(container.querySelector('.cp-diagrams-collapsible .cp-diagrams')).toHaveStyle({ flexDirection: 'row', flexWrap: 'wrap' })
   })
 
   it('renders keyboard definitions and shared labels for image/text blocks', () => {

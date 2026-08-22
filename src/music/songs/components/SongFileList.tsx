@@ -7,11 +7,6 @@ import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
-import Dialog from '@mui/material/Dialog'
-import DialogActions from '@mui/material/DialogActions'
-import DialogContent from '@mui/material/DialogContent'
-import DialogContentText from '@mui/material/DialogContentText'
-import DialogTitle from '@mui/material/DialogTitle'
 import IconButton from '@mui/material/IconButton'
 import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
@@ -21,6 +16,7 @@ import AttachFileIcon from '@mui/icons-material/AttachFile'
 import DeleteIcon from '@mui/icons-material/Delete'
 import DiamondOutlined from '@mui/icons-material/DiamondOutlined'
 import { useEntitlements } from '../../../hooks/useEntitlements.ts'
+import { useDialog } from '../../../contexts/dialogContext.ts'
 import { formatBytes } from '../../../utils/formatBytes.ts'
 import AudioFilePlayer from './AudioFilePlayer.tsx'
 
@@ -55,15 +51,13 @@ export default function SongFileList({
   premiumFeature,
 }: Readonly<SongFileListProps>) {
   const { t } = useTranslation(['songs', 'common'])
+  const { confirmDelete } = useDialog()
   const { has } = useEntitlements()
   const upsellTo = premiumFeature && !has(premiumFeature) ? `/upgrade/${premiumFeature}` : null
   const [files, setFiles] = useState<SongFile[]>(initialFiles)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [confirmId, setConfirmId] = useState<Id | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
-
-  const confirmTarget = files.find((f) => f.id === confirmId)
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -85,9 +79,13 @@ export default function SongFileList({
     }
   }
 
-  async function handleConfirmDelete() {
-    const id = confirmId
-    setConfirmId(null)
+  async function handleDelete(file: SongFile) {
+    const confirmed = await confirmDelete({
+      title: t($ => $.files.deleteTitle),
+      body: t($ => $.files.deleteBody, { name: file.original_filename ?? '' }),
+    })
+    if (!confirmed) return
+    const id = file.id ?? null
     setError(null)
     try {
       await deleteFn(songId, id ?? undefined)
@@ -133,7 +131,7 @@ export default function SongFileList({
               </Typography>
             </Box>
             {canWrite && (
-              <IconButton size="small" color="error" onClick={() => setConfirmId(f.id ?? null)} aria-label={t($ => $.files.deleteAria)}>
+              <IconButton size="small" color="error" onClick={() => { void handleDelete(f) }} aria-label={t($ => $.files.deleteAria)}>
                 <DeleteIcon fontSize="small" />
               </IconButton>
             )}
@@ -184,20 +182,6 @@ export default function SongFileList({
         </Box>
       )}
 
-      <Dialog open={confirmId !== null} onClose={() => setConfirmId(null)}>
-        <DialogTitle>{t($ => $.files.deleteTitle)}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            {t($ => $.files.deleteBody, { name: confirmTarget?.original_filename ?? '' })}
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmId(null)}>{t($ => $.common.actions.cancel)}</Button>
-          <Button color="error" variant="contained" onClick={handleConfirmDelete}>
-            {t($ => $.common.actions.delete)}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Stack>
   )
 }

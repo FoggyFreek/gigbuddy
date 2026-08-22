@@ -84,6 +84,16 @@
     "whatsApp": "Share via WhatsApp",
     "imageCard": "Generate image card"
   },
+  "documentMenu": {
+    "documents": "Documents",
+    "documentsAria": "download gig documents",
+    "itinerary": "Itinerary / Timetable",
+    "artistSettlement": "Artist settlement",
+    "contract": "Contract",
+    "downloadFailed": "Downloading the itinerary failed",
+    "settlementDownloadFailed": "Downloading the artist settlement failed",
+    "contractDownloadFailed": "Downloading the contract failed"
+  },
   "gigShare": {
     "title": "Share gig as image",
     "cardVariation": "Card variation",
@@ -152,9 +162,11 @@
     "importFailed": "Import failed"
   },
   "detail": {
+    "fieldHelp": "More information",
     "tabs": {
       "event": "Event",
       "terms": "Terms",
+      "finance": "Finance",
       "participants": "Participants",
       "tasks": "Tasks"
     },
@@ -184,10 +196,6 @@
     "location": "Location",
     "openInMaps": "Open in maps",
     "terms": "Terms",
-    "paidAdmission": "Paid admission",
-    "guaranteedFee": "Guaranteed fee",
-    "merchandiseCut": "Merchandise cut",
-    "percentageOfNetSales": "Percentage of net sales",
     "ticketLink": "Ticket link",
     "merchandiseSold": "Merchandise sold",
     "itemsSold_one": "{{count}} item · excl. VAT",
@@ -203,31 +211,193 @@
       "paid": "Paid",
       "void": "Void"
     },
-    "equipment": {
-      "title": "Equipment",
-      "add": "Add equipment",
-      "empty": "No equipment recorded yet",
-      "remove": "Remove",
-      "saveFailed": "Could not save equipment",
-      "providerLabel": "Who provides {{item}}",
-      "provider": {
-        "event": "At venue",
-        "band": "We bring"
-      },
-      "items": {
-        "pa_system": "PA system",
-        "drumkit": "Drumkit",
-        "bass_amp": "Bass amp",
-        "guitar_amp": "Guitar amp",
-        "stage_lights": "Stage lights"
-      }
-    },
     "memberAvailability": "Member availability",
     "participants": "Participants",
     "contacts": "Contacts",
     "tasks": "Tasks",
     "attachments": "Attachments",
-    "notes": "Notes"
+    "infoBlocks": {
+      "title": "Additional information",
+      "add": "Add info block",
+      "remove": "Remove this block",
+      "labelField": "Label",
+      "deleteTitle": "Delete the “{{label}}” block?",
+      "saveFailed": "Saving the information block failed",
+      "labels": {
+        "remarks": "Remarks / Notes",
+        "timetable": "Timetable",
+        "hospitality": "Hospitality",
+        "catering": "Catering",
+        "technical_information": "Technical information",
+        "dressing_room": "Dressing room",
+        "light": "Light",
+        "merchandise": "Merchandise",
+        "backline": "Backline",
+        "invoice_info": "Invoice info",
+        "press": "Press",
+        "guestlist": "Guestlist",
+        "recording": "Recording"
+      }
+    },
+    "timetable": {
+      "title": "Timetable",
+      "add": "Add line",
+      "remove": "Remove this line",
+      "empty": "No timetable yet.",
+      "startTime": "From",
+      "endTime": "Until",
+      "description": "Description",
+      "dragAria": "Drag to reorder this line",
+      "unnamedLine": "this line",
+      "deleteTitle": "Delete “{{label}}”?",
+      "saveFailed": "Saving the timetable failed"
+    },
+    "deal": {
+      "title": "Deal",
+      "dealType": "Deal type",
+      "dealTypes": {
+        "flat_fee": "Flat fee",
+        "guarantee": "Guarantee",
+        "door_deal": "Door deal"
+      },
+      "dealTypeHelp": {
+        "flat_fee": "A fixed guaranteed amount, with no revenue from ticket sales.",
+        "guarantee": "A guaranteed fee with potential upside from ticket sales. Choose how the fee and ticket share relate under Guarantee variant.",
+        "door_deal": "A percentage of ticket revenue after the break-even point, with no guaranteed fee."
+      },
+      "guaranteeVariant": "Guarantee variant",
+      "guaranteeVariants": {
+        "plus": "Plus",
+        "versus": "Versus"
+      },
+      "guaranteeVariantHelp": {
+        "plus": "The guaranteed fee plus a percentage of ticket revenue after break-even. Venue costs can be included in break-even.",
+        "versus": "Either the guaranteed fee or the artist's percentage of ticket revenue — whichever is higher."
+      },
+      "guaranteedFee": "Guaranteed fee",
+      "ticketPercentage": "Ticket percentage",
+      "venueShare": "Venue / promoter",
+      "ticketSplitHelp": "The artist's share of ticket revenue first, the venue or promoter's second. The two always add up to 100%.",
+      "includeVenueCosts": "Include venue costs in the break-even calculation",
+      "venueCosts": "Venue costs",
+      "venueCostsHelp": "Production costs recouped from ticket revenue at break-even, such as venue rental.",
+      "venueCapacity": "Venue capacity",
+      "expectedVisitors": "Expected visitors",
+      "expectedVisitorsHelp": "Used to simulate the potential upside.",
+      "ticketsSold": "Tickets sold",
+      "netTicketPrice": "Nett. ticket price",
+      "netTicketPriceHelp": "The price the door takes per ticket, excl. service fees — the basis for every calculation below. If it includes VAT, set the ticket VAT % under Taxes.",
+      "grossTicketPrice": "Gross ticket price",
+      "percentage": "Percentage",
+      "fixedAmount": "Fixed amount",
+      "feeBases": {
+        "none": "None",
+        "percentage": "Percentage",
+        "amount": "Fixed amount"
+      },
+      "bookingFee": {
+        "title": "Booking fee",
+        "basis": "Booking fee",
+        "percentage": "Booking fee percentage",
+        "amount": "Booking fee amount",
+        "percentageHelp": "Calculated from the gross fee."
+      },
+      "commission": {
+        "title": "Commission",
+        "basis": "Commission",
+        "percentage": "Commission percentage",
+        "amount": "Commission amount",
+        "percentageHelp": "Calculated from the nett fee (gross fee minus costs)."
+      },
+      "taxes": {
+        "title": "Taxes",
+        "subjectToVat": "Subject to VAT",
+        "generalVat": "General VAT %",
+        "generalVatHelp": "The rate an invoice generated from this gig is billed at. Leave blank for the default rate ({{rate}}%).",
+        "ticketVat": "Ticket VAT %",
+        "ticketVatHelp": "The VAT the venue charges on tickets, contained in the nett ticket price. Every ticket calculation runs on the price with it taken out.",
+        "copyright": "Copyright / PRS %",
+        "copyrightHelp": "Copyright / PRS deducted from ticket revenue after ticket VAT. Leave blank to ignore it."
+      },
+      "costs": {
+        "title": "Costs",
+        "label": "Cost",
+        "labelPlaceholder": "Travel, backline, catering, …",
+        "amount": "Amount",
+        "paidBy": "Paid by",
+        "paidByOptions": {
+          "artist_agency": "Artist/Agency",
+          "artist": "Artist",
+          "agency": "Agency"
+        },
+        "paidByHelp": {
+          "artist_agency": "Deducted from the gross fee before the booking fee is calculated, so both sides bear a share through the reduced base.",
+          "artist": "Deducted only from what is due to the artist. The booking fee is unaffected.",
+          "agency": "Deducted only from what is due to the booker. The amount due to the artist is unaffected."
+        },
+        "add": "Add",
+        "delete": "Delete cost",
+        "deleteTitle": "Delete \"{{label}}\"?",
+        "empty": "No costs added yet.",
+        "total": "Total costs",
+        "deleteLabel": "Delete cost {{label}}"
+      },
+      "statement": {
+        "title": "Statement",
+        "grossFee": "Gross fee",
+        "costs": "Costs",
+        "nettFee": "Nett. fee",
+        "bookingFee": "Booking fee",
+        "commission": "Commission",
+        "dueToBooker": "Due to booker",
+        "dueToArtist": "Due to artist",
+        "breakdown": {
+          "ticketRevenue_one": "The artist’s {{percentage}}% share of the {{count}} ticket sold so far.",
+          "ticketRevenue_other": "The artist’s {{percentage}}% share of the {{count}} tickets sold so far.",
+          "ticketRevenueUnknown": "No tickets sold have been entered yet.",
+          "ticketRevenueFlatFee": "A flat fee takes no share of ticket revenue.",
+          "grossFee": "Guaranteed fee {{guarantee}} plus {{tickets}} earned on the tickets sold so far.",
+          "costs_one": "The total of {{count}} cost line.",
+          "costs_other": "The total of {{count}} cost lines.",
+          "nettFee": "Gross fee {{gross}} minus costs {{costs}}.",
+          "percentageOfGross": "{{percentage}}% of the gross fee ({{base}}).",
+          "percentageOfNett": "{{percentage}}% of the nett fee minus the booking fee ({{base}}).",
+          "fixedAmount": "A fixed amount, entered as agreed.",
+          "notAgreed": "Not agreed for this gig.",
+          "dueToBooker": "Booking fee {{bookingFee}} plus commission {{commission}}.",
+          "dueToBookerWithCosts": "Booking fee {{bookingFee}} plus commission {{commission}}, minus {{costs}} in costs paid by the agency.",
+          "dueToArtistInclusive": "The nett fee minus commission and the booking fee, which is split out of the gross fee.",
+          "dueToArtistWithCosts": "Minus {{costs}} in costs paid by the artist."
+        }
+      },
+      "tickets": {
+        "title": "Ticket upside",
+        "sold": "Tickets sold",
+        "soldOfCapacity": "{{sold}} / {{capacity}}",
+        "toBreakEven": "Tickets to break even",
+        "expectedUpside": "Expected upside",
+        "potentialUpside": "Potential upside",
+        "soldCaption": "{{price}} / {{revenue}}",
+        "atAttendance_one": "at {{count}} ticket",
+        "atAttendance_other": "at {{count}} tickets",
+        "unknown": "—",
+        "flatFeeNote": "A flat fee takes no share of ticket revenue.",
+        "breakdown": {
+          "sold": "Tickets sold so far, against the venue capacity. The price is per ticket after deductions; the revenue is what's been earned from tickets sold.",
+          "soldVat": "VAT of {{percentage}}% comes off the ticket price first.",
+          "soldCopyright": "Copyright / PRS of {{percentage}}% comes off after VAT.",
+          "expected": "The artist’s {{percentage}}% share at the expected number of visitors.",
+          "potential": "The artist’s {{percentage}}% share at full capacity — the ceiling for this deal.",
+          "flat_fee": "A flat fee has no break-even point.",
+          "guarantee": "Ticket revenue follows the selected guarantee variant.",
+          "door_deal": "Ticket revenue has to cover the venue costs before the artist’s share starts.",
+          "guaranteeVariants": {
+            "plus": "Ticket revenue has to cover the gross fee, and the venue costs when those are included, before the artist’s share starts.",
+            "versus": "Nothing is recouped — the deal simply pays whichever is higher, the guaranteed fee or the artist’s full share of the door."
+          }
+        }
+      }
+    }
   },
   "page": {
     "titleFallback": "Gig details",

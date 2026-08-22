@@ -6,6 +6,7 @@ import { seedDefaultPlans } from '../../../server/db/defaultPlans.js'
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants
 let clearEntitlementCaches
+let billingService
 let billing
 let patchMember
 let seed
@@ -18,17 +19,20 @@ beforeAll(async () => {
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
   app = appMod.createTestApp()
-  const entMod = await import('../../../server/commerce/billing/entitlementService.js')
+  const entMod = await import('../../../server/entitlements/entitlementResolver.js')
   clearEntitlementCaches = entMod.clearEntitlementCaches
   const rosterMod = await import('../../../server/people/roster/bandMemberService.js')
   patchMember = rosterMod.patchMember
   billing = await import('./_billing.js')
+  billingService = await import('../../../server/commerce/billing/billingService.js')
   await runMigrations()
 })
 
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedBandMembers(seed)
   await pool.query('DELETE FROM subscription_plans')
   await seedDefaultPlans(pool)
   clearEntitlementCaches()
@@ -238,6 +242,30 @@ describe('POST /api/tenants/personal (artist workspace)', () => {
       'SELECT COUNT(*)::int AS count FROM chart_of_accounts WHERE tenant_id = $1', [res.body.id],
     )
     expect(accounts.count).toBeGreaterThan(0)
+  })
+
+  it('adds Artist Gold to the same Band Gold trial without extending it', async () => {
+    const trial = await billingService.startTrial(pool, {
+      id: seed.userA.id, email: 'a@test.local', name: 'Alpha User',
+    }, { audience: 'band' })
+    const before = trial.subscription.trial_ends_at
+
+    await asUserA(request(app).post('/api/tenants/personal').send(personalBody()))
+      .expect(201)
+
+    const { rows } = await pool.query(
+      `SELECT sm.audience, p.slug, s.trial_ends_at
+         FROM subscription_modules sm
+         JOIN subscription_plans p ON p.id = sm.plan_id
+         JOIN subscriptions s ON s.id = sm.subscription_id
+        WHERE sm.subscription_id = $1
+        ORDER BY sm.audience`,
+      [trial.subscription.id],
+    )
+    expect(rows).toEqual([
+      { audience: 'artist', slug: 'artist_gold', trial_ends_at: before },
+      { audience: 'band', slug: 'gold', trial_ends_at: before },
+    ])
   })
 
   it('records the accounting profile as a sole trader in the requested country', async () => {

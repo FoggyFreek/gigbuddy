@@ -5,94 +5,66 @@
 //
 // The entitlement resolver enforces all access time-bounds itself, so these
 // tasks are REPAIR-ONLY: they flip durable status, settle in-flight charges,
-// finish sagas, and clean up — access never depends on them running.
+// finish sagas, and clean up — access never depends on them running. The one
+// thing here that is not repair is the renewal notice, which is a message
+// rather than a state change.
 import pool from '../../../db/index.js'
 import {
-  listStalePendingMandate,
   listStalePendingActivation,
+  listExpiredTrials,
   listScheduleStale,
   listCancelAtPeriodEndDue,
   listPastDueExpired,
   listExpiredComplimentary,
   listTrialReminderDue,
-  listDowngradeSchedulePending,
-  listPendingActivationDowngrades,
-  listPendingDowngradesDue,
-  listPendingPurges,
+  listRenewalNoticeDue,
+  listRepriceCandidates,
   subscriptionHasNonterminalPayment,
   markTrialReminderSent,
   cancelSubscriptionNow,
-  clearPendingChange,
-  flipToPendingActivation,
-  fetchUserMollieCustomerId,
 } from '../subscriptionRepository.js'
-import { listStaleNonterminalPayments } from '../subscriptionPaymentRepository.js'
-import { listStalePendingOperations } from '../billingOperationRepository.js'
-import { ingestProviderPayment } from '../paymentIngestionService.js'
 import {
-  repairSchedule,
-  cancelRemoteSubscription,
-  scheduleDowngradeReplacement,
-} from '../billingSaga.js'
-import { executeDowngradePurge } from '../entitlementPurgeService.js'
-import { getPaymentProvider, SUBSCRIPTION_STATUS } from '../paymentProvider/index.js'
+  listModules,
+  listModulesWithPendingPurge,
+} from '../subscriptionModuleRepository.js'
+import { listStaleNonterminalPayments } from '../subscriptionPaymentRepository.js'
+import { listUnreplayableOperations } from '../billingOperationRepository.js'
+import { listPendingRefunds } from '../subscriptionRefundRepository.js'
+import { recoverBillingOperations } from '../billingOperationService.js'
+import { resumePendingRefund } from '../subscriptionRefundService.js'
+import { ingestProviderPayment } from '../paymentIngestionService.js'
+import { repairSchedule, cancelRemoteSubscription } from '../billingSaga.js'
+import { executeModulePurge } from '../entitlementPurgeService.js'
+import { repriceSubscription } from '../subscriptionPricingService.js'
 import { dispatchUserNotification, pushUserNotification } from '../../../user/notifications/notificationService.js'
 import { BILLING_NOTIFICATION_TYPES } from '../../../domain/notificationTypes.js'
 import { logger } from '../../../utils/logger.js'
 
 const DAY_MS = 24 * 60 * 60 * 1000
-const PENDING_MANDATE_STALE_MS = DAY_MS
 const PENDING_ACTIVATION_STALE_MS = 7 * DAY_MS
 const NONTERMINAL_POLL_MS = 60 * 60 * 1000
 const PAST_DUE_GRACE_MS = 14 * DAY_MS
+// The trial has already been resolver-locked for two days by the time this
+// fires; the flip is bookkeeping, and the canceled row is what keeps the
+// once-per-user trial spent.
+const TRIAL_EXPIRY_GRACE_MS = 2 * DAY_MS
 const TRIAL_REMINDER_WINDOW_MS = 2 * DAY_MS
+const RENEWAL_NOTICE_7D_MS = 7 * DAY_MS
+const RENEWAL_NOTICE_1D_MS = 1 * DAY_MS
 const ORPHAN_OP_STALE_MS = 10 * 60 * 1000
+const REFUND_RESUME_STALE_MS = 10 * 60 * 1000
 
 async function notifyUser(userId, type, title, body, dedupeKey) {
   const { inserted } = await dispatchUserNotification({ userId, type, title, body, url: '/billing', dedupeKey })
   if (inserted) pushUserNotification(userId, { type, title, body, url: '/billing' })
 }
 
-// Terminal downgrade failure: the replacement subscription will never pay
-// (retry window exhausted or the provider reports it canceled/completed).
-// Cancels the replacement remotely, clears EVERY piece of pending downgrade
-// state — pending change, schedule marker, superseded id, manifest, snapshot
-// — and terminally cancels the local row. NOTHING is purged: the customer
-// never got the lower tier, so their data stays (fallback-locked, PBI 11.9).
-export async function finalizeFailedDowngrade(db, sub) {
-  await cancelRemoteSubscription(db, sub).catch((err) =>
-    logger.error('billing.cancel_remote_failed', { err, subscriptionId: sub.id }))
-  if (sub.superseded_mollie_subscription_id
-      && sub.superseded_mollie_subscription_id !== sub.mollie_subscription_id) {
-    await cancelRemoteSubscription(db, sub, sub.superseded_mollie_subscription_id).catch((err) =>
-      logger.error('billing.cancel_remote_failed', { err, subscriptionId: sub.id }))
-  }
-  await clearPendingChange(db, sub.id)
-  await cancelSubscriptionNow(db, sub.id, 'payment_failed')
-  await notifyUser(sub.user_id, BILLING_NOTIFICATION_TYPES.CANCELED,
-    'Subscription canceled',
-    'Your downgrade could not be completed because the payment failed. Your subscription has ended; your data is kept.',
-    `billing-canceled:${sub.id}`)
-  logger.info('billing.downgrade_failed_finalized', { subscriptionId: sub.id })
-}
-
-// Task 1: abandon stale signups. A pending_mandate whose mandate never confirmed
-// within 24h is a dropped checkout; a pending_activation whose first real charge
-// never settled within 7d (aged from the flip into pending_activation, and with
-// nothing in flight — Mollie may still be retrying) has lapsed. A lapsed row
-// carrying a pending downgrade finalizes via finalizeFailedDowngrade: all
-// downgrade state cleared, nothing purged.
+// Task 1: abandon stale signups. A pending_activation whose first charge never
+// settled within 7d (aged from the flip, and with nothing in flight — Mollie
+// may still be retrying) has lapsed.
 export async function reconcileStaleSignups(db = pool) {
-  for (const sub of await listStalePendingMandate(db, PENDING_MANDATE_STALE_MS)) {
-    await cancelSubscriptionNow(db, sub.id, 'trial_abandoned')
-    logger.info('billing.signup_abandoned', { subscriptionId: sub.id })
-  }
   for (const sub of await listStalePendingActivation(db, PENDING_ACTIVATION_STALE_MS)) {
-    if (await subscriptionHasNonterminalPayment(db, sub.id)) continue // SEPA still settling / Mollie retrying
-    if (sub.pending_change_kind === 'downgrade') {
-      await finalizeFailedDowngrade(db, sub)
-      continue
-    }
+    if (await subscriptionHasNonterminalPayment(db, sub.id)) continue // SEPA still settling
     await cancelSubscriptionNow(db, sub.id, 'payment_failed')
     await cancelRemoteSubscription(db, sub).catch((err) =>
       logger.error('billing.cancel_remote_failed', { err, subscriptionId: sub.id }))
@@ -100,8 +72,21 @@ export async function reconcileStaleSignups(db = pool) {
   }
 }
 
-// Task 2: poll nonterminal payments (lost webhooks, SEPA settlement, in-flight
-// plan-change / activation charges) through the same ingestion funnel.
+// Task 2: a trial that ran out without payment authorization. Trials with a
+// verified mandate or an in-flight verification/first charge remain recoverable.
+export async function reconcileExpiredTrials(db = pool) {
+  for (const sub of await listExpiredTrials(db, TRIAL_EXPIRY_GRACE_MS)) {
+    await cancelSubscriptionNow(db, sub.id, 'trial_abandoned')
+    await notifyUser(sub.user_id, BILLING_NOTIFICATION_TYPES.CANCELED,
+      'Trial ended',
+      'Your GigBuddy trial has ended. Your data is kept — subscribe any time to get your features back.',
+      `billing-canceled:${sub.id}`)
+    logger.info('billing.trial_expired', { subscriptionId: sub.id })
+  }
+}
+
+// Task 3: poll nonterminal payments (lost webhooks, SEPA settlement, in-flight
+// conversion / proration charges) through the same ingestion funnel.
 export async function reconcileNonterminalPayments(db = pool) {
   for (const payment of await listStaleNonterminalPayments(db, NONTERMINAL_POLL_MS)) {
     await ingestProviderPayment(payment.subscription_id, payment.mollie_payment_id).catch((err) =>
@@ -109,9 +94,9 @@ export async function reconcileNonterminalPayments(db = pool) {
   }
 }
 
-// Task 3 (+ trial-ended schedule assurance / task 4): resume unfinished remote
-// schedule repair. repairSchedule flags billing_repair_needed on a terminal
-// failure (resolver still locks at period end — bounded and visible).
+// Task 4: resume unfinished remote schedule repair. repairSchedule flags
+// billing_repair_needed on a terminal failure (the resolver still locks at
+// period end — bounded and visible).
 export async function reconcileScheduleRepairs(db = pool) {
   for (const sub of await listScheduleStale(db)) {
     await repairSchedule(db, sub.id).catch((err) =>
@@ -119,60 +104,32 @@ export async function reconcileScheduleRepairs(db = pool) {
   }
 }
 
-// Downgrade-schedule saga resume: rows whose durable cancel-old/create-
-// replacement marker is still set (the inline attempt failed or crashed), plus
-// the terminal poll — a replacement subscription the provider reports
-// canceled/completed while we wait in pending_activation will never pay, so
-// the downgrade fails WITHOUT purging.
-export async function reconcileDowngradeSchedules(db = pool) {
-  for (const sub of await listDowngradeSchedulePending(db)) {
-    await scheduleDowngradeReplacement(db, sub.id).catch((err) =>
-      logger.error('billing.downgrade_schedule_failed', { err, subscriptionId: sub.id }))
-  }
-  const provider = getPaymentProvider()
-  for (const sub of await listPendingActivationDowngrades(db)) {
-    if (await subscriptionHasNonterminalPayment(db, sub.id)) continue // a charge is still settling
-    try {
-      const customerId = await fetchUserMollieCustomerId(db, sub.user_id)
-      if (!customerId) continue
-      const remote = await provider.getSubscription({ customerId, subscriptionId: sub.mollie_subscription_id })
-      if (remote.status === SUBSCRIPTION_STATUS.CANCELED || remote.status === SUBSCRIPTION_STATUS.COMPLETED) {
-        await finalizeFailedDowngrade(db, sub)
-      }
-    } catch (err) {
-      logger.warn('billing.downgrade_replacement_poll_failed', { err, subscriptionId: sub.id })
-    }
+// Task 5: keep the next renewal's price in step with the live discount catalog.
+//
+// This is what makes a TEMPORARY discount actually temporary. A promo with an
+// `effective_to` changes nothing about the subscription when it lapses, so
+// without this sweep the provider schedule would keep charging the promotional
+// amount for the rest of the customer's life. repriceSubscription only flags
+// the schedule stale when the amount really moved, so a quiet tick is cheap.
+export async function reconcileNextPeriodPricing(db = pool) {
+  for (const sub of await listRepriceCandidates(db)) {
+    await repriceSubscription(db, sub.id).catch((err) =>
+      logger.error('billing.reprice_failed', { err, subscriptionId: sub.id }))
   }
 }
 
-// Task 7: a pending paid downgrade whose paid period has ended flips to
-// pending_activation (stamping pending_activation_at). Access fallback-locks
-// via the resolver; NOTHING is purged until the replacement's first charge is
-// authoritatively paid.
-export async function reconcilePendingDowngrades(db = pool) {
-  for (const sub of await listPendingDowngradesDue(db)) {
-    const flipped = await flipToPendingActivation(db, sub.id)
-    if (!flipped) continue
-    await notifyUser(sub.user_id, BILLING_NOTIFICATION_TYPES.DOWNGRADE_SCHEDULED,
-      'Downgrade pending payment',
-      'Your billing period has ended. The downgraded plan activates as soon as its first payment is confirmed.',
-      `billing-downgrade-pending:${sub.id}`)
-    logger.info('billing.downgrade_period_ended', { subscriptionId: sub.id })
-  }
-}
-
-// Purge safety net: manifests whose downgrade already took effect but whose
-// inline purge never ran (crash between the state change and the purge). The
-// per-subscription session lock inside executeDowngradePurge prevents any
-// overlap with an inline run.
+// Purge safety net: manifests whose change already took effect but whose inline
+// purge never ran (a crash between the state change and the purge). The
+// per-module advisory lock inside executeModulePurge prevents any overlap with
+// an inline run.
 export async function reconcilePendingPurges(db = pool) {
-  for (const sub of await listPendingPurges(db)) {
-    await executeDowngradePurge(db, sub.id).catch((err) =>
-      logger.error('billing.purge_failed', { err, subscriptionId: sub.id }))
+  for (const module of await listModulesWithPendingPurge(db)) {
+    await executeModulePurge(db, { moduleId: module.id }).catch((err) =>
+      logger.error('billing.purge_failed', { err, subscriptionId: module.subscription_id }))
   }
 }
 
-// Task 5: force-cancel subscriptions stuck past_due beyond the retry grace
+// Task 6: force-cancel subscriptions stuck past_due beyond the retry grace
 // (Mollie has exhausted its retries) on both sides.
 export async function reconcilePastDue(db = pool) {
   for (const sub of await listPastDueExpired(db, PAST_DUE_GRACE_MS)) {
@@ -186,15 +143,17 @@ export async function reconcilePastDue(db = pool) {
   }
 }
 
-// Task 6: finalize cancel-at-period-end once the paid period has passed. A
-// pending purge manifest (the free-fallback downgrade path) executes here —
-// the moment the fallback plan becomes the real plan.
+// Task 7: finalize cancel-at-period-end once the paid period has passed. Any
+// purge manifest a scheduled downgrade left behind executes here — the moment
+// the customer stops paying for the feature.
 export async function reconcileCancelAtPeriodEnd(db = pool) {
   for (const sub of await listCancelAtPeriodEndDue(db)) {
     const reason = sub.cancel_reason ?? 'user_requested'
+    const modules = await listModules(db, sub.id)
     await cancelSubscriptionNow(db, sub.id, reason)
-    if (sub.pending_purge_manifest) {
-      await executeDowngradePurge(db, sub.id).catch((err) =>
+    for (const module of modules) {
+      if (!module.pending_purge_manifest) continue
+      await executeModulePurge(db, { moduleId: module.id }).catch((err) =>
         logger.error('billing.purge_failed', { err, subscriptionId: sub.id }))
     }
     await notifyUser(sub.user_id, BILLING_NOTIFICATION_TYPES.CANCELED,
@@ -208,23 +167,67 @@ export async function reconcileCancelAtPeriodEnd(db = pool) {
 export async function reconcileTrialReminders(db = pool) {
   for (const sub of await listTrialReminderDue(db, TRIAL_REMINDER_WINDOW_MS)) {
     await notifyUser(sub.user_id, BILLING_NOTIFICATION_TYPES.TRIAL_ENDING,
-      'Trial ending soon', 'Your GigBuddy trial ends in 2 days. Your first payment follows automatically.',
+      'Trial ending soon',
+      'Your GigBuddy trial ends in 2 days. Choose a billing cycle to keep your features.',
       `billing-trial-ending:${sub.id}`)
     await markTrialReminderSent(db, sub.id)
   }
 }
 
-// Task 9: surface billing_operations stuck 'pending' past the grace window (a
-// crash around a remote call). State-based tasks (1/2/3) drive the owning saga
-// forward on its idempotency key; this alert makes lingering orphans visible.
+function euros(cents) {
+  return `€${((cents ?? 0) / 100).toFixed(2)}`
+}
+
+function dateKey(value) {
+  return new Date(value).toISOString().slice(0, 10)
+}
+
+// Task 9: advance notice of the combined renewal charge, at T-7 and T-1.
+//
+// The sweep window is wide (everything renewing inside 7 days) and the tick is
+// 15 minutes, so idempotency comes from the notification dedupe key, which
+// carries the period end. That also means the copy must be DATE-based, never
+// "in 7 days": a subscription that entered the window late would otherwise be
+// told a number that is simply wrong.
+export async function reconcileRenewalNotices(db = pool) {
+  const due = await listRenewalNoticeDue(db, RENEWAL_NOTICE_7D_MS)
+  const now = Date.now()
+  for (const sub of due) {
+    const endsAt = new Date(sub.current_period_end)
+    const offset = endsAt.getTime() - now <= RENEWAL_NOTICE_1D_MS ? '1d' : '7d'
+    const amount = euros(sub.next_total_cents ?? sub.total_cents)
+    await notifyUser(sub.user_id, BILLING_NOTIFICATION_TYPES.RENEWAL_UPCOMING,
+      'Subscription renews soon',
+      `Your GigBuddy subscription renews on ${dateKey(endsAt)} for ${amount}.`,
+      `billing-renewal-${offset}:${sub.id}:${dateKey(endsAt)}`)
+  }
+}
+
+// Legacy rows created before commands were persisted cannot be replayed safely;
+// keep surfacing those for operator repair.
 export async function reconcileOrphanOperations(db = pool) {
-  const orphans = await listStalePendingOperations(db, ORPHAN_OP_STALE_MS)
-  for (const op of orphans) {
+  for (const op of await listUnreplayableOperations(db, ORPHAN_OP_STALE_MS)) {
     logger.warn('billing.operation_orphaned', { subscriptionId: op.subscription_id, opType: op.op_type })
   }
 }
 
-// Task 11: revoke expired complimentary subscriptions.
+export async function reconcileBillingOperations(db = pool) {
+  await recoverBillingOperations(db)
+}
+
+// Task 11: a refund intent committed but never confirmed at the provider. The
+// outbox op makes the retry safe — a call that already succeeded is skipped
+// rather than refunding twice.
+export async function reconcilePendingRefunds(db = pool) {
+  for (const refund of await listPendingRefunds(db, REFUND_RESUME_STALE_MS)) {
+    await resumePendingRefund(db, refund).catch((err) =>
+      logger.error('billing.refund_recovery_failed', {
+        err, subscriptionId: refund.subscription_id, refundId: refund.id,
+      }))
+  }
+}
+
+// Task 12: revoke expired complimentary subscriptions.
 export async function reconcileExpiredComplimentary(db = pool) {
   for (const sub of await listExpiredComplimentary(db)) {
     await cancelSubscriptionNow(db, sub.id, 'admin_revoked')
@@ -235,24 +238,20 @@ export async function reconcileExpiredComplimentary(db = pool) {
   }
 }
 
-// Trial expiry (plan task 4) is intentionally NOT a separate task: a trial's
-// first post-trial charge is generated by the provider subscription and flows
-// through payment ingestion (webhook + task 2 poll), which activates on paid and
-// drops to past_due on a failed conversion — exactly the "activate/past_due"
-// outcome. Access during and after the trial is resolver-bounded (trial + 2d)
-// regardless of this job, so no additional durable-status flip is needed here.
-
 // All billing tasks in order, each isolated. Called by runReconciliationTick.
 export const BILLING_TASKS = [
   ['stale_signups', reconcileStaleSignups],
+  ['expired_trials', reconcileExpiredTrials],
   ['nonterminal_payments', reconcileNonterminalPayments],
+  ['next_period_pricing', reconcileNextPeriodPricing],
   ['schedule_repairs', reconcileScheduleRepairs],
-  ['downgrade_schedules', reconcileDowngradeSchedules],
-  ['pending_downgrades', reconcilePendingDowngrades],
   ['past_due', reconcilePastDue],
   ['cancel_at_period_end', reconcileCancelAtPeriodEnd],
   ['pending_purges', reconcilePendingPurges],
   ['trial_reminders', reconcileTrialReminders],
+  ['renewal_notices', reconcileRenewalNotices],
+  ['pending_refunds', reconcilePendingRefunds],
+  ['billing_operations', reconcileBillingOperations],
   ['orphan_operations', reconcileOrphanOperations],
   ['expired_complimentary', reconcileExpiredComplimentary],
 ]

@@ -20,6 +20,9 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedBandMembers(seed)
+  seed = await fixtureDb.seedGigsAndTasks(seed)
 })
 
 afterAll(async () => {
@@ -174,71 +177,69 @@ describe('gig admission — tenant isolation', () => {
   })
 })
 
-describe('gig deal terms — merchandise_cut & percentage_of_sales', () => {
-  it('PATCH persists both percentages to DB', async () => {
+describe('gig deal terms — percentage_of_sales', () => {
+  it('PATCH persists the percentage to DB', async () => {
     await asUserA(
       request(app)
         .patch(`/api/gigs/${seed.gigA.id}`)
-        .send({ merchandise_cut: 15, percentage_of_sales: '20.5' })
+        .send({ percentage_of_sales: '20.5' })
     ).expect(200)
     const { rows } = await pool.query(
-      'SELECT merchandise_cut, percentage_of_sales FROM gigs WHERE id = $1',
+      'SELECT percentage_of_sales FROM gigs WHERE id = $1',
       [seed.gigA.id]
     )
-    expect(Number(rows[0].merchandise_cut)).toBe(15)
     expect(Number(rows[0].percentage_of_sales)).toBe(20.5)
   })
 
-  it('PATCH null clears a percentage field', async () => {
+  it('PATCH null clears the percentage field', async () => {
     await asUserA(
-      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ merchandise_cut: 10 })
+      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ percentage_of_sales: 10 })
     ).expect(200)
     await asUserA(
-      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ merchandise_cut: null })
+      request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ percentage_of_sales: null })
     ).expect(200)
     const { rows } = await pool.query(
-      'SELECT merchandise_cut FROM gigs WHERE id = $1',
+      'SELECT percentage_of_sales FROM gigs WHERE id = $1',
       [seed.gigA.id]
     )
-    expect(rows[0].merchandise_cut).toBeNull()
+    expect(rows[0].percentage_of_sales).toBeNull()
   })
 
   it('PATCH rejects out-of-range and non-numeric percentages → 400, DB unchanged', async () => {
     for (const bad of [150, -10, 'abc', '', '   ']) {
       await asUserA(
-        request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ merchandise_cut: bad })
+        request(app).patch(`/api/gigs/${seed.gigA.id}`).send({ percentage_of_sales: bad })
       ).expect(400)
     }
     const { rows } = await pool.query(
-      'SELECT merchandise_cut FROM gigs WHERE id = $1',
+      'SELECT percentage_of_sales FROM gigs WHERE id = $1',
       [seed.gigA.id]
     )
-    expect(rows[0].merchandise_cut).toBeNull()
+    expect(rows[0].percentage_of_sales).toBeNull()
   })
 
-  it('PATCH percentages on foreign-tenant gig → 404, DB unchanged', async () => {
+  it('PATCH percentage on foreign-tenant gig → 404, DB unchanged', async () => {
     await asUserA(
       request(app)
         .patch(`/api/gigs/${seed.gigB.id}`)
-        .send({ merchandise_cut: 25 })
+        .send({ percentage_of_sales: 25 })
     ).expect(404)
     const { rows } = await pool.query(
-      'SELECT merchandise_cut FROM gigs WHERE id = $1',
+      'SELECT percentage_of_sales FROM gigs WHERE id = $1',
       [seed.gigB.id]
     )
-    expect(rows[0].merchandise_cut).toBeNull()
+    expect(rows[0].percentage_of_sales).toBeNull()
   })
 
-  it('GET /api/gigs/:id includes both deal-term fields', async () => {
+  it('GET /api/gigs/:id includes the deal-term field', async () => {
     await asUserA(
       request(app)
         .patch(`/api/gigs/${seed.gigA.id}`)
-        .send({ merchandise_cut: 12.5, percentage_of_sales: 30 })
+        .send({ percentage_of_sales: 30 })
     ).expect(200)
     const res = await asUserA(
       request(app).get(`/api/gigs/${seed.gigA.id}`)
     ).expect(200)
-    expect(Number(res.body.merchandise_cut)).toBe(12.5)
     expect(Number(res.body.percentage_of_sales)).toBe(30)
   })
 })
@@ -536,89 +537,6 @@ describe('gig tags', () => {
     await asUserA(
       request(app).put(`/api/gigs/${seed.gigB.id}/tags`).send({ tags: ['Leaked'] }),
     ).expect(404)
-  })
-})
-
-describe('gig equipment', () => {
-  const equipmentUrl = (gigId) => `/api/gigs/${gigId}/equipment`
-
-  // Returns the supertest request itself so callers can chain .expect().
-  function setEquipment(gigId, equipment) {
-    return asUserA(request(app).put(equipmentUrl(gigId)).send({ equipment }))
-  }
-
-  it('replaces the whole set and returns the same shape the detail payload carries', async () => {
-    const res = await setEquipment(seed.gigA.id, [
-      { item: 'drumkit', provider: 'band' },
-      { item: 'pa_system', provider: 'event' },
-    ]).expect(200)
-
-    expect(res.body).toEqual([
-      { item: 'drumkit', provider: 'band' },
-      { item: 'pa_system', provider: 'event' },
-    ])
-
-    const detail = await asUserA(request(app).get(`/api/gigs/${seed.gigA.id}`)).expect(200)
-    expect(detail.body.equipment).toEqual(res.body)
-
-    // A second PUT replaces rather than merges.
-    const replaced = await setEquipment(seed.gigA.id, [
-      { item: 'stage_lights', provider: 'event' },
-    ]).expect(200)
-    expect(replaced.body).toEqual([{ item: 'stage_lights', provider: 'event' }])
-
-    const cleared = await setEquipment(seed.gigA.id, []).expect(200)
-    expect(cleared.body).toEqual([])
-  })
-
-  it('collapses duplicate items instead of failing on the primary key', async () => {
-    const res = await setEquipment(seed.gigA.id, [
-      { item: 'drumkit', provider: 'event' },
-      { item: 'drumkit', provider: 'band' },
-    ]).expect(200)
-
-    expect(res.body).toEqual([{ item: 'drumkit', provider: 'band' }])
-  })
-
-  it('rejects an unknown item, an unknown provider and a non-array body', async () => {
-    await setEquipment(seed.gigA.id, [{ item: 'laser_harp', provider: 'event' }]).expect(400)
-    await setEquipment(seed.gigA.id, [{ item: 'drumkit', provider: 'venue' }]).expect(400)
-    await setEquipment(seed.gigA.id, [{ item: 'drumkit', provider: null }]).expect(400)
-    await setEquipment(seed.gigA.id, ['drumkit']).expect(400)
-    await setEquipment(seed.gigA.id, 'drumkit').expect(400)
-    await asUserA(request(app).put(equipmentUrl(seed.gigA.id)).send({})).expect(400)
-
-    const { rows } = await pool.query('SELECT * FROM gig_equipment')
-    expect(rows).toEqual([])
-  })
-
-  it('404s a foreign-tenant gig and leaves its equipment untouched', async () => {
-    await pool.query(
-      `INSERT INTO gig_equipment (gig_id, tenant_id, item_key, provider) VALUES ($1, $2, 'drumkit', 'event')`,
-      [seed.gigB.id, seed.tenantB.id],
-    )
-
-    await setEquipment(seed.gigB.id, [{ item: 'pa_system', provider: 'band' }]).expect(404)
-
-    const { rows } = await pool.query(
-      'SELECT item_key, provider FROM gig_equipment WHERE gig_id = $1',
-      [seed.gigB.id],
-    )
-    expect(rows).toEqual([{ item_key: 'drumkit', provider: 'event' }])
-  })
-
-  it('forbids readers (403) but allows contributors (200)', async () => {
-    await pool.query(
-      'UPDATE memberships SET role = $1 WHERE user_id = $2 AND tenant_id = $3',
-      ['reader', seed.userA.id, seed.tenantA.id],
-    )
-    await setEquipment(seed.gigA.id, [{ item: 'drumkit', provider: 'band' }]).expect(403)
-
-    await pool.query(
-      'UPDATE memberships SET role = $1 WHERE user_id = $2 AND tenant_id = $3',
-      ['contributor', seed.userA.id, seed.tenantA.id],
-    )
-    await setEquipment(seed.gigA.id, [{ item: 'drumkit', provider: 'band' }]).expect(200)
   })
 })
 

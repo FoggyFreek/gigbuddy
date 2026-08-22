@@ -1,97 +1,117 @@
 import { describe, expect, it } from 'vitest'
-import { isCurrentPlan, planActionKind, ladderPlans } from '../planLadder.ts'
+import {
+  isCurrentPlan, planActionKind, ladderPlans, moduleFor, trialTierPlan,
+} from '../planLadder.ts'
+
+// Band and artist are still two independent products; they are just modules of
+// one subscription now. These helpers decide what a plan card offers WITHIN one
+// ladder — the guard that keeps the UI from proposing something the API rejects.
 
 const plan = (over = {}) => ({
   id: 1, slug: 'silver', name: 'Silver', audience: 'band',
   monthly_price_cents: 999, yearly_price_cents: 9999,
   entitlements: { features: {}, limits: {} },
-  is_active: true, is_fallback: false, sort_order: 2,
+  is_active: true, is_fallback: false, is_trial_tier: false, sort_order: 2,
   ...over,
 })
 
-const sub = (over = {}) => ({
-  id: 1, planId: 1, planSlug: 'silver', audience: 'band', status: 'active',
-  billingInterval: 'month', priceCents: 999, cancelAtPeriodEnd: false,
-  currentPeriodEnd: null, trialEndsAt: null, isComplimentary: false,
-  complimentaryExpiresAt: null, pendingChange: null, downgradeScheduled: false,
-  pendingLimitsSnapshot: null, scheduleStale: false, repairNeeded: false,
+const BRONZE = plan({ id: 10, slug: 'bronze', name: 'Bronze', is_fallback: true, sort_order: 1, monthly_price_cents: 0, yearly_price_cents: 0 })
+const SILVER = plan({ id: 11, sort_order: 2 })
+const GOLD = plan({ id: 12, slug: 'gold', name: 'Gold', sort_order: 3, is_trial_tier: true })
+const ARTIST_GOLD = plan({ id: 20, slug: 'artist_gold', name: 'Artist Gold', audience: 'artist', sort_order: 2, is_trial_tier: true })
+
+const module = (over = {}) => ({
+  audience: 'band', planId: SILVER.id, planSlug: 'silver', status: 'active',
+  priceCents: 999, isStarter: true,
+  pendingPlanId: null, pendingPlanSlug: null, pendingChangeKind: null,
+  pendingLimitsSnapshot: null,
   ...over,
 })
 
-describe('planActionKind — within one ladder', () => {
-  it('offers subscribe on a paid plan when there is no subscription', () => {
-    expect(planActionKind(plan(), null, false, 0)).toBe('subscribe')
+describe('moduleFor', () => {
+  it('finds the module governing a ladder', () => {
+    const sub = { modules: [module(), module({ audience: 'artist', planId: ARTIST_GOLD.id })] }
+    expect(moduleFor(sub, 'band').planId).toBe(SILVER.id)
+    expect(moduleFor(sub, 'artist').planId).toBe(ARTIST_GOLD.id)
   })
 
-  it('offers nothing on the free floor when there is no subscription', () => {
-    expect(planActionKind(plan({ is_fallback: true }), null, false, 0)).toBeNull()
-  })
-
-  it('ranks by sort_order', () => {
-    const current = sub()
-    expect(planActionKind(plan({ id: 2, sort_order: 3 }), current, false, 2)).toBe('upgrade')
-    expect(planActionKind(plan({ id: 3, sort_order: 1 }), current, false, 2)).toBe('downgrade')
-    expect(planActionKind(plan({ id: 4, sort_order: 2 }), current, false, 2)).toBe('switch')
-  })
-
-  it('offers nothing on the plan already active', () => {
-    expect(planActionKind(plan(), sub(), true, 2)).toBeNull()
-  })
-})
-
-describe('planActionKind — across ladders', () => {
-  // The regression this exists for: artist_gold once carried the highest
-  // sort_order overall, so a gold subscriber saw "Upgrade" on it and the API
-  // answered 400. Ranking must never cross the product boundary.
-  it('offers nothing on a plan from the other audience', () => {
-    const bandSub = sub({ audience: 'band' })
-    const artistPlan = plan({ id: 9, slug: 'artist_gold', audience: 'artist', sort_order: 99 })
-    expect(planActionKind(artistPlan, bandSub, false, 2)).toBeNull()
-  })
-
-  it('holds in the other direction too', () => {
-    const artistSub = sub({ audience: 'artist' })
-    expect(planActionKind(plan({ audience: 'band', sort_order: 1 }), artistSub, false, 2)).toBeNull()
+  it('is null when the customer never bought that product', () => {
+    expect(moduleFor({ modules: [module()] }, 'artist')).toBeNull()
+    expect(moduleFor(null, 'band')).toBeNull()
   })
 })
 
 describe('isCurrentPlan', () => {
-  it('without a subscription, the free floor is current', () => {
-    expect(isCurrentPlan(null, plan({ is_fallback: true }), 'month')).toBe(true)
-    expect(isCurrentPlan(null, plan(), 'month')).toBe(false)
+  it('matches the module’s plan', () => {
+    expect(isCurrentPlan(module(), SILVER)).toBe(true)
+    expect(isCurrentPlan(module(), GOLD)).toBe(false)
   })
 
-  it('matches on plan and interval', () => {
-    expect(isCurrentPlan(sub(), plan(), 'month')).toBe(true)
-    expect(isCurrentPlan(sub(), plan(), 'year')).toBe(false)
+  it('treats the free floor as current when there is no module', () => {
+    expect(isCurrentPlan(null, BRONZE)).toBe(true)
+    expect(isCurrentPlan(null, SILVER)).toBe(false)
   })
 
-  it('a complimentary grant has no interval, so plan id alone decides', () => {
-    const grant = sub({ isComplimentary: true, billingInterval: null })
-    expect(isCurrentPlan(grant, plan(), 'year')).toBe(true)
+  it('still reports the CURRENT plan while a change is scheduled', () => {
+    // The downgrade has not happened yet; saying otherwise would offer to
+    // "upgrade" back to the plan they are still on.
+    const scheduled = module({ planId: GOLD.id, pendingPlanId: SILVER.id, pendingChangeKind: 'downgrade' })
+    expect(isCurrentPlan(scheduled, GOLD)).toBe(true)
+    expect(isCurrentPlan(scheduled, SILVER)).toBe(false)
+  })
+})
+
+describe('planActionKind', () => {
+  it('offers "add" on a paid plan when the ladder has no module', () => {
+    expect(planActionKind(SILVER, null, 'band', 0)).toBe('add')
+    expect(planActionKind(GOLD, null, 'band', 0)).toBe('add')
+  })
+
+  it('offers nothing on the free floor when there is no module — that IS the free plan', () => {
+    expect(planActionKind(BRONZE, null, 'band', 0)).toBeNull()
+  })
+
+  it('offers nothing on the plan the module is already on', () => {
+    expect(planActionKind(SILVER, module(), 'band', SILVER.sort_order)).toBeNull()
+  })
+
+  it('ranks by sort_order within the ladder', () => {
+    expect(planActionKind(GOLD, module(), 'band', SILVER.sort_order)).toBe('upgrade')
+    const onGold = module({ planId: GOLD.id, planSlug: 'gold' })
+    expect(planActionKind(SILVER, onGold, 'band', GOLD.sort_order)).toBe('downgrade')
+  })
+
+  it('offers the free floor as a REMOVAL — having no module is the free plan', () => {
+    expect(planActionKind(BRONZE, module(), 'band', SILVER.sort_order)).toBe('remove')
+  })
+
+  it('never offers an action for a plan on the other ladder', () => {
+    expect(planActionKind(ARTIST_GOLD, module(), 'band', SILVER.sort_order)).toBeNull()
+    expect(planActionKind(GOLD, null, 'artist', 0)).toBeNull()
   })
 })
 
 describe('ladderPlans', () => {
-  const all = [
-    plan({ id: 1, slug: 'gold', audience: 'band', sort_order: 3 }),
-    plan({ id: 2, slug: 'bronze', audience: 'band', sort_order: 1 }),
-    plan({ id: 3, slug: 'artist_gold', audience: 'artist', sort_order: 2 }),
-    plan({ id: 4, slug: 'artist_hidden', audience: 'artist', sort_order: 1, is_active: false }),
-  ]
-
   it('keeps one audience and ranks it', () => {
-    expect(ladderPlans(all, 'band').map((p) => p.slug)).toEqual(['bronze', 'gold'])
+    const ranked = ladderPlans([GOLD, ARTIST_GOLD, BRONZE, SILVER], 'band')
+    expect(ranked.map((p) => p.slug)).toEqual(['bronze', 'silver', 'gold'])
   })
 
   it('can drop inactive plans', () => {
-    expect(ladderPlans(all, 'artist').map((p) => p.slug)).toEqual(['artist_hidden', 'artist_gold'])
-    expect(ladderPlans(all, 'artist', { activeOnly: true }).map((p) => p.slug)).toEqual(['artist_gold'])
+    const retired = plan({ id: 99, slug: 'old', is_active: false, sort_order: 4 })
+    expect(ladderPlans([SILVER, retired], 'band', { activeOnly: true }).map((p) => p.slug))
+      .toEqual(['silver'])
+  })
+})
+
+describe('trialTierPlan', () => {
+  it('finds the flagged trial tier per ladder', () => {
+    const plans = [BRONZE, SILVER, GOLD, ARTIST_GOLD]
+    expect(trialTierPlan(plans, 'band').slug).toBe('gold')
+    expect(trialTierPlan(plans, 'artist').slug).toBe('artist_gold')
   })
 
-  it('does not mutate the input', () => {
-    const before = all.map((p) => p.slug)
-    ladderPlans(all, 'band')
-    expect(all.map((p) => p.slug)).toEqual(before)
+  it('is null when the catalog designates none', () => {
+    expect(trialTierPlan([BRONZE, SILVER], 'band')).toBeNull()
   })
 })

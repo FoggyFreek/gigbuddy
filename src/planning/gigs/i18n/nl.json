@@ -84,6 +84,16 @@
     "whatsApp": "Delen via WhatsApp",
     "imageCard": "Afbeelding genereren"
   },
+  "documentMenu": {
+    "documents": "Documenten",
+    "documentsAria": "documenten van optreden downloaden",
+    "itinerary": "Draaiboek / Tijdschema",
+    "artistSettlement": "Artiestenafrekening",
+    "contract": "Contract",
+    "downloadFailed": "Downloaden van het draaiboek is mislukt",
+    "settlementDownloadFailed": "Downloaden van de artiestenafrekening is mislukt",
+    "contractDownloadFailed": "Downloaden van het contract is mislukt"
+  },
   "gigShare": {
     "title": "Gig delen als afbeelding",
     "cardVariation": "Kaartvariant",
@@ -152,9 +162,11 @@
     "importFailed": "Importeren mislukt"
   },
   "detail": {
+    "fieldHelp": "Meer informatie",
     "tabs": {
       "event": "Evenement",
       "terms": "Afspraken",
+      "finance": "Financiën",
       "participants": "Deelnemers",
       "tasks": "Taken"
     },
@@ -184,10 +196,6 @@
     "location": "Locatie",
     "openInMaps": "Openen in kaarten",
     "terms": "Afspraken",
-    "paidAdmission": "Betaalde toegang",
-    "guaranteedFee": "Gegarandeerde gage",
-    "merchandiseCut": "Merchandise-aandeel",
-    "percentageOfNetSales": "Percentage van netto-omzet",
     "ticketLink": "Ticketlink",
     "merchandiseSold": "Verkochte merchandise",
     "itemsSold_one": "{{count}} item · excl. btw",
@@ -203,31 +211,193 @@
       "paid": "Betaald",
       "void": "Vervallen"
     },
-    "equipment": {
-      "title": "Apparatuur",
-      "add": "Apparatuur toevoegen",
-      "empty": "Nog geen apparatuur vastgelegd",
-      "remove": "Verwijderen",
-      "saveFailed": "Opslaan van apparatuur mislukt",
-      "providerLabel": "Wie zorgt voor {{item}}",
-      "provider": {
-        "event": "Op locatie",
-        "band": "Wij nemen mee"
-      },
-      "items": {
-        "pa_system": "PA-systeem",
-        "drumkit": "Drumstel",
-        "bass_amp": "Basversterker",
-        "guitar_amp": "Gitaarversterker",
-        "stage_lights": "Podiumverlichting"
-      }
-    },
     "memberAvailability": "Beschikbaarheid",
     "participants": "Deelnemers",
     "contacts": "Contacten",
     "tasks": "Taken",
     "attachments": "Bijlagen",
-    "notes": "Notities"
+    "infoBlocks": {
+      "title": "Aanvullende informatie",
+      "add": "Info-blok toevoegen",
+      "remove": "Dit blok verwijderen",
+      "labelField": "Label",
+      "deleteTitle": "Blok “{{label}}” verwijderen?",
+      "saveFailed": "Opslaan van het informatieblok is mislukt",
+      "labels": {
+        "remarks": "Opmerkingen / Notities",
+        "timetable": "Tijdschema",
+        "hospitality": "Hospitality",
+        "catering": "Catering",
+        "technical_information": "Technische informatie",
+        "dressing_room": "Kleedkamer",
+        "light": "Licht",
+        "merchandise": "Merchandise",
+        "backline": "Backline",
+        "invoice_info": "Factuurgegevens",
+        "press": "Pers",
+        "guestlist": "Gastenlijst",
+        "recording": "Opname"
+      }
+    },
+    "timetable": {
+      "title": "Tijdschema",
+      "add": "Regel toevoegen",
+      "remove": "Deze regel verwijderen",
+      "empty": "Nog geen tijdschema.",
+      "startTime": "Van",
+      "endTime": "Tot",
+      "description": "Omschrijving",
+      "dragAria": "Sleep om deze regel te verplaatsen",
+      "unnamedLine": "deze regel",
+      "deleteTitle": "“{{label}}” verwijderen?",
+      "saveFailed": "Opslaan van het tijdschema is mislukt"
+    },
+    "deal": {
+      "title": "Deal",
+      "dealType": "Dealtype",
+      "dealTypes": {
+        "flat_fee": "Vaste gage",
+        "guarantee": "Garantie",
+        "door_deal": "Doordeal"
+      },
+      "dealTypeHelp": {
+        "flat_fee": "Een vast gegarandeerd bedrag, zonder inkomsten uit kaartverkoop.",
+        "guarantee": "Een gegarandeerde gage gecombineerd met een percentage van de kaartopbrengst. Kies bij Garantievariant hoe die twee zich verhouden.",
+        "door_deal": "Een percentage van de kaartopbrengst na het break-evenpunt, zonder gegarandeerde gage."
+      },
+      "guaranteeVariant": "Garantievariant",
+      "guaranteeVariants": {
+        "plus": "Plus",
+        "versus": "Versus"
+      },
+      "guaranteeVariantHelp": {
+        "plus": "De gegarandeerde gage plus een percentage van de kaartopbrengst na break-even. Zaalkosten kunnen worden meegerekend.",
+        "versus": "Of de gegarandeerde gage, of het percentage van de artiest in de kaartopbrengst — het hoogste van beide."
+      },
+      "guaranteedFee": "Gegarandeerde gage",
+      "ticketPercentage": "Kaartpercentage",
+      "venueShare": "Zaal / promotor",
+      "ticketSplitHelp": "Eerst het aandeel van de artiest in de kaartopbrengst, dan dat van de zaal of promotor. Samen zijn ze altijd 100%.",
+      "includeVenueCosts": "Locatiekosten meerekenen in de break-evenberekening",
+      "venueCosts": "Locatiekosten",
+      "venueCostsHelp": "Kosten uit productie of locatiehuur.",
+      "venueCapacity": "Zaalcapaciteit",
+      "expectedVisitors": "Verwachte bezoekers",
+      "expectedVisitorsHelp": "Wordt gebruikt om de mogelijke opbrengst te simuleren.",
+      "ticketsSold": "Verkochte kaarten",
+      "netTicketPrice": "Netto kaartprijs",
+      "netTicketPriceHelp": "De prijs die de kassa per kaart binnenkrijgt, excl. servicekosten — de basis voor alle berekeningen hieronder. Staat de btw erin, vul die dan in bij Belastingen als ticket-btw %.",
+      "grossTicketPrice": "Bruto kaartprijs",
+      "percentage": "Percentage",
+      "fixedAmount": "Vast bedrag",
+      "feeBases": {
+        "none": "Geen",
+        "percentage": "Percentage",
+        "amount": "Vast bedrag"
+      },
+      "bookingFee": {
+        "title": "Boekingsfee",
+        "basis": "Boekingsfee",
+        "percentage": "Boekingsfee percentage",
+        "amount": "Boekingsfee bedrag",
+        "percentageHelp": "Berekend over de brutogage — de gegarandeerde gage plus de tot nu toe verdiende kaartopbrengst."
+      },
+      "commission": {
+        "title": "Commissie",
+        "basis": "Commissie",
+        "percentage": "Commissie percentage",
+        "amount": "Commissie bedrag",
+        "percentageHelp": "Berekend over de nettogage (brutogage min kosten)."
+      },
+      "taxes": {
+        "title": "Belastingen",
+        "subjectToVat": "Btw-plichtig",
+        "generalVat": "Algemeen btw %",
+        "generalVatHelp": "Het tarief waarmee een factuur vanuit dit optreden wordt opgemaakt. Laat leeg voor het standaardtarief ({{rate}}%).",
+        "ticketVat": "Ticket-btw %",
+        "ticketVatHelp": "De btw die het podium op kaarten rekent en die in de nettoticketprijs zit. Alle ticketberekeningen gaan over de prijs zonder die btw.",
+        "copyright": "Auteursrecht / Buma %",
+        "copyrightHelp": "Auteursrecht / Buma wordt na de ticket-btw van de ticketopbrengst afgetrokken. Laat leeg om dit te negeren."
+      },
+      "costs": {
+        "title": "Kosten",
+        "label": "Kostenpost",
+        "labelPlaceholder": "Reiskosten, backline, catering, …",
+        "amount": "Bedrag",
+        "paidBy": "Betaald door",
+        "paidByOptions": {
+          "artist_agency": "Artiest/Bureau",
+          "artist": "Artiest",
+          "agency": "Bureau"
+        },
+        "paidByHelp": {
+          "artist_agency": "Wordt afgetrokken van de brutogage voordat de boekingsfee wordt berekend, zodat beide partijen via de verlaagde grondslag meebetalen.",
+          "artist": "Wordt alleen afgetrokken van het bedrag voor de artiest. De boekingsfee blijft ongewijzigd.",
+          "agency": "Wordt alleen afgetrokken van het bedrag voor de boeker. Het bedrag voor de artiest blijft ongewijzigd."
+        },
+        "add": "Toevoegen",
+        "delete": "Kostenpost verwijderen",
+        "deleteTitle": "\"{{label}}\" verwijderen?",
+        "empty": "Nog geen kosten toegevoegd.",
+        "total": "Totale kosten",
+        "deleteLabel": "Kostenpost {{label}} verwijderen"
+      },
+      "statement": {
+        "title": "Afrekening",
+        "grossFee": "Brutogage",
+        "costs": "Kosten",
+        "nettFee": "Nettogage",
+        "bookingFee": "Boekingsfee",
+        "commission": "Commissie",
+        "dueToBooker": "Voor de boeker",
+        "dueToArtist": "Voor de artiest",
+        "breakdown": {
+          "ticketRevenue_one": "Het aandeel van {{percentage}}% in de {{count}} tot nu toe verkochte kaart.",
+          "ticketRevenue_other": "Het aandeel van {{percentage}}% in de {{count}} tot nu toe verkochte kaarten.",
+          "ticketRevenueUnknown": "Er zijn nog geen verkochte kaarten ingevuld.",
+          "ticketRevenueFlatFee": "Een vaste gage deelt niet mee in de kaartopbrengst.",
+          "grossFee": "Gegarandeerde gage {{guarantee}} plus {{tickets}} uit de tot nu toe verkochte kaarten.",
+          "costs_one": "Het totaal van {{count}} kostenpost.",
+          "costs_other": "Het totaal van {{count}} kostenposten.",
+          "nettFee": "Brutogage {{gross}} min kosten {{costs}}.",
+          "percentageOfGross": "{{percentage}}% van de brutogage ({{base}}).",
+          "percentageOfNett": "{{percentage}}% van de nettogage min de boekingsfee ({{base}}).",
+          "fixedAmount": "Een vast bedrag, zoals afgesproken ingevoerd.",
+          "notAgreed": "Niet afgesproken voor dit optreden.",
+          "dueToBooker": "Boekingsfee {{bookingFee}} plus commissie {{commission}}.",
+          "dueToBookerWithCosts": "Boekingsfee {{bookingFee}} plus commissie {{commission}}, min {{costs}} aan kosten betaald door het bureau.",
+          "dueToArtistInclusive": "De nettogage min commissie en de boekingsfee, die uit de brutogage wordt gehaald.",
+          "dueToArtistWithCosts": "Min {{costs}} aan kosten betaald door de artiest."
+        }
+      },
+      "tickets": {
+        "title": "Kaartopbrengst",
+        "sold": "Verkochte kaarten",
+        "soldOfCapacity": "{{sold}} / {{capacity}}",
+        "toBreakEven": "Kaarten tot break-even",
+        "expectedUpside": "Verwachte opbrengst",
+        "potentialUpside": "Mogelijke opbrengst",
+        "soldCaption": "{{price}} / {{revenue}}",
+        "atAttendance_one": "bij {{count}} kaart",
+        "atAttendance_other": "bij {{count}} kaarten",
+        "unknown": "—",
+        "flatFeeNote": "Bij een vaste gage is er geen aandeel in de kaartopbrengst.",
+        "breakdown": {
+          "sold": "Tot nu toe verkochte kaarten, afgezet tegen de zaalcapaciteit. De prijs is per kaart na aftrek; de opbrengst is wat er tot nu toe is verdiend aan verkochte kaarten.",
+          "soldVat": "Er gaat eerst {{percentage}}% btw af van de kaartprijs.",
+          "soldCopyright": "Daarna gaat {{percentage}}% auteursrecht / Buma eraf.",
+          "expected": "Het aandeel van {{percentage}}% voor de artiest bij het verwachte aantal bezoekers.",
+          "potential": "Het aandeel van {{percentage}}% voor de artiest bij volle zaal — het maximum voor deze deal.",
+          "flat_fee": "Een vaste gage heeft geen break-evenpunt.",
+          "guarantee": "De kaartopbrengst volgt de gekozen garantievariant.",
+          "door_deal": "De kaartopbrengst moet eerst de zaalkosten dekken voordat het aandeel van de artiest begint.",
+          "guaranteeVariants": {
+            "plus": "De kaartopbrengst moet eerst de brutogage dekken, en de zaalkosten wanneer die worden meegerekend, voordat het aandeel van de artiest begint.",
+            "versus": "Er wordt niets terugverdiend — de deal betaalt gewoon het hoogste van de gegarandeerde gage of het volledige aandeel van de artiest in de kassa."
+          }
+        }
+      }
+    }
   },
   "page": {
     "titleFallback": "Optredengegevens",

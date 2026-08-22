@@ -9,7 +9,6 @@ import { slugFromBandName } from '../../../../utils/slugify.ts'
 import type { TenantKind } from '../../../../auth/tenantKinds.ts'
 
 interface SummaryStepProps {
-  /** Which sort of tenant this flow is creating — selects the copy. */
   kind: TenantKind
   plan: SubscriptionPlan
   interval: BillingInterval
@@ -18,6 +17,8 @@ interface SummaryStepProps {
   resumedSlug: string | null
   resumedBandName: string | null
   logoFileName: string | null
+  trialEndsAt: Date | null
+  addingToTrial: boolean
 }
 
 export default function SummaryStep({
@@ -28,6 +29,8 @@ export default function SummaryStep({
   resumedSlug,
   resumedBandName,
   logoFileName,
+  trialEndsAt,
+  addingToTrial,
 }: Readonly<SummaryStepProps>) {
   const { t } = useTranslation(['onboarding', 'billing'])
   const price = priceForInterval(plan, interval)
@@ -42,6 +45,19 @@ export default function SummaryStep({
     priceLabel = t($ => $.billing.plans.perYear, { price: formatEur(price) })
   } else {
     priceLabel = t($ => $.billing.plans.perMonth, { price: formatEur(price) })
+  }
+
+  // A running trial ends when it ends: adding a product to it starts no new
+  // period, and the copy has to say so.
+  let noteText: string
+  if (trialEndsAt && addingToTrial) {
+    noteText = t($ => $.summary.addToTrialNote, { date: trialEndsAt })
+  } else if (trialEndsAt) {
+    noteText = t($ => $.summary.trialNote, { date: trialEndsAt })
+  } else if (plan.is_fallback) {
+    noteText = t($ => $.summary.freeNote)
+  } else {
+    noteText = t($ => $.summary.paymentNote)
   }
 
   const row = (label: string, value: string) => (
@@ -64,11 +80,15 @@ export default function SummaryStep({
       )}
 
       <Stack spacing={1}>
-        {row(t($ => $.summary.plan), `${plan.name} — ${priceLabel}`)}
-        {row(
-          t($ => $.summary.interval),
-          interval === 'year' ? t($ => $.summary.yearly) : t($ => $.summary.monthly),
-        )}
+        {row(t($ => $.summary.plan), trialEndsAt
+          ? t($ => $.summary.goldTrial, { plan: plan.name })
+          : `${plan.name} — ${priceLabel}`)}
+        {trialEndsAt
+          ? row(t($ => $.summary.trialEnds), t($ => $.summary.date, { date: trialEndsAt }))
+          : row(
+            t($ => $.summary.interval),
+            interval === 'year' ? t($ => $.summary.yearly) : t($ => $.summary.monthly),
+          )}
         {row(t($ => $.workspace[kind].summaryLabel), bandName)}
         {row(t($ => $.summary.slug), slug)}
         {row(t($ => $.summary.logo), logoFileName ?? t($ => $.summary.noLogo))}
@@ -80,9 +100,7 @@ export default function SummaryStep({
         </Typography>
       )}
 
-      <Alert severity="info">
-        {plan.is_fallback ? t($ => $.summary.freeNote) : t($ => $.summary.paymentNote)}
-      </Alert>
+      <Alert severity="info">{noteText}</Alert>
     </Stack>
   )
 }

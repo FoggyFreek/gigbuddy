@@ -112,6 +112,7 @@ interface Props {
   label: string
   value: string
   onChange: (value: string) => void
+  compact?: boolean
 }
 
 function completionAt(value: string, cursor: number): Completion | null {
@@ -194,7 +195,7 @@ function createCaretAnchor(textarea: HTMLTextAreaElement, cursor: number): Caret
   }
 }
 
-export default function ChordProSourceEditor({ label, value, onChange }: Readonly<Props>) {
+export default function ChordProSourceEditor({ label, value, onChange, compact = false }: Readonly<Props>) {
   const { t } = useTranslation('songs')
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const pendingCaret = useRef<number | null>(null)
@@ -295,7 +296,7 @@ export default function ChordProSourceEditor({ label, value, onChange }: Readonl
                 setCaretAnchor(createCaretAnchor(inputRef.current, completion.cursor))
               }
             },
-            style: { fontFamily: MONO_FONT, fontSize: 14, lineHeight: 1.5, resize: 'none', overflow: 'auto' },
+            style: { fontFamily: MONO_FONT, fontSize: compact ? 12 : 14, lineHeight: 1.5, resize: 'none', overflow: 'auto' },
           },
         }}
         sx={{

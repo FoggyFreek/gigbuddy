@@ -232,7 +232,7 @@ describe('AppShell tenant switcher', () => {
     expect(within(addBand).queryByTestId('DiamondOutlinedIcon')).not.toBeInTheDocument()
   })
 
-  it('shows super-admin nav links in the settings menu only to super admins', async () => {
+  it('shows super-admin nav links in the dedicated admin menu', async () => {
     useAuth.mockReturnValue({
       user: { ...TWO_TENANT_USER, isSuperAdmin: true },
       logout: vi.fn(),
@@ -240,23 +240,20 @@ describe('AppShell tenant switcher', () => {
     })
     const user = userEvent.setup()
     wrap(<AppShell />)
-    await user.click(screen.getByLabelText('open settings menu'))
+    await user.click(screen.getByLabelText('open super-admin menu'))
     const menu = screen.getByRole('menu')
-    expect(within(menu).getByText('Tenants')).toBeInTheDocument()
-    expect(within(menu).getByText('All Users')).toBeInTheDocument()
+    expect(within(menu).getByText('Organisations')).toBeInTheDocument()
+    expect(within(menu).getByText('All users')).toBeInTheDocument()
   })
 
-  it('does not show super-admin nav links to non-super', async () => {
+  it('does not show super-admin nav links to non-super', () => {
     useAuth.mockReturnValue({
       user: TWO_TENANT_USER,
       logout: vi.fn(),
       switchTenant: vi.fn(),
     })
-    const user = userEvent.setup()
     wrap(<AppShell />)
-    await user.click(screen.getByLabelText('open settings menu'))
-    expect(screen.queryByText('Tenants')).not.toBeInTheDocument()
-    expect(screen.queryByText('All Users')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('open super-admin menu')).not.toBeInTheDocument()
   })
 
   it('shows the unified Settings link in the settings menu', async () => {

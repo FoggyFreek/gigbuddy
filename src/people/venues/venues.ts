@@ -1,6 +1,12 @@
 import { request } from '../../api/_client.ts'
-import type { Venue, Contact, DuplicateEntityMatch, Id } from '../../types/entities.ts'
-import type { LimitedCollectionResponse, PlaceEnrichResponse, PlaceSuggestion } from '../../types/api.ts'
+import type { Venue, Contact, DuplicateEntityMatch, Gig, Id } from '../../types/entities.ts'
+import type {
+  LimitedCollectionResponse,
+  LimitedCollectionWithCursorResponse,
+  ListCollectionCursor,
+  PlaceEnrichResponse,
+  PlaceSuggestion,
+} from '../../types/api.ts'
 
 interface VenueCategoryImpact {
   affected_count?: number
@@ -46,6 +52,21 @@ export const searchVenues = (q: string, category?: string) => {
   const params = new URLSearchParams({ q })
   if (category) params.set('category', category)
   return api<Venue[]>(`/search?${params}`)
+}
+// The venue's gig history, newest first. Deep bounded: pass the previous page's
+// nextCursor to load more.
+export const listVenueEvents = (
+  id: Id,
+  limit: number,
+  cursor?: ListCollectionCursor,
+  options: Pick<RequestInit, 'signal'> = {},
+) => {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (cursor) {
+    params.set('cursorDate', cursor.date)
+    params.set('cursorId', String(cursor.id))
+  }
+  return api<LimitedCollectionWithCursorResponse<Gig>>(`/${id}/events?${params}`, { signal: options.signal })
 }
 export const getVenueCategoryImpact = (id: Id, newCategory: string) =>
   api<VenueCategoryImpact>(`/${id}/category-impact?new_category=${encodeURIComponent(newCategory)}`)

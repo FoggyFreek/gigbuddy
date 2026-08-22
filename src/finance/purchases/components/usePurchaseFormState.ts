@@ -19,6 +19,7 @@ import { buildPurchasePayload, emptyLine, purchaseToForm } from './purchaseFormH
 import { useAccountingProfile } from '../../../contexts/accountingProfileContext.ts'
 import type { PurchaseForm, PurchaseFormLine } from './purchaseFormHelpers.ts'
 import { vatControlAccountCodes } from '../../../../shared/vatControlAccounts.js'
+import { useDialog } from '../../../contexts/dialogContext.ts'
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
@@ -63,8 +64,6 @@ export interface UsePurchaseFormStateResult {
   paymentCandidatesError: string | null
   selectedBankLineId: Id | null
   setSelectedBankLineId: (id: Id | null) => void
-  deleteDialogOpen: boolean
-  setDeleteDialogOpen: (open: boolean) => void
   patchForm: (patch: Partial<PurchaseForm>) => void
   patchLine: (index: number, patch: Partial<PurchaseFormLine>) => void
   addLine: () => void
@@ -73,8 +72,8 @@ export interface UsePurchaseFormStateResult {
   openPaymentDialog: () => void
   closePaymentDialog: () => void
   handleRegisterPayment: () => Promise<void>
-  handleDelete: () => void
-  confirmDelete: () => Promise<void>
+  handleDelete: () => Promise<void>
+
   attachments: PurchaseAttachment[]
   attachmentsBusy: boolean
   attachmentError: string | null
@@ -88,11 +87,11 @@ export interface UsePurchaseFormStateResult {
 // edited here, so this hook only deals with an existing purchase.
 export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: UsePurchaseFormStateArgs): UsePurchaseFormStateResult {
   const { t } = useTranslation('purchases')
+  const { confirmDelete } = useDialog()
   const { accountingCountry, defaultVatRate } = useAccountingProfile()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [form, setForm] = useState<PurchaseForm | null>(null)
   const [purchase, setPurchase] = useState<Purchase | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -413,12 +412,12 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
     }
   }
 
-  function handleDelete() {
-    setDeleteDialogOpen(true)
-  }
-
-  async function confirmDelete() {
-    setDeleteDialogOpen(false)
+  async function handleDelete() {
+    const confirmed = await confirmDelete({
+      title: t($ => $.deleteDialog.title),
+      body: t($ => $.deleteDialog.body),
+    })
+    if (!confirmed) return
     try {
       await deletePurchase(purchaseId)
       onClose(true)
@@ -456,8 +455,6 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
     paymentCandidatesError,
     selectedBankLineId,
     setSelectedBankLineId,
-    deleteDialogOpen,
-    setDeleteDialogOpen,
     patchForm,
     patchLine,
     addLine,
@@ -467,7 +464,6 @@ export function usePurchaseFormState({ purchaseId, onClose, onPurchaseUpdate }: 
     closePaymentDialog,
     handleRegisterPayment,
     handleDelete,
-    confirmDelete,
     attachments,
     attachmentsBusy,
     attachmentError,

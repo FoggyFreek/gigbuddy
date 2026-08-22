@@ -1,0 +1,245 @@
+/* Theme colors come from the active MUI theme through React Email's documented
+ * --re-* variables. This file only owns viewport and touch responsiveness. */
+.gb-template-editor-shell {
+  display: flex;
+  min-width: 0;
+  min-height: 420px;
+  overflow: hidden;
+}
+
+.gb-template-editor-shell.gb-template-editor-shell--hidden {
+  display: none;
+}
+
+.gb-template-editor-canvas {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  padding-right: 1rem;
+}
+
+.gb-merge-fields-dock {
+  box-sizing: border-box;
+  flex: 0 0 13rem;
+  align-self: stretch;
+  width: 13rem;
+  margin-right: 1rem;
+  padding-right: 1rem;
+  overflow-y: auto;
+  border-right: 1px solid var(--re-border);
+}
+
+.gb-merge-fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 0.75rem;
+}
+
+.gb-merge-fields-list > button {
+  border-color: var(--re-border);
+  border-radius: 0;
+}
+
+.gb-merge-fields-list > button:hover {
+  border-color: var(--re-border);
+  background-color: var(--re-hover);
+}
+
+.gb-merge-fields-list > button + button {
+  margin-top: -1px;
+}
+
+.gb-merge-fields-list [draggable='true'] {
+  cursor: grab;
+}
+
+.gb-merge-fields-list [draggable='true']:active {
+  cursor: grabbing;
+}
+
+.gb-template-image-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.gb-template-image-tile {
+  min-width: 0;
+  min-height: 6.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border: 1px solid var(--re-border);
+  border-radius: 0.375rem;
+  text-align: center;
+}
+
+.gb-template-image-tile img {
+  display: block;
+  width: 3rem;
+  height: 3rem;
+  object-fit: contain;
+}
+
+.gb-template-image-grid--white .gb-template-image-tile {
+  background: #343434;
+  color: #fff;
+}
+
+.gb-template-image-tile[draggable='true'] {
+  cursor: grab;
+}
+
+.gb-template-editor-inspector {
+  box-sizing: border-box;
+  flex: 0 0 17rem;
+  width: 17rem;
+  max-height: 42rem;
+  overflow-y: auto;
+  border-left: 1px solid var(--re-border);
+  padding: 0.25rem 0 0.25rem 1rem;
+  color: var(--re-text);
+  background: var(--re-bg);
+}
+
+.gb-template-editor-inspector [data-re-inspector-input],
+.gb-template-editor-inspector [data-re-inspector-color-hex],
+.gb-template-editor-inspector [data-re-inspector-select] {
+  border: 1px solid var(--re-border);
+  border-radius: 0.25rem;
+  color: var(--re-text);
+  background-color: var(--re-input-bg, var(--re-bg));
+  caret-color: var(--re-text);
+  box-shadow: none;
+}
+
+.gb-template-editor-inspector [data-re-inspector-select] option {
+  color: var(--re-text);
+  background-color: var(--re-input-bg, var(--re-bg));
+}
+
+/* The library's own [data-re-inspector-input] rule caps max-width at 3.5rem
+ * for the small numeric fields. Plain text/textarea fields (Source, Alt, …)
+ * get an inline width from the library too, but max-width still clips it
+ * since it's a separate property — lift the cap for those. */
+.gb-template-editor-inspector [data-re-inspector-prop-row] > [data-re-inspector-input] {
+  max-width: none;
+}
+
+.gb-template-editor-inspector [data-re-inspector-number],
+.gb-template-editor-inspector [data-re-inspector-color-control] {
+  background-color: var(--re-input-bg, var(--re-bg));
+  box-shadow: none;
+}
+
+.gb-template-editor-inspector [data-re-inspector-number] [data-re-inspector-input],
+.gb-template-editor-inspector [data-re-inspector-number] [data-re-inspector-select],
+.gb-template-editor-inspector [data-re-inspector-color-control] [data-re-inspector-color-hex] {
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+}
+
+.gb-template-editor-inspector [data-re-inspector-input]:focus,
+.gb-template-editor-inspector [data-re-inspector-select]:focus {
+  border-color: var(--re-text-muted);
+}
+
+/* The editor theme only sets text-align on [alignment] elements, which has no
+ * visual effect on an <img> (a replaced element) or on the button's wrapping
+ * div. Mirror what the export renderer actually produces so the canvas isn't
+ * misleading while editing. */
+.ProseMirror img[alignment='left'] {
+  display: block;
+  margin-right: auto;
+  margin-left: 0;
+}
+
+.ProseMirror img[alignment='center'] {
+  display: block;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.ProseMirror img[alignment='right'] {
+  display: block;
+  margin-right: 0;
+  margin-left: auto;
+}
+
+.ProseMirror div.align-left {
+  text-align: left;
+}
+
+.ProseMirror div.align-center {
+  text-align: center;
+}
+
+.ProseMirror div.align-right {
+  text-align: right;
+}
+
+[data-re-bubble-menu] {
+  box-sizing: border-box;
+  max-width: calc(100vw - 1rem);
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+[data-re-bubble-menu-group] {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 600px) {
+  .gb-template-editor-shell {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .gb-template-editor-canvas {
+    width: 100%;
+    padding-right: 0;
+  }
+
+  .gb-merge-fields-dock {
+    flex-basis: auto;
+    width: 100%;
+    max-height: 12rem;
+    margin-right: 0;
+    margin-bottom: 1rem;
+    padding-right: 0;
+    padding-bottom: 1rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--re-border);
+  }
+
+  .gb-template-editor-inspector {
+    flex-basis: auto;
+    width: 100%;
+    max-height: none;
+    margin-top: 1rem;
+    border-top: 1px solid var(--re-border);
+    border-left: 0;
+    padding: 1rem 0 0;
+  }
+
+  [data-re-bubble-menu] {
+    max-width: calc(100vw - 0.5rem);
+    border-radius: 0.5rem;
+  }
+
+  [data-re-bubble-menu-item],
+  [data-re-node-selector-trigger] {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    padding: 0.625rem;
+  }
+
+  [data-re-bubble-menu-item] svg {
+    width: 1rem;
+    height: 1rem;
+  }
+}

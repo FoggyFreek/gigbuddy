@@ -4,6 +4,7 @@ import type { LimitedCollectionResponse } from '../../types/api.ts'
 
 interface ContactFilters {
   category?: string
+  categoryIn?: readonly string[]
   excludeCategory?: string
 }
 
@@ -20,6 +21,7 @@ const api = <T = unknown>(path: string, options?: RequestInit) =>
 export const listContacts = (filters: ContactFilters = {}) => {
   const params = new URLSearchParams()
   if (filters.category) params.set('category', filters.category)
+  for (const category of filters.categoryIn ?? []) params.append('categoryIn', category)
   if (filters.excludeCategory) params.set('excludeCategory', filters.excludeCategory)
   const query = params.toString()
   return api<Contact[]>(query ? `/?${query}` : '/')
@@ -34,7 +36,7 @@ export const searchContacts = (
   return api<Contact[]>(`/search?${params}`)
 }
 export const checkContactDuplicates = (
-  body: Pick<Contact, 'name' | 'email' | 'category' | 'iban'>,
+  body: Pick<Contact, 'name' | 'first_name' | 'email' | 'category' | 'iban'>,
   options: Pick<RequestInit, 'signal'> = {},
 ) =>
   api<LimitedCollectionResponse<DuplicateEntityMatch>>('/duplicate-check', {

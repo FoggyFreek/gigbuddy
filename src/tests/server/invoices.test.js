@@ -48,14 +48,18 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedGigsAndTasks(seed)
+  seed = await fixtureDb.seedContactsAndVenues(seed)
+  seed = await fixtureDb.seedAccountingForTenants(seed)
 
   // Give Alpha gig a fee + linked venue, and Beta similarly.
   await pool.query(
-    `UPDATE gigs SET booking_fee_cents = 50000, venue_id = $1 WHERE id = $2`,
+    `UPDATE gigs SET guaranteed_fee_cents = 50000, venue_id = $1 WHERE id = $2`,
     [seed.venues[0].id, seed.gigA.id],
   )
   await pool.query(
-    `UPDATE gigs SET booking_fee_cents = 70000, venue_id = $1 WHERE id = $2`,
+    `UPDATE gigs SET guaranteed_fee_cents = 70000, venue_id = $1 WHERE id = $2`,
     [seed.venues[1].id, seed.gigB.id],
   )
 })
@@ -551,6 +555,10 @@ describe('invoices — draft-from-gig', () => {
     expect(res.body.draft.customer_tax_id).toBe('NL001794860B34')
     expect(res.body.draft.lines).toHaveLength(1)
     expect(res.body.draft.lines[0].unit_price_cents).toBe(50000)
+    // A performance is invoiced at the country's reduced rate, not the standard
+    // rate the profile carries for what the tenant buys.
+    expect(Number(res.body.draft.lines[0].tax_percentage)).toBe(9)
+    expect(Number(res.body.tenant.tax_percentage)).toBe(21)
   })
 
   it('returns empty billing_targets when only venue is linked', async () => {
@@ -601,6 +609,209 @@ describe('invoices — draft-from-gig', () => {
   it('cross-tenant draft returns 404', async () => {
     const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigB.id}`))
     expect(res.status).toBe(404)
+  })
+
+  // A gig whose deal shares in the door is billed as the calculation behind it,
+  // so the venue can check the settlement line by line. The decomposition and
+  // its tie-out with the artist statement are covered in the frontend unit test
+  // for shared/gigDealInvoiceLines.js; what matters here is that the draft
+  // endpoint actually serves those lines, described and taxed.
+  async function setDealTerms(gigId, terms) {
+    const columns = Object.keys(terms)
+    await pool.query(
+      `UPDATE gigs SET ${columns.map((c, i) => `${c} = $${i + 1}`).join(', ')} WHERE id = $${columns.length + 1}`,
+      [...columns.map((c) => terms[c]), gigId],
+    )
+  }
+
+  it('bills a door deal as ticket revenue, break-even and the venue share', async () => {
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'door_deal',
+      venue_costs_cents: 30000,
+      tickets_sold: 200,
+      ticket_price_net_cents: 1000,
+      percentage_of_sales: 70,
+    })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+
+    const lines = res.body.draft.lines
+    expect(lines).toHaveLength(3)
+    expect(lines.map((line) => [line.quantity, line.unit_price_cents])).toEqual([
+      [200, 1000],
+      [1, -30000],
+      [1, -51000],
+    ])
+    // 2000 gross, less the 300 break-even, less the venue's 30% of the rest.
+    const net = lines.reduce((total, line) => total + line.quantity * line.unit_price_cents, 0)
+    expect(net).toBe(119000)
+    // A deduction adjusts money, not stock: the quantity stays positive and the
+    // amount carries the sign.
+    expect(lines.every((line) => line.quantity > 0)).toBe(true)
+    expect(lines.every((line) => Number(line.tax_percentage) === 9)).toBe(true)
+    expect(lines.map((line) => line.position)).toEqual([0, 1, 2])
+    expect(lines[0].description).toContain(seed.gigA.event_description ?? '')
+    expect(lines[2].description).toContain('30%')
+    expect(new Set(lines.map((line) => line.description)).size).toBe(3)
+  })
+
+  it('bills a guarantee as the fee plus the itemised door settlement', async () => {
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'guarantee',
+      guarantee_variant: 'plus',
+      guaranteed_fee_cents: 50000,
+      venue_costs_cents: 30000,
+      tickets_sold: 200,
+      ticket_price_net_cents: 1000,
+      percentage_of_sales: 70,
+    })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+
+    const lines = res.body.draft.lines
+    // Fee, revenue, the fee and venue costs recouped, and the venue's share.
+    expect(lines).toHaveLength(5)
+    expect(lines[0]).toMatchObject({ quantity: 1, unit_price_cents: 50000 })
+    const net = lines.reduce((total, line) => total + line.quantity * line.unit_price_cents, 0)
+    expect(net).toBe(134000)
+  })
+
+  it('keeps the single fee line for a flat fee', async () => {
+    await setDealTerms(seed.gigA.id, { deal_type: 'flat_fee' })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+    expect(res.body.draft.lines).toHaveLength(1)
+    expect(res.body.draft.lines[0].unit_price_cents).toBe(50000)
+  })
+
+  it('splits the booking fee without changing the draft total in specified mode', async () => {
+    await pool.query(
+      `UPDATE tenants SET preferred_invoice_mode = 'specified' WHERE id = $1`,
+      [seed.tenantA.id],
+    )
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'flat_fee',
+      guaranteed_fee_cents: 100000,
+      agency_fee_basis: 'amount',
+      agency_fee_amount_cents: 15000,
+    })
+
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+    expect(res.body.draft.lines.map((line) => [line.description, line.unit_price_cents])).toEqual([
+      [expect.stringContaining('Artiestenvergoeding'), 85000],
+      ['Boekingskosten', 15000],
+    ])
+    expect(res.body.draft.lines.reduce(
+      (total, line) => total + line.quantity * line.unit_price_cents, 0,
+    )).toBe(100000)
+  })
+
+  it('captures specified lines in the draft when the tenant preference changes later', async () => {
+    await pool.query(
+      `UPDATE tenants SET preferred_invoice_mode = 'specified' WHERE id = $1`,
+      [seed.tenantA.id],
+    )
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'flat_fee',
+      guaranteed_fee_cents: 100000,
+      agency_fee_basis: 'amount',
+      agency_fee_amount_cents: 15000,
+    })
+    const draft = await asUserA(
+      request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`),
+    ).expect(200)
+
+    await pool.query(
+      `UPDATE tenants SET preferred_invoice_mode = 'combined' WHERE id = $1`,
+      [seed.tenantA.id],
+    )
+    const created = await asUserA(request(app).post('/api/invoices'))
+      .send({ ...draft.body.draft, customer_name: draft.body.draft.customer_name || 'Venue' })
+      .expect(201)
+
+    expect(created.body.lines.map((line) => line.unit_price_cents)).toEqual([85000, 15000])
+    expect(created.body.subtotal_cents).toBe(100000)
+  })
+
+  it('falls back to one empty line when a door deal never reached break-even', async () => {
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'door_deal',
+      venue_costs_cents: 500000,
+      tickets_sold: 10,
+      ticket_price_net_cents: 1000,
+      percentage_of_sales: 70,
+    })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+    expect(res.body.draft.lines).toHaveLength(1)
+    expect(res.body.draft.lines[0].unit_price_cents).toBe(0)
+  })
+
+  // The deal's own Taxes section decides what the invoice is billed at, and
+  // whether the door's own VAT has to come out of the ticket revenue first.
+  it('bills the lines at the general VAT rate the deal overrides with', async () => {
+    await setDealTerms(seed.gigA.id, { deal_type: 'flat_fee', subject_to_vat: true, vat_percentage: 21 })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+    expect(Number(res.body.draft.lines[0].tax_percentage)).toBe(21)
+  })
+
+  it('bills at zero for a deal that is not subject to VAT', async () => {
+    await setDealTerms(seed.gigA.id, { deal_type: 'flat_fee', subject_to_vat: false, vat_percentage: 21 })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+    expect(Number(res.body.draft.lines[0].tax_percentage)).toBe(0)
+  })
+
+  it('takes the ticket VAT out of the door before the venue recoups anything', async () => {
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'door_deal',
+      venue_costs_cents: 0,
+      tickets_sold: 104,
+      ticket_price_net_cents: 685,
+      percentage_of_sales: 100,
+      subject_to_vat: true,
+      ticket_vat_percentage: 9,
+    })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+
+    const lines = res.body.draft.lines
+    // EUR 712.40 through the door, of which 9/109 — EUR 58.82 — is the venue's
+    // VAT, billed as its own correction line.
+    expect(lines.map((line) => [line.quantity, line.unit_price_cents])).toEqual([[104, 685], [1, -5882]])
+    expect(lines[1].description).toContain('9%')
+    expect(lines.reduce((total, line) => total + line.quantity * line.unit_price_cents, 0)).toBe(65358)
+  })
+
+  it('deducts Copyright / PRS after ticket VAT and applies general VAT to the resulting lines', async () => {
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'door_deal',
+      venue_costs_cents: 0,
+      tickets_sold: 104,
+      ticket_price_net_cents: 685,
+      percentage_of_sales: 100,
+      subject_to_vat: true,
+      vat_percentage: 21,
+      ticket_vat_percentage: 9,
+      copyright_percentage: 10,
+    })
+    const res = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+
+    expect(res.body.draft.lines.map((line) => [line.unit_price_cents, Number(line.tax_percentage)])).toEqual([
+      [685, 21],
+      [-5882, 21],
+      [-6536, 21],
+    ])
+    expect(res.body.draft.lines[2].description).toContain('10%')
+  })
+
+  it('creates an invoice from a door-deal draft that totals the artist share', async () => {
+    await setDealTerms(seed.gigA.id, {
+      deal_type: 'door_deal',
+      venue_costs_cents: 30000,
+      tickets_sold: 200,
+      ticket_price_net_cents: 1000,
+      percentage_of_sales: 70,
+    })
+    const draft = await asUserA(request(app).get(`/api/invoices/draft-from-gig/${seed.gigA.id}`)).expect(200)
+    const created = await asUserA(request(app).post('/api/invoices'))
+      .send({ ...draft.body.draft, customer_name: draft.body.draft.customer_name || 'Venue' })
+      .expect(201)
+    expect(created.body.subtotal_cents).toBe(119000)
   })
 })
 
@@ -752,12 +963,83 @@ describe('invoices — PATCH gig_id + recompute', () => {
 })
 
 describe('invoices — .eml header sanitization', () => {
-  async function emlFor(overrides) {
+  // The email body now comes from an outreach template with context 'invoice';
+  // the header-safety guarantees below must survive that path unchanged.
+  // Per-test, because truncateAll() wipes it between cases.
+  beforeEach(async () => {
+    // The stored PDF must be readable: an invoice email without its invoice is a
+    // hard error now, so the default throwing getObject stub would 409.
+    const storage = await import('../../../server/utils/storage.js')
+    storage.storageClient.getObject.mockImplementation(async () =>
+      Readable.from([Buffer.from('%PDF-1.7 stored invoice')]))
+    await asUserA(request(app).post('/api/outreach/templates')).send({
+      name: 'Invoice email',
+      context: 'invoice',
+      subject: 'Factuur {{invoice.number}}',
+      body_html: '<p>{{customer.greeting}}</p>{{#message}}{{#invoice.payment_block}}',
+      body_text: '{{customer.greeting}}',
+    }).expect(201)
+  })
+
+  async function emlFor(overrides, body = {}) {
     const r = await asUserA(request(app).post('/api/invoices')).send(basePayload(overrides)).expect(201)
-    const res = await asUserA(request(app).post(`/api/invoices/${r.body.id}/eml`)).send({})
+    const res = await asUserA(request(app).post(`/api/invoices/${r.body.id}/eml`)).send(body)
     expect(res.status).toBe(200)
     return res.text
   }
+
+  const htmlOf = (text) => {
+    const marker = 'Content-Transfer-Encoding: base64'
+    const body = text.slice(text.indexOf(marker) + marker.length)
+    const b64 = /[A-Za-z0-9+/=\s]+/.exec(body)[0].replaceAll(/\s/g, '')
+    return Buffer.from(b64, 'base64').toString('utf8')
+  }
+
+  it('renders the subject and greeting from the template', async () => {
+    const text = await emlFor({ customer_contact_family_name: 'Jansen', customer_contact_title: 'dhr.' })
+    const subject = /Subject: =\?UTF-8\?B\?([^?]+)\?=/.exec(text)
+    expect(Buffer.from(subject[1], 'base64').toString('utf8')).toMatch(/^Factuur /)
+    expect(htmlOf(text)).toContain('Geachte dhr. Jansen,')
+  })
+
+  it('escapes the custom message and keeps its line breaks', async () => {
+    const html = htmlOf(await emlFor({}, { message: '<script>x</script>\nsecond line' }))
+    expect(html).toContain('&lt;script&gt;')
+    expect(html).not.toContain('<script>')
+    expect(html).toContain('second line')
+    expect(html).toContain('<br>')
+  })
+
+  it('sends an invoice with a blank message and no payment link', async () => {
+    expect(await emlFor({}, { message: '' })).toContain('Content-Type: application/pdf')
+  })
+
+  it('attaches the e-invoice XML when asked, and embeds the PDF on request', async () => {
+    expect(await emlFor({}, { attachments: 'pdf_xml' })).toContain('Content-Type: application/xml')
+    expect(await emlFor({}, { attachments: 'pdf_xml_embedded' })).toContain('Content-Type: application/xml')
+  })
+
+  it('rejects an unknown attachments option', async () => {
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    await asUserA(request(app).post(`/api/invoices/${r.body.id}/eml`)).send({ attachments: 'zip' }).expect(400)
+  })
+
+  it('refuses to build an email when the stored PDF cannot be read', async () => {
+    const storage = await import('../../../server/utils/storage.js')
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    storage.storageClient.getObject.mockImplementation(async () => { throw new Error('no such key') })
+    const res = await asUserA(request(app).post(`/api/invoices/${r.body.id}/eml`)).send({})
+    expect(res.status).toBe(409)
+    expect(res.body.code).toBe('invoice_pdf_unavailable')
+  })
+
+  it('refuses to build an email when no invoice template exists', async () => {
+    await pool.query('DELETE FROM outreach_templates')
+    const r = await asUserA(request(app).post('/api/invoices')).send(basePayload()).expect(201)
+    const res = await asUserA(request(app).post(`/api/invoices/${r.body.id}/eml`)).send({})
+    expect(res.status).toBe(400)
+    expect(res.body.code).toBe('invoice_template_missing')
+  })
 
   it('rejects CRLF header injection via customer_email (no To, no injected header)', async () => {
     const text = await emlFor({

@@ -14,6 +14,7 @@ vi.mock('../venues.ts', () => ({
   addVenueContact: vi.fn(),
   setVenueContactPrimary: vi.fn().mockResolvedValue({}),
   removeVenueContact: vi.fn().mockResolvedValue({}),
+  listVenueEvents: vi.fn(),
 }))
 
 vi.mock('../../contacts/contacts.ts', () => ({
@@ -31,6 +32,7 @@ import VenueDetailPage from '../VenueDetailPage.tsx'
 import {
   getVenue,
   enrichVenue,
+  listVenueEvents,
   listVenueContacts,
   addVenueContact,
   setVenueContactPrimary,
@@ -40,6 +42,7 @@ import { searchContacts } from '../../contacts/contacts.ts'
 import { searchPlaces } from '../places.ts'
 import { AuthContext } from '../../../contexts/authContext.ts'
 import theme from '../../../theme.ts'
+import { CompactLayoutContext } from '../../../hooks/useCompactLayout.ts'
 
 const VENUE = { id: 1, category: 'venue', name: 'Test Venue' }
 
@@ -81,15 +84,17 @@ const LOCKED_AUTH_VALUE = {
   },
 }
 
-function wrap(authValue = AUTH_VALUE) {
+function wrap(authValue = AUTH_VALUE, compact = false) {
   return render(
     <MemoryRouter initialEntries={['/venues/1']}>
       <AuthContext.Provider value={authValue}>
         <ThemeProvider theme={theme}>
+          <CompactLayoutContext.Provider value={compact}>
           <Routes>
             <Route path="/venues/:id" element={<VenueDetailPage />} />
             <Route path="/contacts/:id" element={<ContactStub />} />
           </Routes>
+          </CompactLayoutContext.Provider>
         </ThemeProvider>
       </AuthContext.Provider>
     </MemoryRouter>
@@ -105,6 +110,7 @@ beforeEach(() => {
   searchContacts.mockReset().mockResolvedValue([])
   searchPlaces.mockReset().mockResolvedValue([])
   enrichVenue.mockReset()
+  listVenueEvents.mockReset().mockResolvedValue({ items: [], meta: { limit: 10, returned: 0, nextCursor: null } })
 })
 
 describe('VenueDetailPage — Contacts section', () => {
@@ -268,5 +274,94 @@ describe('VenueDetailPage — address enrichment', () => {
     // even though the suggestion carried a value.
     await waitFor(() => expect(screen.getByLabelText(/City/)).toHaveValue('Amsterdam'))
     expect(screen.getByLabelText(/Street and number/)).toHaveValue('')
+  })
+})
+
+describe('VenueDetailPage — floating tabs', () => {
+  const ADDRESSED = {
+    ...VENUE,
+    street_and_number: 'Weteringschans 6',
+    street_additional: '2nd floor',
+    city: 'Amsterdam',
+    organization_name: 'Zwaan BV',
+  }
+
+  it('renders the name and address over the location header', async () => {
+    getVenue.mockResolvedValue(ADDRESSED)
+    wrap()
+
+    const header = await screen.findByTestId('venue-location-header')
+    expect(within(header).getByRole('heading', { name: 'Test Venue' })).toBeInTheDocument()
+    expect(within(header).getByText('Weteringschans 6, 2nd floor')).toBeInTheDocument()
+    expect(within(header).getByText('Amsterdam')).toBeInTheDocument()
+  })
+
+  it('links the header action to Google Maps in a new tab', async () => {
+    getVenue.mockResolvedValue(ADDRESSED)
+    wrap()
+
+    const header = await screen.findByTestId('venue-location-header')
+    const link = within(header).getByRole('link', { name: 'Open in Google Maps' })
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link.getAttribute('href')).toContain('google.com/maps')
+    expect(link.getAttribute('href')).toContain(encodeURIComponent('Test Venue, Weteringschans 6'))
+  })
+
+  it('opens on Information and moves the invoicing fields to their own tab', async () => {
+    getVenue.mockResolvedValue(ADDRESSED)
+    const user = userEvent.setup()
+    wrap()
+
+    expect(await screen.findByLabelText(/Street and number/)).toBeVisible()
+    expect(screen.getByLabelText(/Organization name/)).not.toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Invoicing' }))
+
+    expect(screen.getByLabelText(/Organization name/)).toBeVisible()
+    expect(screen.getByLabelText(/Street and number/)).not.toBeVisible()
+  })
+
+  const EVENT = {
+    id: 7,
+    event_date: '2026-05-01',
+    event_description: 'Spring show',
+    status: 'confirmed',
+    start_time: '20:00:00',
+    end_time: '23:30:00',
+  }
+
+  it('lists the venue events in a table on the Events tab', async () => {
+    listVenueEvents.mockResolvedValue({ items: [EVENT], meta: { limit: 10, returned: 1, nextCursor: null } })
+    const user = userEvent.setup()
+    wrap()
+
+    await user.click(await screen.findByRole('button', { name: 'Events' }))
+
+    const row = (await screen.findByText('Spring show')).closest('tr')
+    // formatShortDate's nl-NL default, as everywhere else in the app.
+    expect(within(row).getByText('01 mei 2026')).toBeInTheDocument()
+    expect(within(row).getByText('20:00–23:30')).toBeInTheDocument()
+    // Status is a column without a header — three named columns only.
+    expect(screen.getAllByRole('columnheader').filter((h) => h.textContent).map((h) => h.textContent))
+      .toEqual(['Event', 'Date', 'Time'])
+    expect(listVenueEvents).toHaveBeenCalledWith(1, 10, undefined, expect.anything())
+  })
+
+  it('drops the table for stacked rows in a compact pane', async () => {
+    listVenueEvents.mockResolvedValue({ items: [EVENT], meta: { limit: 10, returned: 1, nextCursor: null } })
+    const user = userEvent.setup()
+    wrap(AUTH_VALUE, true)
+
+    await user.click(await screen.findByRole('button', { name: 'Events' }))
+
+    expect(await screen.findByText('Spring show')).toBeInTheDocument()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+
+  it('does not fetch events until the Events tab is opened', async () => {
+    wrap()
+
+    await waitFor(() => expect(getVenue).toHaveBeenCalled())
+    expect(listVenueEvents).not.toHaveBeenCalled()
   })
 })

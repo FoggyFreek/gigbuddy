@@ -26,6 +26,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedBandMembers(seed)
   // userA is a seeded tenant_admin; the last-admin rule is covered in
   // lastTenantAdmin.test.js, so demote them to exercise the ordinary path.
   await pool.query(

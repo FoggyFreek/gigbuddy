@@ -25,6 +25,10 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedBandMembers(seed)
+  seed = await fixtureDb.seedGigsAndTasks(seed)
+  seed = await fixtureDb.seedCalendar(seed)
 })
 
 afterAll(async () => {
@@ -603,9 +607,16 @@ describe('/api/me planning details and self-actions', () => {
       [gig.id, seed.tenantA.id],
     )
 
+    await pool.query(
+      `INSERT INTO gig_costs (gig_id, tenant_id, label, amount_cents) VALUES ($1, $2, 'Travel', 12500)`,
+      [gig.id, seed.tenantA.id],
+    )
+
     const res = await hubGet(artist.id, `/api/me/gigs/${gig.id}`).expect(200)
     expect(res.body).not.toHaveProperty('banner_path')
     expect(res.body).not.toHaveProperty('participants')
+    // The band's cost breakdown stays with the band; the hub renders no Terms tab.
+    expect(res.body).not.toHaveProperty('costs')
     expect(res.body.tasks.map((task) => task.title)).toEqual(['Mine'])
     expect(res.body.attachments[0]).toMatchObject({ original_filename: 'rider.pdf' })
     expect(res.body.attachments[0]).not.toHaveProperty('object_key')

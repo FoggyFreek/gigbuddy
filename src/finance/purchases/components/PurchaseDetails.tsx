@@ -420,18 +420,6 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
     </>
   )
 
-  const deleteDialog = (
-    <Dialog open={s.deleteDialogOpen} onClose={() => s.setDeleteDialogOpen(false)}>
-      <DialogTitle>{t($ => $.deleteDialog.title)}</DialogTitle>
-      <DialogContent>
-        <DialogContentText>{t($ => $.deleteDialog.body)}</DialogContentText>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => s.setDeleteDialogOpen(false)}>{t($ => $.common.actions.cancel)}</Button>
-        <Button color="error" onClick={s.confirmDelete}>{t($ => $.common.actions.delete)}</Button>
-      </DialogActions>
-    </Dialog>
-  )
 
   const paymentDialog = (
     <PaymentRegistrationDialog
@@ -481,14 +469,13 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
             {bodyCards}
             {!s.readOnly && (
               <Box sx={{ display: 'flex', justifyContent: 'flex-start', mt: 2 }}>
-                <Button color="error" startIcon={<DeleteIcon />} onClick={s.handleDelete}>
+                <Button color="error" startIcon={<DeleteIcon />} onClick={() => { void s.handleDelete() }}>
                   {t($ => $.common.actions.delete)}
                 </Button>
               </Box>
             )}
           </Box>
         </Box>
-        {deleteDialog}
         {paymentDialog}
       </>
     )
@@ -509,7 +496,6 @@ export default function PurchaseDetails({ mode, purchaseId, onClose, onPurchaseU
           {saveActions}
         </DialogActions>
       </Dialog>
-      {deleteDialog}
       {paymentDialog}
     </>
   )

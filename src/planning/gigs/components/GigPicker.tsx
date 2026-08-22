@@ -9,7 +9,7 @@ import { formatShortDate } from '../../../utils/dateFormat.ts'
 import { formatEur } from '../../../finance/invoices/invoiceTotals.ts'
 import type { Gig } from '../../../types/entities.ts'
 
-type GigOption = Gig & { booking_fee_cents?: number; has_invoice?: boolean }
+type GigOption = Gig & { has_invoice?: boolean }
 
 interface GigPickerProps {
   value?: Gig | null
@@ -68,7 +68,7 @@ export default function GigPicker({ value, onChange, disabled, label, autoFocus 
               </Typography>
               {venueName && (
                 <Typography variant="caption" color="text.secondary">
-                  {venueName}{option.booking_fee_cents != null ? ` - ${formatEur(option.booking_fee_cents)}` : ''}
+                  {venueName}{option.guaranteed_fee_cents != null ? ` - ${formatEur(option.guaranteed_fee_cents)}` : ''}
                 </Typography>
               )}
             </Box>

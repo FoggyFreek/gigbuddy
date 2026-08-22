@@ -57,7 +57,36 @@
     "noResults": "No results.",
     "selected_one": "{{count}} venue selected",
     "selected_other": "{{count}} venues selected",
-    "copyEmails": "Copy email addresses (semicolon-separated)"
+    "copyEmails": "Copy email addresses (semicolon-separated)",
+    "emailSelected": "Email selected"
+  },
+  "groups": {
+    "categoriesToggle": "Categories",
+    "groupsToggle": "Groups",
+    "searchPlaceholder": "Search groups..",
+    "noGroups": "No groups found.",
+    "existing": "Existing group",
+    "new": "New group",
+    "name": "Group name",
+    "addSelected": "Add to group",
+    "addDialogTitle": "Add selected to group",
+    "added_one": "Added {{count}} venue or festival to {{name}}.",
+    "added_other": "Added {{count}} venues or festivals to {{name}}.",
+    "alreadyPresent": "The selection is already in {{name}}.",
+    "removeSelected": "Remove from group",
+    "removeTitle": "Remove from group?",
+    "removeBody_one": "Remove the selected venue or festival from {{name}}?",
+    "removeBody_other": "Remove {{count}} selected venues or festivals from {{name}}?",
+    "removed_one": "Removed {{count}} venue or festival from {{name}}.",
+    "removed_other": "Removed {{count}} venues or festivals from {{name}}.",
+    "selectVisible": "Select all visible venues and festivals in {{name}}",
+    "rename": "Rename group",
+    "renameTitle": "Rename group",
+    "renamed": "Group renamed.",
+    "delete": "Delete group",
+    "deleteTitle": "Delete {{name}}?",
+    "deleteBody": "The venues and festivals in this group will not be deleted.",
+    "deleted": "Group deleted."
   },
   "detail": {
     "contactsHeading": "Contacts",
@@ -71,7 +100,21 @@
     "deleteTitle": "Delete venue?",
     "enrichButton": "Look up address",
     "enrichTooltip": "Search for this name and fill any empty address fields",
-    "enrichNeedsName": "Enter a name first"
+    "enrichNeedsName": "Enter a name first",
+    "tabs": {
+      "information": "Information",
+      "invoicing": "Invoicing",
+      "contacts": "Contacts",
+      "events": "Events"
+    },
+    "openInGoogleMaps": "Open in Google Maps",
+    "noEvents": "No events at this location yet.",
+    "loadMoreEvents": "Load more",
+    "eventsTable": {
+      "event": "Event",
+      "date": "Date",
+      "time": "Time"
+    }
   },
   "modal": {
     "addTitle": "Add venue",

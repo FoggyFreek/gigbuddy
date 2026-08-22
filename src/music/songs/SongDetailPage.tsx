@@ -52,6 +52,7 @@ import PremiumDiamond from '../../components/PremiumDiamond.tsx'
 import { usePermissions } from '../../hooks/usePermissions.ts'
 import { useEntitlements } from '../../hooks/useEntitlements.ts'
 import { useToast } from '../../contexts/toastContext.ts'
+import { useDialog } from '../../contexts/dialogContext.ts'
 import type { Album, Song, SongTag, Id } from '../../types/entities.ts'
 import type { Feature } from '../../auth/entitlements.ts'
 import PlanningReadOnlyAlert from '../../components/PlanningReadOnlyAlert.tsx'
@@ -123,6 +124,7 @@ function SectionHeading({ children, premium, expanded, onToggle }: Readonly<Sect
 
 export default function SongDetailPage() {
   const { t } = useTranslation(['songs', 'common'])
+  const { confirmDelete } = useDialog()
   const { id } = useParams()
   const songId = Number(id)
   const { canWritePlanning } = usePermissions()
@@ -137,7 +139,6 @@ export default function SongDetailPage() {
   const [tagOptions, setTagOptions] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingSongId, setLoadingSongId] = useState(songId)
-  const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [albumArtPrompt, setAlbumArtPrompt] = useState<Album | null>(null)
   const [coverMenuAnchor, setCoverMenuAnchor] = useState<HTMLElement | null>(null)
   const [coverBusy, setCoverBusy] = useState(false)
@@ -279,7 +280,7 @@ export default function SongDetailPage() {
   }
 
   async function handleDelete() {
-    setConfirmingDelete(false)
+    if (!await confirmDelete({ title: t($ => $.deleteDialog.title) })) return
     await deleteSong(songId)
     outletCtx.onSongDelete?.(songId)
     closeView()
@@ -521,7 +522,7 @@ export default function SongDetailPage() {
 
       {!loading && song && canWritePlanning && (
         <Box sx={{ mt: 4 }}>
-          <Button color="error" variant="contained" onClick={() => setConfirmingDelete(true)}>
+          <Button color="error" variant="contained" onClick={() => { void handleDelete() }}>
             {t($ => $.common.actions.delete)}
           </Button>
         </Box>
@@ -545,16 +546,6 @@ export default function SongDetailPage() {
         <MenuItem onClick={handleCoverRemove}>{t($ => $.cover.remove)}</MenuItem>
       </Menu>
 
-      <Dialog open={confirmingDelete} onClose={() => setConfirmingDelete(false)}>
-        <DialogTitle>{t($ => $.deleteDialog.title)}</DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t($ => $.confirmation.cannotUndo, { ns: 'common' })}</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmingDelete(false)}>{t($ => $.common.actions.cancel)}</Button>
-          <Button color="error" variant="contained" onClick={handleDelete}>{t($ => $.common.actions.delete)}</Button>
-        </DialogActions>
-      </Dialog>
       <Dialog open={albumArtPrompt !== null} onClose={() => setAlbumArtPrompt(null)}>
         <DialogTitle>{t($ => $.albums.useArtTitle)}</DialogTitle>
         <DialogContent>

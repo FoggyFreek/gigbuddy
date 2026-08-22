@@ -16,7 +16,7 @@ import {
   syncLeadIntoCurrentEvents,
   removeMemberFromCurrentEvents,
 } from './bandMemberRepository.js'
-import { enforceMemberCap } from '../../commerce/billing/limitService.js'
+import { enforceMemberCap } from '../../entitlements/limitService.js'
 import { withTransaction, abortTransaction } from '../../db/withTransaction.js'
 import { badRequest, notFound } from '../../platform/http/serviceErrors.js'
 import { lockTenantRow } from '../workspaces/tenantRepository.js'

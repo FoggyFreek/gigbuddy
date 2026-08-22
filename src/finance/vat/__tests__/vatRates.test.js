@@ -7,6 +7,7 @@ import {
   VAT_RATE_VALUES,
   getVatRates,
   getStandardVatRate,
+  getReducedVatRate,
   getVatIdExample,
   getVatLabel,
   getVatIdLabel,
@@ -27,6 +28,26 @@ describe('vatRates country config', () => {
     expect(DEFAULT_VAT_COUNTRY).toBe('nl')
     expect(getVatRates('nl')).toEqual([21, 9, 0])
     expect(getStandardVatRate('nl')).toBe(21)
+  })
+
+  // Sales invoices default to the reduced rate (a live performance sits under the
+  // reduced tariff), purchases to the standard one — so the two must not collide,
+  // and the reduced rate has to be a rate the country actually offers.
+  it('gives every country a reduced rate drawn from its own rate set', () => {
+    expect(getReducedVatRate('nl')).toBe(9)
+    for (const country of VAT_COUNTRY_CODES) {
+      const reduced = getReducedVatRate(country)
+      expect(getVatRates(country)).toContain(reduced)
+      expect(reduced).toBeGreaterThan(0)
+      // The UK is the one country with no reduced rate for admissions.
+      if (country !== 'gb') expect(reduced).toBeLessThan(getStandardVatRate(country))
+      else expect(reduced).toBe(getStandardVatRate(country))
+    }
+  })
+
+  it('falls back to the default country for an unknown one, like the other rate reads', () => {
+    expect(getReducedVatRate('zz')).toBe(getReducedVatRate('nl'))
+    expect(getReducedVatRate(undefined)).toBe(getReducedVatRate('nl'))
   })
 
   it('exposes distinct rate sets per country', () => {

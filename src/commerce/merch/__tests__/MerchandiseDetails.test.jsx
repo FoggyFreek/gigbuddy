@@ -1,3 +1,5 @@
+import { DialogProvider } from '../../../contexts/DialogContext.tsx'
+import { MemoryRouter } from 'react-router'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
@@ -32,9 +34,9 @@ const SALES = [
 
 function renderDetails(props = {}) {
   return render(
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={theme}><MemoryRouter><DialogProvider>
       <MerchandiseDetails productId={1} period={PERIOD} {...props} />
-    </ThemeProvider>,
+    </DialogProvider></MemoryRouter></ThemeProvider>,
   )
 }
 
@@ -124,6 +126,8 @@ describe('MerchandiseDetails', () => {
     await waitFor(() => expect(onReload).toHaveBeenCalled())
     // Voided sale is hidden; with no remaining rows the empty state shows.
     expect(await screen.findByText('No sales in this period.')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /void sale/i })).toBeNull()
+    // The shared dialog host keeps its content through the close transition, so
+    // the row action is only provably gone once the dialog has finished exiting.
+    await waitFor(() => expect(screen.queryByRole('button', { name: /void sale/i })).toBeNull())
   })
 })

@@ -11,6 +11,7 @@ import TextField from '@mui/material/TextField'
 import Tooltip from '@mui/material/Tooltip'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import CopyAdornment from '../../../components/CopyAdornment.tsx'
+import { useCompactLayout } from '../../../hooks/useCompactLayout.ts'
 
 export interface VenueForm {
   category?: string
@@ -33,6 +34,13 @@ export interface VenueForm {
   [key: string]: unknown
 }
 
+/**
+ * `form` is the add/edit dialog's order (identity first, then address).
+ * The detail page splits the same fields over two tabs: `detail` is its
+ * Information tab (name and address), `invoicing` the billing identity.
+ */
+export type VenueFieldsVariant = 'form' | 'detail' | 'invoicing'
+
 interface VenueFieldsProps {
   form: VenueForm
   onChange: (field: string, value: string) => void
@@ -45,211 +53,177 @@ interface VenueFieldsProps {
    * lookup coupling; without it the ordinary text field renders.
    */
   nameField?: ReactNode
+  variant?: VenueFieldsVariant
 }
 
-export default function VenueFields({ form, onChange, errors = {}, lockedCategory, disabled = false, nameField }: Readonly<VenueFieldsProps>) {
+// One cell per field, in visual order: [field, wide span, compact span]. The
+// compact span applies below `sm` AND inside a SplitView pane (useCompactLayout),
+// where a wide viewport still leaves the form only part of the screen — three
+// fields on one row would be unreadable there. `category` drops out when the
+// caller locks it; every other row keeps its widths.
+type FieldCell = [field: string, wide: number, compact: number]
+
+const FORM_LAYOUT: FieldCell[] = [
+  ['category', 4, 12], ['name', 8, 12],
+  ['title', 3, 4], ['given_name', 4, 8], ['family_name', 5, 12],
+  ['organization_name', 12, 12],
+  ['kvk_number', 6, 12], ['tax_id', 6, 12],
+  ['street_and_number', 8, 12], ['postal_code', 4, 6],
+  ['street_additional', 12, 12],
+  ['city', 5, 12], ['region', 4, 6], ['country', 3, 6],
+  ['website', 12, 12],
+  ['phone', 6, 12], ['email', 6, 12],
+]
+
+const DETAIL_LAYOUT: FieldCell[] = [
+  ['category', 4, 12], ['name', 8, 12],
+  ['street_and_number', 5, 12], ['street_additional', 4, 12], ['postal_code', 3, 6],
+  ['city', 5, 12], ['region', 4, 6], ['country', 3, 6],
+  ['website', 6, 12], ['phone', 3, 12], ['email', 3, 12],
+]
+
+// Who the invoice is actually addressed to, and the numbers it must carry.
+const INVOICING_LAYOUT: FieldCell[] = [
+  ['title', 3, 4], ['given_name', 4, 8], ['family_name', 5, 12],
+  ['organization_name', 12, 12],
+  ['kvk_number', 6, 12], ['tax_id', 6, 12],
+]
+
+const LAYOUTS: Record<VenueFieldsVariant, FieldCell[]> = {
+  form: FORM_LAYOUT,
+  detail: DETAIL_LAYOUT,
+  invoicing: INVOICING_LAYOUT,
+}
+
+export default function VenueFields({
+  form,
+  onChange,
+  errors = {},
+  lockedCategory,
+  disabled = false,
+  nameField,
+  variant = 'form',
+}: Readonly<VenueFieldsProps>) {
   const { t } = useTranslation('venues')
+  const isCompact = useCompactLayout()
   const isFestival = form.category === 'festival'
+
+  // A plain text cell — the shape almost every field takes.
+  const text = (
+    field: string,
+    label: string,
+    extra: { placeholder?: string; type?: string; copy?: boolean; maxLength?: number } = {},
+  ) => (
+    <TextField
+      label={label}
+      fullWidth
+      type={extra.type}
+      value={form[field] ?? ''}
+      onChange={(e) => onChange(field, e.target.value)}
+      placeholder={extra.placeholder}
+      slotProps={{
+        htmlInput: { readOnly: disabled, ...(extra.maxLength ? { maxLength: extra.maxLength } : {}) },
+        ...(extra.copy ? { input: { endAdornment: <CopyAdornment value={form[field] as string} /> } } : {}),
+      }}
+    />
+  )
+
+  const fields: Record<string, () => ReactNode> = {
+    category: () => (
+      <FormControl fullWidth>
+        <InputLabel>{t($ => $.fields.category)}</InputLabel>
+        <Select
+          label={t($ => $.fields.category)}
+          value={form.category}
+          onChange={(e) => onChange('category', e.target.value)}
+          disabled={disabled}
+        >
+          <MenuItem value="venue">{t($ => $.category.venue)}</MenuItem>
+          <MenuItem value="festival">{t($ => $.category.festival)}</MenuItem>
+        </Select>
+      </FormControl>
+    ),
+    name: () => nameField ?? (
+      <TextField
+        label={isFestival ? t($ => $.fields.festivalName) : t($ => $.fields.venueName)}
+        fullWidth
+        required
+        value={form.name}
+        onChange={(e) => onChange('name', e.target.value)}
+        error={!!errors.name}
+        helperText={errors.name}
+        slotProps={{ htmlInput: { readOnly: disabled } }}
+      />
+    ),
+    title: () => text('title', t($ => $.fields.title), { placeholder: t($ => $.placeholders.title) }),
+    given_name: () => text('given_name', t($ => $.fields.givenName)),
+    family_name: () => text('family_name', t($ => $.fields.familyName)),
+    organization_name: () => text('organization_name', t($ => $.fields.organizationName)),
+    kvk_number: () => text('kvk_number', t($ => $.fields.kvkNumber), { copy: true }),
+    tax_id: () => text('tax_id', t($ => $.fields.taxId), { copy: true }),
+    street_and_number: () => text('street_and_number', t($ => $.fields.streetAndNumber)),
+    street_additional: () => text('street_additional', t($ => $.fields.streetAdditional), {
+      placeholder: t($ => $.placeholders.streetAdditional),
+    }),
+    postal_code: () => text('postal_code', t($ => $.fields.postalCode), {
+      placeholder: t($ => $.placeholders.postalCode),
+    }),
+    city: () => text('city', t($ => $.fields.city)),
+    region: () => text('region', t($ => $.fields.region), { placeholder: t($ => $.placeholders.region) }),
+    country: () => (
+      <TextField
+        label={t($ => $.fields.country)}
+        fullWidth
+        value={form.country}
+        onChange={(e) => onChange('country', e.target.value.slice(0, 2).toUpperCase())}
+        slotProps={{ htmlInput: { maxLength: 2, readOnly: disabled } }}
+        placeholder={t($ => $.placeholders.country)}
+      />
+    ),
+    website: () => (
+      <TextField
+        label={t($ => $.fields.website)}
+        fullWidth
+        value={form.website}
+        onChange={(e) => onChange('website', e.target.value)}
+        placeholder={t($ => $.placeholders.website)}
+        slotProps={{
+          htmlInput: { readOnly: disabled },
+          input: {
+            endAdornment: form.website ? (
+              <InputAdornment position="end">
+                <Tooltip title={t($ => $.openInNewTab)}>
+                  <IconButton
+                    size="small"
+                    edge="end"
+                    tabIndex={-1}
+                    component="a"
+                    href={form.website as string}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <OpenInNewIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </InputAdornment>
+            ) : null,
+          },
+        }}
+      />
+    ),
+    phone: () => text('phone', t($ => $.fields.phone), { copy: true }),
+    email: () => text('email', t($ => $.fields.email), { type: 'email', copy: true }),
+  }
+
+  const layout = LAYOUTS[variant]
+
   return (
     <>
-      {!lockedCategory && (
-        <Grid size={4}>
-          <FormControl fullWidth>
-            <InputLabel>{t($ => $.fields.category)}</InputLabel>
-            <Select
-              label={t($ => $.fields.category)}
-              value={form.category}
-              onChange={(e) => onChange('category', e.target.value)}
-              disabled={disabled}
-            >
-              <MenuItem value="venue">{t($ => $.category.venue)}</MenuItem>
-              <MenuItem value="festival">{t($ => $.category.festival)}</MenuItem>
-            </Select>
-          </FormControl>
-        </Grid>
-      )}
-      <Grid size={8}>
-        {nameField ?? (
-          <TextField
-            label={isFestival ? t($ => $.fields.festivalName) : t($ => $.fields.venueName)}
-            fullWidth
-            required
-            value={form.name}
-            onChange={(e) => onChange('name', e.target.value)}
-            error={!!errors.name}
-            helperText={errors.name}
-            slotProps={{ htmlInput: { readOnly: disabled } }}
-          />
-        )}
-      </Grid>
-
-      <Grid size={3}>
-        <TextField
-          label={t($ => $.fields.title)}
-          fullWidth
-          value={form.title}
-          onChange={(e) => onChange('title', e.target.value)}
-          placeholder={t($ => $.placeholders.title)}
-          slotProps={{ htmlInput: { readOnly: disabled } }}
-        />
-      </Grid>
-      <Grid size={4}>
-        <TextField
-          label={t($ => $.fields.givenName)}
-          fullWidth
-          value={form.given_name}
-          onChange={(e) => onChange('given_name', e.target.value)}
-          slotProps={{ htmlInput: { readOnly: disabled } }}
-        />
-      </Grid>
-      <Grid size={5}>
-        <TextField
-          label={t($ => $.fields.familyName)}
-          fullWidth
-          value={form.family_name}
-          onChange={(e) => onChange('family_name', e.target.value)}
-          slotProps={{ htmlInput: { readOnly: disabled } }}
-        />
-      </Grid>
-
-      <Grid size={12}>
-        <TextField
-          label={t($ => $.fields.organizationName)}
-          fullWidth
-          value={form.organization_name}
-          onChange={(e) => onChange('organization_name', e.target.value)}
-          slotProps={{ htmlInput: { readOnly: disabled } }}
-        />
-      </Grid>
-      <Grid size={6}>
-        <TextField
-          label={t($ => $.fields.kvkNumber)}
-          fullWidth
-          value={form.kvk_number}
-          onChange={(e) => onChange('kvk_number', e.target.value)}
-          slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.kvk_number as string} /> } }}
-        />
-      </Grid>
-      <Grid size={6}>
-        <TextField
-          label={t($ => $.fields.taxId)}
-          fullWidth
-          value={form.tax_id}
-          onChange={(e) => onChange('tax_id', e.target.value)}
-          slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.tax_id as string} /> } }}
-        />
-      </Grid>
-
-      <Grid size={8}>
-        <TextField
-          label={t($ => $.fields.streetAndNumber)}
-          fullWidth
-          value={form.street_and_number}
-          onChange={(e) => onChange('street_and_number', e.target.value)}
-          slotProps={{ htmlInput: { readOnly: disabled } }}
-        />
-      </Grid>
-      <Grid size={4}>
-        <TextField
-          label={t($ => $.fields.postalCode)}
-          fullWidth
-          value={form.postal_code}
-          onChange={(e) => onChange('postal_code', e.target.value)}
-          placeholder={t($ => $.placeholders.postalCode)}
-          slotProps={{ htmlInput: { readOnly: disabled } }}
-        />
-      </Grid>
-      <Grid size={12}>
-        <TextField
-          label={t($ => $.fields.streetAdditional)}
-          fullWidth
-          value={form.street_additional}
-          onChange={(e) => onChange('street_additional', e.target.value)}
-          placeholder={t($ => $.placeholders.streetAdditional)}
-          slotProps={{ htmlInput: { readOnly: disabled } }}
-        />
-      </Grid>
-
-      <Grid size={5}>
-        <TextField
-          label={t($ => $.fields.city)}
-          fullWidth
-          value={form.city}
-          onChange={(e) => onChange('city', e.target.value)}
-          slotProps={{ htmlInput: { readOnly: disabled } }}
-        />
-      </Grid>
-      <Grid size={4}>
-        <TextField
-          label={t($ => $.fields.region)}
-          fullWidth
-          value={form.region}
-          onChange={(e) => onChange('region', e.target.value)}
-          placeholder={t($ => $.placeholders.region)}
-          slotProps={{ htmlInput: { readOnly: disabled } }}
-        />
-      </Grid>
-      <Grid size={3}>
-        <TextField
-          label={t($ => $.fields.country)}
-          fullWidth
-          value={form.country}
-          onChange={(e) => onChange('country', e.target.value.slice(0, 2).toUpperCase())}
-          slotProps={{ htmlInput: { maxLength: 2, readOnly: disabled } }}
-          placeholder={t($ => $.placeholders.country)}
-        />
-      </Grid>
-
-      <Grid size={12}>
-        <TextField
-          label={t($ => $.fields.website)}
-          fullWidth
-          value={form.website}
-          onChange={(e) => onChange('website', e.target.value)}
-          placeholder={t($ => $.placeholders.website)}
-          slotProps={{
-            htmlInput: { readOnly: disabled },
-            input: {
-              endAdornment: form.website ? (
-                <InputAdornment position="end">
-                  <Tooltip title={t($ => $.openInNewTab)}>
-                    <IconButton
-                      size="small"
-                      edge="end"
-                      tabIndex={-1}
-                      component="a"
-                      href={form.website as string}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <OpenInNewIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </InputAdornment>
-              ) : null,
-            },
-          }}
-        />
-      </Grid>
-      <Grid size={6}>
-        <TextField
-          label={t($ => $.fields.phone)}
-          fullWidth
-          value={form.phone}
-          onChange={(e) => onChange('phone', e.target.value)}
-          slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.phone as string} /> } }}
-        />
-      </Grid>
-      <Grid size={6}>
-        <TextField
-          label={t($ => $.fields.email)}
-          fullWidth
-          type="email"
-          value={form.email}
-          onChange={(e) => onChange('email', e.target.value)}
-          slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.email as string} /> } }}
-        />
-      </Grid>
+      {layout
+        .filter(([field]) => !(field === 'category' && lockedCategory))
+        .map(([field, wide, compact]) => (
+          <Grid key={field} size={isCompact ? compact : wide}>{fields[field]()}</Grid>
+        ))}
     </>
   )
 }

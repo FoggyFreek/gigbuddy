@@ -2,19 +2,23 @@
 // (see app/apiRouter.js) — billing is user-level, not tenant-scoped, so no active
 // tenant is resolved. The subscription owner acts here regardless of which band
 // is active.
+//
+// One subscription per user, made of modules, so nothing here takes an
+// `audience` to say WHICH subscription — only to say which module.
 import { Router } from 'express'
 import pool from '../../db/index.js'
 import { auditLog } from '../../utils/auditLog.js'
 import { requireCurrentTerms } from '../../middleware/auth.js'
 import { sendError } from '../../platform/http/routeHelpers.js'
-import { listPlans } from '../plans/planService.js'
-import { parseAudience } from './billingValidators.js'
 import {
   getBillingState,
+  startTrial,
   subscribe,
+  checkout,
+  changeModule,
+  previewModuleChange,
   cancelSubscription,
   resumeSubscription,
-  changePlan,
   downgrade,
   previewDowngrade,
   syncOwnSubscription,
@@ -23,24 +27,49 @@ import {
 const router = Router()
 
 router.get('/', async (req, res) => {
-  const [state, plans] = await Promise.all([
-    getBillingState(pool, req.user.id),
-    listPlans(pool),
-  ])
-  res.json({ ...state, plans: plans.filter((p) => p.is_active) })
+  res.json(await getBillingState(pool, req.user.id))
 })
 
+// Start the free trial: 30 days, Gold only, one starter module, no payment and
+// no provider schedule.
+router.post('/trial', requireCurrentTerms, async (req, res) => {
+  const result = await startTrial(pool, req.user, req.body ?? {})
+  if (result.error) return sendError(res, result.error)
+  auditLog(req, 'billing.trial_started', { subscriptionId: result.subscription.id })
+  res.status(201).json(result)
+})
+
+// Direct signup for a customer whose trial is already spent.
 router.post('/subscribe', requireCurrentTerms, async (req, res) => {
   const result = await subscribe(pool, req.user, req.body ?? {})
   if (result.error) return sendError(res, result.error)
   auditLog(req, 'billing.subscribe', { subscriptionId: result.subscriptionId })
-  res.status(201).json({ checkoutUrl: result.checkoutUrl, trial: result.trial })
+  res.status(201).json(result)
 })
 
-router.post('/change-plan', requireCurrentTerms, async (req, res) => {
-  const result = await changePlan(pool, req.user, req.body ?? {})
+// Trial continuation: price the module set, verify the mandate for €0.01 now,
+// and schedule the first combined subscription charge at trial_ends_at.
+router.post('/checkout', requireCurrentTerms, async (req, res) => {
+  const result = await checkout(pool, req.user, req.body ?? {})
   if (result.error) return sendError(res, result.error)
-  auditLog(req, 'billing.plan_change', { interval: req.body?.interval })
+  auditLog(req, 'billing.checkout', { subscriptionId: result.subscriptionId })
+  res.status(201).json(result)
+})
+
+// What adding or upgrading a module would cost right now — the UI must never
+// ask for a confirmation whose price the user has not seen.
+router.post('/modules/preview', requireCurrentTerms, async (req, res) => {
+  const result = await previewModuleChange(pool, req.user, req.body ?? {})
+  if (result.error) return sendError(res, result.error)
+  res.json(result)
+})
+
+// Add a module, or move one UP. Free during a trial; on a paid cycle it charges
+// the prorated difference and preserves the renewal date.
+router.post('/modules', requireCurrentTerms, async (req, res) => {
+  const result = await changeModule(pool, req.user, req.body ?? {})
+  if (result.error) return sendError(res, result.error)
+  auditLog(req, 'billing.module_change', { audience: req.body?.audience, planId: req.body?.planId })
   res.json(result)
 })
 
@@ -52,36 +81,36 @@ router.post('/downgrade/preview', requireCurrentTerms, async (req, res) => {
   res.json(result)
 })
 
+// Lower a module's plan, or remove it altogether. Type-to-confirm; takes effect
+// at the period boundary, and only then is anything purged.
 router.post('/downgrade', requireCurrentTerms, async (req, res) => {
   const result = await downgrade(pool, req.user, req.body ?? {})
   if (result.error) return sendError(res, result.error)
-  auditLog(req, 'billing.downgrade_scheduled', { planId: req.body?.planId, interval: req.body?.interval })
+  auditLog(req, 'billing.downgrade_scheduled', {
+    audience: req.body?.audience, planId: req.body?.planId,
+  })
   res.json(result)
 })
 
-// Cancel and resume name the product explicitly — the body's `audience` is
-// required, since a user may hold a live band and a live artist subscription.
+// `immediate: true` is the withdrawal path — inside the five-day window it ends
+// access now and refunds the charge that opened the period, in full.
 router.post('/cancel', requireCurrentTerms, async (req, res) => {
   const result = await cancelSubscription(pool, req.user.id, req.body ?? {})
   if (result.error) return sendError(res, result.error)
-  auditLog(req, 'billing.cancel', { audience: req.body?.audience })
+  auditLog(req, 'billing.cancel', { immediate: req.body?.immediate === true })
   res.json(result)
 })
 
 router.post('/resume', requireCurrentTerms, async (req, res) => {
-  const result = await resumeSubscription(pool, req.user.id, req.body ?? {})
+  const result = await resumeSubscription(pool, req.user.id)
   if (result.error) return sendError(res, result.error)
-  auditLog(req, 'billing.resume', { audience: req.body?.audience })
+  auditLog(req, 'billing.resume', {})
   res.json(result)
 })
 
-// Manual reconcile (dev, when webhooks are disabled). An `audience` narrows it
-// to one ladder — a checkout return must not read the other product's settled
-// subscription as its own. Omitted, it syncs both.
+// Manual reconcile (dev, when webhooks are disabled).
 router.post('/sync', requireCurrentTerms, async (req, res) => {
-  const parsed = req.body?.audience === undefined ? { audience: null } : parseAudience(req.body)
-  if (parsed.error) return sendError(res, { status: 400, body: { error: parsed.error } })
-  res.json(await syncOwnSubscription(pool, req.user.id, parsed.audience))
+  res.json(await syncOwnSubscription(pool, req.user.id))
 })
 
 export default router

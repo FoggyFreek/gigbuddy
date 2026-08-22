@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import ChordProView from '../../../songs/components/chordpro/ChordProView.tsx'
+import { useCompactLayout } from '../../../../hooks/useCompactLayout.ts'
 
-// Fixed, deliberately large: on stage the chart is read at arm's length or
-// further, and a size that shifts per song is harder to read than one that
-// doesn't. Anything that doesn't fit is paged through instead of shrunk.
+// Fixed per layout so the size never shifts between songs. Compact screens use
+// a slightly smaller size to keep more of the chart visible at once.
 const STAGE_FONT_SIZE = 26
+const COMPACT_STAGE_FONT_SIZE = 18
 
 // Stage overrides on top of ChordProView's own styles. Chords get room to
 // breathe — wider gaps between cells, clear separation from the lyric under
@@ -38,6 +39,7 @@ export default function PerformanceChartSlide({
   page,
   onPageCount,
 }: Readonly<PerformanceChartSlideProps>) {
+  const isCompact = useCompactLayout()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
   const [box, setBox] = useState({ width: 0, height: 0 })
@@ -83,8 +85,9 @@ export default function PerformanceChartSlide({
     >
       <Box
         ref={contentRef}
+        className="performance-chart-content"
         style={{
-          fontSize: `${STAGE_FONT_SIZE}px`,
+          fontSize: `${isCompact ? COMPACT_STAGE_FONT_SIZE : STAGE_FONT_SIZE}px`,
           // A chart that fits on one screen is centred vertically; one that
           // paginates is pinned to the top, because the page offset and a
           // centring translate can't both own the transform.

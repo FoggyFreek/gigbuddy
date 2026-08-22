@@ -25,6 +25,8 @@ export const FEATURES = Object.freeze({
   // `integrations` so "planning, but no calendar sync" is expressible — the
   // shape a free artist workspace takes.
   CALENDAR_SYNC: 'calendar_sync',
+  // Venue outreach. A downgrade is read-only; stored records are never purged.
+  OUTREACH: 'outreach',
 })
 
 export const LIMITS = Object.freeze({
@@ -68,6 +70,33 @@ export function featuresToPurge(current, target) {
     (feature) => current.features[feature] === true && target.features[feature] === false,
   )
 }
+
+// A target with any feature removed or any numeric limit reduced (null =
+// unlimited = largest) relative to the current plan is a downgrade. Deliberately
+// entitlement-shaped, not price-shaped: a bundle discount can make ADDING a
+// module cheaper than the current total, and that is not a downgrade.
+//
+// Both sides must be EFFECTIVE entitlements, for the same reason as
+// featuresToPurge above.
+export function isDowngrade(currentEnt, targetEnt) {
+  for (const f of FEATURE_KEYS) {
+    if (currentEnt.features[f] && !targetEnt.features[f]) return true
+  }
+  for (const l of LIMIT_KEYS) {
+    const cur = currentEnt.limits[l]
+    const tgt = targetEnt.limits[l]
+    if (cur === null && tgt !== null) return true
+    if (cur !== null && tgt !== null && tgt < cur) return true
+  }
+  return false
+}
+
+// Access grace after a trial or a paid period ends, before the account falls
+// back to the free plan. The resolver enforces it (`isUnlocked`); the frontend
+// reads the same value to tell "trial just ended, still unlocked" apart from
+// "trial over, back on the fallback plan" — one number, no drift.
+export const PERIOD_GRACE_DAYS = 2
+export const PERIOD_GRACE_MS = PERIOD_GRACE_DAYS * 24 * 60 * 60 * 1000
 
 // Limits use `null` as the unlimited sentinel (a real JSONB value, unlike
 // undefined, and unambiguous next to 0 which means "none allowed").

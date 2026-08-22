@@ -23,6 +23,7 @@ interface ChordProViewProps {
   // editing the chart).
   transposeOffset?: number
   diagramsOpen?: boolean
+  compact?: boolean
 }
 
 // Mirrors CHORDPRO_PRINT_CSS but with theme colors so the screen tracks light/dark.
@@ -514,9 +515,31 @@ function FlowContent({ blocks, columns, transpose, chords, diagramsOpen }: Reado
   )
 }
 
-function DiagramGrid({ chords }: Readonly<{ chords: ResolvedChord[] }>) {
+interface DiagramProps {
+  chords: ResolvedChord[]
+  vertical?: boolean
+  compact?: boolean
+}
+
+// `vertical` marks a side placement ({diagrams: right|left}), where the grid
+// lives in a narrow column beside the lyrics and must stack rather than wrap.
+// The class stays on in compact layouts because print always keeps that column;
+// only the screen grid falls back to wrapping once the layout is a single column.
+function DiagramGrid({ chords, vertical = false, compact = false }: Readonly<DiagramProps>) {
+  const stacked = vertical && !compact
   return (
-    <Box className="cp-diagrams" sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2, justifyContent: 'center' }}>
+    <Box
+      className={vertical ? 'cp-diagrams cp-diagrams-vertical' : 'cp-diagrams'}
+      sx={{
+        display: 'flex',
+        flexDirection: stacked ? 'column' : 'row',
+        flexWrap: stacked ? 'nowrap' : 'wrap',
+        alignItems: stacked ? 'center' : undefined,
+        gap: 2,
+        mb: 2,
+        justifyContent: 'center',
+      }}
+    >
       {chords.map((c, i) => <ChordDiagram key={i} name={c.name} shape={c.shape} />)}
     </Box>
   )
@@ -524,7 +547,7 @@ function DiagramGrid({ chords }: Readonly<{ chords: ResolvedChord[] }>) {
 
 // A collapsible header at the top of the view holding the guitar chord diagrams.
 // Starts collapsed so the chart stays the focus; the count hints at what's inside.
-function CollapsibleDiagrams({ chords, defaultOpen }: Readonly<{ chords: ResolvedChord[]; defaultOpen: boolean }>) {
+function CollapsibleDiagrams({ chords, defaultOpen, vertical, compact }: Readonly<DiagramProps & { defaultOpen: boolean }>) {
   const { t } = useTranslation('songs')
   const [open, setOpen] = useState(defaultOpen)
   return (
@@ -538,31 +561,31 @@ function CollapsibleDiagrams({ chords, defaultOpen }: Readonly<{ chords: Resolve
         {t($ => $.view.chordsHeading, { n: chords.length })}
       </ButtonBase>
       <Collapse in={open} unmountOnExit>
-        <DiagramGrid chords={chords} />
+        <DiagramGrid chords={chords} vertical={vertical} compact={compact} />
       </Collapse>
     </Box>
   )
 }
 
-function PrintDiagrams({ chords }: Readonly<{ chords: ResolvedChord[] }>) {
+function PrintDiagrams({ chords, vertical, compact }: Readonly<DiagramProps>) {
   return (
     <Box className="cp-diagrams-print" sx={{ display: 'none' }}>
-      <DiagramGrid chords={chords} />
+      <DiagramGrid chords={chords} vertical={vertical} compact={compact} />
     </Box>
   )
 }
 
-function DiagramPlacement({ chords, defaultOpen }: Readonly<{ chords: ResolvedChord[]; defaultOpen: boolean }>) {
+function DiagramPlacement({ chords, defaultOpen, vertical = false, compact = false }: Readonly<DiagramProps & { defaultOpen: boolean }>) {
   if (chords.length === 0) return null
   return (
     <Box className="cp-diagram-placement">
-      <CollapsibleDiagrams chords={chords} defaultOpen={defaultOpen} />
-      <PrintDiagrams chords={chords} />
+      <CollapsibleDiagrams chords={chords} defaultOpen={defaultOpen} vertical={vertical} compact={compact} />
+      <PrintDiagrams chords={chords} vertical={vertical} compact={compact} />
     </Box>
   )
 }
 
-export default function ChordProView({ source, transposeOffset = 0, diagramsOpen = false }: Readonly<ChordProViewProps>) {
+export default function ChordProView({ source, transposeOffset = 0, diagramsOpen = false, compact = false }: Readonly<ChordProViewProps>) {
   const transposed = useMemo(() => applySourceTransposition(source), [source])
   const renderedSource = transposed.source
   const { columns, blocks, warnings } = useMemo(() => parseChordProDocument(renderedSource), [renderedSource])
@@ -571,6 +594,8 @@ export default function ChordProView({ source, transposeOffset = 0, diagramsOpen
   const { widthCh } = useMemo(() => extractLabelLayout(renderedSource, blocks), [renderedSource, blocks])
   const diagramChords = chords.filter((chord) => chord.shape !== null)
   const showGrid = placement !== 'off' && diagramChords.length > 0
+  const isSide = placement === 'right' || placement === 'left'
+  const sideColumns = placement === 'left' ? 'auto minmax(0, 1fr)' : 'minmax(0, 1fr) auto'
   const flow = <FlowContent blocks={blocks} columns={columns} transpose={transposeOffset} chords={diagramChords} diagramsOpen={diagramsOpen} />
   const docStyle = {
     '--cp-label-width': widthCh > 0 ? `${Math.min(Math.max(Math.ceil(widthCh * 6), 36), 84)}px` : '0px',
@@ -578,7 +603,7 @@ export default function ChordProView({ source, transposeOffset = 0, diagramsOpen
   } as CSSProperties
 
   return (
-    <Box className="cp-doc" style={docStyle}>
+    <Box className="cp-doc" style={docStyle} sx={{ fontSize: compact ? 14 : undefined }}>
       <MetaHeader meta={meta} />
       {warnings.length > 0 && (
         <Box className="cp-warnings" sx={{ mb: 2, p: 1, borderRadius: 1, border: '1px solid', borderColor: 'warning.main', color: 'warning.main', fontSize: 13 }}>
@@ -586,10 +611,21 @@ export default function ChordProView({ source, transposeOffset = 0, diagramsOpen
         </Box>
       )}
       {showGrid && placement === 'top' && <DiagramPlacement chords={diagramChords} defaultOpen={diagramsOpen} />}
-      {showGrid && placement === 'right' ? (
-        <Box className="cp-right-layout" sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 2, alignItems: 'start' }}>
+      {showGrid && isSide ? (
+        <Box
+          className={`cp-side-layout cp-side-layout-${placement}`}
+          sx={{
+            display: 'grid',
+            // Too narrow for a side column: stack the diagrams above (left) or
+            // below (right) the lyrics instead of squeezing them.
+            gridTemplateColumns: compact ? '1fr' : sideColumns,
+            gap: 2,
+            alignItems: 'start',
+          }}
+        >
+          {placement === 'left' && <DiagramPlacement chords={diagramChords} defaultOpen={diagramsOpen} vertical compact={compact} />}
           {flow}
-          <DiagramPlacement chords={diagramChords} defaultOpen={diagramsOpen} />
+          {placement === 'right' && <DiagramPlacement chords={diagramChords} defaultOpen={diagramsOpen} vertical compact={compact} />}
         </Box>
       ) : flow}
       {showGrid && placement === 'bottom' && <DiagramPlacement chords={diagramChords} defaultOpen={diagramsOpen} />}

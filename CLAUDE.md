@@ -50,6 +50,7 @@ One Node process in production: Express serves `/api`, the built `dist/` assets,
 | Frontend bootstrap / provider hierarchy | `src/main.tsx` |
 | Route tree + frontend access guards | `src/app/App.tsx` (`RequireAuth`/`RequirePermission`/`RequireEntitlement`/`RequireTenantCapability`/`RequireSuperAdmin`) |
 | App shell / navigation | `src/components/AppShell.tsx`, `src/components/appShell/` |
+| Modals + app-level prompts | `src/contexts/DialogContext.tsx`, `src/dialogs/` (registry, suppression, `AppDialogs`), `src/app/navTargets.ts` |
 | Backend bootstrap + middleware pipeline | `server/index.js` |
 | API composition, access tiers, rate limits, gates | `server/app/apiRouter.js` |
 | DB connection / transactions | `server/db/index.js`, `server/db/withTransaction.js` |
@@ -66,7 +67,7 @@ One Node process in production: Express serves `/api`, the built `dist/` assets,
 | `tenant-model` | band vs personal tenants, capabilities, the cross-tenant `/api/me/*` hub, global band profiles, `my_bands` |
 | `availability` | user-level slots, the redacted band projection, delegated writes |
 | `finance-ledger` | double-entry ledger, accounting profile/regime, VAT treatment, bank import |
-| `subscription-billing` | plans and the two audiences, entitlements, limits, Mollie lifecycle, gating UI |
+| `subscription-billing` | plans, subscription modules, pricing rules & snapshots, entitlements, limits, Mollie lifecycle, refunds, gating UI |
 | `test-harness` | backend test database internals |
 | `react-frontend` / `i18n` / `material-ui-theming` | frontend rules, translations, theming |
 | `detail-component-permissions` | gating editing affordances in detail/editor components |
@@ -125,16 +126,36 @@ Load the **availability** skill before changing slots, the projection, or who ma
 
 - **Strict TypeScript** (`tsc --noEmit` at 0 errors); all `src/` app code is `.ts`/`.tsx`, only tests stay `.js`/`.jsx`. Backend stays ESM JavaScript. Load the **react-frontend** skill before frontend work.
 - Anything derivable from props or state is **calculated during render, not stored in state**.
-- No Redux/React Query — React contexts + hooks + component state; central contexts in `src/contexts/` (auth/tenant switching, profile, theming, toasts).
+- No Redux/React Query — React contexts + hooks + component state; central contexts in `src/contexts/` (auth/tenant switching, profile, theming, toasts, dialogs).
 - **All HTTP goes through `src/api/_client.ts`** (CSRF header, error normalization, 401 events) behind a thin typed API module in the owning frontend feature slice. Page components never embed `/api/...` paths.
 - Frontend guards and entitlement gating are **UX only** — backend middleware is authoritative.
 - **MUI v9** (Material 3). Component conventions, shared types, the cross-feature hooks (`useDebouncedSave`, `useCompactLayout`, …) and the tutorial registry are all in the **react-frontend** skill. **Never rename a shipped tutorial key** (persisted).
+- **Email templates use React Email** for email-ready HTML/text composition. The in-app visual editor uses `@react-email/editor` (TipTap/ProseMirror), customized in `src/promotion/outreach/components/TemplateEditor.tsx`; load the **react-email** skill and read `docs/outreach-templating.md` before changing it.
 - **Which feed a planning page reads is decided by tenant kind, not by the page** — `usePlanningSource(aggregate)` and `usePagedEventTabs` own that split, and a row's writability follows the tenant it came from. A new list goes through them, not around them; see the **tenant-model** skill.
 - **i18n**: i18next typed selector form `t($ => $.key)`, never bare `t('key')`; shared namespaces live in `src/i18n/`, feature namespaces live beside their feature, with en canonical + nl and parity enforced at compile time. Load the **i18n** skill for non-trivial work; copy existing English wording verbatim when extracting (tests assert literal copy).
+- **Modals go through the dialog layer, not a per-call-site component** — see below.
+
+### Dialogs — one host, one registry
+
+`DialogProvider` (`src/contexts/DialogContext.tsx`, mounted in `main.tsx`) owns the app's single modal host; `useDialog()` (`src/contexts/dialogContext.ts`) is the only way in and **throws outside the provider** — a silently missing dialog is worse than a loud one. Requests queue rather than replace each other, and the entry on screen is dropped only on the close transition's exit.
+
+- **Deleting anything is `await confirmDelete({ title, body? })`** → `boolean`, backed by the registry's `confirm-delete`: one owner for the danger colour, the button wording and the "This cannot be undone." default. Other confirmations are `await confirm({ title, body, confirmLabel, destructive })`. **Do not add another bespoke `<XyzConfirmDialog>`** for a plain confirm/cancel; a dedicated component is for modals with real content (forms, pickers, wizards) or one that owns busy/blocked state on its confirm button.
+- Outside a provider, `useDialog()` returns a fallback that **renders fine but throws the moment a dialog is opened** — so only a test that actually clicks through a confirmation needs `<DialogProvider>` (inside the router) in its `wrap()`. This is deliberately stricter than `useToast()`, which no-ops: a missing toast costs a message, a missing confirmation would swallow the user's answer.
+- Recurring or state-driven prompts are **defined once in `src/dialogs/dialogRegistry.ts`** and opened by id: `openDialog('trial-ended')`. `DialogParams` maps id → params, so params are required exactly when the dialog takes them. Copy lives in the `dialogs` i18n namespace.
+- **Never rename a shipped dialog id** — it is the "don't show this message again" storage key (`gigbuddy_suppressed_dialogs` in localStorage, `src/dialogs/dialogSuppression.ts`), same rule as tutorial keys. A suppressible dialog resolves `null` without rendering; check suppression *before* any fetch that only feeds the prompt.
+- Actions navigate by **naming a destination**, not a URL: `navigateTo: { settings: 'billing' }` or `{ path: '/gigs' }`. Settings section ids live in `src/app/navTargets.ts` and `SettingsPage` imports them from there, so a renamed section is a compile error at every link.
+- State-driven prompts hang off `src/dialogs/AppDialogs.tsx` at the composition root (`App.tsx`), **not off `AppShell`** — the shell is rendered directly by a dozen tests that must not need a dialog provider or a billing fetch. Each watcher hook stays quiet until there is an authenticated user.
+- Trial prompts (`trial-grace` / `trial-ended`) split on the *entitlement resolver's* grace window: `PERIOD_GRACE_MS` in `shared/entitlements.js` is the single owner of that boundary — the resolver and `src/commerce/billing/trialStatus.ts` both read it. **Never re-derive the grace length client-side.**
 
 ## Finance & billing
 
 Two separate concerns, each with its own skill. **Load the skill before touching either** — the prohibitions below are the minimum that must hold even if you don't.
+
+### Gig deal terms and invoice modes
+
+Gig deal vocabulary lives in `shared/gigDealVocabulary.js`; calculation and invoice decomposition live in `shared/gigDealEngine.js` and `shared/gigDealInvoiceLines.js`. There are three deal types: `flat_fee`, `guarantee`, and `door_deal`. A guarantee has a required `plus` or `versus` variant; non-guarantees have no variant. Booking fees are inclusive in the gross artist fee and are calculated once by the shared engine.
+
+Each tenant chooses `combined` or `specified` invoice presentation. `combined` keeps the booking fee inside the artist fee. `specified` splits that same total into artist-fee and booking-fee lines on one invoice; it never appends the booking fee. With no booking-fee basis it resolves to `combined`. Invoice drafts capture the resulting lines, so later preference changes do not rewrite an existing draft or issued invoice.
 
 **Books** (`server/finance/`, `src/finance/`) → the **finance-ledger** skill. An immutable double-entry ledger (`ledger_transactions` + `ledger_entries`):
 
@@ -146,10 +167,13 @@ Two separate concerns, each with its own skill. **Load the skill before touching
 
 **Platform billing** (Mollie, user-level subscriptions; tenants inherit from `tenants.owner_user_id`) → the **subscription-billing** skill:
 
-- `shared/entitlements.js` is the single source of truth for features and limits.
+- `shared/entitlements.js` is the single source of truth for features and limits; **`shared/pricing.js` is the single source of truth for money** — the server charges and the frontend quotes from the same pure engine, so a quote and an invoice cannot drift.
 - **Never call the payment provider inside a DB transaction**, and never import a concrete adapter — use `getPaymentProvider()`. Remote mutations go through the `billing_operations` outbox saga.
-- Plans are **two independent products** (`subscription_plans.audience` = `band` | `artist`, `shared/planAudiences.js`), not one ladder; tenant kind selects which. Keep `server/db/defaultPlans.js` and the seeding migration in step.
+- **One subscription per user, composed of band/artist MODULES** on one shared cycle (`subscription_modules`, migration `181`). Band and artist stay two independent products (`subscription_plans.audience`, `shared/planAudiences.js`) and tenant kind selects the module; what they share is the cycle, the price and the renewal payment. **Absence of a module IS that ladder's free plan** — a fallback plan can never be stored as one. Keep `server/db/defaultPlans.js` and the seeding migration in step.
+- Per-product state (`entitlement_overrides`, purge manifest, limits snapshot, a scheduled plan change) lives on the **module row**, never the subscription — an artist downgrade's `bands: 0` snapshot must not zero the owner's band cap.
+- **Pricing-rule terms are never edited in place** — a price snapshot pins `{ code, version }`, so changing a discount supersedes it with a new version.
 - Customer-invoice Mollie payments and platform subscription billing are separate flows.
+- Product-level docs: `docs/subscriptionmodel/`.
 
 ## Cross-cutting services
 

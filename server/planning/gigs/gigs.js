@@ -3,8 +3,9 @@ import multer from 'multer'
 import pool from '../../db/index.js'
 import { requirePermission } from '../../middleware/permissions.js'
 import { PERMISSIONS } from '../../auth/permissions.js'
-import { parseId } from './gigValidators.js'
+import { parseId, parseOrderedTimetableIds } from './gigValidators.js'
 import { requireParam, sendError, viewerOf } from '../../platform/http/routeHelpers.js'
+import { normalizeDocumentLng } from '../../utils/documentI18n.js'
 import {
   listGigs,
   listUpcomingGigs,
@@ -14,12 +15,14 @@ import {
   searchGigs,
   searchGigTags,
   getGig,
+  getGigItineraryPdf,
+  getGigArtistSettlementPdf,
+  getGigContractPdf,
   gigMerchSummary,
   importGigs,
   createGig,
   patchGig,
   setGigTags,
-  setGigEquipment,
   deleteGig,
   addGigTask,
   patchGigTask,
@@ -31,6 +34,19 @@ import {
   deleteGigBanner,
   createGigAttachment,
   deleteGigAttachment,
+  listGigCosts,
+  addGigCost,
+  patchGigCost,
+  removeGigCost,
+  listGigInfoBlocks,
+  addGigInfoBlock,
+  patchGigInfoBlock,
+  removeGigInfoBlock,
+  listGigTimetable,
+  addGigTimetableEntry,
+  patchGigTimetableEntry,
+  removeGigTimetableEntry,
+  reorderGigTimetable,
   listGigContacts,
   addGigContact,
   setGigContactPrimary,
@@ -111,6 +127,46 @@ router.get('/:id', async (req, res) => {
   const result = await getGig(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
   res.json(result.gig)
+})
+
+// The itinerary PDF. A plain tenant-scoped read — any approved member may hand
+// the band its running order — streamed straight back rather than stored, since
+// it is derived from the gig and stale the moment the gig changes.
+router.get('/:id/itinerary.pdf', async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const lng = normalizeDocumentLng(req.query.lng)
+  const result = await getGigItineraryPdf(pool, req.tenantId, id, { lng })
+  if (result.error) return sendError(res, result.error)
+
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="${result.pdf.filename}"`)
+  res.send(result.pdf.buffer)
+})
+
+// The artist settlement contains deal finances, so unlike the itinerary it is
+// only available to members who may view finance.
+router.get('/:id/artist-settlement.pdf', requirePermission(PERMISSIONS.FINANCE_VIEW), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const lng = normalizeDocumentLng(req.query.lng)
+  const result = await getGigArtistSettlementPdf(pool, req.tenantId, id, { lng })
+  if (result.error) return sendError(res, result.error)
+
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="${result.pdf.filename}"`)
+  res.send(result.pdf.buffer)
+})
+
+// The contract contains the same deal finances and is likewise generated live
+// for finance viewers instead of being persisted as a versioned document.
+router.get('/:id/contract.pdf', requirePermission(PERMISSIONS.FINANCE_VIEW), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const lng = normalizeDocumentLng(req.query.lng)
+  const result = await getGigContractPdf(pool, req.tenantId, id, { lng })
+  if (result.error) return sendError(res, result.error)
+
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="${result.pdf.filename}"`)
+  res.send(result.pdf.buffer)
 })
 
 // Merch-sold totals are part of the finance-only Terms section.
@@ -266,11 +322,110 @@ router.put('/:id/tags', requirePermission(PERMISSIONS.PLANNING_WRITE), async (re
   res.json(result.tags)
 })
 
-router.put('/:id/equipment', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+// --- Gig costs (the artist's own costs; summed into the artist statement) ---
+
+router.get('/:id/costs', async (req, res) => {
   const id = requireParam(req, res, 'id'); if (id === null) return
-  const result = await setGigEquipment(pool, req.tenantId, id, req.body)
+  const result = await listGigCosts(pool, req.tenantId, id)
   if (result.error) return sendError(res, result.error)
-  res.json(result.equipment)
+  res.json(result.costs)
+})
+
+router.post('/:id/costs', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await addGigCost(pool, req.tenantId, id, req.body || {})
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.cost)
+})
+
+router.patch('/:id/costs/:costId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const costId = requireParam(req, res, 'costId'); if (costId === null) return
+  const result = await patchGigCost(pool, req.tenantId, id, costId, req.body || {})
+  if (result.error) return sendError(res, result.error)
+  res.json(result.cost)
+})
+
+router.delete('/:id/costs/:costId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const costId = requireParam(req, res, 'costId'); if (costId === null) return
+  const result = await removeGigCost(pool, req.tenantId, id, costId)
+  if (result.error) return sendError(res, result.error)
+  res.status(204).end()
+})
+
+// --- Gig info blocks ("Additional information" on the Tasks tab) ---
+
+router.get('/:id/info-blocks', async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await listGigInfoBlocks(pool, req.tenantId, id)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.infoBlocks)
+})
+
+router.post('/:id/info-blocks', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await addGigInfoBlock(pool, req.tenantId, id, req.body || {})
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.infoBlock)
+})
+
+router.patch('/:id/info-blocks/:blockId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const blockId = requireParam(req, res, 'blockId'); if (blockId === null) return
+  const result = await patchGigInfoBlock(pool, req.tenantId, id, blockId, req.body || {})
+  if (result.error) return sendError(res, result.error)
+  res.json(result.infoBlock)
+})
+
+router.delete('/:id/info-blocks/:blockId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const blockId = requireParam(req, res, 'blockId'); if (blockId === null) return
+  const result = await removeGigInfoBlock(pool, req.tenantId, id, blockId)
+  if (result.error) return sendError(res, result.error)
+  res.status(204).end()
+})
+
+// --- Gig timetable (the gig day's running order, on the Tasks tab) ---
+
+router.get('/:id/timetable', async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await listGigTimetable(pool, req.tenantId, id)
+  if (result.error) return sendError(res, result.error)
+  res.json(result.timetable)
+})
+
+router.post('/:id/timetable', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const result = await addGigTimetableEntry(pool, req.tenantId, id, req.body || {})
+  if (result.error) return sendError(res, result.error)
+  res.status(201).json(result.entry)
+})
+
+// Registered before '/:id/timetable/:entryId' so 'reorder' isn't taken as an id.
+router.patch('/:id/timetable/reorder', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const parsed = parseOrderedTimetableIds(req.body || {})
+  if (parsed.error) return res.status(400).json({ error: parsed.error })
+  const result = await reorderGigTimetable(pool, req.tenantId, id, parsed.orderedEntryIds)
+  if (result.error) return sendError(res, result.error)
+  res.status(204).end()
+})
+
+router.patch('/:id/timetable/:entryId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const entryId = requireParam(req, res, 'entryId'); if (entryId === null) return
+  const result = await patchGigTimetableEntry(pool, req.tenantId, id, entryId, req.body || {})
+  if (result.error) return sendError(res, result.error)
+  res.json(result.entry)
+})
+
+router.delete('/:id/timetable/:entryId', requirePermission(PERMISSIONS.PLANNING_WRITE), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const entryId = requireParam(req, res, 'entryId'); if (entryId === null) return
+  const result = await removeGigTimetableEntry(pool, req.tenantId, id, entryId)
+  if (result.error) return sendError(res, result.error)
+  res.status(204).end()
 })
 
 // --- Gig contacts (mirrors venue_contacts; links are informational) ---

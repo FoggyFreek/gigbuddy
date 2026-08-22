@@ -31,7 +31,7 @@ import {
   markTenantDeletionState,
 } from './tenantRepository.js'
 import { deleteTenantObjects } from '../../platform/files/storageService.js'
-import { enforceMemberCap } from '../../commerce/billing/limitService.js'
+import { enforceMemberCap } from '../../entitlements/limitService.js'
 import { logger } from '../../utils/logger.js'
 import { badRequest, conflict, notFound, tenantKindNotSupported } from '../../platform/http/serviceErrors.js'
 

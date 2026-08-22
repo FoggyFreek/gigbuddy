@@ -5,7 +5,7 @@ import {
 import { getDefaultAccountName } from '../domain/accountNamePacks.js'
 
 // Default chart of accounts for every new tenant.
-// ORDER IS SIGNIFICANT: parents must appear before their children (self-referential FK is IMMEDIATE).
+// Grouped by hierarchy for readability; one statement inserts the whole tree.
 // Migration backfills duplicate this list for existing tenants — keep them in sync.
 
 export const DEFAULT_ACCOUNTS = [
@@ -102,20 +102,37 @@ const DEFAULT_SETTINGS = {
 // English base names above. A freshly seeded account is never customized, so
 // name and default_name start out identical.
 export async function seedTenantAccounting(client, tenantId, countryCode = null) {
-  for (const acc of DEFAULT_ACCOUNTS) {
+  const accounts = DEFAULT_ACCOUNTS.map((acc) => {
     const reportingGroup = acc.reporting_group ?? defaultReportingGroupForType(acc.type)
     const name = getDefaultAccountName(countryCode, acc.code, acc.name)
-    await client.query(
-      `INSERT INTO chart_of_accounts (
-         tenant_id, code, name, default_name, type, parent_code, is_system, is_capitalizable, reporting_group
-       ) VALUES ($1, $2, $3, $3, $4, $5, true, $6, $7)
-       ON CONFLICT (tenant_id, code) DO NOTHING`,
-      [
-        tenantId, acc.code, name, acc.type, acc.parent_code ?? null,
-        acc.capitalizable ?? false, reportingGroup,
-      ],
-    )
-  }
+    return {
+      code: acc.code,
+      name,
+      type: acc.type,
+      parent_code: acc.parent_code ?? null,
+      is_capitalizable: acc.capitalizable ?? false,
+      reporting_group: reportingGroup,
+    }
+  })
+
+  await client.query(
+    `INSERT INTO chart_of_accounts (
+       tenant_id, code, name, default_name, type, parent_code, is_system, is_capitalizable, reporting_group
+     )
+     SELECT $1, seed.code, seed.name, seed.name, seed.type, seed.parent_code,
+            true, seed.is_capitalizable, seed.reporting_group
+       FROM jsonb_to_recordset($2::jsonb) AS seed(
+         code text,
+         name text,
+         type text,
+         parent_code text,
+         is_capitalizable boolean,
+         reporting_group text
+       )
+     ON CONFLICT (tenant_id, code) DO NOTHING`,
+    [tenantId, JSON.stringify(accounts)],
+  )
+
   await client.query(
     `INSERT INTO tenant_accounting_settings (
        tenant_id,

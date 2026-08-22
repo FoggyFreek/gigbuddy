@@ -15,9 +15,15 @@ import { vatChecksumValid } from './vatChecksum.js'
 
 export const DEFAULT_VAT_COUNTRY = 'nl'
 
-// country code (ISO 3166-1 alpha-2, lowercase) -> { standard, rates }
+// country code (ISO 3166-1 alpha-2, lowercase) -> { standard, reduced, rates }
 //   `rates`    — selectable rates, ordered high→low, ending in 0 (zero-rated/exempt).
-//   `standard` — the standard rate, used as the default for new lines/products.
+//   `standard` — the standard rate, used as the default for new purchase/merch lines.
+//   `reduced`  — the country's principal reduced rate: the tariff admission to a
+//                live performance falls under, and so the default for a new SALES
+//                invoice line (this app's invoices are overwhelmingly gigs). It is
+//                a default, never a ruling — every rate stays selectable per line.
+//                `gb` is the exception: the UK has no reduced rate for admissions
+//                (they are exempt or standard-rated), so it keeps its standard.
 //
 // Rates validated for 2026 against the European Commission "Your Europe" VAT
 // guidance and the Tax Foundation "VAT Rates in Europe" table (each country's
@@ -34,16 +40,16 @@ export const DEFAULT_VAT_COUNTRY = 'nl'
 // own VAT-number/registration format, but is NOT an EU member: EU-specific rules
 // (intra-EU Art. 196 reverse charge, the EU SME scheme) do not apply to it.
 export const VAT_COUNTRIES = Object.freeze({
-  nl: { standard: 21, rates: [21, 9, 0], vatLabel: 'btw', vatIdLabel: 'Btw-nr.', eu: true },
-  be: { standard: 21, rates: [21, 12, 6, 0], vatLabel: 'btw', vatIdLabel: 'Btw-nr.', eu: true },
-  de: { standard: 19, rates: [19, 7, 0], vatLabel: 'USt', vatIdLabel: 'USt-IdNr.', eu: true },
-  fr: { standard: 20, rates: [20, 10, 5.5, 2.1, 0], vatLabel: 'TVA', vatIdLabel: 'N° TVA', eu: true },
-  lu: { standard: 17, rates: [17, 14, 8, 3, 0], vatLabel: 'TVA', vatIdLabel: 'No. TVA', eu: true },
-  at: { standard: 20, rates: [20, 13, 10, 0], vatLabel: 'USt', vatIdLabel: 'UID', eu: true },
-  es: { standard: 21, rates: [21, 10, 4, 0], vatLabel: 'IVA', vatIdLabel: 'NIF', eu: true },
-  it: { standard: 22, rates: [22, 10, 5, 4, 0], vatLabel: 'IVA', vatIdLabel: 'P.IVA', eu: true },
-  ie: { standard: 23, rates: [23, 13.5, 9, 4.8, 0], vatLabel: 'VAT', vatIdLabel: 'VAT no.', eu: true },
-  gb: { standard: 20, rates: [20, 5, 0], vatLabel: 'VAT', vatIdLabel: 'VAT no.', eu: false },
+  nl: { standard: 21, reduced: 9, rates: [21, 9, 0], vatLabel: 'btw', vatIdLabel: 'Btw-nr.', eu: true },
+  be: { standard: 21, reduced: 6, rates: [21, 12, 6, 0], vatLabel: 'btw', vatIdLabel: 'Btw-nr.', eu: true },
+  de: { standard: 19, reduced: 7, rates: [19, 7, 0], vatLabel: 'USt', vatIdLabel: 'USt-IdNr.', eu: true },
+  fr: { standard: 20, reduced: 5.5, rates: [20, 10, 5.5, 2.1, 0], vatLabel: 'TVA', vatIdLabel: 'N° TVA', eu: true },
+  lu: { standard: 17, reduced: 3, rates: [17, 14, 8, 3, 0], vatLabel: 'TVA', vatIdLabel: 'No. TVA', eu: true },
+  at: { standard: 20, reduced: 13, rates: [20, 13, 10, 0], vatLabel: 'USt', vatIdLabel: 'UID', eu: true },
+  es: { standard: 21, reduced: 10, rates: [21, 10, 4, 0], vatLabel: 'IVA', vatIdLabel: 'NIF', eu: true },
+  it: { standard: 22, reduced: 10, rates: [22, 10, 5, 4, 0], vatLabel: 'IVA', vatIdLabel: 'P.IVA', eu: true },
+  ie: { standard: 23, reduced: 9, rates: [23, 13.5, 9, 4.8, 0], vatLabel: 'VAT', vatIdLabel: 'VAT no.', eu: true },
+  gb: { standard: 20, reduced: 20, rates: [20, 5, 0], vatLabel: 'VAT', vatIdLabel: 'VAT no.', eu: false },
 })
 
 // Every distinct VAT rate across all supported countries, high→low. Used as the
@@ -158,6 +164,12 @@ export function getVatRates(country) {
 // The standard rate for a country — the default for new purchase/merch lines.
 export function getStandardVatRate(country) {
   return configFor(country).standard
+}
+
+// The reduced rate a live performance is invoiced at in the country — the default
+// for a new sales-invoice line (unknown/blank → the default country's).
+export function getReducedVatRate(country) {
+  return configFor(country).reduced
 }
 
 // The country's VAT tax term (btw / USt / TVA / IVA / VAT), for VAT columns and

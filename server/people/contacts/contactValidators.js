@@ -20,10 +20,22 @@ export function parseCategoryFilter(value) {
   return VALID_CATEGORIES.has(category) ? category : false
 }
 
+// Repeated `categoryIn` query parameters arrive as an array; accepting a
+// comma-separated value as well keeps the endpoint friendly to simple clients.
+export function parseCategoryInFilter(value) {
+  if (value == null || value === '') return []
+  const raw = (Array.isArray(value) ? value : [value])
+    .flatMap((entry) => String(entry).split(','))
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+  if (!raw.length || raw.some((category) => !VALID_CATEGORIES.has(category))) return false
+  return [...new Set(raw)]
+}
+
 // Builds SET fragments ($1..$N) for a contact PATCH. Empty strings normalize to
 // NULL. Returns { error } on an invalid category, or { fields, values }.
 export function buildContactUpdateFields(body) {
-  const allowed = ['name', 'email', 'phone', 'category', 'iban', 'kvk_number', 'tax_id']
+  const allowed = ['name', 'first_name', 'email', 'phone', 'category', 'iban', 'kvk_number', 'tax_id']
   const fields = []
   const values = []
   let idx = 1

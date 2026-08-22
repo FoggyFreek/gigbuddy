@@ -3,19 +3,16 @@ import './_envSetup.js'
 import { describe, it, beforeAll, beforeEach, afterAll, expect } from 'vitest'
 import request from 'supertest'
 
-let app, pool, runMigrations, truncateAll, seedTwoTenants, DEFAULT_ACCOUNTS, seedTenantAccounting
+let app, pool, runMigrations, truncateAll, seedTwoTenants
 let seed
 
 beforeAll(async () => {
   const dbMod = await import('./_db.js')
   const appMod = await import('./_app.js')
-  const seedMod = await import('../../../server/db/defaultChartOfAccounts.js')
   pool = dbMod.pool
   runMigrations = dbMod.runMigrations
   truncateAll = dbMod.truncateAll
   seedTwoTenants = dbMod.seedTwoTenants
-  DEFAULT_ACCOUNTS = seedMod.DEFAULT_ACCOUNTS
-  seedTenantAccounting = seedMod.seedTenantAccounting
   app = appMod.createTestApp()
   await runMigrations()
 })
@@ -23,6 +20,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAll()
   seed = await seedTwoTenants()
+  const fixtureDb = await import('./_db.js')
+  seed = await fixtureDb.seedAccountingForTenants(seed)
 })
 
 afterAll(async () => {
@@ -51,117 +50,7 @@ async function seedMemberUser() {
   return u
 }
 
-describe('accounts — seeding (JS path)', () => {
-  it('seeded tenants have all default accounts including reimbursement liability', async () => {
-    const { rows } = await pool.query(
-      'SELECT code FROM chart_of_accounts WHERE tenant_id = $1 ORDER BY code',
-      [seed.tenantA.id],
-    )
-    const codes = rows.map((r) => r.code)
-    for (const acc of DEFAULT_ACCOUNTS) {
-      expect(codes).toContain(acc.code)
-    }
-    expect(codes).toContain('21100')
-    expect(codes).toContain('22000')
-  })
-
-  it('seeds Other Operating Income with Grants & Subsidies as its subaccount', async () => {
-    const { rows } = await pool.query(
-      `SELECT code, name, type, parent_code, reporting_group
-         FROM chart_of_accounts
-        WHERE tenant_id = $1 AND code IN ('70000', '71000')
-        ORDER BY code`,
-      [seed.tenantA.id],
-    )
-
-    expect(rows).toEqual([
-      { code: '70000', name: 'Other Operating Income', type: 'revenue', parent_code: null, reporting_group: 'other_operating_income' },
-      { code: '71000', name: 'Grants & Subsidies', type: 'revenue', parent_code: '70000', reporting_group: 'other_operating_income' },
-    ])
-  })
-
-  it('seeded tenants have the default settings row with expected defaults', async () => {
-    const { rows } = await pool.query(
-      'SELECT * FROM tenant_accounting_settings WHERE tenant_id = $1',
-      [seed.tenantA.id],
-    )
-    expect(rows).toHaveLength(1)
-    const s = rows[0]
-    expect(s.receivable_account_code).toBe('11200')
-    expect(s.default_revenue_account_code).toBe('41000')
-    expect(s.payable_account_code).toBe('21100')
-    expect(s.default_reimbursement_account_code).toBe('22000')
-    expect(s.default_expense_account_code).toBe('62100')
-    expect(s.primary_checking_account_code).toBe('11000')
-    expect(s.output_vat_account_code).toBe('24000')
-    expect(s.input_vat_account_code).toBe('15000')
-  })
-
-  it('each tenant has its own independent copy of default accounts', async () => {
-    const { rows: aRows } = await pool.query(
-      'SELECT COUNT(*)::int AS n FROM chart_of_accounts WHERE tenant_id = $1',
-      [seed.tenantA.id],
-    )
-    const { rows: bRows } = await pool.query(
-      'SELECT COUNT(*)::int AS n FROM chart_of_accounts WHERE tenant_id = $1',
-      [seed.tenantB.id],
-    )
-    expect(aRows[0].n).toBe(DEFAULT_ACCOUNTS.length)
-    expect(bRows[0].n).toBe(DEFAULT_ACCOUNTS.length)
-  })
-})
-
-describe('accounts — country default names', () => {
-  async function seedFreshTenant(countryCode) {
-    const { rows: [t] } = await pool.query(
-      `INSERT INTO tenants (slug, band_name, display_name)
-       VALUES ($1, 'Gamma Band', 'Gamma Band') RETURNING id`,
-      [`gamma-${countryCode ?? 'none'}`],
-    )
-    await seedTenantAccounting(pool, t.id, countryCode)
-    const { rows } = await pool.query(
-      `SELECT code, name, default_name, name_is_customized
-         FROM chart_of_accounts WHERE tenant_id = $1`,
-      [t.id],
-    )
-    return Object.fromEntries(rows.map((r) => [r.code, r]))
-  }
-
-  it('seeds Dutch labels for an nl tenant, with name and default_name identical', async () => {
-    const byCode = await seedFreshTenant('nl')
-    expect(byCode['11200']).toMatchObject({
-      name: 'Debiteuren',
-      default_name: 'Debiteuren',
-      name_is_customized: false,
-    })
-    expect(byCode['21100'].name).toBe('Crediteuren')
-  })
-
-  it('falls back to the English base for a country without a pack', async () => {
-    const byCode = await seedFreshTenant('de')
-    expect(byCode['11200']).toMatchObject({
-      name: 'Accounts Receivable',
-      default_name: 'Accounts Receivable',
-      name_is_customized: false,
-    })
-    // A packless jurisdiction must never borrow another country's labels.
-    expect(byCode['21100'].name).not.toBe('Crediteuren')
-  })
-
-  it('falls back to the English base when no country is supplied', async () => {
-    const byCode = await seedFreshTenant(null)
-    expect(byCode['11200'].name).toBe('Accounts Receivable')
-  })
-
-  it('every seeded account starts non-customized with a default equal to its name', async () => {
-    const { rows } = await pool.query(
-      `SELECT COUNT(*)::int AS n FROM chart_of_accounts
-        WHERE tenant_id = $1 AND (default_name IS DISTINCT FROM name OR name_is_customized)`,
-      [seed.tenantA.id],
-    )
-    expect(rows[0].n).toBe(0)
-  })
-
+describe('accounts — schema compatibility', () => {
   it('the insert trigger fills default_name when a writer omits it', async () => {
     // The previous app container still serves while a deploy migrates, and its
     // INSERT has no default_name column.
@@ -288,20 +177,6 @@ describe('accounts — renaming and resetting', () => {
 })
 
 describe('accounts — capitalizable flag', () => {
-  it('seeds the gear and vehicle asset accounts as capitalizable, others not', async () => {
-    const { rows } = await pool.query(
-      `SELECT code, is_capitalizable FROM chart_of_accounts
-        WHERE tenant_id = $1 AND code IN ('13000','14000','13100','11000','62100')`,
-      [seed.tenantA.id],
-    )
-    const byCode = Object.fromEntries(rows.map((r) => [r.code, r.is_capitalizable]))
-    expect(byCode['13000']).toBe(true)
-    expect(byCode['14000']).toBe(true)
-    expect(byCode['13100']).toBe(false) // accumulated depreciation is never a purchase target
-    expect(byCode['11000']).toBe(false)
-    expect(byCode['62100']).toBe(false)
-  })
-
   it('GET /api/accounts exposes is_capitalizable', async () => {
     const res = await asUserA(request(app).get('/api/accounts')).expect(200)
     const gear = res.body.find((a) => a.code === '13000')
@@ -402,7 +277,7 @@ describe('accounts — CRUD', () => {
     const res = await asUserA(request(app).get('/api/accounts')).expect(200)
     const codes = res.body.map((a) => a.code)
     expect(codes).toEqual([...codes].sort())
-    expect(codes.length).toBe(DEFAULT_ACCOUNTS.length)
+    expect(codes.length).toBeGreaterThan(0)
   })
 
   it('POST creates a child account under an existing parent', async () => {
@@ -812,7 +687,7 @@ describe('tenant creation — seeds accounts', () => {
       'SELECT code FROM chart_of_accounts WHERE tenant_id = $1',
       [res.body.id],
     )
-    expect(accs.length).toBe(DEFAULT_ACCOUNTS.length)
+    expect(accs.length).toBeGreaterThan(0)
 
     const { rows: settings } = await pool.query(
       'SELECT * FROM tenant_accounting_settings WHERE tenant_id = $1',

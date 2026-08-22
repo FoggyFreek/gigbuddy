@@ -1,3 +1,4 @@
+import { DialogProvider } from '../../../contexts/DialogContext.tsx'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
@@ -74,7 +75,7 @@ const SONG_2 = {
 
 function wrapWithRoutes({ initialEntries, auth = writerAuth }) {
   return render(
-    <MemoryRouter initialEntries={initialEntries}>
+    <MemoryRouter initialEntries={initialEntries}><DialogProvider>
       <ThemeProvider theme={theme}>
         <AuthContext.Provider value={auth}>
           <Routes>
@@ -84,7 +85,7 @@ function wrapWithRoutes({ initialEntries, auth = writerAuth }) {
           </Routes>
         </AuthContext.Provider>
       </ThemeProvider>
-    </MemoryRouter>,
+    </DialogProvider></MemoryRouter>,
   )
 }
 

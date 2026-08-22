@@ -27,6 +27,7 @@ import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalance
 import GavelOutlinedIcon from '@mui/icons-material/GavelOutlined'
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined'
 import GroupsIcon from '@mui/icons-material/Groups'
+import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
 import { usePermissions } from '../../hooks/usePermissions.ts'
 import { useAuth } from '../../contexts/authContext.ts'
 import { PERMISSIONS, type Permission } from '../../auth/permissions.ts'
@@ -43,6 +44,7 @@ import MembersSection from './components/settings/MembersSection.tsx'
 import ChartOfAccountsSection from './components/settings/ChartOfAccountsSection.tsx'
 import AccountingSettingsSection from './components/settings/AccountingSettingsSection.tsx'
 import AccountingProfileSection from './components/settings/AccountingProfileSection.tsx'
+import InvoiceModeSection from './components/settings/InvoiceModeSection.tsx'
 import FinancialProfileSection from './components/settings/FinancialProfileSection.tsx'
 import BandProfileClaimSection from './components/settings/BandProfileClaimSection.tsx'
 import MyAvailabilitySection from './components/settings/MyAvailabilitySection.tsx'
@@ -54,24 +56,23 @@ import { useTenantKind } from '../../hooks/useTenantKind.ts'
 import { useEntitlements } from '../../hooks/useEntitlements.ts'
 import { FEATURES } from '../../auth/entitlements.ts'
 import { TENANT_CAPABILITIES, type TenantCapability } from '../../auth/tenantCapabilities.ts'
+import type { SettingsSectionId } from '../../app/navTargets.ts'
 
 // A single settings surface that merges the former per-user account settings,
 // members management, and tenant (band) settings. Desktop uses a master-detail
 // layout (nav card + detail pane); mobile drills into each section separately
 // with a back arrow. The nav is role-gated: band and finance items appear only
 // when the active tenant role grants the matching permission.
-type SectionId =
-  | 'preferences' | 'billing' | 'connected-accounts' | 'my-availability'
-  | 'accent' | 'members' | 'storage'
-  | 'integrations' | 'chart-of-accounts' | 'default-accounts'
-  | 'financial-profile' | 'accounting-profile' | 'delete-account'
+// The ids themselves live in src/app/navTargets.ts, so anything linking into a
+// settings section (the dialog registry, for one) names it type-safely.
+type SectionId = SettingsSectionId
 
 // camelCase leaf keys under settings.nav.items — a literal union so the typed
 // selector index (`t($ => $.nav.items[labelKey])`) stays compile-checked.
 type ItemLabelKey =
   | 'preferences' | 'billing' | 'connectedAccounts' | 'myAvailability' | 'accent' | 'membersAndInvites'
   | 'storage' | 'integrations' | 'chartOfAccounts' | 'defaultAccounts'
-  | 'financialProfile' | 'accountingProfile' | 'manageAccounts'
+  | 'financialProfile' | 'accountingProfile' | 'invoiceMode' | 'manageAccounts'
 
 interface NavItemDef {
   id: SectionId
@@ -100,6 +101,7 @@ const BAND_ITEMS: NavItemDef[] = [
 const FINANCE_ITEMS: NavItemDef[] = [
   { id: 'financial-profile', labelKey: 'financialProfile', icon: BadgeOutlinedIcon, permission: PERMISSIONS.FINANCE_MANAGE },
   { id: 'accounting-profile', labelKey: 'accountingProfile', icon: GavelOutlinedIcon, permission: PERMISSIONS.FINANCE_MANAGE },
+  { id: 'invoice-mode', labelKey: 'invoiceMode', icon: ReceiptLongOutlinedIcon, permission: PERMISSIONS.FINANCE_MANAGE },
   { id: 'default-accounts', labelKey: 'defaultAccounts', icon: AccountBalanceWalletOutlinedIcon, permission: PERMISSIONS.FINANCE_MANAGE },
   { id: 'chart-of-accounts', labelKey: 'chartOfAccounts', icon: AccountTreeOutlinedIcon, permission: PERMISSIONS.FINANCE_MANAGE },
 ]
@@ -169,6 +171,8 @@ export default function SettingsPage() {
         return <FinancialProfileSection />
       case 'accounting-profile':
         return <AccountingProfileSection />
+      case 'invoice-mode':
+        return <InvoiceModeSection />
       case 'default-accounts':
         return <AccountingSettingsSection />
       case 'chart-of-accounts':

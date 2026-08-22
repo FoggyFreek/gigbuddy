@@ -2,8 +2,8 @@ import pool from '../../db/index.js'
 import { withTransaction, abortTransaction } from '../../db/withTransaction.js'
 import { storageClient, BUCKET } from '../../utils/storage.js'
 import { logger } from '../../utils/logger.js'
+import { lockTenantUsage } from '../../db/tenantLock.js'
 import {
-  lockTenantStatistics,
   upsertTenantStatistics,
   ensureTenantStatistics,
   getStorageBytes,
@@ -47,7 +47,7 @@ export function computeTenantStorage(tenantId) {
 // lock until the first commits, then re-lists fresh.
 export async function refreshTenantStorage(tenantId) {
   await withTransaction(async (client) => {
-    await lockTenantStatistics(client, tenantId)
+    await lockTenantUsage(client, tenantId)
     const { storageBytes, objectCount } = await computeTenantStorage(tenantId)
     await upsertTenantStatistics(client, tenantId, storageBytes, objectCount)
   })
@@ -65,7 +65,7 @@ export async function refreshTenantStorage(tenantId) {
 // snapshot-bound limit after — never the old limit under a committed snapshot.
 export async function reserveStorageUsage(tenantId, sizeBytes, limit) {
   return withTransaction(async (client) => {
-    await lockTenantStatistics(client, tenantId)
+    await lockTenantUsage(client, tenantId)
     const limitBytes = typeof limit === 'function' ? await limit(client) : limit
     await ensureTenantStatistics(client, tenantId)
     const storageBytes = await getStorageBytes(client, tenantId)
@@ -81,7 +81,7 @@ export async function reserveStorageUsage(tenantId, sizeBytes, limit) {
 // absent. Clamped at zero so a duplicate release can't corrupt the counter.
 export async function releaseStorageUsage(tenantId, sizeBytes) {
   await withTransaction(async (client) => {
-    await lockTenantStatistics(client, tenantId)
+    await lockTenantUsage(client, tenantId)
     await decrementStorageUsage(client, tenantId, sizeBytes)
   })
 }

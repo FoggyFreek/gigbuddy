@@ -23,6 +23,7 @@ import {
   updateVenueFields,
   deleteVenue as deleteVenueRow,
   getAffectedGigs,
+  listVenueGigs as listVenueGigRows,
   clearGigReferences,
   migrateGigReferences,
   getContactInTenant,
@@ -39,6 +40,8 @@ import { normalizeCoordinatePair } from '../../domain/venue.js'
 import { pickFillableUpdates } from '../../../shared/placeFields.js'
 import { normalizeOptionalUrl, WEB_URL_PROTOCOLS } from '../../utils/urls.js'
 import { badRequest, conflict, notFound } from '../../platform/http/serviceErrors.js'
+import { limitedCollectionWithCursor } from '../../platform/collections/limitedCollectionService.js'
+import { INVALID_CURSOR, parseListCursor } from '../../platform/http/requestValidators.js'
 
 const NOT_FOUND = notFound('Not found')
 
@@ -112,6 +115,22 @@ export async function getCategoryImpact(db, tenantId, venueId, newCategory) {
   if (currentCategory === newCategory) return { affectedGigs: [] }
 
   return { affectedGigs: await getAffectedGigs(db, venueId, tenantId, currentCategory) }
+}
+
+// The venue's event history for the detail page's Events tab: a deep bounded
+// feed walked with a keyset cursor. Existence is checked first so a venue in
+// another tenant reads as 404 rather than an empty list.
+export async function listVenueEvents(db, tenantId, venueId, query = {}) {
+  if (!(await venueExistsInTenant(db, venueId, tenantId))) return NOT_FOUND
+
+  const parsedCursor = parseListCursor(query)
+  if (parsedCursor === null) return badRequest(INVALID_CURSOR)
+
+  return limitedCollectionWithCursor(
+    query.limit,
+    (limit) => listVenueGigRows(db, venueId, tenantId, limit, parsedCursor.cursor),
+    (gig) => gig.event_date,
+  )
 }
 
 // ---------- writes ----------

@@ -9,13 +9,14 @@ const LOG_LEVELS = ['debug', 'info', 'warn', 'error']
 // original message (see logger.error's `err` handling).
 const CONTEXT_KEYS = new Set([
   'tenantId', 'invoiceId', 'purchaseId', 'userId', 'gigId', 'taskId', 'rehearsalId',
+  'dealType', 'guaranteeVariant',
   'operation', 'status', 'method', 'path', 'durationMs', 'endpointHost',
   'operationId', 'revision', 'attemptCount', 'errorCode',
   'mode', 'migrated', 'reEncrypted', 'port',
   'filename', 'aborted',
   'tenants', 'encrypted', 'corrupt',
   'migrationNeeded', 'reEncryptionNeeded', 'rateMissing', 'ratesFilled',
-  'subscriptionId', 'planId', 'planSlug', 'paymentKind', 'mollieStatus',
+  'subscriptionId', 'refundId', 'planId', 'planSlug', 'paymentKind', 'mollieStatus',
   'audience', 'pendingPlanSlug', 'pendingAudience', 'crossAudiencePending',
   'jobName', 'feature', 'ownerUserId', 'opType', 'revokedTokens',
   'achievementKey', 'shopifyResponseJson',

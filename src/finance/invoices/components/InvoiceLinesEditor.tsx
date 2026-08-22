@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next'
-import { useCompactLayout } from '../../../hooks/useCompactLayout.ts'
 import type { InvoiceForm, InvoiceFormLine } from './invoiceFormHelpers.ts'
 import { computeInvoiceTotals, formatCurrency } from '../invoiceTotals.ts'
 import { useAccountingProfile } from '../../../contexts/accountingProfileContext.ts'
@@ -16,182 +15,26 @@ import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Typography from '@mui/material/Typography'
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
-import MoneyInput from './MoneyInput.tsx'
-import VatRateSelect from '../../../components/shared/VatRateSelect.tsx'
-import TaxCategorySelect from '../../../components/shared/TaxCategorySelect.tsx'
-import { taxCategoryUsesZeroRate } from '../../../../shared/taxCategories.js'
+import {
+  DataGrid, GridCellModes, renderEditSingleSelectCell, useGridApiRef,
+  type GridColDef, type GridRenderCellParams, type GridRenderEditCellParams,
+  type GridValueOptionsParams,
+} from '@mui/x-data-grid'
+import { enUS, nlNL } from '@mui/x-data-grid/locales'
+import { vatRateOptions } from '../../vat/vatRates.ts'
+import { commonVatSelection } from '../../../../shared/taxCategories.js'
 
-const GRID_COLUMNS = '2fr 0.6fr 1fr 1.35fr 1fr 32px'
+// jsdom gives every element a zero-size box, so the virtualizer would render no
+// rows at all. Only the test environment pays for rendering every row.
+const DISABLE_VIRTUALIZATION = import.meta.env.MODE === 'test'
 
 // The EU VIES VAT-number validation service. We link users here rather than
 // integrating: they confirm the check, we retain the attestation.
 const VIES_URL = 'https://ec.europa.eu/taxation_customs/vies/'
 
-type LineTotals = ReturnType<typeof computeInvoiceTotals>['perLine'][number]
-
-interface InvoiceLineRowProps {
-  line: InvoiceFormLine
+interface LineRow extends InvoiceFormLine {
+  id: string
   idx: number
-  lineTotals: LineTotals
-  taxInclusive?: boolean
-  appliesKor?: boolean
-  readOnly?: boolean
-  canRemove?: boolean
-  compact?: boolean
-  patchLine: (idx: number, patch: Partial<InvoiceFormLine>) => void
-  removeLine: (idx: number) => void
-  currency: string
-  accountingCountry: string
-}
-
-function InvoiceLineRow({ line, idx, lineTotals, taxInclusive, appliesKor, readOnly, canRemove, compact, patchLine, removeLine, currency, accountingCountry }: Readonly<InvoiceLineRowProps>) {
-  const { t } = useTranslation('invoices')
-  const displayCents = taxInclusive ? lineTotals.grossCents : lineTotals.netCents
-
-  if (compact) {
-    const row2Cols = appliesKor ? '0.6fr 1fr 1fr' : '0.6fr 1fr 0.7fr 1fr'
-    return (
-      <Box sx={{ mb: 1.5 }}>
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 32px', gap: 1, alignItems: 'center', mb: 2 }}>
-          <TextField
-            size="small"
-            label={t($ => $.lines.description)}
-            placeholder={t($ => $.lines.descriptionPlaceholder)}
-            value={line.description}
-            onChange={(e) => patchLine(idx, { description: e.target.value })}
-            disabled={readOnly}
-          />
-          <IconButton
-            size="small"
-            onClick={() => removeLine(idx)}
-            disabled={readOnly || !canRemove}
-            aria-label={t($ => $.lines.removeLine)}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Box>
-        <Box sx={{ display: 'grid', gridTemplateColumns: row2Cols, gap: 1, alignItems: 'center' }}>
-          <TextField
-            size="small"
-            type="number"
-            label={t($ => $.lines.quantity)}
-            slotProps={{ htmlInput: { min: 0, step: 0.25 } }}
-            value={line.quantity}
-            onChange={(e) => patchLine(idx, { quantity: Number(e.target.value) || 0 })}
-            disabled={readOnly}
-          />
-          <MoneyInput
-            label={t($ => $.lines.price)}
-            cents={line.unit_price_cents}
-            onChange={(c) => patchLine(idx, { unit_price_cents: c })}
-            disabled={readOnly}
-            currency={currency}
-          />
-          {!appliesKor && (
-            <VatRateSelect
-              id={`invoice-line-${idx}-vat-rate`}
-              label={t($ => $.lines.vatPercentage)}
-              country={accountingCountry}
-              value={line.tax_percentage}
-              categoryCode={line.tax_category_code}
-              onChange={(rate, taxPatch) => patchLine(idx, {
-                tax_percentage: rate ?? 0,
-                ...taxPatch,
-              })}
-              disabled={readOnly}
-            />
-          )}
-          <Typography variant="body2" align="right">{formatCurrency(displayCents, currency)}</Typography>
-        </Box>
-        {!appliesKor && <Box sx={{ mt: 1 }}>
-          <TaxCategorySelect
-            direction="sale"
-            categoryCode={line.tax_category_code}
-            jurisdictionCode={line.tax_jurisdiction_code}
-            defaultJurisdiction={accountingCountry}
-            rate={line.tax_percentage}
-            disabled={readOnly}
-            onChange={(patch) => patchLine(idx, {
-              ...patch,
-              ...(patch.tax_category_code && taxCategoryUsesZeroRate(patch.tax_category_code, 'sale')
-                ? { tax_percentage: 0 }
-                : {}),
-            })}
-          />
-        </Box>}
-      </Box>
-    )
-  }
-
-  return (
-    <>
-      <Box sx={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 1, alignItems: 'center', mb: 1 }}>
-      <TextField
-        size="small"
-        placeholder={t($ => $.lines.descriptionPlaceholder)}
-        value={line.description}
-        onChange={(e) => patchLine(idx, { description: e.target.value })}
-        disabled={readOnly}
-      />
-      <TextField
-        size="small"
-        type="number"
-        slotProps={{ htmlInput: { min: 0, step: 0.25 } }}
-        value={line.quantity}
-        onChange={(e) => patchLine(idx, { quantity: Number(e.target.value) || 0 })}
-        disabled={readOnly}
-      />
-      <MoneyInput
-        cents={line.unit_price_cents}
-        onChange={(c) => patchLine(idx, { unit_price_cents: c })}
-        disabled={readOnly}
-        currency={currency}
-      />
-      {!appliesKor ? (
-        <VatRateSelect
-          id={`invoice-line-${idx}-vat-rate`}
-          label={t($ => $.lines.vatPercentage)}
-          country={accountingCountry}
-          value={line.tax_percentage}
-          categoryCode={line.tax_category_code}
-          onChange={(rate, taxPatch) => patchLine(idx, {
-            tax_percentage: rate ?? 0,
-            ...taxPatch,
-          })}
-          disabled={readOnly}
-          hideLabel
-        />
-      ) : (
-        <span />
-      )}
-      <Typography variant="body2" align="right">{formatCurrency(displayCents, currency)}</Typography>
-      <IconButton
-        size="small"
-        onClick={() => removeLine(idx)}
-        disabled={readOnly || !canRemove}
-        aria-label={t($ => $.lines.removeLine)}
-      >
-        <DeleteIcon fontSize="small" />
-      </IconButton>
-      </Box>
-      {!appliesKor && <Box sx={{ ml: 1, mb: 1.5, maxWidth: 520 }}>
-        <TaxCategorySelect
-          direction="sale"
-          categoryCode={line.tax_category_code}
-          jurisdictionCode={line.tax_jurisdiction_code}
-          defaultJurisdiction={accountingCountry}
-          rate={line.tax_percentage}
-          disabled={readOnly}
-          onChange={(patch) => patchLine(idx, {
-            ...patch,
-            ...(patch.tax_category_code && taxCategoryUsesZeroRate(patch.tax_category_code, 'sale')
-              ? { tax_percentage: 0 }
-              : {}),
-          })}
-        />
-      </Box>}
-    </>
-  )
 }
 
 interface InvoiceLinesEditorProps {
@@ -206,13 +49,128 @@ interface InvoiceLinesEditorProps {
 }
 
 export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly, patchForm, patchLine, addLine, removeLine }: Readonly<InvoiceLinesEditorProps>) {
-  const { t } = useTranslation('invoices')
+  const { t, i18n } = useTranslation('invoices')
+  const { t: tCommon } = useTranslation('common')
   const { profile, accountingCountry } = useAccountingProfile()
   const currency = profile?.base_currency ?? 'EUR'
-  const compact = useCompactLayout()
+  const apiRef = useGridApiRef()
   // KOR and reverse charge both remove VAT from the invoice, so the VAT controls
   // and column are hidden in either case.
   const noVat = Boolean(appliesKor) || Boolean(form.reverse_charge)
+
+  function rateLabel(rate: number): string {
+    if (accountingCountry.toLowerCase() !== 'nl') return `${rate}%`
+    if (rate === 21) return tCommon($ => $.vat.rates.standard)
+    if (rate === 9) return tCommon($ => $.vat.rates.reduced)
+    if (rate === 0) return tCommon($ => $.vat.rates.zero)
+    return `${rate}%`
+  }
+
+  // Picking a rate is the whole edit — close the cell as soon as the value has
+  // landed rather than leaving the dropdown open until the reviewer clicks away.
+  const renderSelectEditCell = (params: GridRenderEditCellParams<LineRow>) => renderEditSingleSelectCell({
+    ...params,
+    onValueChange: () => {
+      setTimeout(() => apiRef.current?.stopCellEditMode({ id: params.id, field: params.field }))
+    },
+  })
+
+  const rows: LineRow[] = form.lines.map((line, idx) => ({ ...line, id: line._key, idx }))
+
+  const columns: GridColDef<LineRow>[] = [
+    {
+      field: 'description',
+      headerName: t($ => $.lines.description),
+      flex: 2,
+      minWidth: 160,
+      editable: !readOnly,
+    },
+    {
+      field: 'quantity',
+      headerName: t($ => $.lines.quantity),
+      type: 'number',
+      width: 90,
+      editable: !readOnly,
+    },
+    {
+      field: 'unit_price_cents',
+      headerName: t($ => $.lines.price),
+      type: 'number',
+      width: 130,
+      editable: !readOnly,
+      valueGetter: (value: number) => (value ?? 0) / 100,
+      valueSetter: (value: number, row) => ({ ...row, unit_price_cents: Math.round(Number(value) * 100) || 0 }),
+      valueFormatter: (value: number) => formatCurrency(Math.round((value ?? 0) * 100), currency),
+    },
+    {
+      field: 'tax_percentage',
+      headerName: t($ => $.lines.vatPercentage),
+      type: 'singleSelect',
+      width: 170,
+      editable: !readOnly,
+      renderEditCell: renderSelectEditCell,
+      valueOptions: (params: GridValueOptionsParams<LineRow>) => (
+        vatRateOptions(accountingCountry, params.row?.tax_percentage).map((rate) => ({ value: rate, label: rateLabel(rate) }))
+      ),
+      valueFormatter: (value: number) => rateLabel(value),
+      valueSetter: (value: number, row) => {
+        const rate = Number(value)
+        const taxSelection = commonVatSelection(accountingCountry, rate)
+        return {
+          ...row,
+          tax_percentage: rate,
+          tax_category_code: taxSelection?.tax_category_code ?? row.tax_category_code,
+          tax_jurisdiction_code: taxSelection?.tax_jurisdiction_code ?? row.tax_jurisdiction_code,
+        }
+      },
+    },
+    {
+      field: 'total',
+      headerName: t($ => $.labels.total),
+      type: 'number',
+      width: 120,
+      editable: false,
+      sortable: false,
+      filterable: false,
+      valueGetter: (_value: never, row: LineRow) => {
+        const lineTotals = totals.perLine[row.idx] || { grossCents: 0, netCents: 0, taxCents: 0 }
+        return form.tax_inclusive ? lineTotals.grossCents : lineTotals.netCents
+      },
+      valueFormatter: (value: number) => formatCurrency(value, currency),
+    },
+    {
+      field: 'delete',
+      headerName: '',
+      width: 48,
+      editable: false,
+      sortable: false,
+      filterable: false,
+      disableColumnMenu: true,
+      renderCell: (params: GridRenderCellParams<LineRow>) => (
+        <IconButton
+          size="small"
+          onClick={() => removeLine(params.row.idx)}
+          disabled={readOnly || form.lines.length <= 1}
+          aria-label={t($ => $.lines.removeLine)}
+        >
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      ),
+    },
+  ]
+
+  function processRowUpdate(newRow: LineRow): LineRow {
+    patchLine(newRow.idx, {
+      description: newRow.description,
+      quantity: Number(newRow.quantity) || 0,
+      unit_price_cents: newRow.unit_price_cents,
+      tax_percentage: newRow.tax_percentage,
+      tax_category_code: newRow.tax_category_code,
+      tax_jurisdiction_code: newRow.tax_jurisdiction_code,
+    })
+    return newRow
+  }
+
   return (
     <>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 1 }}>
@@ -244,7 +202,7 @@ export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly,
         )}
       </Box>
       {form.reverse_charge && !appliesKor && (
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+        <Typography variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
           {t($ => $.lines.reverseChargeHint)}
         </Typography>
       )}
@@ -266,7 +224,7 @@ export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly,
               {t($ => $.lines.viesOpen)}
             </Link>
           </Box>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+          <Typography variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
             {t($ => $.lines.viesHint)}
           </Typography>
           {form.vies_checked && (
@@ -283,36 +241,31 @@ export default function InvoiceLinesEditor({ form, totals, appliesKor, readOnly,
         </Box>
       )}
 
-      {!compact && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 1, alignItems: 'center', mb: 0.5 }}>
-          <Typography variant="caption" color="text.secondary">{t($ => $.lines.description)}</Typography>
-          <Typography variant="caption" color="text.secondary" align="right">{t($ => $.lines.quantity)}</Typography>
-          <Typography variant="caption" color="text.secondary" align="right">{t($ => $.lines.price)}</Typography>
-          {!noVat
-            ? <Typography variant="caption" color="text.secondary" align="right">{t($ => $.lines.vatPercentage)}</Typography>
-            : <span />}
-          <Typography variant="caption" color="text.secondary" align="right">{t($ => $.labels.total)}</Typography>
-          <span />
-        </Box>
-      )}
-
-      {form.lines.map((line, idx) => (
-        <InvoiceLineRow
-          key={line._key}
-          line={line}
-          idx={idx}
-          lineTotals={totals.perLine[idx] || { grossCents: 0, netCents: 0, taxCents: 0 }}
-          taxInclusive={form.tax_inclusive}
-          appliesKor={noVat}
-          readOnly={readOnly}
-          canRemove={form.lines.length > 1}
-          compact={compact}
-          patchLine={patchLine}
-          removeLine={removeLine}
-          currency={currency}
-          accountingCountry={accountingCountry}
+      <Box sx={{ mb: 1.5, width: '100%' }}>
+        <DataGrid<LineRow>
+          apiRef={apiRef}
+          rows={rows}
+          columns={columns}
+          columnVisibilityModel={{ tax_percentage: !noVat }}
+          autoHeight
+          density="compact"
+          hideFooter
+          disableRowSelectionOnClick
+          disableColumnMenu
+          disableVirtualization={DISABLE_VIRTUALIZATION}
+          localeText={(i18n.language.startsWith('nl') ? nlNL : enUS).components.MuiDataGrid.defaultProps.localeText}
+          processRowUpdate={processRowUpdate}
+          onProcessRowUpdateError={() => { /* form state is authoritative */ }}
+          // The VAT rate is a single select — one click opens its dropdown
+          // rather than requiring the usual double-click to enter edit mode.
+          onCellClick={(params) => {
+            if (params.field !== 'tax_percentage') return
+            if (!params.isEditable || params.cellMode !== GridCellModes.View) return
+            apiRef.current?.startCellEditMode({ id: params.id, field: params.field })
+          }}
+          sx={{ '& .MuiDataGrid-cell': { alignItems: 'center' } }}
         />
-      ))}
+      </Box>
 
       <Button size="small" startIcon={<AddIcon />} disabled={readOnly} onClick={addLine}>
         {t($ => $.lines.addItem)}

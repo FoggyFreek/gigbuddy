@@ -54,7 +54,8 @@ export const SAMPLE_CHART_SOURCE = `{title: New Song}
 # {transpose: n} shifts every chord by n semitones (0 = no change).
 {transpose: 0}
 
-# {define} registers a custom fretboard; {diagrams} places the chord grid (top/bottom/off).
+# {define} registers a custom fretboard; {diagrams} places the chord grid
+# (top/bottom/right/left/below/off).
 {define: G7sus4 base-fret 1 frets 3 3 0 0 1 1}
 
 # Sections: verse / chorus / bridge (short forms: sov/eov, soc/eoc, sob/eob).
@@ -954,7 +955,7 @@ export function applySourceTransposition(source: string): SourceTransposition {
 
 // ---------- chord diagrams ----------
 
-export type DiagramsPlacement = 'top' | 'bottom' | 'right' | 'below' | 'off'
+export type DiagramsPlacement = 'top' | 'bottom' | 'right' | 'left' | 'below' | 'off'
 export interface ResolvedChord { name: string; shape: ChordShape | null }
 export interface ChordAnalysis { placement: DiagramsPlacement; chords: ResolvedChord[] }
 
@@ -962,6 +963,7 @@ export interface ChordAnalysis { placement: DiagramsPlacement; chords: ResolvedC
 // (handled in parseChordProDocument) and must not override the grid.
 const RE_DEFINE = /^\{define\b[:\s]+(.+)\}$/i
 const RE_DIAGRAMS_VAL = /^\{diagrams\b[:\s]*([a-z]*)\}/i
+const EXPLICIT_PLACEMENTS = new Set<DiagramsPlacement>(['top', 'bottom', 'right', 'left', 'below', 'off'])
 const DEFINE_KEYWORDS = new Set(['base-fret', 'base_fret', 'basefret', 'frets', 'fingers', 'keys', 'display', 'format', 'diagram', 'copy', 'copyall'])
 
 function parseFret(tok: string): number {
@@ -1044,8 +1046,10 @@ function collectDefsAndPlacement(text: string): { defs: ChordDefs; placement: Di
     const trimmed = line.trim()
     const md = RE_DIAGRAMS_VAL.exec(trimmed)
     if (md) {
-      const v = (md[1] || 'on').toLowerCase()
-      placement = v === 'off' ? 'off' : v === 'top' ? 'top' : v === 'right' ? 'right' : v === 'below' ? 'below' : 'bottom'
+      // Bare {diagrams} and {diagrams: on} both mean 'bottom', as does anything
+      // we don't recognize.
+      const v = (md[1] || 'on').toLowerCase() as DiagramsPlacement
+      placement = EXPLICIT_PLACEMENTS.has(v) ? v : 'bottom'
       continue
     }
     const mDef = RE_DEFINE.exec(trimmed)
@@ -1136,7 +1140,9 @@ export const CHORDPRO_PRINT_CSS = `
   .cp-columns-4 { column-count: 4; }
   .cp-columns-5 { column-count: 5; }
   .cp-columns-6 { column-count: 6; }
-  .cp-right-layout { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
+  .cp-side-layout { display: grid; gap: 16px; align-items: start; }
+  .cp-side-layout-right { grid-template-columns: minmax(0, 1fr) auto; }
+  .cp-side-layout-left { grid-template-columns: auto minmax(0, 1fr); }
   .cp-column-break { break-after: column; }
   .cp-page-break { break-before: page; page-break-before: always; column-span: all; }
   .cp-column-span { column-span: all; }
@@ -1149,6 +1155,7 @@ export const CHORDPRO_PRINT_CSS = `
   .cp-diagrams-collapsible { display: none; }
   .cp-diagrams-print { display: block; }
   .cp-diagrams { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin: 0 0 1em; }
+  .cp-diagrams-vertical { flex-direction: column; flex-wrap: nowrap; align-items: center; }
   .cp-diagram { text-align: center; font-size: 9pt; color: #000; }
   .cp-diagram > div:first-child { font-weight: 700; color: #1565c0; }
   .cp-diagram svg { display: block; margin: 0 auto; }

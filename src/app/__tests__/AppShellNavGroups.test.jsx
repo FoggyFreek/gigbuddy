@@ -22,6 +22,14 @@ vi.mock('../../user/notifications/usePushNotifications.ts', () => ({
     unsubscribe: vi.fn(),
   }),
 }))
+let viewport = 'desktop'
+vi.mock('@mui/material/useMediaQuery', () => ({
+  default: (query) => {
+    if (query.includes('599.95')) return viewport === 'mobile'
+    if (query.includes('1199.95')) return viewport !== 'desktop'
+    return false
+  },
+}))
 
 import { useAuth } from '../../contexts/authContext.ts'
 
@@ -47,8 +55,8 @@ function LocationProbe() {
   return <div data-testid="location-pathname">{pathname}</div>
 }
 
-function renderShell(initialPath = '/') {
-  return render(
+function ShellRoutes({ initialPath }) {
+  return (
     <ThemeProvider theme={theme}>
       <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
@@ -57,8 +65,12 @@ function renderShell(initialPath = '/') {
           </Route>
         </Routes>
       </MemoryRouter>
-    </ThemeProvider>,
+    </ThemeProvider>
   )
+}
+
+function renderShell(initialPath = '/') {
+  return render(<ShellRoutes initialPath={initialPath} />)
 }
 
 const pathnameText = () => screen.getByTestId('location-pathname').textContent
@@ -66,6 +78,7 @@ const pathnameText = () => screen.getByTestId('location-pathname').textContent
 describe('AppShell nav groups', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    viewport = 'desktop'
     useAuth.mockReturnValue({ user: USER, logout: vi.fn(), switchTenant: vi.fn() })
   })
 
@@ -74,6 +87,24 @@ describe('AppShell nav groups', () => {
     for (const label of ['Overview', 'Planning', 'Network', 'Financial', 'Accounting', 'Repertoire']) {
       expect(screen.getByRole('button', { name: `${label} group` })).toBeInTheDocument()
     }
+  })
+
+  it('hides the super-admin menu from regular tenant administrators', () => {
+    renderShell('/')
+    expect(screen.queryByLabelText('open super-admin menu')).not.toBeInTheDocument()
+  })
+
+  it('shows the dedicated super-admin menu to super administrators', async () => {
+    const user = userEvent.setup()
+    useAuth.mockReturnValue({
+      user: { ...USER, isSuperAdmin: true },
+      logout: vi.fn(),
+      switchTenant: vi.fn(),
+    })
+    renderShell('/')
+    await user.click(screen.getByLabelText('open super-admin menu'))
+    expect(await screen.findByRole('menuitem', { name: 'Operations dashboard' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Complimentary access' })).toBeInTheDocument()
   })
 
   it('auto-expands the group containing the active route and collapses the rest', () => {
@@ -168,6 +199,21 @@ describe('AppShell nav groups', () => {
       // visible "Planning" means no flyout opened.
       await new Promise((r) => setTimeout(r, 150))
       expect(screen.queryByText('Planning')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('responsive navigation', () => {
+    it('collapses between sm and lg, then restores a nav that was expanded on desktop', () => {
+      const view = renderShell('/gigs')
+      expect(screen.getByLabelText('collapse navigation')).toBeInTheDocument()
+
+      viewport = 'tablet'
+      view.rerender(<ShellRoutes initialPath="/gigs" />)
+      expect(screen.getByLabelText('expand navigation')).toBeInTheDocument()
+
+      viewport = 'desktop'
+      view.rerender(<ShellRoutes initialPath="/gigs" />)
+      expect(screen.getByLabelText('collapse navigation')).toBeInTheDocument()
     })
   })
 })

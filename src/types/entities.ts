@@ -9,11 +9,16 @@
 // - `Id` is a number from Postgres, sometimes a string from the client.
 import type { PurchaseImportWarningCode } from '../finance/purchases/purchaseImportWarnings.ts'
 import type { BandMemberRole } from '../people/memberships/bandMemberRoles.ts'
-import type { GigEquipmentItemKey, GigEquipmentProvider } from '../planning/gigs/gigEquipment.ts'
 import type { TenantKind } from '../auth/tenantKinds.ts'
 import type { JoinPolicy } from '../people/memberships/membership.ts'
+import { COST_PAID_BY, DEAL_TYPES, FEE_BASES, GUARANTEE_VARIANTS } from '../../shared/gigDealVocabulary.js'
 
 export type Id = number | string
+
+export interface VenueGroup {
+  id: Id
+  name: string
+}
 
 export interface Venue {
   id?: Id
@@ -28,7 +33,11 @@ export interface Venue {
   postal_code?: string
   country?: string
   primary_contact_name?: string
+  primary_contact_id?: Id | null
+    primary_contact_email?: string | null
+    email?: string | null
   years?: number[]
+  group_ids?: Id[]
   is_primary?: boolean
   latitude?: number | null
   longitude?: number | null
@@ -139,20 +148,90 @@ export interface Gig {
   members_availability?: MemberAvailability[]
   // Venue deal terms. NUMERIC(5,2) percentages arrive as strings over the wire
   // but may be set as numbers in code; null = not agreed.
-  merchandise_cut?: number | string | null
+  /** Doubles as the artist's share of ticket revenue; the venue takes the rest. */
   percentage_of_sales?: number | string | null
+  // Deal terms. The maths that turns these into an artist statement lives in
+  // src/planning/gigs/dealTerms.ts — nothing here is derived server-side.
+  deal_type?: DealType
+  guarantee_variant?: GuaranteeVariant | null
+  guaranteed_fee_cents?: number | null
+  breakeven_includes_venue_costs?: boolean
+  venue_costs_cents?: number | null
+  venue_capacity?: number | null
+  expected_visitors?: number | null
+  tickets_sold?: number | null
+  ticket_price_net_cents?: number | null
+  ticket_price_gross_cents?: number | null
+  agency_fee_basis?: FeeBasis
+  agency_fee_percentage?: number | string
+  agency_fee_amount_cents?: number
+  commission_basis?: FeeBasis
+  commission_percentage?: number | string
+  commission_amount_cents?: number
+  /** Whether the deal carries VAT at all; the two rates below only apply if it does. */
+  subject_to_vat?: boolean
+  /** The rate an invoice from this gig is billed at; null = no override. */
+  vat_percentage?: number | string | null
+  /** The venue's VAT contained in the nett ticket price; null = none to take out. */
+  ticket_vat_percentage?: number | string | null
+  /** Copyright / PRS deducted from ticket revenue after ticket VAT; null = ignored. */
+  copyright_percentage?: number | string | null
+  /** The artist's own costs, itemised. Only present on the gig detail read. */
+  costs?: GigCost[]
+  /** The "Additional information" blocks. Only present on the gig detail read. */
+  info_blocks?: GigInfoBlock[]
+  /** The gig day's running order. Only present on the gig detail read. */
+  timetable?: GigTimetableEntry[]
   viewerBandMemberId?: Id | null
 }
+
+// Who a cost line is paid by, which decides how it moves through the artist
+// statement (src/planning/gigs/dealTerms.ts): 'artist_agency' comes off the
+// gross fee before the booking fee is calculated, 'artist' comes off only
+// what is due to the artist, 'agency' comes off only what is due to the
+// booker. Missing/undefined on old data reads as 'artist', the pre-existing
+// behaviour.
+export type CostPaidBy = typeof COST_PAID_BY[number]
+
+export interface GigCost {
+  id?: Id
+  label?: string
+  amount_cents?: number | string | null
+  paid_by?: CostPaidBy
+  position?: number
+}
+
+// A labelled block of free-form text on the gig's Tasks tab. `label` holds a
+// canonical key from shared/gigInfoLabels.js when `label_is_custom` is false,
+// and the text the user typed when it is true.
+export interface GigInfoBlock {
+  id: Id
+  label: string
+  label_is_custom: boolean
+  content: string
+  position: number
+}
+
+// One line of the gig day's running order (get-in, soundcheck, doors, …).
+// Both times are optional and carry 'HH:MM'; a zero-length line has
+// end_time === start_time, and no ordering between the two is enforced.
+export interface GigTimetableEntry {
+  id: Id
+  start_time: string | null
+  end_time: string | null
+  description: string
+  position: number
+}
+
+// Deal vocabulary is derived from the shared runtime declarations. Server
+// tests keep those declarations aligned with the database CHECK constraints.
+export type DealType = typeof DEAL_TYPES[number]
+export type GuaranteeVariant = typeof GUARANTEE_VARIANTS[number]
+export type FeeBasis = typeof FEE_BASES[number]
 
 export interface GigTag {
   id?: Id
   name?: string
-}
-
-/** One catalogue item on a gig, and who supplies it. Detail payloads only. */
-export interface GigEquipmentEntry {
-  item: GigEquipmentItemKey
-  provider: GigEquipmentProvider
 }
 
 export interface Member {
@@ -409,8 +488,9 @@ export interface NotificationPrefs {
 }
 
 export interface Contact {
-  id?: Id
-  name?: string
+    id?: Id
+    name?: string
+    first_name?: string | null
   email?: string | null
   phone?: string | null
   category?: string
