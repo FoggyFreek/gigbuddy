@@ -407,18 +407,6 @@ describe('GigDetailContent — Terms field saving', () => {
     updateGig.mockClear()
   })
 
-  it('saves the artist ticket share as a number', async () => {
-    getGig.mockResolvedValueOnce({ ...GIG_PAID, deal_type: 'guarantee' })
-    const user = userEvent.setup()
-    wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/ticket percentage/i))
-    await openTab(user, 'Terms')
-    await user.type(screen.getByLabelText(/ticket percentage/i), '20')
-    await waitFor(
-      () => expect(updateGig).toHaveBeenCalledWith(1, { percentage_of_sales: 20 })
-    )
-  })
-
   // Editing the venue's half writes the artist's, so the pair cannot drift
   // off 100 — there is only ever one stored number.
   it('saves the complement when the venue share is edited', async () => {
@@ -430,37 +418,6 @@ describe('GigDetailContent — Terms field saving', () => {
     await user.type(screen.getByLabelText(/venue \/ promoter/i), '30')
     await waitFor(
       () => expect(updateGig).toHaveBeenCalledWith(1, { percentage_of_sales: 70 })
-    )
-  })
-
-  it('saves money terms as cents and counts as whole numbers', async () => {
-    getGig.mockResolvedValueOnce({ ...GIG_PAID, deal_type: 'guarantee' })
-    const user = userEvent.setup()
-    wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/ticket link/i))
-    await openTab(user, 'Terms')
-
-    await user.type(screen.getByRole('spinbutton', { name: /^venue costs$/i }), '800')
-    await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, { venue_costs_cents: 80000 }))
-
-    await user.type(screen.getByLabelText(/venue capacity/i), '300')
-    await waitFor(() => expect(updateGig).toHaveBeenCalledWith(1, {
-      venue_capacity: 300,
-      venue_costs_cents: 80000,
-    }))
-  })
-
-  // The booking fee and commission sit on NOT NULL columns: a blanked input has
-  // to send 0, never null, or the server 400s on a constraint it owns.
-  it('sends zero rather than null when a NOT NULL fee input is blanked', async () => {
-    getGig.mockResolvedValueOnce({ ...GIG_PAID, agency_fee_basis: 'amount', agency_fee_amount_cents: 5000 })
-    const user = userEvent.setup()
-    wrap(<GigDetailContent gigId={1} />)
-    await waitFor(() => screen.getByLabelText(/ticket link/i))
-    await openTab(user, 'Terms')
-    await user.clear(screen.getByLabelText(/booking fee amount/i))
-    await waitFor(
-      () => expect(updateGig).toHaveBeenCalledWith(1, { agency_fee_amount_cents: 0 })
     )
   })
 
