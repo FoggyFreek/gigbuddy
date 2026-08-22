@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -30,9 +30,10 @@ import GigEventDetails from './GigEventDetails.tsx'
 import GigFinance from './GigFinance.tsx'
 import GigTasksSection from './GigTasksSection.tsx'
 import GigTerms from './GigTerms.tsx'
+import TabPanel from './TabPanel.tsx'
 import { feeToDisplay, numberToInput, patchForGigField } from './gigFormFields.ts'
 import type { GigDetail, GigDetailForm, GigDetailTabKey } from './types.ts'
-import useDebouncedSave from '../../../../hooks/useDebouncedSave.ts'
+import useDebouncedSave, { type SaveStatus } from '../../../../hooks/useDebouncedSave.ts'
 import { useCrossTenantRow } from '../../../shared/useCrossTenantRow.ts'
 import { usePlanningSource } from '../../../shared/usePlanningSource.ts'
 import { usePermissions } from '../../../../hooks/usePermissions.ts'
@@ -56,9 +57,11 @@ const REQUIRED_FIELDS = ['event_date', 'event_description']
 
 export type TabKey = GigDetailTabKey
 
-// The detail body is split across four tabs, selected from the floating pill
-// that overlaps the banner. Panels stay mounted (toggled via `display`) so
-// auto-saving children (tasks/attachments) and form state survive tab switches.
+// The detail body is split across these tabs, selected from the floating pill
+// that overlaps the banner. Panels stay mounted behind their TabPanel wrapper
+// so auto-saving children (tasks/attachments) and form state survive a switch.
+// Only the two that need to know they are on screen take `active`: Event, for
+// the Leaflet map, and Finance, for the statement.
 const TABS: { key: TabKey; Icon: SvgIconComponent }[] = [
   { key: 'event', Icon: FestivalIcon },
   { key: 'terms', Icon: HandshakeIcon },
@@ -69,7 +72,6 @@ const TABS: { key: TabKey; Icon: SvgIconComponent }[] = [
 
 export interface GigDetailHandle {
   flush: () => Promise<void>
-  saveStatus: string
 }
 
 interface GigDetailContentProps {
@@ -83,9 +85,11 @@ interface GigDetailContentProps {
   canWrite?: boolean
   // Tab to open on first mount (e.g. arriving from the tasks list → 'tasks').
   initialTab?: TabKey
+  // Reports each debounced-save transition to whoever renders the status label.
+  onSaveStatusChange?: (status: SaveStatus) => void
 }
 
-const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded, onGigLoadError, canWrite = true, initialTab = 'event' }, ref) {
+const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(function GigDetailContent({ gigId, onBannerUpdate, onGigLoaded, onGigLoadError, canWrite = true, initialTab = 'event', onSaveStatusChange }, ref) {
   const { t } = useTranslation(['gigs', 'common'])
   const { user } = useAuth()
   // A personal workspace reads through the cross-tenant hub, so gigs from the
@@ -148,13 +152,19 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     async (patch: Record<string, unknown>) => { await updateGig(gigId, patch) },
     [gigId]
   )
-  const { schedule, flush, status: saveStatus } = useDebouncedSave(
-    saveFn,
-    600,
-    (patch) => onBannerUpdate?.(gigId, patch)
+  // Stable, so `flush` keeps its identity — the memoized Participants panel
+  // takes it as a prop.
+  const onSaved = useCallback(
+    (patch: Record<string, unknown>) => onBannerUpdate?.(gigId, patch),
+    [gigId, onBannerUpdate]
   )
+  const { schedule, flush, status: saveStatus } = useDebouncedSave(saveFn, 600, onSaved)
 
-  useImperativeHandle(ref, () => ({ flush, saveStatus }), [flush, saveStatus])
+  useImperativeHandle(ref, () => ({ flush }), [flush])
+
+  useEffect(() => {
+    onSaveStatusChange?.(saveStatus)
+  }, [saveStatus, onSaveStatusChange])
 
   const applyGig = useCallback((g: GigDetail) => {
     setGig(g)
@@ -245,30 +255,42 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     listMembers().then(setMembers).catch(() => {})
   }, [gig, isCrossBand, source])
 
+  // The Participants and Tasks panels are memoized, so what they read off the
+  // gig has to keep its identity between renders — a bare `?? []` would hand
+  // them a fresh array on every keystroke and defeat the memo on its own.
+  const participants = useMemo(() => gig?.participants ?? [], [gig])
+  const attachments = useMemo(() => gig?.attachments ?? [], [gig])
+  const infoBlocks = useMemo(() => gig?.info_blocks ?? [], [gig])
+  const timetable = useMemo(() => gig?.timetable ?? [], [gig])
   const participantIds = useMemo(
-    () => new Set((gig?.participants ?? []).map((p) => p.band_member_id)),
-    [gig]
+    () => new Set(participants.map((p) => p.band_member_id)),
+    [participants]
   )
-  const candidateMembers = members.filter((m) => !participantIds.has(m.id))
+  const candidateMembers = useMemo(
+    () => members.filter((m) => !participantIds.has(m.id)),
+    [members, participantIds]
+  )
 
   const handleAvailabilityChange = useCallback((availability: AvailabilitySummary | null) => {
     onBannerUpdate?.(gigId, { members_availability: availability?.members ?? [] })
   }, [gigId, onBannerUpdate])
 
-  async function handleVote(memberId: Id, vote: string | null) {
+  // The handlers below are props of the memoized Participants and Tasks panels,
+  // hence useCallback: an unstable one re-renders them on every keystroke.
+  const handleVote = useCallback(async (memberId: Id, vote: string | null) => {
     await setGigVote(gigId, memberId, vote ?? '')
     await refresh()
-  }
+  }, [gigId, refresh])
 
-  async function handleRemoveParticipant(memberId: Id) {
+  const handleRemoveParticipant = useCallback(async (memberId: Id) => {
     await removeGigParticipant(gigId, memberId)
     await refresh()
-  }
+  }, [gigId, refresh])
 
-  async function handleAddParticipant(memberId: Id) {
+  const handleAddParticipant = useCallback(async (memberId: Id) => {
     await addGigParticipant(gigId, Number(memberId))
     await refresh()
-  }
+  }, [gigId, refresh])
 
   // Which of the artist's bands this gig was for. Saved on the spot rather than
   // debounced — a picker has no half-typed state to wait for — but the pending
@@ -284,10 +306,11 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
 
   // The only write a cross-band viewer gets: ticking their own assigned task.
   // /api/gigs is out of reach, so it goes through the hub instead.
-  async function completeOwnTaskCrossBand(task: Task, done: boolean): Promise<Task> {
+  const completeOwnTaskCrossBand = useCallback(async (task: Task, done: boolean): Promise<Task> => {
     if (task.id == null) return task
     return setMyTaskDone(task.id, done)
-  }
+  }, [])
+  const onToggleTask = isCrossBand ? completeOwnTaskCrossBand : undefined
 
   // Cost lines save on the spot: a row has an explicit confirm, so there is no
   // half-typed state for the debounce to protect.
@@ -306,16 +329,16 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
     setCosts((current) => current.filter((cost) => cost.id !== costId))
   }
 
-  function handleTaskUpsert(task: Task) {
+  const handleTaskUpsert = useCallback((task: Task) => {
     setInitialTasks((current) => {
       if (task.id == null || !current.some((item) => item.id === task.id)) return [...current, task]
       return current.map((item) => item.id === task.id ? task : item)
     })
-  }
+  }, [])
 
-  function handleTaskDelete(taskId: Id) {
+  const handleTaskDelete = useCallback((taskId: Id) => {
     setInitialTasks((current) => current.filter((task) => task.id !== taskId))
-  }
+  }, [])
 
   function handleChange(field: string, value: unknown) {
     if (!editable) return
@@ -622,7 +645,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       {/* ── Event ──────────────────────────────────────────────────────── */}
       <PlanningReadOnlyAlert canWrite={editable} />
 
-      <Box sx={{ display: shownTab === 'event' ? 'block' : 'none' }}>
+      <TabPanel active={shownTab === 'event'}>
         {/* The band a gig was played with, where a gigbuddy band's gig shows the
             band switcher. A band profile is no tenant to switch into, so it sits
             at the top of the Event tab instead of in the banner. */}
@@ -635,6 +658,8 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
           />
         )}
         <GigEventDetails
+          // Gates the Leaflet map only: it mis-sizes when built inside a hidden
+          // panel, so it mounts on arrival instead of sitting behind display:none.
           active={shownTab === 'event'}
           editable={editable}
           form={form}
@@ -652,24 +677,25 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
             handleChange('festival_id', festival?.id ?? null)
           }}
         />
-      </Box>
+      </TabPanel>
 
       {ownRow && (
-        <GigTerms
-          gigId={gigId}
-          active={shownTab === 'terms'}
-          editable={editable}
-          form={form}
-          costs={costs}
-          onChange={handleChange}
-          onAddCost={handleAddCost}
-          onUpdateCost={handleUpdateCost}
-          onDeleteCost={handleDeleteCost}
-        />
+        <TabPanel active={shownTab === 'terms'}>
+          <GigTerms
+            editable={editable}
+            form={form}
+            costs={costs}
+            onChange={handleChange}
+            onAddCost={handleAddCost}
+            onUpdateCost={handleUpdateCost}
+            onDeleteCost={handleDeleteCost}
+          />
+        </TabPanel>
       )}
 
       {ownRow && canViewFinance && (
         <GigFinance
+          // Renders nothing while hidden, so it needs no wrapper of its own.
           active={shownTab === 'finance'}
           editable={editable}
           gigId={gigId}
@@ -682,43 +708,45 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
       )}
 
       {ownRow && (
-        <GigAvailability
-          active={shownTab === 'participants'}
-          editable={editable}
-          gigId={gigId}
-          showAvailability={showAvailability}
-          eventDate={form.event_date}
-          endDate={form.end_date}
-          eventStatus={form.status}
-          startTime={form.start_time}
-          endTime={form.end_time}
-          participants={gig?.participants ?? []}
-          candidateMembers={candidateMembers}
-          venueId={selectedVenue?.id}
-          festivalId={selectedFestival?.id}
-          flush={flush}
-          onAddParticipant={handleAddParticipant}
-          onRemoveParticipant={handleRemoveParticipant}
-          onVote={handleVote}
-          onAvailabilityChange={handleAvailabilityChange}
-        />
+        <TabPanel active={shownTab === 'participants'}>
+          <GigAvailability
+            editable={editable}
+            gigId={gigId}
+            showAvailability={showAvailability}
+            eventDate={form.event_date}
+            endDate={form.end_date}
+            eventStatus={form.status}
+            startTime={form.start_time}
+            endTime={form.end_time}
+            participants={participants}
+            candidateMembers={candidateMembers}
+            venueId={selectedVenue?.id}
+            festivalId={selectedFestival?.id}
+            flush={flush}
+            onAddParticipant={handleAddParticipant}
+            onRemoveParticipant={handleRemoveParticipant}
+            onVote={handleVote}
+            onAvailabilityChange={handleAvailabilityChange}
+          />
+        </TabPanel>
       )}
 
-      <GigTasksSection
-        active={shownTab === 'tasks'}
-        editable={editable}
-        gigId={gigId}
-        initialTasks={initialTasks}
-        initialAttachments={gig?.attachments ?? []}
-        members={members}
-        initialInfoBlocks={gig?.info_blocks ?? []}
-        initialTimetable={gig?.timetable ?? []}
-        currentBandMemberId={isCrossBand ? (gig?.viewerBandMemberId ?? null) : currentBandMemberId}
-        plainTextAttachments={isCrossBand}
-        onToggleTask={isCrossBand ? completeOwnTaskCrossBand : undefined}
-        onTaskUpsert={handleTaskUpsert}
-        onTaskDelete={handleTaskDelete}
-      />
+      <TabPanel active={shownTab === 'tasks'}>
+        <GigTasksSection
+          editable={editable}
+          gigId={gigId}
+          initialTasks={initialTasks}
+          initialAttachments={attachments}
+          members={members}
+          initialInfoBlocks={infoBlocks}
+          initialTimetable={timetable}
+          currentBandMemberId={isCrossBand ? (gig?.viewerBandMemberId ?? null) : currentBandMemberId}
+          plainTextAttachments={isCrossBand}
+          onToggleTask={onToggleTask}
+          onTaskUpsert={handleTaskUpsert}
+          onTaskDelete={handleTaskDelete}
+        />
+      </TabPanel>
       <ImageCropDialog
         open={cropOpen}
         imageSrc={cropImageSrc}
@@ -735,4 +763,6 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
   )
 })
 
-export default GigDetailContent
+// Memoized so a save-status transition, which only the caller's status label
+// cares about, doesn't re-render the whole detail body.
+export default memo(GigDetailContent)

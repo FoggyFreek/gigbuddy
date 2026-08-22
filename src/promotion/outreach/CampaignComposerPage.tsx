@@ -8,14 +8,13 @@ import Typography from '@mui/material/Typography'
 import { DataGrid, type GridColDef } from '@mui/x-data-grid'
 import { useLocation, useNavigate } from 'react-router'
 import { useTranslation } from 'react-i18next'
-import type { Id } from '../../types/entities.ts'
 import {
   createOutreachCampaign, sendOutreachCampaign, type CampaignRecipientInput,
   type OutreachCampaign, type OutreachRecipient,
 } from './outreachCampaigns.ts'
 import { listOutreachTemplates, type OutreachTemplate } from './outreachTemplates.ts'
 
-interface ComposerState { recipients?: CampaignRecipientInput[]; contractId?: Id }
+interface ComposerState { recipients?: CampaignRecipientInput[] }
 
 export default function CampaignComposerPage() {
   const { t } = useTranslation('outreach')
@@ -36,7 +35,7 @@ export default function CampaignComposerPage() {
   async function review() {
     if (!templateId || !recipients.length) return
     setBusy(true); setError(null)
-    try { setCampaign(await createOutreachCampaign({ templateId, recipients, ...(state.contractId ? { contractId: state.contractId } : {}) })) }
+    try { setCampaign(await createOutreachCampaign({ templateId, recipients })) }
     catch (caught) { setError(caught instanceof Error ? caught.message : String(caught)) }
     finally { setBusy(false) }
   }

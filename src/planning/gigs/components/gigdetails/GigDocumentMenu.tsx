@@ -8,7 +8,12 @@ import Tooltip from '@mui/material/Tooltip'
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined'
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 import { useTranslation } from 'react-i18next'
-import { downloadGigArtistSettlement, downloadGigItinerary } from '../../gigs.ts'
+import {
+  downloadGigArtistSettlement,
+  downloadGigContract,
+  downloadGigItinerary,
+  type GigDocumentFile,
+} from '../../gigs.ts'
 import { downloadBlob } from '../../../../promotion/sharing/shareCard.ts'
 import { useToast } from '../../../../contexts/toastContext.ts'
 import type { Gig } from '../../../../types/entities.ts'
@@ -18,9 +23,10 @@ interface GigDocumentMenuProps {
   canViewFinance?: boolean
 }
 
-// The gig's generated documents. One entry today (the itinerary), but it is a
-// menu rather than a bare button because that is the shape the next document
-// slots into — and it keeps the toolbar from growing an icon per format.
+type DocumentDownloader = (gigId: NonNullable<Gig['id']>, lng: string) => Promise<GigDocumentFile>
+
+// The gig's live generated documents share one compact download surface and
+// one error-handling path. None of these files are persisted by the server.
 export default function GigDocumentMenu({ gig, canViewFinance = false }: Readonly<GigDocumentMenuProps>) {
   const { t, i18n } = useTranslation('gigs')
   const showToast = useToast()
@@ -36,33 +42,20 @@ export default function GigDocumentMenu({ gig, canViewFinance = false }: Readonl
     setAnchorEl(null)
   }
 
-  async function handleItinerary(e: React.MouseEvent) {
+  async function handleDownload(
+    e: React.MouseEvent,
+    downloader: DocumentDownloader,
+    failureMessage: string,
+  ) {
     e.stopPropagation()
     handleClose()
     if (!gig?.id || busy) return
     setBusy(true)
     try {
-      // The server localizes the document, so it is told which language the
-      // person asking for it is reading the app in.
-      const { blob, filename } = await downloadGigItinerary(gig.id, i18n.language)
+      const { blob, filename } = await downloader(gig.id, i18n.language)
       downloadBlob(blob, filename)
     } catch {
-      showToast?.(t($ => $.documentMenu.downloadFailed), 'error')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function handleArtistSettlement(e: React.MouseEvent) {
-    e.stopPropagation()
-    handleClose()
-    if (!gig?.id || busy) return
-    setBusy(true)
-    try {
-      const { blob, filename } = await downloadGigArtistSettlement(gig.id, i18n.language)
-      downloadBlob(blob, filename)
-    } catch {
-      showToast?.(t($ => $.documentMenu.settlementDownloadFailed), 'error')
+      showToast?.(failureMessage, 'error')
     } finally {
       setBusy(false)
     }
@@ -86,14 +79,20 @@ export default function GigDocumentMenu({ gig, canViewFinance = false }: Readonl
         onClick={(e) => e.stopPropagation()}
         disableRestoreFocus
       >
-        <MenuItem onClick={(e) => { void handleItinerary(e) }} disabled={busy}>
+        <MenuItem onClick={(e) => { void handleDownload(e, downloadGigItinerary, t($ => $.documentMenu.downloadFailed)) }} disabled={busy}>
           <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
           <ListItemText>{t($ => $.documentMenu.itinerary)}</ListItemText>
         </MenuItem>
         {canViewFinance && (
-          <MenuItem onClick={(e) => { void handleArtistSettlement(e) }} disabled={busy}>
+          <MenuItem onClick={(e) => { void handleDownload(e, downloadGigArtistSettlement, t($ => $.documentMenu.settlementDownloadFailed)) }} disabled={busy}>
             <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
             <ListItemText>{t($ => $.documentMenu.artistSettlement)}</ListItemText>
+          </MenuItem>
+        )}
+        {canViewFinance && (
+          <MenuItem onClick={(e) => { void handleDownload(e, downloadGigContract, t($ => $.documentMenu.contractDownloadFailed)) }} disabled={busy}>
+            <ListItemIcon><PictureAsPdfIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t($ => $.documentMenu.contract)}</ListItemText>
           </MenuItem>
         )}
       </Menu>

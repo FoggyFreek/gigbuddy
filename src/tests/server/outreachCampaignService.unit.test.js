@@ -11,11 +11,6 @@ const sendRepository = vi.hoisted(() => ({ isSuppressed: vi.fn() }))
 
 vi.mock('../../../server/promotion/outreach/campaignRepository.js', () => repository)
 vi.mock('../../../server/promotion/outreach/sendRepository.js', () => sendRepository)
-vi.mock('../../../server/promotion/outreach/contractRepository.js', () => ({
-  fetchContract: vi.fn(),
-  markContractSent: vi.fn(),
-}))
-
 import { sendCampaign } from '../../../server/promotion/outreach/campaignService.js'
 
 describe('outreach campaign delivery', () => {
@@ -26,7 +21,6 @@ describe('outreach campaign delivery', () => {
   it('sends the merged template HTML without appending an unsubscribe footer', async () => {
     const campaign = {
       id: 12,
-      contract_id: null,
       from_name: 'Example Band',
       from_email: 'hello@example.test',
       reply_to: null,
@@ -53,11 +47,7 @@ describe('outreach campaign delivery', () => {
       dispatch: vi.fn().mockResolvedValue([{ recipientId: pending.id, providerMessageId: 'message-1' }]),
     }
 
-    await sendCampaign({}, 7, campaign.id, { role: 'member', isSuperAdmin: true }, {
-      singleDispatcher: { supportsAttachments: true, dispatch: vi.fn() },
-      batchDispatcher,
-      attachmentLoader: vi.fn(),
-    })
+    await sendCampaign({}, 7, campaign.id, { role: 'member', isSuperAdmin: true }, { batchDispatcher })
 
     expect(batchDispatcher.dispatch).toHaveBeenCalledWith([
       expect.objectContaining({

@@ -71,8 +71,6 @@ function render(overrides = {}) {
       { label: 'Backline', amount_cents: 15000, paid_by: 'artist_agency' },
       { label: 'Travel', amount_cents: 20000, paid_by: 'artist' },
     ],
-    reference: '2026-0007',
-    version: 2,
     generatedAt: new Date('2026-08-22T10:00:00Z'),
     lng: 'en',
     ...overrides,
@@ -86,7 +84,8 @@ describe('renderGigContractPdf', () => {
 
     const text = await pdfText(buffer)
     expect(text).toContain('Performance agreement')
-    expect(text).toContain('2026-0007')
+    expect(text).not.toContain('Reference')
+    expect(text).not.toContain('Version')
     expect(text).toContain('Testing Tones B.V.')
     expect(text).toContain('Stichting Paradiso')
     expect(text).toContain('agree to the performance and deal terms listed below')

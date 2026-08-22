@@ -199,10 +199,11 @@ function wrapAsRole(user, ui) {
   )
 }
 
-// The detail body is split across tabbed panels (Event/Terms/Participants/
-// Tasks). Panels stay mounted but inactive ones are display:none, so a test
-// must activate the owning tab before interacting with (or role-querying) its
-// fields. Label/text/display-value queries still match across hidden panels.
+// The detail body is split across tabbed panels (Event/Terms/Finance/
+// Participants/Tasks). Most stay mounted under display:none, so a test must
+// activate the owning tab before interacting with (or role-querying) its
+// fields; label/text/display-value queries still match across those. Finance
+// renders nothing while hidden, so its content needs the tab open at all.
 async function openTab(user, label) {
   await user.click(screen.getByRole('button', { name: label }))
 }

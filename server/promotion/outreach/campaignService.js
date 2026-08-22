@@ -10,7 +10,6 @@ import { renderOutreachBlocks } from './blocks/index.js'
 import { logger } from '../../utils/logger.js'
 import { getSenderIdentity } from './senderRepository.js'
 import { isSuppressed } from './sendRepository.js'
-import { fetchContract, markContractSent } from './contractRepository.js'
 import { fetchProfileTenant } from '../../people/profiles/profileRepository.js'
 import {
   fetchCampaign, fetchContactForCampaign, fetchTemplateForCampaign,
@@ -35,9 +34,6 @@ export async function createCampaign(db, tenantId, userId, body, caller) {
   if (recipients.some((recipient) => !['primary_contact', 'venue'].includes(recipient.addressSource ?? 'primary_contact'))) {
     return badRequest('Invalid recipient address source')
   }
-  if (body.contractId && recipients.length !== 1) return badRequest('A contract campaign must have exactly one recipient')
-  if (body.contractId && !callerCan(caller, PERMISSIONS.FINANCE_MANAGE)) return forbidden('Permission denied')
-
   return withTransaction(async (client) => {
     const template = await fetchTemplateForCampaign(client, tenantId, templateId)
     const sender = await getSenderIdentity(client, tenantId)
@@ -46,29 +42,16 @@ export async function createCampaign(db, tenantId, userId, body, caller) {
     if (!sender?.resend_configured || !sender.outreach_from_email || !sender.outreach_from_name) {
       abortTransaction(badRequest('Resend sender is not configured in settings', { code: 'sender_not_configured' }))
     }
-    let selectedContract = null
-    if (body.contractId) {
-      selectedContract = await fetchContract(client, tenantId, Number(body.contractId))
-      if (!selectedContract) abortTransaction(NOT_FOUND)
-      if (!selectedContract.pdf_object_key || selectedContract.status !== 'draft') abortTransaction(badRequest('The selected contract is not available to send'))
-    }
     const campaign = await insertCampaign(client, tenantId, {
       templateId, subject: template.subject, bodyHtml: template.body_html, bodyText: template.body_text,
       fromName: sender.outreach_from_name, fromEmail: sender.outreach_from_email, replyTo: sender.outreach_reply_to,
-      userId, contractId: body.contractId ?? null,
+      userId,
     })
     const created = []
     for (const [index, input] of recipients.entries()) {
       const venueId = input.venueId
       const venue = venueId ? await fetchVenueForCampaign(client, tenantId, Number(venueId)) : null
       if (venueId && !venue) abortTransaction(NOT_FOUND)
-      if (selectedContract) {
-        const contractVenueId = selectedContract.terms_snapshot?.gig?.venue_id
-          ?? selectedContract.terms_snapshot?.venue?.id
-        if (!venue || Number(contractVenueId) !== Number(venue.id)) {
-          abortTransaction(badRequest('The contract does not belong to the selected venue'))
-        }
-      }
       const contactId = Number(input.contactId)
       const hasContactId = Number.isInteger(contactId) && contactId > 0
       const contact = hasContactId ? await fetchContactForCampaign(client, tenantId, contactId) : null
@@ -106,17 +89,13 @@ export async function getCampaign(db, tenantId, campaignId) {
   return { campaign: { ...campaign, recipients: await listCampaignRecipients(db, tenantId, campaignId) } }
 }
 
-export async function sendCampaign(db, tenantId, campaignId, caller, { singleDispatcher, batchDispatcher, attachmentLoader }) {
+export async function sendCampaign(db, tenantId, campaignId, caller, { batchDispatcher }) {
   const campaign = await fetchCampaign(db, tenantId, campaignId)
   if (!campaign) return NOT_FOUND
-  const required = campaign.contract_id ? PERMISSIONS.FINANCE_MANAGE : PERMISSIONS.PLANNING_WRITE
-  if (!callerCan(caller, required)) return forbidden('Permission denied')
+  if (!callerCan(caller, PERMISSIONS.PLANNING_WRITE)) return forbidden('Permission denied')
   if (['sent', 'partial', 'failed'].includes(campaign.status)) return getCampaign(db, tenantId, campaignId)
   const recipients = await listCampaignRecipients(db, tenantId, campaignId)
-  const dispatcher = campaign.contract_id ? singleDispatcher : batchDispatcher
-  if (campaign.contract_id && (!dispatcher.supportsAttachments || recipients.length !== 1)) return badRequest('The selected dispatcher cannot send this contract campaign')
   await setCampaignStatus(db, tenantId, campaignId, 'sending')
-  const attachment = campaign.contract_id ? await attachmentLoader(campaign.contract_id) : null
   const messages = []
   for (const recipient of recipients) {
     if (recipient.status !== 'pending') continue
@@ -130,13 +109,11 @@ export async function sendCampaign(db, tenantId, campaignId, caller, { singleDis
     const payload = {
       from: `${campaign.from_name} <${campaign.from_email}>`, to: recipient.to_email, subject: recipient.merged_subject,
       html, text, replyTo: campaign.reply_to ?? undefined,
-      ...(campaign.contract_id ? { attachments: [attachment] } : {
-        headers: { 'List-Unsubscribe': `<mailto:${campaign.reply_to ?? campaign.from_email}?subject=unsubscribe>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
-      }),
+      headers: { 'List-Unsubscribe': `<mailto:${campaign.reply_to ?? campaign.from_email}?subject=unsubscribe>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
     }
     messages.push({ recipientId: recipient.id, idempotencyKey: recipient.idempotency_key, payload })
   }
-  const results = await dispatcher.dispatch(messages)
+  const results = await batchDispatcher.dispatch(messages)
   for (const result of results) {
     await setRecipientResult(db, tenantId, result.recipientId, result.error
       ? { status: 'failed', error: result.error }
@@ -154,6 +131,5 @@ export async function sendCampaign(db, tenantId, campaignId, caller, { singleDis
   const failed = finalRecipients.filter((row) => row.status === 'failed').length
   const finalStatus = failed && sent ? 'partial' : failed || !sent ? 'failed' : 'sent'
   const finalCampaign = await setCampaignStatus(db, tenantId, campaignId, finalStatus, true)
-  if (campaign.contract_id && sent) await markContractSent(db, tenantId, campaign.contract_id, campaignId)
   return { campaign: { ...finalCampaign, recipients: finalRecipients } }
 }

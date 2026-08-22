@@ -9,7 +9,6 @@ import rehearsalsRouter from '../planning/rehearsals/rehearsals.js'
 import achievementsRouter from '../user/achievements/achievements.js'
 import bandEventsRouter from '../planning/events/bandEvents.js'
 import outreachRouter from '../promotion/outreach/outreach.js'
-import gigContractsRouter from '../promotion/outreach/gigContracts.js'
 import venuesRouter from '../people/venues/venues.js'
 import contactsRouter from '../people/contacts/contacts.js'
 import songsRouter from '../music/songs/songs.js'
@@ -285,7 +284,6 @@ router.use(
   requireEntitlement(FEATURES.CUSTOM_SLUG),
   tenantSettingsRouter,
 )
-router.use('/gigs/:gigId/contracts', tenantMember, gigContractsRouter)
 router.use('/gigs', tenantMember, myBandField, gigsRouter)
 router.use('/geocode', tenantMember, geocodeRouter)
 // The TomTom-backed lookup is a paid convenience: typing an address by hand is

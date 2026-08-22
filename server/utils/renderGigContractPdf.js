@@ -131,7 +131,7 @@ function drawBandName(doc, bandName, y) {
     .text(name, PAGE_MARGIN, y, { width: HEADER_LEFT_W, height: HEADER_MARK_H, ellipsis: true })
 }
 
-function drawHeader(doc, gig, meta, { t, locale }) {
+function drawHeader(doc, meta, { t, locale }) {
   const y = PAGE_MARGIN
   if (!drawLogo(doc, meta.logoBuffer, y)) drawBandName(doc, meta.bandName, y)
 
@@ -139,10 +139,6 @@ function drawHeader(doc, gig, meta, { t, locale }) {
     .text(t('documentTitle'), HEADER_RIGHT_X, y, { width: HEADER_RIGHT_W, align: 'right' })
   let metaY = Math.max(doc.y, y + 20) + 2
   doc.fontSize(9).font('Helvetica').fillColor(MUTED)
-  doc.text(t('reference', { reference: meta.reference }), HEADER_RIGHT_X, metaY, { width: HEADER_RIGHT_W, align: 'right' })
-  metaY += 13
-  doc.text(t('version', { version: meta.version }), HEADER_RIGHT_X, metaY, { width: HEADER_RIGHT_W, align: 'right' })
-  metaY += 13
   doc.text(fmtDate(meta.generatedAt, locale), HEADER_RIGHT_X, metaY, { width: HEADER_RIGHT_W, align: 'right' })
   metaY += 13
 
@@ -272,8 +268,6 @@ export async function renderGigContractPdf({
   costs = [],
   logoBuffer = null,
   bandName = '',
-  reference,
-  version = 1,
   generatedAt = new Date(),
   lng = 'en',
 }) {
@@ -282,7 +276,7 @@ export async function renderGigContractPdf({
   const doc = new PDFDocument({ size: 'A4', margin: PAGE_MARGIN })
   const done = bufferDocument(doc)
 
-  let y = drawHeader(doc, gig, { logoBuffer, bandName, reference, version, generatedAt }, { t, locale })
+  let y = drawHeader(doc, { logoBuffer, bandName, generatedAt }, { t, locale })
   y = drawAgreement(doc, tenant, venue, y, t)
   y = drawParties(doc, tenant, venue, y, t)
   y = drawGigDetails(doc, gig, venue, y, { t, locale })

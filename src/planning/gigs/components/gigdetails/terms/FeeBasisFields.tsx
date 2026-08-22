@@ -9,6 +9,8 @@ import FieldHelpAdornment from '../FieldHelpAdornment.tsx'
 import { FEE_BASES } from '../../../dealTerms.ts'
 import type { FeeBasis } from '../../../dealTerms.ts'
 
+const euroAdornment = <InputAdornment position="start">€</InputAdornment>
+
 interface Props {
   basisLabel: string
   percentageLabel: string
@@ -97,7 +99,7 @@ export default function FeeBasisFields({
             htmlInput: { min: 0, step: 0.01, readOnly: !editable, 'aria-label': amountLabel },
             input: {
               disableUnderline: true,
-              startAdornment: <InputAdornment position="start">€</InputAdornment>,
+              startAdornment: euroAdornment,
             },
           }}
         />

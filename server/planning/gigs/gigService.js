@@ -14,6 +14,7 @@ import { dispatchNotification } from '../../user/notifications/notificationServi
 import { logger } from '../../utils/logger.js'
 import { renderGigItineraryPdf } from '../../utils/renderGigItineraryPdf.js'
 import { renderGigArtistSettlementPdf } from '../../utils/renderGigArtistSettlementPdf.js'
+import { renderGigContractPdf } from '../../utils/renderGigContractPdf.js'
 import { loadTenantLogoBuffer } from '../../utils/tenantLogo.js'
 import { sanitizeFilename } from '../../utils/sanitizeFilename.js'
 import { createTask as createTaskService, patchTask as patchTaskService, removeTask as removeTaskService } from '../tasks/taskService.js'
@@ -109,7 +110,7 @@ import {
 } from '../../people/roster/bandMemberRepository.js'
 import { getTaskById } from '../tasks/taskRepository.js'
 import { fetchTenant } from '../../people/workspaces/tenantRepository.js'
-import { listVenueContacts as listVenueContactRows } from '../../people/venues/venueRepository.js'
+import { fetchVenue, listVenueContacts as listVenueContactRows } from '../../people/venues/venueRepository.js'
 import { INVALID_CURSOR, INVALID_TODAY, MAX_RANGE_DAYS, parseLocalDate, parseListCursor } from '../../platform/http/requestValidators.js'
 import { badRequest, notFound } from '../../platform/http/serviceErrors.js'
 import { assertMyBandWritable } from '../../people/my-bands/myBandService.js'
@@ -404,6 +405,40 @@ export async function getGigArtistSettlementPdf(
   return { pdf: { buffer, filename: artistSettlementFilename(gig) } }
 }
 
+// A live agreement assembled from the gig's current deal facts. Like the
+// itinerary and settlement it is derived on request: there is no stored copy
+// to become stale and no document lifecycle to maintain.
+export async function getGigContractPdf(
+  db,
+  tenantId,
+  gigId,
+  { lng = 'en', generatedAt = new Date() } = {},
+) {
+  const gig = await fetchGigWithRelations(db, gigId, tenantId)
+  if (!gig) return NOT_FOUND
+  if (!gig.venue_id) return badRequest('The gig needs a venue before a contract can be generated')
+
+  const [costs, tenant, venue] = await Promise.all([
+    listGigCostRows(db, gigId, tenantId),
+    fetchTenant(db, tenantId),
+    fetchVenue(db, gig.venue_id, tenantId),
+  ])
+  if (!tenant || !venue) return NOT_FOUND
+
+  const logoBuffer = await loadTenantLogoBuffer(tenant)
+  const buffer = await renderGigContractPdf({
+    gig,
+    costs,
+    tenant,
+    venue,
+    logoBuffer,
+    lng,
+    generatedAt,
+    bandName: tenant.display_name || tenant.band_name || '',
+  })
+  return { pdf: { buffer, filename: contractFilename(gig) } }
+}
+
 // The Contacts tab reads three sources — the gig's own linked contacts plus the
 // ones inherited from its venue and its festival — so the itinerary carries the
 // same three, in the same order. Each contact appears once: a person linked
@@ -434,6 +469,10 @@ function itineraryFilename(gig) {
 
 function artistSettlementFilename(gig) {
   return gigDocumentFilename('artist-settlement', gig)
+}
+
+function contractFilename(gig) {
+  return gigDocumentFilename('contract', gig)
 }
 
 function gigDocumentFilename(prefix, gig) {

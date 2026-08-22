@@ -1,7 +1,5 @@
 {
   "documentTitle": "Performance agreement",
-  "reference": "Reference {{reference}}",
-  "version": "Version {{version}}",
   "agreement": "{{band}} and {{venue}} agree to the performance and deal terms listed below.",
   "bandFallback": "The band",
   "venueFallback": "The venue",

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router'
 import Box from '@mui/material/Box'
@@ -7,12 +7,13 @@ import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import CloseIcon from '@mui/icons-material/Close'
-import GigDetailContent, { type TabKey } from './components/gigdetails/GigDetailContent.tsx'
+import GigDetailContent, { type GigDetailHandle, type TabKey } from './components/gigdetails/GigDetailContent.tsx'
 import GigDocumentMenu from './components/gigdetails/GigDocumentMenu.tsx'
 import GigShareMenu from './components/gigdetails/GigShareMenu.tsx'
 import PastEventAlert from '../../components/PastEventAlert.tsx'
 import SaveStatusLabel from '../../components/SaveStatusLabel.tsx'
 import { deleteGig } from './gigs.ts'
+import type { SaveStatus } from '../../hooks/useDebouncedSave.ts'
 import { usePermissions } from '../../hooks/usePermissions.ts'
 import { useDialog } from '../../contexts/dialogContext.ts'
 import type { Gig, Id } from '../../types/entities.ts'
@@ -33,8 +34,8 @@ export default function GigDetailPage() {
   const outletCtx = (useOutletContext() || {}) as Record<string, unknown>
   const insideSplitView = !!outletCtx.insideSplitView
 
-  const contentRef = useRef<{ saveStatus: string; flush: () => Promise<void> }>(null)
-  const [polledStatus, setPolledStatus] = useState('idle')
+  const contentRef = useRef<GigDetailHandle>(null)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [gig, setGig] = useState<MaybeCrossTenant<Gig> | null>(null)
 
   // The lifted gig lags during async loads / split-view id changes, so a gig
@@ -51,13 +52,6 @@ export default function GigDetailPage() {
     setGig(g)
     onGigDetailLoaded?.(g)
   }, [onGigDetailLoaded])
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPolledStatus(contentRef.current?.saveStatus ?? 'idle')
-    }, 100)
-    return () => clearInterval(interval)
-  }, [])
 
   async function handleDelete() {
     if (!await confirmDelete({ title: t($ => $.page.deleteConfirmTitle) })) return
@@ -107,11 +101,12 @@ export default function GigDetailPage() {
         onBannerUpdate={outletCtx.onGigUpdate as ((gigId: Id, patch: Record<string, unknown>) => void) | undefined}
         onGigLoaded={handleGigLoaded}
         onGigLoadError={onGigDetailLoadError}
+        onSaveStatusChange={setSaveStatus}
       />
 
       {detailCanWrite && (
         <Box sx={{ mt: 2, display: 'flex', alignItems: 'center' }}>
-          <SaveStatusLabel status={polledStatus} />
+          <SaveStatusLabel status={saveStatus} />
         </Box>
       )}
 

@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import Divider from '@mui/material/Divider'
@@ -14,7 +15,6 @@ import type { AvailabilityStatus, AvailabilitySummary, Id, Member, Participant }
 const TWO_COLUMN_MIN_WIDTH = 760
 
 interface Props {
-  active: boolean
   editable: boolean
   gigId: Id
   showAvailability: boolean
@@ -34,8 +34,9 @@ interface Props {
   onAvailabilityChange?: (availability: AvailabilitySummary | null) => void
 }
 
-export default function GigAvailability({
-  active,
+// Memoized on props that carry no form object, so a keystroke in another tab
+// skips the roster, the availability chips and the contacts section.
+const GigAvailability = memo(function GigAvailability({
   editable,
   gigId,
   showAvailability,
@@ -103,7 +104,7 @@ export default function GigAvailability({
   const bandWideLabel = availabilityLabel(availability?.bandWide?.status)
 
   return (
-    <Box sx={{ display: active ? 'block' : 'none', containerType: 'inline-size' }}>
+    <Box sx={{ containerType: 'inline-size' }}>
       <Box
         sx={{
           display: 'flex',
@@ -162,4 +163,6 @@ export default function GigAvailability({
       </Box>
     </Box>
   )
-}
+})
+
+export default GigAvailability

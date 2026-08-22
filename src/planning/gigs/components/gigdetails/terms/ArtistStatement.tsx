@@ -9,6 +9,9 @@ import { formatEur } from '../../../../../finance/invoices/invoiceTotals.ts'
 import { computeArtistStatement, dealTypeHasTicketShare } from '../../../dealTerms.ts'
 import type { GigDealTerms } from '../../../dealTerms.ts'
 
+const TOP_ROW_COLUMNS = { xs: 1, sm: 3 } as const
+const SPLIT_ROW_COLUMNS = { xs: 2, sm: 4 } as const
+
 interface Props {
   terms: GigDealTerms
   costLineCount: number
@@ -133,7 +136,7 @@ export default function ArtistStatement({ terms, costLineCount }: Readonly<Props
           trailing hairlines under the wrapper's own border, which the
           overflow then clips. */}
       <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-        <Grid container spacing={0} columns={{ xs: 1, sm: 3 }} sx={{ mr: '-1px', mb: '-1px' }}>
+        <Grid container spacing={0} columns={TOP_ROW_COLUMNS} sx={{ mr: '-1px', mb: '-1px' }}>
           <StatementCell
             label={t($ => $.detail.deal.statement.grossFee)}
             breakdown={grossFeeBreakdown}
@@ -158,7 +161,7 @@ export default function ArtistStatement({ terms, costLineCount }: Readonly<Props
             })}
           />
         </Grid>
-        <Grid container spacing={0} columns={{ xs: 2, sm: 4 }} sx={{ mr: '-1px', mb: '-1px' }}>
+        <Grid container spacing={0} columns={SPLIT_ROW_COLUMNS} sx={{ mr: '-1px', mb: '-1px' }}>
           <StatementCell
             label={t($ => $.detail.deal.statement.bookingFee)}
             amountCents={statement.agencyFeeCents}

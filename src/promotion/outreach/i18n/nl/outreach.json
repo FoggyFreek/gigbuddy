@@ -24,7 +24,6 @@
     }
   },
   "deleteTitle": "Dit sjabloon verwijderen?",
-  "contracts": { "title": "Contracten", "generate": "Contract genereren", "empty": "Nog geen contracten gegenereerd.", "download": "Voorbeeld / downloaden", "countersign": "Markeer als ondertekend", "email": "Naar locatie e-mailen", "noRecipient": "De locatie heeft geen contactpersoon die dit contract kan ontvangen." },
   "campaigns": {
     "button": "Geschiedenis en blokkeringen", "title": "Outreachcampagnes", "history": "Geschiedenis", "suppressions": "Blokkeringen",
     "id": "Campagne", "status": "Status", "created": "Aangemaakt", "recipient": "Ontvanger", "email": "E-mailadres",

@@ -1,12 +1,12 @@
-# Outreach templates, campaigns, and gig contracts
+# Outreach templates, campaigns, and gig documents
 
 Outreach is a tenant-scoped promotion feature. Templates are venue-facing email templates;
 there are no contract templates or gig-context templates. Existing templates and campaign
 history remain readable after a subscription downgrade, while mutation and dispatch require
 the `outreach` entitlement and `PLANNING_WRITE`.
 
-Gig contracts are generated documents owned by the gig rather than the template system.
-Generation and lifecycle changes require `FINANCE_MANAGE`; reads require `FINANCE_VIEW`.
+Gig contracts are live generated documents owned by the gig rather than the template
+system. Downloading one requires `FINANCE_VIEW`.
 
 ## Architecture
 
@@ -19,12 +19,11 @@ Generation and lifecycle changes require `FINANCE_MANAGE`; reads require `FINANC
   React Email composition requires the live browser editor. A campaign freezes both before
   recipients are reviewed or sent.
 - A one-recipient message and a bulk campaign use the same campaign model. The batch
-  dispatcher chunks at 100 recipients; a contract attachment always uses the single-send
-  dispatcher.
-- A contract freezes the gig, venue, tenant and cost facts at generation. The fact-only PDF
-  is rendered by `server/utils/renderGigContractPdf.js` with the tenant logo, full deal
-  terms, a short mutual-agreement statement and signature spaces for band and venue. PDFs
-  are tenant-keyed object-storage files.
+  dispatcher chunks at 100 recipients.
+- A contract PDF is rendered on demand by `server/utils/renderGigContractPdf.js` from the
+  current gig, venue, tenant and cost facts. It includes the tenant logo, full deal terms,
+  a short mutual-agreement statement and signature spaces for band and venue. It is sent
+  directly to the browser and is not stored or attached to outreach campaigns.
 
 ## HTTP surface
 
@@ -33,8 +32,7 @@ Generation and lifecycle changes require `FINANCE_MANAGE`; reads require `FINANC
 - `/api/outreach/sender`
 - `/api/outreach/campaigns[/:id]` and `/:id/send`
 - `/api/outreach/campaigns/suppressions/list[/:id]`
-- `/api/gigs/:gigId/contracts`
-- `/api/outreach/contracts/:id`, `/:id/pdf`, `/:id/countersign`, and `/:id/void`
+- `/api/gigs/:gigId/contract.pdf`
 
 All list endpoints are bounded and all repository queries include `tenant_id`. The send
 endpoint is rate-limited per tenant. Provider calls use deterministic idempotency keys and
@@ -43,14 +41,12 @@ than rolling back successful deliveries.
 
 ## Deployment
 
-Apply migrations 199-204 before deploying the application. The former email-template slice
-is removed only at the application layer in this release; its table is intentionally left in
-place for an expand/migrate/contract rollout.
+Apply all pending migrations before deploying the application. Migration 207 queues legacy
+contract PDFs for storage cleanup and removes the versioned contract schema.
 
 Configure a tenant Resend API key first, then save a sender identity in Settings. Saving
 checks that the exact from-address domain is verified in Resend. Suppressions are checked
-again immediately before every dispatch; non-contract email includes list-unsubscribe
-headers.
+again immediately before every dispatch; email includes list-unsubscribe headers.
 
 ## Verification
 
@@ -61,5 +57,5 @@ npm.cmd run type-check
 npm.cmd run lint
 npm.cmd run build
 npm.cmd test -- --run src/promotion/outreach/__tests__/outreachMerge.test.js src/planning/gigs/__tests__/renderGigContractPdf.test.js
-infisical run --env=test -- npx vitest run --config vitest.server.config.js src/tests/server/outreachTemplates.test.js
+infisical run --env=test -- npx vitest run --config vitest.server.config.js src/tests/server/outreachTemplates.test.js src/tests/server/gigContract.test.js
 ```

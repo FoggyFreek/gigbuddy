@@ -89,8 +89,10 @@
     "documentsAria": "documenten van optreden downloaden",
     "itinerary": "Draaiboek / Tijdschema",
     "artistSettlement": "Artiestenafrekening",
+    "contract": "Contract",
     "downloadFailed": "Downloaden van het draaiboek is mislukt",
-    "settlementDownloadFailed": "Downloaden van de artiestenafrekening is mislukt"
+    "settlementDownloadFailed": "Downloaden van de artiestenafrekening is mislukt",
+    "contractDownloadFailed": "Downloaden van het contract is mislukt"
   },
   "gigShare": {
     "title": "Gig delen als afbeelding",

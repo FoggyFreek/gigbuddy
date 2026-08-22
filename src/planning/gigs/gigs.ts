@@ -21,7 +21,7 @@ interface GigContact {
 }
 
 /** A generated document: its bytes plus the name the server gave it. */
-export interface GigItineraryFile {
+export interface GigDocumentFile {
   blob: Blob
   filename: string
 }
@@ -175,20 +175,28 @@ export const removeGigContact = (gigId: Id, contactId: Id) =>
 //
 // The server names the document in Content-Disposition and this reads that name
 // back, so the naming rule has one owner and the two cannot drift.
-export async function downloadGigItinerary(gigId: Id, lng: string): Promise<GigItineraryFile> {
+async function downloadGigPdf(
+  gigId: Id,
+  lng: string,
+  documentPath: string,
+  fallbackPrefix: string,
+): Promise<GigDocumentFile> {
   const { blob, headers } = await requestBlobWithHeaders(
-    `/api/gigs/${gigId}/itinerary.pdf?lng=${encodeURIComponent(lng)}`,
+    `/api/gigs/${gigId}/${documentPath}.pdf?lng=${encodeURIComponent(lng)}`,
     { method: 'GET' },
   )
   const match = /filename="([^"]+)"/.exec(headers.get('Content-Disposition') ?? '')
-  return { blob, filename: match?.[1] || `itinerary-${gigId}.pdf` }
+  return { blob, filename: match?.[1] || `${fallbackPrefix}-${gigId}.pdf` }
 }
 
-export async function downloadGigArtistSettlement(gigId: Id, lng: string): Promise<GigItineraryFile> {
-  const { blob, headers } = await requestBlobWithHeaders(
-    `/api/gigs/${gigId}/artist-settlement.pdf?lng=${encodeURIComponent(lng)}`,
-    { method: 'GET' },
-  )
-  const match = /filename="([^"]+)"/.exec(headers.get('Content-Disposition') ?? '')
-  return { blob, filename: match?.[1] || `artist-settlement-${gigId}.pdf` }
+export function downloadGigItinerary(gigId: Id, lng: string): Promise<GigDocumentFile> {
+  return downloadGigPdf(gigId, lng, 'itinerary', 'itinerary')
+}
+
+export function downloadGigArtistSettlement(gigId: Id, lng: string): Promise<GigDocumentFile> {
+  return downloadGigPdf(gigId, lng, 'artist-settlement', 'artist-settlement')
+}
+
+export function downloadGigContract(gigId: Id, lng: string): Promise<GigDocumentFile> {
+  return downloadGigPdf(gigId, lng, 'contract', 'contract')
 }

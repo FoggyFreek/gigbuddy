@@ -89,8 +89,10 @@
     "documentsAria": "download gig documents",
     "itinerary": "Itinerary / Timetable",
     "artistSettlement": "Artist settlement",
+    "contract": "Contract",
     "downloadFailed": "Downloading the itinerary failed",
-    "settlementDownloadFailed": "Downloading the artist settlement failed"
+    "settlementDownloadFailed": "Downloading the artist settlement failed",
+    "contractDownloadFailed": "Downloading the contract failed"
   },
   "gigShare": {
     "title": "Share gig as image",

@@ -1,6 +1,5 @@
 export function createBatchDispatcher(resend) {
   return {
-    supportsAttachments: false,
     async dispatch(messages) {
       const results = []
       for (let offset = 0; offset < messages.length; offset += 100) {

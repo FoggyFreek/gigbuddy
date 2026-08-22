@@ -40,9 +40,6 @@ export const sharePhotoKey = (tenantId, uuid, ext) =>
 export const invoicePdfKey = (tenantId, uuid) =>
   `tenants/${tenantId}/invoices/${uuid}.pdf`
 
-export const contractPdfKey = (tenantId, uuid) =>
-  `tenants/${tenantId}/contracts/${uuid}.pdf`
-
 export const invoiceLogoKey = (tenantId, uuid, ext) =>
   `tenants/${tenantId}/invoices/logo-${uuid}${ext}`
 

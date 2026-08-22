@@ -17,6 +17,7 @@ import {
   getGig,
   getGigItineraryPdf,
   getGigArtistSettlementPdf,
+  getGigContractPdf,
   gigMerchSummary,
   importGigs,
   createGig,
@@ -148,6 +149,19 @@ router.get('/:id/artist-settlement.pdf', requirePermission(PERMISSIONS.FINANCE_V
   const id = requireParam(req, res, 'id'); if (id === null) return
   const lng = normalizeDocumentLng(req.query.lng)
   const result = await getGigArtistSettlementPdf(pool, req.tenantId, id, { lng })
+  if (result.error) return sendError(res, result.error)
+
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="${result.pdf.filename}"`)
+  res.send(result.pdf.buffer)
+})
+
+// The contract contains the same deal finances and is likewise generated live
+// for finance viewers instead of being persisted as a versioned document.
+router.get('/:id/contract.pdf', requirePermission(PERMISSIONS.FINANCE_VIEW), async (req, res) => {
+  const id = requireParam(req, res, 'id'); if (id === null) return
+  const lng = normalizeDocumentLng(req.query.lng)
+  const result = await getGigContractPdf(pool, req.tenantId, id, { lng })
   if (result.error) return sendError(res, result.error)
 
   res.setHeader('Content-Type', 'application/pdf')

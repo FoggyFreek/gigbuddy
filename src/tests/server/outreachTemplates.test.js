@@ -1,18 +1,8 @@
 import './_envSetup.js'
 // @vitest-environment node
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readFile } from 'node:fs/promises'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import request from 'supertest'
 import { seedDefaultPlans } from '../../../server/db/defaultPlans.js'
-
-const storageMocks = vi.hoisted(() => ({
-  uploadObjectWithQuota: vi.fn(async () => undefined),
-}))
-
-vi.mock('../../../server/platform/files/storageService.js', async (importOriginal) => ({
-  ...(await importOriginal()),
-  uploadObjectWithQuota: storageMocks.uploadObjectWithQuota,
-}))
 
 let app, pool, runMigrations, truncateAll, seedTwoTenants, billing, clearEntitlementCaches
 let seed
@@ -27,7 +17,6 @@ beforeAll(async () => {
   await runMigrations()
 })
 beforeEach(async () => {
-  storageMocks.uploadObjectWithQuota.mockClear()
   await truncateAll()
   seed = await seedTwoTenants()
   await pool.query('DELETE FROM subscription_plans')
@@ -107,89 +96,6 @@ describe('outreach templates', () => {
   })
 })
 
-describe('gig contracts', () => {
-  it('upgrades the legacy contract-template columns before generation', async () => {
-    await pool.query(`
-      ALTER TABLE gig_contracts
-        ADD COLUMN template_id INTEGER,
-        ADD COLUMN body_html TEXT NOT NULL
-    `)
-    const migration = await readFile(
-      new URL('../../../server/db/migrations/206_drop_legacy_contract_template_fields.sql', import.meta.url),
-      'utf8',
-    )
-    await pool.query(migration)
-
-    const { rows: legacyColumns } = await pool.query(`
-      SELECT column_name
-        FROM information_schema.columns
-       WHERE table_schema = 'public'
-         AND table_name = 'gig_contracts'
-         AND column_name IN ('template_id', 'body_html')
-    `)
-    expect(legacyColumns).toEqual([])
-
-    const { rows: [venue] } = await pool.query(
-      `INSERT INTO venues (tenant_id, name, category)
-       VALUES ($1, 'Upgraded Contract Venue', 'venue') RETURNING id`,
-      [seed.tenantA.id],
-    )
-    await pool.query(
-      'UPDATE gigs SET venue_id = $1 WHERE id = $2 AND tenant_id = $3',
-      [venue.id, seed.gigA.id, seed.tenantA.id],
-    )
-    await asUserA(request(app).post(`/api/gigs/${seed.gigA.id}/contracts`)
-      .send({ lng: 'nl' })).expect(201)
-  })
-
-  it('generates and stores a PDF for a gig with a venue', async () => {
-    const { rows: [venue] } = await pool.query(
-      `INSERT INTO venues (tenant_id, name, category)
-       VALUES ($1, 'Contract Venue', 'venue') RETURNING id`,
-      [seed.tenantA.id],
-    )
-    await pool.query(
-      'UPDATE gigs SET venue_id = $1 WHERE id = $2 AND tenant_id = $3',
-      [venue.id, seed.gigA.id, seed.tenantA.id],
-    )
-
-    const response = await asUserA(request(app).post(`/api/gigs/${seed.gigA.id}/contracts`)
-      .send({ lng: 'en' })).expect(201)
-
-    expect(response.body).toMatchObject({
-      gig_id: seed.gigA.id,
-      reference: expect.stringMatching(/^\d{4}-0001$/),
-      version: 1,
-      locale: 'en',
-      status: 'draft',
-      pdf_object_key: expect.stringMatching(new RegExp(`^tenants/${seed.tenantA.id}/contracts/.+\\.pdf$`)),
-    })
-    expect(storageMocks.uploadObjectWithQuota).toHaveBeenCalledWith(
-      response.body.pdf_object_key,
-      expect.any(Buffer),
-      expect.any(Number),
-      'application/pdf',
-    )
-    const { rows: [stored] } = await pool.query(
-      'SELECT terms_snapshot FROM gig_contracts WHERE id = $1 AND tenant_id = $2',
-      [response.body.id, seed.tenantA.id],
-    )
-    expect(stored.terms_snapshot).toMatchObject({
-      gig: expect.objectContaining({ id: seed.gigA.id, venue_id: venue.id }),
-      costs: expect.any(Array),
-      venue: expect.objectContaining({ id: venue.id, name: 'Contract Venue' }),
-      tenant: expect.objectContaining({ display_name: expect.any(String) }),
-    })
-    expect(stored.terms_snapshot.gig).not.toHaveProperty('venue_capacity')
-    expect(stored.terms_snapshot.gig).not.toHaveProperty('expected_visitors')
-  })
-
-  it('returns 404 when another tenant gig is used for contract reads or generation', async () => {
-    await asUserA(request(app).get(`/api/gigs/${seed.gigB.id}/contracts?limit=10`)).expect(404)
-    await asUserA(request(app).post(`/api/gigs/${seed.gigB.id}/contracts`).send({ lng: 'en' })).expect(404)
-  })
-})
-
 describe('outreach campaigns', () => {
   async function campaignFixture() {
     await pool.query(
@@ -243,30 +149,6 @@ describe('outreach campaigns', () => {
     expect(contactCampaign.body.recipients[0]).toMatchObject({
       venue_id: venue.id, contact_id: contact.id, to_email: 'contact@test.example', to_name: 'Primary Person', status: 'pending',
     })
-  })
-
-  it('attaches a generated contract with an ordinary venue email template', async () => {
-    const { venue, contact, template } = await campaignFixture()
-    await pool.query(
-      'UPDATE gigs SET venue_id = $1 WHERE id = $2 AND tenant_id = $3',
-      [venue.id, seed.gigA.id, seed.tenantA.id],
-    )
-    const { rows: [contract] } = await pool.query(
-      `INSERT INTO gig_contracts
-        (tenant_id, gig_id, reference, version, locale, terms_snapshot, pdf_object_key)
-       VALUES ($1, $2, '2026-0001', 1, 'en', $3, 'tenants/test/contracts/example.pdf')
-       RETURNING id`,
-      [seed.tenantA.id, seed.gigA.id, { gig: { venue_id: venue.id }, venue: { id: venue.id } }],
-    )
-
-    const campaign = await asUserA(request(app).post('/api/outreach/campaigns').send({
-      templateId: template.id,
-      contractId: contract.id,
-      recipients: [{ venueId: venue.id, contactId: contact.id }],
-    })).expect(201)
-
-    expect(campaign.body).toMatchObject({ template_id: template.id, contract_id: contract.id })
-    expect(campaign.body.recipients[0]).toMatchObject({ venue_id: venue.id, contact_id: contact.id })
   })
 
   it('returns 404 when a venue-address recipient belongs to another tenant', async () => {

@@ -1,4 +1,3 @@
-import Box from '@mui/material/Box'
 import Grid from '@mui/material/Grid'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -15,11 +14,8 @@ import { dealTermsFromForm } from './gigFormFields.ts'
 import { usePermissions } from '../../../../hooks/usePermissions.ts'
 import type { CostPaidBy, GigCost, Id } from '../../../../types/entities.ts'
 import type { GigDetailForm } from './types.ts'
-import GigContractsSection from '../../../../promotion/outreach/components/GigContractsSection.tsx'
 
 interface Props {
-  active: boolean
-  gigId: Id
   editable: boolean
   form: GigDetailForm
   costs: GigCost[]
@@ -30,8 +26,6 @@ interface Props {
 }
 
 export default function GigTerms({
-  active,
-  gigId,
   editable,
   form,
   costs,
@@ -48,61 +42,58 @@ export default function GigTerms({
   const dealTerms = dealTermsFromForm(form, costs)
 
   return (
-    <Box sx={{ display: active ? 'block' : 'none' }}>
-      <Grid container spacing={2}>
-        {canViewFinance && (
-          <>
-            <DealSection editable={editable} form={form} onChange={onChange} />
-            {/* Always offered: the deal type says whether tickets are sold,
-                so there is no separate paid-admission flag to gate this on. */}
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                label={t($ => $.detail.ticketLink)}
-                type="url"
-                fullWidth
-                value={form.ticket_link}
-                onChange={(event) => onChange('ticket_link', event.target.value)}
-                slotProps={{
-                  htmlInput: { readOnly: !editable },
-                  input: {
-                    endAdornment: form.ticket_link ? (
-                      <InputAdornment position="end">
-                        <Tooltip title={t($ => $.detail.openLink)}>
-                          <IconButton
-                            size="small"
-                            edge="end"
-                            component="a"
-                            href={form.ticket_link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <OpenInNewIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      </InputAdornment>
-                    ) : null,
-                  },
-                }}
-              />
-            </Grid>
-
-            <TicketUpside terms={dealTerms} />
-
-            <GigCostsEditor
-              editable={editable}
-              costs={costs}
-              onAdd={onAddCost}
-              onUpdate={onUpdateCost}
-              onDelete={onDeleteCost}
+    <Grid container spacing={2}>
+      {canViewFinance && (
+        <>
+          <DealSection editable={editable} form={form} onChange={onChange} />
+          {/* Always offered: the deal type says whether tickets are sold,
+              so there is no separate paid-admission flag to gate this on. */}
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              label={t($ => $.detail.ticketLink)}
+              type="url"
+              fullWidth
+              value={form.ticket_link}
+              onChange={(event) => onChange('ticket_link', event.target.value)}
+              slotProps={{
+                htmlInput: { readOnly: !editable },
+                input: {
+                  endAdornment: form.ticket_link ? (
+                    <InputAdornment position="end">
+                      <Tooltip title={t($ => $.detail.openLink)}>
+                        <IconButton
+                          size="small"
+                          edge="end"
+                          component="a"
+                          href={form.ticket_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <OpenInNewIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </InputAdornment>
+                  ) : null,
+                },
+              }}
             />
+          </Grid>
 
-            <BookerSection editable={editable} form={form} onChange={onChange} />
+          <TicketUpside terms={dealTerms} />
 
-            <TaxesSection editable={editable} form={form} onChange={onChange} />
-          </>
-        )}
-      {canViewFinance && <GigContractsSection gigId={gigId} venueId={form.venue_id || undefined} />}
-      </Grid>
-    </Box>
+          <GigCostsEditor
+            editable={editable}
+            costs={costs}
+            onAdd={onAddCost}
+            onUpdate={onUpdateCost}
+            onDelete={onDeleteCost}
+          />
+
+          <BookerSection editable={editable} form={form} onChange={onChange} />
+
+          <TaxesSection editable={editable} form={form} onChange={onChange} />
+        </>
+      )}
+    </Grid>
   )
 }

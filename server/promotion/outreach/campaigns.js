@@ -7,10 +7,9 @@ import { requireEntitlement } from '../../middleware/entitlements.js'
 import { requirePermission } from '../../middleware/permissions.js'
 import { requireParam, sendError } from '../../platform/http/routeHelpers.js'
 import { getResendClientForTenant } from '../../platform/integrations/resendService.js'
-import { createBatchDispatcher, createSingleDispatcher } from './dispatch/index.js'
+import { createBatchDispatcher } from './dispatch/index.js'
 import { createCampaign, getCampaign, listCampaigns, sendCampaign } from './campaignService.js'
 import { addSuppression, deleteSuppression, listSuppressions } from './suppressionService.js'
-import { loadContractAttachment } from './contractService.js'
 
 const router = Router()
 const outreachWrite = requireEntitlement(FEATURES.OUTREACH)
@@ -63,9 +62,7 @@ router.post('/:id/send', sendLimiter, outreachWrite, async (req, res) => {
   const clientResult = await getResendClientForTenant(pool, req.tenantId)
   if (clientResult.error) return sendError(res, clientResult.error)
   const result = await sendCampaign(pool, req.tenantId, id, caller(req), {
-    singleDispatcher: createSingleDispatcher(clientResult.resend),
     batchDispatcher: createBatchDispatcher(clientResult.resend),
-    attachmentLoader: (contractId) => loadContractAttachment(pool, req.tenantId, contractId),
   })
   if (result.error) return sendError(res, result.error)
   res.json(result.campaign)

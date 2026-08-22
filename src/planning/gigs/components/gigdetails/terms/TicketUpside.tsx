@@ -9,6 +9,8 @@ import { formatEur } from '../../../../../finance/invoices/invoiceTotals.ts'
 import { computeTicketUpside, dealTypeHasTicketShare } from '../../../dealTerms.ts'
 import type { GigDealTerms, TicketScenario } from '../../../dealTerms.ts'
 
+const UPSIDE_COLUMNS = { xs: 2, sm: 4 } as const
+
 interface Props {
   terms: GigDealTerms
 }
@@ -128,7 +130,7 @@ export default function TicketUpside({ terms }: Readonly<Props>) {
           margins push the trailing hairlines under the wrapper's own border,
           which the overflow then clips. */}
       <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-        <Grid container spacing={0} columns={{ xs: 2, sm: 4 }} sx={{ mr: '-1px', mb: '-1px' }}>
+        <Grid container spacing={0} columns={UPSIDE_COLUMNS} sx={{ mr: '-1px', mb: '-1px' }}>
           <UpsideTile
             label={t($ => $.detail.deal.tickets.sold)}
             value={soldValue}

@@ -25,7 +25,7 @@ export const FEATURES = Object.freeze({
   // `integrations` so "planning, but no calendar sync" is expressible — the
   // shape a free artist workspace takes.
   CALENDAR_SYNC: 'calendar_sync',
-  // Venue outreach and contracts. A downgrade is read-only; stored records are never purged.
+  // Venue outreach. A downgrade is read-only; stored records are never purged.
   OUTREACH: 'outreach',
 })
 

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../gigs.ts', () => ({
   downloadGigArtistSettlement: vi.fn(),
+  downloadGigContract: vi.fn(),
   downloadGigItinerary: vi.fn(),
 }))
 
@@ -14,7 +15,7 @@ vi.mock('../../../promotion/sharing/shareCard.ts', () => ({
 }))
 
 import GigDocumentMenu from '../components/gigdetails/GigDocumentMenu.tsx'
-import { downloadGigArtistSettlement, downloadGigItinerary } from '../gigs.ts'
+import { downloadGigArtistSettlement, downloadGigContract, downloadGigItinerary } from '../gigs.ts'
 import { downloadBlob } from '../../../promotion/sharing/shareCard.ts'
 import { ToastContext } from '../../../contexts/toastContext.ts'
 import theme from '../../../theme.ts'
@@ -43,10 +44,14 @@ beforeEach(() => {
     blob: new Blob(['%PDF-'], { type: 'application/pdf' }),
     filename: 'artist-settlement-paradiso-night-09122026.pdf',
   })
+  downloadGigContract.mockResolvedValue({
+    blob: new Blob(['%PDF-'], { type: 'application/pdf' }),
+    filename: 'contract-paradiso-night-09122026.pdf',
+  })
 })
 
 describe('GigDocumentMenu', () => {
-  it('offers both generated PDFs to a finance viewer once the menu is open', async () => {
+  it('offers all generated PDFs to a finance viewer once the menu is open', async () => {
     wrap(<GigDocumentMenu gig={GIG} canViewFinance />)
     expect(screen.queryByText('Itinerary / Timetable')).not.toBeInTheDocument()
     expect(screen.queryByText('Artist settlement')).not.toBeInTheDocument()
@@ -54,6 +59,7 @@ describe('GigDocumentMenu', () => {
     await openMenu()
     expect(screen.getByText('Itinerary / Timetable')).toBeInTheDocument()
     expect(screen.getByText('Artist settlement')).toBeInTheDocument()
+    expect(screen.getByText('Contract')).toBeInTheDocument()
   })
 
   it('keeps the finance-only settlement out of the menu for other members', async () => {
@@ -62,6 +68,7 @@ describe('GigDocumentMenu', () => {
 
     expect(screen.getByText('Itinerary / Timetable')).toBeInTheDocument()
     expect(screen.queryByText('Artist settlement')).not.toBeInTheDocument()
+    expect(screen.queryByText('Contract')).not.toBeInTheDocument()
   })
 
   it('downloads the itinerary PDF for the gig in the reader\'s language', async () => {
@@ -86,6 +93,16 @@ describe('GigDocumentMenu', () => {
     expect(downloadBlob.mock.calls[0][1]).toBe('artist-settlement-paradiso-night-09122026.pdf')
   })
 
+  it('downloads the live contract PDF for the gig in the reader\'s language', async () => {
+    wrap(<GigDocumentMenu gig={GIG} canViewFinance />)
+    await openMenu()
+    await userEvent.click(screen.getByText('Contract'))
+
+    await waitFor(() => expect(downloadGigContract).toHaveBeenCalledWith(7, expect.any(String)))
+    await waitFor(() => expect(downloadBlob).toHaveBeenCalledTimes(1))
+    expect(downloadBlob.mock.calls[0][1]).toBe('contract-paradiso-night-09122026.pdf')
+  })
+
   it('closes the menu after choosing a document', async () => {
     wrap(<GigDocumentMenu gig={GIG} />)
     await openMenu()
@@ -103,6 +120,18 @@ describe('GigDocumentMenu', () => {
     await userEvent.click(screen.getByText('Itinerary / Timetable'))
 
     await waitFor(() => expect(showToast).toHaveBeenCalledWith('Downloading the itinerary failed', 'error'))
+    expect(downloadBlob).not.toHaveBeenCalled()
+  })
+
+  it('shows contract-specific feedback when live contract generation fails', async () => {
+    const showToast = vi.fn()
+    downloadGigContract.mockRejectedValue(new Error('boom'))
+    wrap(<GigDocumentMenu gig={GIG} canViewFinance />, { showToast })
+
+    await openMenu()
+    await userEvent.click(screen.getByText('Contract'))
+
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Downloading the contract failed', 'error'))
     expect(downloadBlob).not.toHaveBeenCalled()
   })
 

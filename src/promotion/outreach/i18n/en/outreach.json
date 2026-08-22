@@ -24,7 +24,6 @@
     }
   },
   "deleteTitle": "Delete this template?",
-  "contracts": { "title": "Contracts", "generate": "Generate contract", "empty": "No contracts generated yet.", "download": "Preview / download", "countersign": "Mark countersigned", "email": "Email to venue", "noRecipient": "The venue has no contact who can receive this contract." },
   "campaigns": {
     "button": "History & suppressions", "title": "Outreach campaigns", "history": "History", "suppressions": "Suppressions",
     "id": "Campaign", "status": "Status", "created": "Created", "recipient": "Recipient", "email": "Email address",

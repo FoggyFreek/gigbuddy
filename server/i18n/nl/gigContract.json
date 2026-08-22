@@ -1,7 +1,5 @@
 {
   "documentTitle": "Optredenovereenkomst",
-  "reference": "Referentie {{reference}}",
-  "version": "Versie {{version}}",
   "agreement": "{{band}} en {{venue}} komen het optreden en de hieronder vermelde afspraken overeen.",
   "bandFallback": "De band",
   "venueFallback": "De locatie",

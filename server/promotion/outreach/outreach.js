@@ -2,7 +2,6 @@ import { Router } from 'express'
 import pool from '../../db/index.js'
 import templatesRouter from './templates.js'
 import campaignsRouter from './campaigns.js'
-import contractsRouter from './contracts.js'
 import { requirePermission } from '../../middleware/permissions.js'
 import { requireEntitlement } from '../../middleware/entitlements.js'
 import { PERMISSIONS } from '../../auth/permissions.js'
@@ -35,6 +34,5 @@ router.put('/sender', requireEntitlement(FEATURES.OUTREACH), requirePermission(P
   res.json(result.sender)
 })
 router.use('/campaigns', campaignsRouter)
-router.use('/contracts', contractsRouter)
 
 export default router

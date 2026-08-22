@@ -14,9 +14,9 @@ export async function fetchVenueForCampaign(executor, tenantId, venueId) {
 export async function insertCampaign(executor, tenantId, data) {
   const { rows } = await executor.query(
     `INSERT INTO outreach_campaigns (tenant_id, template_id, subject_snapshot, body_html_snapshot, body_text_snapshot,
-      from_name, from_email, reply_to, created_by_user_id, contract_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
-    [tenantId, data.templateId, data.subject, data.bodyHtml, data.bodyText, data.fromName, data.fromEmail, data.replyTo, data.userId, data.contractId],
+      from_name, from_email, reply_to, created_by_user_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [tenantId, data.templateId, data.subject, data.bodyHtml, data.bodyText, data.fromName, data.fromEmail, data.replyTo, data.userId],
   )
   return rows[0]
 }

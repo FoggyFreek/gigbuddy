@@ -86,6 +86,12 @@ export default function GigFinance({
     return () => controller.abort()
   }, [gigId, invoicesEnabled])
 
+  // A read-only view of the deal, so it only has to be right while on screen:
+  // rendering nothing while hidden keeps a keystroke in the Terms tab from
+  // recomputing the statement and walking its tiles. The component itself stays
+  // mounted, so the two reads above stay per gig rather than per visit.
+  if (!active) return null
+
   // Derived from the form rather than the saved row, so the statement tracks
   // what is being typed instead of lagging the debounced save.
   const dealTerms = dealTermsFromForm(form, costs)
@@ -113,7 +119,7 @@ export default function GigFinance({
 
   return (
     <>
-      <Box sx={{ display: active ? 'block' : 'none' }}>
+      <Box>
         <Grid container spacing={2} sx={{ mb: 2 }}>
           <ArtistStatement terms={dealTerms} costLineCount={costs.length} />
         </Grid>
