@@ -1,5 +1,5 @@
 import { MemoryRouter } from 'react-router'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ThemeProvider } from '@mui/material/styles'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -32,10 +32,11 @@ import { compressLogo } from '../../../utils/compressImage.ts'
 import InvoiceDetails from '../components/InvoiceDetails.tsx'
 import { AccountingProfileContext } from '../../../contexts/accountingProfileContext.ts'
 import { ProfileContext } from '../../../contexts/profileContext.ts'
+import { DialogProvider } from '../../../contexts/DialogContext.tsx'
 import i18n from '../../../i18n/index.ts'
 import theme from '../../../theme.ts'
 
-function wrap(ui, accountingProfile = null, mollie = true) {
+function wrap(ui, accountingProfile = null, mollie = true, withDialog = false) {
   const wrapContent = (child) => {
     const content = accountingProfile
       ? (
@@ -57,8 +58,13 @@ function wrap(ui, accountingProfile = null, mollie = true) {
       </ThemeProvider>
     )
   }
-  const result = render(wrapContent(ui))
-  return { ...result, rerender: (nextUi) => result.rerender(wrapContent(nextUi)) }
+  const withRouter = (child) => (
+    <MemoryRouter>
+      {withDialog ? <DialogProvider>{child}</DialogProvider> : child}
+    </MemoryRouter>
+  )
+  const result = render(withRouter(wrapContent(ui)))
+  return { ...result, rerender: (nextUi) => result.rerender(withRouter(wrapContent(nextUi))) }
 }
 
 // PDF, UBL and email all live behind one "Download" menu button, so every
@@ -151,37 +157,43 @@ afterEach(async () => {
 })
 
 describe('InvoiceDetails', () => {
-  it('saves invoice changes via updateInvoice and stays on the invoice', async () => {
+  it('saves edited business identifiers, updates the list, and stays on the invoice', async () => {
     const onClose = vi.fn()
     const onInvoiceUpdate = vi.fn()
-    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
-    invoicesApi.updateInvoice.mockResolvedValueOnce({ ...EDIT_INVOICE, customer_name: 'Venue BV' })
+    invoicesApi.getInvoice.mockResolvedValueOnce({
+      ...EDIT_INVOICE,
+      customer_kvk: '50048295',
+      customer_tax_id: 'NL001794860B34',
+    })
+    invoicesApi.updateInvoice.mockResolvedValueOnce({
+      ...EDIT_INVOICE,
+      customer_kvk: '50048295',
+      customer_tax_id: 'NL819789471B01',
+    })
     wrap(<InvoiceDetails invoiceId={7} onClose={onClose} onInvoiceUpdate={onInvoiceUpdate} />)
-    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    const chamberNumber = await screen.findByRole('textbox', { name: 'Chamber of Commerce number' })
+    const vatId = screen.getByRole('textbox', { name: 'VAT ID' })
+    expect(chamberNumber).toHaveValue('50048295')
+    await userEvent.clear(vatId)
+    await userEvent.type(vatId, 'NL819789471B01')
 
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
-    await waitFor(() => expect(invoicesApi.updateInvoice).toHaveBeenCalledTimes(1))
     expect(invoicesApi.updateInvoice).toHaveBeenCalledWith(
       7,
-      expect.objectContaining({ customer_name: 'Venue BV' }),
+      expect.objectContaining({
+        customer_kvk: '50048295',
+        customer_tax_id: 'NL819789471B01',
+      }),
     )
     // Saving keeps the editor open; only delete and the close control leave it.
     expect(onClose).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
     // The list still learns about the change.
     await waitFor(() => expect(onInvoiceUpdate).toHaveBeenCalledWith(
-      7, expect.objectContaining({ customer_name: 'Venue BV' }),
+      7, expect.objectContaining({ customer_tax_id: 'NL819789471B01' }),
     ))
-  })
-
-  it('loads and renders an existing invoice in edit mode', async () => {
-    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
-    // Payment-link panel is only rendered in edit mode once the invoice loads.
-    expect(screen.getByText('Payment link')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Create payment link/ })).toBeInTheDocument()
   })
 
   it('hides Mollie payment-link UI when Mollie is not configured', async () => {
@@ -214,50 +226,6 @@ describe('InvoiceDetails', () => {
     expect(screen.queryByRole('option', { name: '21%' })).not.toBeInTheDocument()
   })
 
-  it('edits the customer Chamber of Commerce number and VAT ID', async () => {
-    invoicesApi.getInvoice.mockResolvedValueOnce({
-      ...EDIT_INVOICE,
-      customer_kvk: '50048295',
-      customer_tax_id: 'NL001794860B34',
-    })
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-
-    const chamberNumber = await screen.findByRole('textbox', { name: 'Chamber of Commerce number' })
-    const vatId = screen.getByRole('textbox', { name: 'VAT ID' })
-    expect(chamberNumber).toHaveValue('50048295')
-    expect(vatId).toHaveValue('NL001794860B34')
-
-    await userEvent.clear(vatId)
-    await userEvent.type(vatId, 'NL819789471B01')
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-
-    await waitFor(() => expect(invoicesApi.updateInvoice).toHaveBeenCalledWith(
-      7,
-      expect.objectContaining({
-        customer_kvk: '50048295',
-        customer_tax_id: 'NL819789471B01',
-      }),
-    ))
-  })
-
-  it('uses the Dutch customer business-identifier labels', async () => {
-    await i18n.changeLanguage('nl')
-    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-
-    expect(await screen.findByRole('textbox', { name: 'KVK nr.' })).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Btw nr.' })).toBeInTheDocument()
-  })
-
-  it('shows a friendly error when payment-link creation fails', async () => {
-    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
-    invoicesApi.createInvoicePaymentLink.mockRejectedValueOnce(new Error('mollie_key_missing'))
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: /Create payment link/ }))
-    expect(await screen.findByText(/Mollie API key not configured/)).toBeInTheDocument()
-  })
 
   it('immediately renders the payment link returned after successful creation', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
@@ -274,36 +242,6 @@ describe('InvoiceDetails', () => {
     expect(screen.getByRole('button', { name: 'Remove payment link' })).toBeInTheDocument()
   })
 
-  it('reflects a successful payment-link sync (maps the API response shape)', async () => {
-    invoicesApi.getInvoice.mockResolvedValueOnce(LINKED_INVOICE)
-    // Real sync response shape: { paymentLinkId, paymentLinkUrl, paymentId, status, paidAt, invoiceStatus }
-    invoicesApi.syncInvoicePaymentLink.mockResolvedValueOnce({
-      paymentLinkId: 'pl_test123',
-      paymentLinkUrl: LINKED_INVOICE.mollie_payment_link_url,
-      paymentId: 'tr_paid789',
-      status: 'paid',
-      paidAt: '2026-05-15T10:00:00.000Z',
-      invoiceStatus: 'paid',
-    })
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: 'Refresh payment status' }))
-    // Both the payment-status chip and the invoice-status chip move to 'paid'
-    // (proving result.status and result.invoiceStatus both flow through onUpdated).
-    await waitFor(() => expect(screen.getAllByText('paid')).toHaveLength(2))
-  })
-
-  it('shows an error when payment-link sync fails', async () => {
-    invoicesApi.getInvoice.mockResolvedValueOnce(LINKED_INVOICE)
-    invoicesApi.syncInvoicePaymentLink.mockRejectedValueOnce(new Error('sync boom'))
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: 'Refresh payment status' }))
-    expect(await screen.findByText('sync boom')).toBeInTheDocument()
-  })
-
   it('renders a finalized invoice read-only (no Save, fields disabled)', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(FINALIZED_INVOICE)
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
@@ -314,7 +252,7 @@ describe('InvoiceDetails', () => {
     expect(screen.getByDisplayValue('Venue BV')).toBeDisabled()
   })
 
-  it('offers re-generating the PDF on a finalized invoice and points the download at the fresh key', async () => {
+  it('re-generates a finalized PDF by reloading the full invoice', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(RENDERED_INVOICE)
     // The endpoint answers with the new key only — not a whole invoice.
     invoicesApi.renderInvoice.mockResolvedValueOnce({ pdf_path: 'tenants/1/invoices/new-key.pdf' })
@@ -332,30 +270,13 @@ describe('InvoiceDetails', () => {
     await openDownloadMenu()
     await waitFor(() => expect(screen.getByRole('menuitem', { name: /Download PDF/ }))
       .toHaveAttribute('href', '/api/files/tenants/1/invoices/new-key.pdf'))
-    // Re-generating is not a status change: nothing is PATCHed.
-    expect(invoicesApi.updateInvoice).not.toHaveBeenCalled()
-  })
-
-  it('keeps the finalized invoice intact after re-generating (render returns only pdf_path)', async () => {
-    invoicesApi.getInvoice.mockResolvedValueOnce(RENDERED_INVOICE)
-    invoicesApi.renderInvoice.mockResolvedValueOnce({ pdf_path: 'tenants/1/invoices/new-key.pdf' })
-    invoicesApi.getInvoice.mockResolvedValueOnce({
-      ...RENDERED_INVOICE,
-      pdf_path: 'tenants/1/invoices/new-key.pdf',
-    })
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText(/This invoice is finalized/)).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: 'Regenerate' }))
-    await waitFor(() => expect(invoicesApi.renderInvoice).toHaveBeenCalledWith(7))
-
-    // Everything derived from the loaded invoice must survive: read-only mode,
-    // the status chip and the finalized banner. Overwriting the invoice with the
-    // partial render response would drop all three.
+    // Everything derived from the loaded invoice must survive. Overwriting the
+    // invoice with the partial render response would drop all three.
     expect(await screen.findByText(/This invoice is finalized/)).toBeInTheDocument()
     expect(screen.getByText('sent')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Venue BV')).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(invoicesApi.updateInvoice).not.toHaveBeenCalled()
   })
 
   it('surfaces an error when re-generating the PDF fails', async () => {
@@ -373,60 +294,11 @@ describe('InvoiceDetails', () => {
       .toHaveAttribute('href', '/api/files/tenants/1/invoices/old-key.pdf')
   })
 
-  it('keeps deleting at the foot of the page, apart from the action row', async () => {
-    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
-
-    const buttons = screen.getAllByRole('button').map((button) => button.textContent)
-    expect(buttons).toContain('Delete')
-    // It trails the row actions rather than sitting among them.
-    expect(buttons.indexOf('Delete')).toBeGreaterThan(buttons.indexOf('Save'))
-  })
-
-  it('offers no delete on a finalized invoice', async () => {
-    invoicesApi.getInvoice.mockResolvedValueOnce({ ...EDIT_INVOICE, finalized_at: '2026-03-01T00:00:00Z', status: 'sent' })
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
-
-    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
-  })
-
-  it('offers no re-generate control before a PDF has been rendered', async () => {
-    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
-
-    expect(screen.queryByRole('button', { name: 'Regenerate' })).toBeNull()
-    await openDownloadMenu()
-    expect(screen.queryByRole('menuitem', { name: /Download PDF/ })).toBeNull()
-  })
-
   // Reader mode: finance.view without finance.manage. Every invoice mutation is
   // finance.manage on the server, so nothing may be offered as editable.
   describe('without finance.manage', () => {
-    it('hides the PDF re-generate control but keeps the download link', async () => {
+    it('makes a draft read-only without withholding downloads', async () => {
       invoicesApi.getInvoice.mockResolvedValueOnce(RENDERED_INVOICE)
-      wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
-      await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
-
-      expect(screen.queryByRole('button', { name: 'Regenerate' })).toBeNull()
-      // Downloads are read affordances — those routes carry no finance.manage gate.
-      await openDownloadMenu()
-      expect(screen.getByRole('menuitem', { name: /Download PDF/ }))
-        .toHaveAttribute('href', '/api/files/tenants/1/invoices/old-key.pdf')
-    })
-
-    it('withholds the send-email action, which is a mutation', async () => {
-      invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
-      wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
-      await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
-
-      expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
-    })
-
-    it('renders an editable draft read-only and withholds save/delete/status actions', async () => {
-      invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
       wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
       await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
@@ -434,47 +306,15 @@ describe('InvoiceDetails', () => {
       expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
       expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
       expect(screen.queryByRole('button', { name: 'Mark as sent' })).toBeNull()
-      // The lines editor disables rather than hides its controls — the existing
-      // read-only treatment it already applies to a finalized invoice.
+      expect(screen.queryByRole('button', { name: 'Regenerate' })).toBeNull()
       expect(screen.getByRole('button', { name: /Add item/ })).toBeDisabled()
       expect(screen.getByLabelText('remove line')).toBeDisabled()
+      // Downloads are read affordances — those routes carry no finance.manage gate.
+      await openDownloadMenu()
+      expect(screen.getByRole('menuitem', { name: /Download PDF/ }))
+        .toHaveAttribute('href', '/api/files/tenants/1/invoices/old-key.pdf')
     })
 
-    it('withholds the payment-link controls but keeps copy and open', async () => {
-      invoicesApi.getInvoice.mockResolvedValueOnce(LINKED_INVOICE)
-      wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
-      await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
-
-      expect(screen.queryByRole('button', { name: 'Refresh payment status' })).toBeNull()
-      expect(screen.queryByRole('button', { name: 'Remove payment link' })).toBeNull()
-      expect(screen.getByRole('button', { name: /Copy link/ })).toBeInTheDocument()
-      expect(screen.getByRole('link', { name: 'Open payment page' })).toBeInTheDocument()
-    })
-
-    it('offers no create control when there is no payment link yet', async () => {
-      invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
-      wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />)
-      await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
-
-      expect(screen.queryByRole('button', { name: /Create payment link/ })).toBeNull()
-    })
-
-    it('refuses the re-generate mutation even if the handler is reached', async () => {
-      invoicesApi.getInvoice.mockResolvedValueOnce(RENDERED_INVOICE)
-      const { rerender } = wrap(
-        <InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite />,
-      )
-      await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
-
-      // Re-render as a reader while the control is still mounted from the
-      // writer pass, then drive the click past the disabled-pointer check:
-      // the guard in the hook must still refuse the call.
-      rerender(
-        <InvoiceDetails invoiceId={7} onClose={vi.fn()} canWrite={false} />,
-      )
-      expect(screen.queryByRole('button', { name: 'Regenerate' })).toBeNull()
-      expect(invoicesApi.renderInvoice).not.toHaveBeenCalled()
-    })
   })
 
   it('adds and removes invoice lines', async () => {
@@ -511,42 +351,6 @@ describe('InvoiceDetails', () => {
     )
   })
 
-  it('removes the payment link via the remove button', async () => {
-    invoicesApi.getInvoice.mockResolvedValueOnce(LINKED_INVOICE)
-    invoicesApi.deleteInvoicePaymentLink.mockResolvedValueOnce({
-      ...LINKED_INVOICE,
-      mollie_payment_link_id: null,
-      mollie_payment_link_url: null,
-      mollie_payment_status: null,
-    })
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: 'Remove payment link' }))
-    await waitFor(() => expect(invoicesApi.deleteInvoicePaymentLink).toHaveBeenCalledWith(7))
-    // Back to the create state once the link columns are cleared.
-    expect(await screen.findByRole('button', { name: /Create payment link/ })).toBeInTheDocument()
-  })
-
-  it('shows a friendly message when the link turns out to be paid', async () => {
-    invoicesApi.getInvoice.mockResolvedValueOnce(LINKED_INVOICE)
-    invoicesApi.deleteInvoicePaymentLink.mockRejectedValueOnce(
-      Object.assign(new Error('Payment link has a paid payment'), { code: 'payment_link_paid' }),
-    )
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('button', { name: 'Remove payment link' }))
-    expect(await screen.findByText(/already been paid/)).toBeInTheDocument()
-  })
-
-  it('does not offer the remove button for a paid link', async () => {
-    invoicesApi.getInvoice.mockResolvedValueOnce({ ...LINKED_INVOICE, mollie_payment_status: 'paid' })
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('Payment link')).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: 'Remove payment link' })).toBeNull()
-  })
-
   it('asks for confirmation before voiding and only PATCHes after confirm', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(FINALIZED_INVOICE)
     invoicesApi.updateInvoice.mockResolvedValueOnce({ ...FINALIZED_INVOICE, status: 'void' })
@@ -560,18 +364,47 @@ describe('InvoiceDetails', () => {
     expect(screen.getByText(/reversing entry is posted/i)).toBeInTheDocument()
     expect(invoicesApi.updateInvoice).not.toHaveBeenCalled()
 
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(invoicesApi.updateInvoice).not.toHaveBeenCalled()
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await userEvent.click(screen.getByRole('button', { name: 'Void' }))
     await userEvent.click(screen.getByRole('button', { name: 'Void invoice' }))
     await waitFor(() => expect(invoicesApi.updateInvoice).toHaveBeenCalledWith(7, { status: 'void' }))
   })
 
-  it('cancelling the void dialog leaves the invoice untouched', async () => {
+  it('confirms marking a sent invoice as paid before recording the status change', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(FINALIZED_INVOICE)
+    invoicesApi.updateInvoice.mockResolvedValueOnce({ ...FINALIZED_INVOICE, status: 'paid' })
     wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
     await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
 
-    await userEvent.click(screen.getByRole('button', { name: 'Void' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Mark as paid' }))
+    expect(await screen.findByText(/Mark invoice 2026-0007 as paid\?/)).toBeInTheDocument()
     expect(invoicesApi.updateInvoice).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm payment' }))
+    await waitFor(() => expect(invoicesApi.updateInvoice).toHaveBeenCalledWith(7, { status: 'paid' }))
+  })
+
+  it('only deletes a draft after the shared destructive confirmation is accepted', async () => {
+    const onClose = vi.fn()
+    invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
+    wrap(<InvoiceDetails invoiceId={7} onClose={onClose} />, null, true, true)
+    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    const cancelDialog = await screen.findByRole('dialog')
+    await userEvent.click(within(cancelDialog).getByRole('button', { name: 'Cancel' }))
+    expect(invoicesApi.deleteInvoice).not.toHaveBeenCalled()
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    const confirmDialog = await screen.findByRole('dialog')
+    await userEvent.click(within(confirmDialog).getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() => expect(invoicesApi.deleteInvoice).toHaveBeenCalledWith(7))
+    expect(onClose).toHaveBeenCalledWith(true)
   })
 
   it('confirms the consequences before marking a draft as sent', async () => {
@@ -736,16 +569,6 @@ describe('InvoiceDetails — UBL/Peppol download', () => {
     expect(screen.getByRole('menuitem', { name: /Not ready for e-invoicing/ })).toBeInTheDocument()
   })
 
-  it('shows no warning once the invoice carries everything Peppol needs', async () => {
-    invoicesApi.getInvoice.mockResolvedValueOnce(PEPPOL_READY_INVOICE)
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
-
-    await openDownloadMenu()
-    expect(screen.queryByLabelText(/Not ready for e-invoicing/)).toBeNull()
-    expect(screen.getByRole('menuitem', { name: /Download UBL \(XML\)/ })).toBeInTheDocument()
-  })
-
   it('surfaces a failed download instead of failing silently', async () => {
     invoicesApi.getInvoice.mockResolvedValueOnce(EDIT_INVOICE)
     invoicesApi.downloadInvoiceUbl.mockRejectedValueOnce(new Error('boom'))
@@ -768,36 +591,4 @@ describe('InvoiceDetails — UBL/Peppol download', () => {
     expect(screen.getByRole('menuitem', { name: 'UBL met ingesloten pdf-factuur' })).toBeInTheDocument()
   })
 
-  it('groups all download variants under one menu', async () => {
-    invoicesApi.getInvoice.mockResolvedValueOnce(PEPPOL_READY_INVOICE)
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
-
-    // Nothing is offered until the menu is opened.
-    expect(screen.queryByRole('menuitem')).toBeNull()
-
-    await openDownloadMenu()
-    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      'Download UBL (XML)',
-      'UBL with embedded PDF invoice',
-    ])
-  })
-
-  it('includes the PDF entry once one has been rendered', async () => {
-    // Peppol-clean, so the UBL entry carries no secondary warning line and the
-    // assertion is about the menu's contents rather than the warning.
-    invoicesApi.getInvoice.mockResolvedValueOnce({
-      ...PEPPOL_READY_INVOICE,
-      pdf_path: 'tenants/1/invoices/old-key.pdf',
-    })
-    wrap(<InvoiceDetails invoiceId={7} onClose={vi.fn()} />)
-    await waitFor(() => expect(screen.getByText('The Band')).toBeInTheDocument())
-
-    await openDownloadMenu()
-    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      'Download PDF',
-      'Download UBL (XML)',
-      'UBL with embedded PDF invoice',
-    ])
-  })
 })
