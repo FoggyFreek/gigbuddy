@@ -8,7 +8,8 @@ import availabilityRouter from '../planning/availability/availability.js'
 import rehearsalsRouter from '../planning/rehearsals/rehearsals.js'
 import achievementsRouter from '../user/achievements/achievements.js'
 import bandEventsRouter from '../planning/events/bandEvents.js'
-import emailTemplatesRouter from '../people/profiles/emailTemplates.js'
+import outreachRouter from '../promotion/outreach/outreach.js'
+import gigContractsRouter from '../promotion/outreach/gigContracts.js'
 import venuesRouter from '../people/venues/venues.js'
 import contactsRouter from '../people/contacts/contacts.js'
 import songsRouter from '../music/songs/songs.js'
@@ -61,6 +62,7 @@ import publicMollieRouter from '../finance/invoices/publicMollie.js'
 import publicInvoicesRouter from '../finance/invoices/publicInvoices.js'
 import publicCalendarRouter from '../promotion/calendar-feed/publicCalendar.js'
 import publicLinkpageRouter from '../promotion/linkpage/publicLinkpage.js'
+import publicOutreachImagesRouter from '../promotion/outreach/publicOutreachImages.js'
 import linkpageRouter from '../promotion/linkpage/linkpage.js'
 import calendarFeedRouter from '../promotion/calendar-feed/calendarFeed.js'
 import { loadUser, requireApproved, requireCurrentTerms } from '../middleware/auth.js'
@@ -135,6 +137,18 @@ const publicWebhookLimiter = rateLimit({
   skip: () => isTest,
 })
 
+// Email providers proxy embedded images in bursts, so this public media route
+// needs substantially more headroom than webhooks while still bounding abuse.
+const publicMediaLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5000,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later' },
+  keyGenerator,
+  skip: () => isTest,
+})
+
 // The band directory answers questions about tenants the caller has no
 // membership in. The outstanding-request cap governs how many requests may be
 // OPEN; this limiter governs how fast someone may knock — and bounds scraping
@@ -184,6 +198,7 @@ router.use('/public/billing', publicWebhookLimiter, publicBillingMollieRouter)
 router.use('/public/invoices', publicWebhookLimiter, publicInvoicesRouter)
 router.use('/public/calendar', publicWebhookLimiter, publicCalendarRouter)
 router.use('/public/linkpage', publicWebhookLimiter, publicLinkpageRouter)
+router.use('/public/outreach', publicMediaLimiter, publicOutreachImagesRouter)
 
 router.use(apiLimiter)
 router.use(csrf)
@@ -270,6 +285,7 @@ router.use(
   requireEntitlement(FEATURES.CUSTOM_SLUG),
   tenantSettingsRouter,
 )
+router.use('/gigs/:gigId/contracts', tenantMember, gigContractsRouter)
 router.use('/gigs', tenantMember, myBandField, gigsRouter)
 router.use('/geocode', tenantMember, geocodeRouter)
 // The TomTom-backed lookup is a paid convenience: typing an address by hand is
@@ -289,7 +305,7 @@ router.use('/band-events', tenantMember, myBandField, bandEventsRouter)
 router.use('/my-bands', tenantMember, myBands, myBandsRouter)
 // Claiming a global band profile: band-only, and an administrative act.
 router.use('/band-profile-claims', tenantManage, bandProfileClaim, bandProfileClaimsRouter)
-router.use('/email-templates', tenantMember, emailTemplatesRouter)
+router.use('/outreach', tenantMember, outreachRouter)
 router.use('/venues', tenantMember, venuesRouter)
 router.use('/contacts', tenantMember, contactsRouter)
 router.use('/songs', tenantMember, songsRouter)

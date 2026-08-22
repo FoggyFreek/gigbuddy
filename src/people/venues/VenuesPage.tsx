@@ -13,12 +13,15 @@ import SplitView from '../../components/SplitView.tsx'
 import VenuesTable from './components/VenuesTable.tsx'
 import VenueFormModal from './components/VenueFormModal.tsx'
 import VenueImportDialog from './components/VenueImportDialog.tsx'
+import VenueCampaignDialogContent from '../../promotion/outreach/components/VenueCampaignDialogContent.tsx'
+import { useDialog } from '../../contexts/dialogContext.ts'
 import { listVenues } from './venues.ts'
 import type { Venue, Id } from '../../types/entities.ts'
 
 export default function VenuesPage() {
-  const { t } = useTranslation(['venues', 'common'])
+  const { t } = useTranslation(['venues', 'common', 'outreach'])
   const navigate = useNavigate()
+  const { closeDialog, showDialog } = useDialog()
   const { id: selectedIdParam } = useParams()
   const selectedId = selectedIdParam ? Number(selectedIdParam) : null
   const [modal, setModal] = useState<{ mode: 'create' } | null>(null)
@@ -68,6 +71,16 @@ export default function VenuesPage() {
     reload()
   }
 
+  function emailSelected(selected: Venue[]) {
+    void showDialog({
+      id: 'venue-email-campaign',
+      title: t($ => $.outreach.venueDialog.title),
+      body: <VenueCampaignDialogContent venues={selected} onClose={closeDialog} />,
+      actions: [],
+      maxWidth: 'md',
+    })
+  }
+
   return (
     <SplitView
       basePath="/venues"
@@ -108,6 +121,7 @@ export default function VenuesPage() {
           venues={venues}
           onRowClick={(v) => navigate(`/venues/${v.id}`)}
           selectedId={selectedId}
+          onEmailSelected={emailSelected}
         />
       )}
 

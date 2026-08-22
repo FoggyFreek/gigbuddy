@@ -26,6 +26,7 @@ import Divider from '@mui/material/Divider'
 import { useProfile } from '../../../../contexts/profileContext.ts'
 import type { IntegrationName } from '../../../../utils/integrations.ts'
 import { TENANT_CAPABILITIES } from '../../../../auth/tenantCapabilities.ts'
+import SenderIdentitySection from '../../../../promotion/outreach/components/SenderIdentitySection.tsx'
 
 // Shopify client ids aren't secret but are long; collapse the middle so the
 // display value doesn't eat the card's horizontal space.
@@ -656,9 +657,10 @@ interface SecretKeySectionProps {
     remove: string
   }
   mt?: number
+  additionalContent?: React.ReactNode
 }
 
-function SecretKeySection({ integration, api, invalidCode, logoLight, logoDark, alt, copy, mt }: Readonly<SecretKeySectionProps>) {
+function SecretKeySection({ integration, api, invalidCode, logoLight, logoDark, alt, copy, mt, additionalContent }: Readonly<SecretKeySectionProps>) {
   const { t } = useTranslation('settings')
   const { setIntegrationConfigured } = useProfile()
   const [status, setStatus] = useState<IntegrationSecretStatus | null>(null)
@@ -764,6 +766,12 @@ function SecretKeySection({ integration, api, invalidCode, logoLight, logoDark, 
           )}
         </Stack>
       )}
+      {additionalContent && (
+        <>
+          <Divider sx={{ my: 2 }} />
+          {additionalContent}
+        </>
+      )}
     </IntegrationCard>
   )
 }
@@ -816,6 +824,7 @@ export function ResendKeySection() {
         remove: t($ => $.resend.remove),
       }}
       mt={3}
+      additionalContent={<SenderIdentitySection />}
     />
   )
 }

@@ -25,6 +25,7 @@ const REQUIRED_FIELDS = ['name']
 
 const EMPTY_FORM = {
   name:     '',
+  first_name: '',
   email:    '',
   phone:    '',
   category: 'press',
@@ -56,6 +57,7 @@ export default function ContactFormModal({
   const { t } = useTranslation(['contacts', 'common'])
   const [form, setForm] = useState(() => ({
     name:     initial?.name ?? EMPTY_FORM.name,
+    first_name: initial?.first_name ?? EMPTY_FORM.first_name,
     email:    initial?.email ?? EMPTY_FORM.email,
     phone:    initial?.phone ?? EMPTY_FORM.phone,
     category: initial?.category ?? EMPTY_FORM.category,
@@ -85,6 +87,7 @@ export default function ContactFormModal({
       .then((c) => {
         setForm({
           name:     c.name || '',
+          first_name: c.first_name || '',
           email:    c.email || '',
           phone:    c.phone || '',
           category: c.category || 'press',
@@ -139,6 +142,7 @@ export default function ContactFormModal({
     if (Object.keys(errs).length) { setErrors(errs); return }
     const contact = await createContact({
       name:     form.name.trim(),
+      first_name: form.first_name.trim() || null,
       email:    form.email || null,
       phone:    form.phone || null,
       category: form.category,

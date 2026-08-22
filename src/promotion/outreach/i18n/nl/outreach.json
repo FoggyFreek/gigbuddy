@@ -1,0 +1,45 @@
+{
+  "title": "Sjablonen",
+  "locales": { "en": "Engels", "nl": "Nederlands" },
+  "table": { "name": "Naam", "subject": "Onderwerp", "locale": "Taal" },
+  "actions": {
+    "copy": "Sjabloon kopiëren", "delete": "Sjabloon verwijderen",
+    "copyTitle": "\"{{name}}\" kopiëren?", "copyBody": "Er wordt een nieuwe kopie van dit sjabloon gemaakt.", "copyConfirm": "Kopiëren",
+    "deleteTitle": "\"{{name}}\" verwijderen?"
+  },
+  "create": {
+    "button": "Nieuw sjabloon", "title": "Sjabloon maken", "name": "Naam", "nameRequired": "Naam is verplicht",
+    "startingPoint": "Startpunt", "blank": "Leeg"
+  },
+  "editor": {
+    "name": "Naam", "locale": "Taal", "subject": "Onderwerp", "edit": "Bewerken", "preview": "Voorbeeld", "mode": "Editormodus", "designProperties": "Ontwerpeigenschappen",
+    "alignment": { "left": "Links uitlijnen", "center": "Centreren", "right": "Rechts uitlijnen" },
+    "images": {
+      "library": "Sjablooninhoud", "mergeFields": "Velden", "title": "Beeld", "branding": "Huisstijl", "social": "Socialmedia-iconen",
+      "color": "Icoonkleur", "black": "Zwart", "white": "Wit", "configure": "Instellen in Profiel",
+      "items": {
+        "banner": "Bandbanner", "logo-light": "Logo voor lichte achtergrond", "logo-dark": "Logo voor donkere achtergrond", "avatar": "Bandavatar",
+        "facebook": "Facebook", "instagram": "Instagram", "tiktok": "TikTok", "youtube": "YouTube", "spotify": "Spotify", "bandsintown": "Bandsintown"
+      }
+    }
+  },
+  "deleteTitle": "Dit sjabloon verwijderen?",
+  "contracts": { "title": "Contracten", "generate": "Contract genereren", "empty": "Nog geen contracten gegenereerd.", "download": "Voorbeeld / downloaden", "countersign": "Markeer als ondertekend", "email": "Naar locatie e-mailen", "noRecipient": "De locatie heeft geen contactpersoon die dit contract kan ontvangen." },
+  "campaigns": {
+    "button": "Geschiedenis en blokkeringen", "title": "Outreachcampagnes", "history": "Geschiedenis", "suppressions": "Blokkeringen",
+    "id": "Campagne", "status": "Status", "created": "Aangemaakt", "recipient": "Ontvanger", "email": "E-mailadres",
+    "issue": "Probleem", "review": "Ontvangers controleren", "addSuppression": "Adres blokkeren", "removeSuppression": "Blokkering verwijderen"
+  },
+  "composer": {
+    "title": "Outreach opstellen", "template": "E-mailsjabloon", "review": "Ontvangers controleren",
+    "reviewNotice": "Controleer elk ingevuld onderwerp en alle overgeslagen ontvangers voordat je verzendt.",
+    "send": "Campagne verzenden", "noRecipients": "Selecteer minstens één locatie met een primair contact."
+  },
+  "venueDialog": {
+    "title": "Geselecteerde locaties e-mailen", "selection_one": "Stel een e-mail op voor {{count}} geselecteerde locatie.", "selection_other": "Stel een e-mail op voor {{count}} geselecteerde locaties.",
+    "addressSource": "Gebruik het e-mailadres van", "primaryContact": "Primair contact", "venueAddress": "Locatie / festival",
+    "noTemplates": "Maak eerst een e-mailsjabloon voor locaties voordat je een campagne verzendt.", "sent": "Campagne verzonden.",
+    "partial": "Campagne gedeeltelijk verzonden. Controleer de mislukte of overgeslagen ontvangers.",
+    "failed": "Campagne mislukt. Controleer de fouten bij ontvangers en probeer het opnieuw."
+  }
+}

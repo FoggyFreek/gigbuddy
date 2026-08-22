@@ -57,7 +57,8 @@
     "noResults": "Geen resultaten.",
     "selected_one": "{{count}} locatie geselecteerd",
     "selected_other": "{{count}} locaties geselecteerd",
-    "copyEmails": "E-mailadressen kopiëren (puntkomma-gescheiden)"
+    "copyEmails": "E-mailadressen kopiëren (puntkomma-gescheiden)",
+    "emailSelected": "Selectie e-mailen"
   },
   "detail": {
     "contactsHeading": "Contacten",

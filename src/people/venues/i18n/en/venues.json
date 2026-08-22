@@ -57,7 +57,8 @@
     "noResults": "No results.",
     "selected_one": "{{count}} venue selected",
     "selected_other": "{{count}} venues selected",
-    "copyEmails": "Copy email addresses (semicolon-separated)"
+    "copyEmails": "Copy email addresses (semicolon-separated)",
+    "emailSelected": "Email selected"
   },
   "detail": {
     "contactsHeading": "Contacts",

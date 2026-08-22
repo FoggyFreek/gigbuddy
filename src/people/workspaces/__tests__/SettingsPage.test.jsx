@@ -7,6 +7,7 @@ import { AuthContext } from '../../../contexts/authContext.ts'
 import SettingsPage from '../SettingsPage.tsx'
 import theme from '../../../theme.ts'
 import { clearResendKey, getBandsintownKey, setResendKey } from '../../profiles/profile.ts'
+import { getOutreachSender } from '../../../promotion/outreach/outreachSender.ts'
 import { updateActiveTenantSlug } from '../tenants.ts'
 
 vi.mock('../../../commerce/billing/billing.ts', async (importOriginal) => {
@@ -44,6 +45,12 @@ vi.mock('../../profiles/profile.ts', () => ({
   setShopifySecret: vi.fn(), clearShopifySecret: vi.fn(),
   setShopifyClientId: vi.fn(), clearShopifyClientId: vi.fn(),
   setShopifyDomain: vi.fn(),
+}))
+vi.mock('../../../promotion/outreach/outreachSender.ts', () => ({
+  getOutreachSender: vi.fn().mockResolvedValue({
+    fromName: 'The Testers', fromEmail: 'hello@example.com', replyTo: 'reply@example.com', configured: true,
+  }),
+  saveOutreachSender: vi.fn(),
 }))
 vi.mock('../../memberships/users.ts', async (importOriginal) => {
   const actual = await importOriginal()
@@ -272,6 +279,23 @@ describe('SettingsPage — plan gating', () => {
     const logo = await screen.findByAltText('Resend')
     expect(logo).toHaveAttribute('src', '/share/resend/resend-wordmark-light-256px.png')
     expect(logo.closest('.MuiPaper-outlined')).not.toBeNull()
+  })
+
+  it('keeps compact sender identity controls inside the Resend configuration card', async () => {
+    const user = userEvent.setup()
+    wrap('/settings/integrations', { entitlements: integrationsEntitlements })
+
+    const logo = await screen.findByAltText('Resend')
+    await user.click(within(logo.closest('.MuiPaper-outlined')).getByRole('button', { name: 'Add integration' }))
+    const card = (await screen.findByText('Send emails through Resend')).closest('.MuiPaper-outlined')
+    await getOutreachSender.mock.results[0]?.value
+
+    for (const label of ['From name', 'From email', 'Reply-to email (optional)']) {
+      const field = within(card).getByLabelText(label)
+      expect(field.closest('.MuiInputBase-root')).toHaveClass('MuiInputBase-sizeSmall')
+    }
+    expect(within(card).getByRole('button', { name: 'Save sender' })).toBeInTheDocument()
+    expect(within(card).queryByText('Save sender')).not.toBeInTheDocument()
   })
 
   it('configures and removes the Resend key without displaying its saved value', async () => {

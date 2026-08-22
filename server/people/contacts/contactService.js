@@ -100,12 +100,13 @@ export async function getContact(db, tenantId, contactId) {
 // ---------- writes ----------
 
 export async function createContact(db, tenantId, body) {
-  const { name, email, phone, category, iban, kvk_number: kvkNumber, tax_id: taxId } = body
+  const { name, first_name: firstName, email, phone, category, iban, kvk_number: kvkNumber, tax_id: taxId } = body
   if (!name || !String(name).trim()) return badRequest('name is required')
   const finalCategory = VALID_CATEGORIES.has(category) ? category : 'press'
   try {
     const contact = await insertContact(db, tenantId, {
       name: String(name).trim(),
+      firstName: firstName ? String(firstName).trim() : null,
       email: email || null,
       phone: phone || null,
       category: finalCategory,

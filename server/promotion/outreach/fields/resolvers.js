@@ -1,0 +1,26 @@
+export function resolveOutreachRawValues({ tenant = {}, venue = {}, contact = {} } = {}, { locale = 'nl' } = {}) {
+  return {
+    'band.name': tenant.display_name ?? tenant.band_name,
+    'band.short_bio': tenant.short_bio,
+    'band.bio': tenant.bio,
+    'band.city': tenant.address_city,
+    'band.formal_name': tenant.formal_name,
+    'band.kvk': tenant.kvk_number,
+    'band.tax_id': tenant.tax_id,
+    'band.spotify_handle': tenant.spotify_handle,
+    'band.youtube_handle': tenant.youtube_handle,
+    'band.tiktok_handle': tenant.tiktok_handle,
+    'band.instagram_handle': tenant.instagram_handle,
+    'band.facebook_handle': tenant.facebook_handle,
+    'band.bandsintown_artist_id': tenant.bandsintown_artist_id,
+    'venue.name': venue.name,
+    'venue.city': venue.city,
+    'venue.country': venue.country,
+    'venue.category': venue.category,
+    'venue.organization_name': venue.organization_name,
+    'venue.kvk_number': venue.kvk_number,
+    'venue.tax_id': venue.tax_id,
+    'contact.name': contact.name,
+    'contact.first_name': contact.first_name || (locale === 'nl' ? 'daar' : 'there'),
+  }
+}

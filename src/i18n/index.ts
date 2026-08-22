@@ -25,7 +25,7 @@ import enContacts from '../people/contacts/i18n/en/contacts.json'
 import enSuppliers from '../people/contacts/i18n/en/suppliers.json'
 import enVenues from '../people/venues/i18n/en/venues.json'
 import enPlaces from '../people/venues/i18n/en/places.json'
-import enEmailTemplates from '../people/profiles/i18n/en/emailTemplates.json'
+import enOutreach from '../promotion/outreach/i18n/en/outreach.json'
 import enInvoices from '../finance/invoices/i18n/en.json'
 import enPurchases from '../finance/purchases/i18n/en.json'
 import enMerch from '../commerce/merch/i18n/en.json'
@@ -64,7 +64,7 @@ import nlContacts from '../people/contacts/i18n/nl/contacts.json'
 import nlSuppliers from '../people/contacts/i18n/nl/suppliers.json'
 import nlVenues from '../people/venues/i18n/nl/venues.json'
 import nlPlaces from '../people/venues/i18n/nl/places.json'
-import nlEmailTemplates from '../people/profiles/i18n/nl/emailTemplates.json'
+import nlOutreach from '../promotion/outreach/i18n/nl/outreach.json'
 import nlInvoices from '../finance/invoices/i18n/nl.json'
 import nlPurchases from '../finance/purchases/i18n/nl.json'
 import nlMerch from '../commerce/merch/i18n/nl.json'
@@ -106,7 +106,7 @@ const en = {
   suppliers: enSuppliers,
   venues: enVenues,
   places: enPlaces,
-  emailTemplates: enEmailTemplates,
+  outreach: enOutreach,
   invoices: enInvoices,
   purchases: enPurchases,
   merch: enMerch,
@@ -155,7 +155,7 @@ const nl = {
   suppliers: nlSuppliers,
   venues: nlVenues,
   places: nlPlaces,
-  emailTemplates: nlEmailTemplates,
+  outreach: nlOutreach,
   invoices: nlInvoices,
   purchases: nlPurchases,
   merch: nlMerch,

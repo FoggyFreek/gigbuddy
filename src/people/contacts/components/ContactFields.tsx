@@ -11,6 +11,7 @@ import { ALL_CONTACT_CATEGORIES, contactIsSupplierLike, useContactCategoryLabel 
 interface ContactFieldsProps {
   form: {
     name: string
+    first_name?: string
     email: string
     phone: string
     category: string
@@ -30,19 +31,13 @@ export default function ContactFields({ form, onChange, errors = {}, categories 
   return (
     <>
       <Grid size={4}>
-        <FormControl fullWidth>
-          <InputLabel>{t($ => $.fields.category)}</InputLabel>
-          <Select
-            label={t($ => $.fields.category)}
-            value={form.category}
-            onChange={(e) => onChange('category', e.target.value)}
-            disabled={disabled}
-          >
-            {categories.map((cat) => (
-              <MenuItem key={cat} value={cat}>{categoryLabel(cat)}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <TextField
+          label={t($ => $.fields.firstName)}
+          fullWidth
+          value={form.first_name ?? ''}
+          onChange={(e) => onChange('first_name', e.target.value)}
+          slotProps={{ htmlInput: { readOnly: disabled } }}
+        />
       </Grid>
       <Grid size={8}>
         <TextField
@@ -74,6 +69,21 @@ export default function ContactFields({ form, onChange, errors = {}, categories 
           onChange={(e) => onChange('phone', e.target.value)}
           slotProps={{ htmlInput: { readOnly: disabled }, input: { endAdornment: <CopyAdornment value={form.phone} /> } }}
         />
+      </Grid>
+      <Grid size={6}>
+        <FormControl fullWidth>
+          <InputLabel>{t($ => $.fields.category)}</InputLabel>
+          <Select
+            label={t($ => $.fields.category)}
+            value={form.category}
+            onChange={(e) => onChange('category', e.target.value)}
+            disabled={disabled}
+          >
+            {categories.map((cat) => (
+              <MenuItem key={cat} value={cat}>{categoryLabel(cat)}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
       </Grid>
       {contactIsSupplierLike(form) && (
         <>

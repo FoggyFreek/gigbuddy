@@ -277,11 +277,20 @@
     "description": "Koppel Resend voor het versturen van e-mail vanuit je eigen domein binnen GigBuddy. De sleutel wordt veilig opgeslagen en na het opslaan nooit volledig getoond.",
     "label": "Resend-API-sleutel",
     "placeholder": "re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "helper": "Gebruik een Resend-sleutel met alleen verzendrechten en beperk deze waar mogelijk tot je geverifieerde verzenddomein.",
+    "helper": "Gebruik een sleutel met alleen verzendrechten die beperkt is tot je geverifieerde verzenddomein.",
     "invalidFormat": "Ongeldig sleutelformaat. Resend-API-sleutels beginnen met re_.",
     "saveFailed": "De sleutel kon niet worden opgeslagen. Probeer het opnieuw.",
     "replace": "Sleutel vervangen",
-    "remove": "Sleutel verwijderen"
+    "remove": "Sleutel verwijderen",
+    "sender": {
+      "title": "Afzenderidentiteit",
+      "description": "Sla een adres van je geverifieerde Resend-domein op. Resend valideert het domein wanneer elke e-mail wordt verzonden.",
+      "fromName": "Naam afzender",
+      "fromEmail": "E-mailadres afzender",
+      "replyTo": "Antwoordadres (optioneel)",
+      "saved": "Afzenderconfiguratie opgeslagen",
+      "save": "Afzender opslaan"
+    }
   },
   "accounting": {
     "title": "Boekhoudinstellingen",

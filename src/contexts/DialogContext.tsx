@@ -151,35 +151,37 @@ export function DialogProvider({ children }: Readonly<DialogProviderProps>) {
               : current.request.body}
           </DialogContent>
         )}
-        <DialogActions sx={{ flexWrap: 'wrap', justifyContent: 'space-between', px: 3, pb: 2 }}>
-          {current?.request.suppressible ? (
-            <FormControlLabel
-              control={(
-                <Checkbox
-                  size="small"
-                  checked={suppressChecked}
-                  onChange={(event) => setSuppressChecked(event.target.checked)}
-                />
-              )}
-              label={t($ => $.dontShowAgain)}
-              slotProps={{ typography: { variant: 'body2' } }}
-            />
-          ) : <span />}
-          <span>
-            {current?.request.actions.map((action) => (
-              <Button
-                key={action.id}
-                onClick={() => { void handleAction(action) }}
-                variant={action.variant}
-                color={action.color}
-                autoFocus={action.autoFocus}
-                sx={{ ml: 1 }}
-              >
-                {action.label}
-              </Button>
-            ))}
-          </span>
-        </DialogActions>
+        {(current?.request.suppressible || current?.request.actions.length) ? (
+          <DialogActions sx={{ flexWrap: 'wrap', justifyContent: 'space-between', px: 3, pb: 2 }}>
+            {current.request.suppressible ? (
+              <FormControlLabel
+                control={(
+                  <Checkbox
+                    size="small"
+                    checked={suppressChecked}
+                    onChange={(event) => setSuppressChecked(event.target.checked)}
+                  />
+                )}
+                label={t($ => $.dontShowAgain)}
+                slotProps={{ typography: { variant: 'body2' } }}
+              />
+            ) : <span />}
+            <span>
+              {current.request.actions.map((action) => (
+                <Button
+                  key={action.id}
+                  onClick={() => { void handleAction(action) }}
+                  variant={action.variant}
+                  color={action.color}
+                  autoFocus={action.autoFocus}
+                  sx={{ ml: 1 }}
+                >
+                  {action.label}
+                </Button>
+              ))}
+            </span>
+          </DialogActions>
+        ) : null}
       </Dialog>
     </DialogContext.Provider>
   )

@@ -35,7 +35,7 @@ export function parseCategoryInFilter(value) {
 // Builds SET fragments ($1..$N) for a contact PATCH. Empty strings normalize to
 // NULL. Returns { error } on an invalid category, or { fields, values }.
 export function buildContactUpdateFields(body) {
-  const allowed = ['name', 'email', 'phone', 'category', 'iban', 'kvk_number', 'tax_id']
+  const allowed = ['name', 'first_name', 'email', 'phone', 'category', 'iban', 'kvk_number', 'tax_id']
   const fields = []
   const values = []
   let idx = 1

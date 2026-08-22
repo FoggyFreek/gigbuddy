@@ -35,18 +35,15 @@ const COLUMN_COUNT = 6
 const ALL_CATEGORIES = ['venue', 'festival'] as const
 
 const COLUMNS = [
-  { id: 'category', labelKey: 'category' as const },
   { id: 'name',     labelKey: 'name' as const },
   { id: 'city',     labelKey: 'cityCountry' as const },
   { id: 'contact',  labelKey: 'contact' as const },
+  { id: 'category', labelKey: 'category' as const },
   { id: 'years',    labelKey: 'performed' as const, sortable: false },
 ]
 
-// Extended venue shape used within VenuesTable (email/phone are included in
-// the list endpoint but not in the canonical display Venue type).
 interface VenueRow extends Venue {
-  email?: string
-  phone?: string
+  phone?: string | null
 }
 
 function contactName(venue: VenueRow): string {
@@ -171,9 +168,10 @@ interface VenuesTableProps {
   venues: VenueRow[]
   onRowClick: (venue: VenueRow) => void
   selectedId?: Id | null
+  onEmailSelected?: (venues: VenueRow[]) => void
 }
 
-export default function VenuesTable({ venues, onRowClick, selectedId = null }: Readonly<VenuesTableProps>) {
+export default function VenuesTable({ venues, onRowClick, selectedId = null, onEmailSelected }: Readonly<VenuesTableProps>) {
   const { t } = useTranslation('venues')
   const categoryLabel = (category: string) =>
     category === 'festival' ? t($ => $.category.festivalPlural) : t($ => $.category.venuePlural)
@@ -273,6 +271,9 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: R
           <ContentCopyIcon fontSize="small" />
         </IconButton>
       </Tooltip>
+      {onEmailSelected && <Button size="small" variant="contained" onClick={() => onEmailSelected(sorted.filter((venue) => venue.id !== undefined && selected.has(venue.id)))}>
+        {t($ => $.table.emailSelected)}
+      </Button>}
     </Box>
   )
 
@@ -445,10 +446,10 @@ export default function VenuesTable({ venues, onRowClick, selectedId = null }: R
                       onClick={(e) => e.stopPropagation()}
                     />
                   </TableCell>
-                  <TableCell><CategoryChip category={v.category} /></TableCell>
                   <TableCell>{displayName(v)}</TableCell>
                   <TableCell>{cityCountry(v)}</TableCell>
                   <TableCell>{contactName(v)}</TableCell>
+                  <TableCell><CategoryChip category={v.category} /></TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                       {(v.years ?? []).map((yr) => (

@@ -50,6 +50,7 @@ const REQUIRED_FIELDS = ['name']
 interface ContactForm {
   [key: string]: unknown
   name: string
+  first_name: string
   email: string
   phone: string
   category: string
@@ -94,6 +95,7 @@ export default function ContactDetailPage() {
 
   const [form, setForm] = useState<ContactForm>({
     name: '',
+    first_name: '',
     email: '',
     phone: '',
     category: 'press',
@@ -140,6 +142,7 @@ export default function ContactDetailPage() {
         }
         setForm({
           name:     c.name || '',
+          first_name: c.first_name || '',
           email:    c.email || '',
           phone:    c.phone || '',
           category: c.category || 'press',

@@ -656,6 +656,7 @@ const GigDetailContent = forwardRef<GigDetailHandle, GigDetailContentProps>(func
 
       {ownRow && (
         <GigTerms
+          gigId={gigId}
           active={shownTab === 'terms'}
           editable={editable}
           form={form}

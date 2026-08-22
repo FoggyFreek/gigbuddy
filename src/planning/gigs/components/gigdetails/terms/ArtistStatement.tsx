@@ -123,7 +123,7 @@ export default function ArtistStatement({ terms, costLineCount }: Readonly<Props
 
   return (
     <Grid size={12} data-testid="artist-statement">
-      <Typography variant="subtitle2" sx={{ fontWeight: 600, mt: 1, mb: 1 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 600,  mb: 1 }}>
         {t($ => $.detail.deal.statement.title)}
       </Typography>
 

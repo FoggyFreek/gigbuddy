@@ -15,9 +15,11 @@ import { dealTermsFromForm } from './gigFormFields.ts'
 import { usePermissions } from '../../../../hooks/usePermissions.ts'
 import type { CostPaidBy, GigCost, Id } from '../../../../types/entities.ts'
 import type { GigDetailForm } from './types.ts'
+import GigContractsSection from '../../../../promotion/outreach/components/GigContractsSection.tsx'
 
 interface Props {
   active: boolean
+  gigId: Id
   editable: boolean
   form: GigDetailForm
   costs: GigCost[]
@@ -29,6 +31,7 @@ interface Props {
 
 export default function GigTerms({
   active,
+  gigId,
   editable,
   form,
   costs,
@@ -98,6 +101,7 @@ export default function GigTerms({
             <TaxesSection editable={editable} form={form} onChange={onChange} />
           </>
         )}
+      {canViewFinance && <GigContractsSection gigId={gigId} venueId={form.venue_id || undefined} />}
       </Grid>
     </Box>
   )

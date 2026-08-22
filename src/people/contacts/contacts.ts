@@ -36,7 +36,7 @@ export const searchContacts = (
   return api<Contact[]>(`/search?${params}`)
 }
 export const checkContactDuplicates = (
-  body: Pick<Contact, 'name' | 'email' | 'category' | 'iban'>,
+  body: Pick<Contact, 'name' | 'first_name' | 'email' | 'category' | 'iban'>,
   options: Pick<RequestInit, 'signal'> = {},
 ) =>
   api<LimitedCollectionResponse<DuplicateEntityMatch>>('/duplicate-check', {

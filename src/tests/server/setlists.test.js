@@ -671,3 +671,118 @@ describe('GET /api/setlists/search', () => {
     expect(res.body).toEqual([])
   })
 })
+
+describe('POST /api/setlists/:id/copy', () => {
+  // A setlist with two sets: songs + a pause, a segue link, and a second set
+  // excluded from the total — enough structure to prove the copy is faithful.
+  async function setupRichSetlist(name = 'Main Set') {
+    const setlist = await createSetlistA(name)
+    const tree = await asUserA(request(app).get(`/api/setlists/${setlist.id}`)).expect(200)
+    const set1 = tree.body.sets[0].id
+    const songs = [
+      await createSong(seed.tenantA.id, 'One', 100),
+      await createSong(seed.tenantA.id, 'Two', 200),
+    ]
+    const items = []
+    for (const song of songs) {
+      items.push((await asUserA(request(app).post(`/api/setlists/${setlist.id}/sets/${set1}/items`)
+        .send({ item_type: 'song', song_id: song.id })).expect(201)).body)
+    }
+    await asUserA(request(app).post(`/api/setlists/${setlist.id}/sets/${set1}/items`)
+      .send({ item_type: 'pause', duration_seconds: 300, label: 'Tuning' })).expect(201)
+    await asUserA(request(app).patch(`/api/setlists/${setlist.id}/items/${items[0].id}`)
+      .send({ linked_to_next: true, transition_note: 'straight in' })).expect(200)
+
+    const set2 = (await asUserA(request(app).post(`/api/setlists/${setlist.id}/sets`)
+      .send({ name: 'Encore' })).expect(201)).body
+    await asUserA(request(app).patch(`/api/setlists/${setlist.id}/sets/${set2.id}`)
+      .send({ include_in_total: false })).expect(200)
+
+    return { setlist, set1, items }
+  }
+
+  const copy = (id) => asUserA(request(app).post(`/api/setlists/${id}/copy`))
+
+  it('names the copy "{name} Copy" and duplicates sets and items', async () => {
+    const { setlist } = await setupRichSetlist()
+    const created = (await copy(setlist.id).expect(201)).body
+    expect(created.name).toBe('Main Set Copy')
+    expect(created.id).not.toBe(setlist.id)
+
+    const source = (await asUserA(request(app).get(`/api/setlists/${setlist.id}`)).expect(200)).body
+    const clone = (await asUserA(request(app).get(`/api/setlists/${created.id}`)).expect(200)).body
+
+    const shape = (tree) => tree.sets.map((s) => ({
+      name: s.name,
+      include_in_total: s.include_in_total,
+      sort_order: s.sort_order,
+      items: s.items.map((i) => ({
+        item_type: i.item_type,
+        song_id: i.song_id,
+        duration_seconds: i.duration_seconds,
+        label: i.label,
+        sort_order: i.sort_order,
+        linked_to_next: i.linked_to_next,
+        transition_note: i.transition_note,
+      })),
+    }))
+    expect(shape(clone)).toEqual(shape(source))
+    // Fresh rows, not the source's.
+    const sourceItemIds = source.sets.flatMap((s) => s.items.map((i) => i.id))
+    const cloneItemIds = clone.sets.flatMap((s) => s.items.map((i) => i.id))
+    expect(cloneItemIds.some((id) => sourceItemIds.includes(id))).toBe(false)
+  })
+
+  it('numbers consecutive copies of the same setlist', async () => {
+    const setlist = await createSetlistA('Main Set')
+    expect((await copy(setlist.id).expect(201)).body.name).toBe('Main Set Copy')
+    expect((await copy(setlist.id).expect(201)).body.name).toBe('Main Set Copy(1)')
+    expect((await copy(setlist.id).expect(201)).body.name).toBe('Main Set Copy(2)')
+  })
+
+  it('copies a copy as a sibling rather than stacking "Copy Copy"', async () => {
+    const setlist = await createSetlistA('Main Set')
+    const first = (await copy(setlist.id).expect(201)).body
+    expect((await copy(first.id).expect(201)).body.name).toBe('Main Set Copy(1)')
+  })
+
+  it('carries the assigned chart across to the copy', async () => {
+    const song = await createSong(seed.tenantA.id, 'Charted', 100)
+    const chart = (await pool.query(
+      `INSERT INTO song_chordpro_charts (song_id, tenant_id, name, source)
+       VALUES ($1, $2, $3, $4) RETURNING id`,
+      [song.id, seed.tenantA.id, 'Live version', '{title: Charted}'],
+    )).rows[0]
+    const setlist = await createSetlistA('Charted Set')
+    const tree = await asUserA(request(app).get(`/api/setlists/${setlist.id}`)).expect(200)
+    const item = (await asUserA(request(app).post(`/api/setlists/${setlist.id}/sets/${tree.body.sets[0].id}/items`)
+      .send({ item_type: 'song', song_id: song.id })).expect(201)).body
+    await asUserA(request(app).patch(`/api/setlists/${setlist.id}/items/${item.id}`)
+      .send({ chart_id: chart.id })).expect(200)
+
+    const created = (await copy(setlist.id).expect(201)).body
+    const clone = (await asUserA(request(app).get(`/api/setlists/${created.id}`)).expect(200)).body
+    expect(clone.sets[0].items[0].chart_id).toBe(chart.id)
+    expect(clone.sets[0].items[0].chart_name).toBe('Live version')
+  })
+
+  it('leaves personal notes behind — a copy starts with none', async () => {
+    const { setlist, items } = await setupRichSetlist('Noted')
+    await asUserA(request(app).put(`/api/setlists/${setlist.id}/items/${items[0].id}/note`)
+      .send({ note: 'capo 2' })).expect(200)
+
+    const created = (await copy(setlist.id).expect(201)).body
+    const clone = (await asUserA(request(app).get(`/api/setlists/${created.id}`)).expect(200)).body
+    expect(clone.sets[0].items.every((i) => i.my_note === null)).toBe(true)
+  })
+
+  it('404s (no leak) when copying another tenant\'s setlist', async () => {
+    const { rows } = await pool.query(
+      'INSERT INTO setlists (tenant_id, name) VALUES ($1, $2) RETURNING id',
+      [seed.tenantB.id, 'B list'],
+    )
+    await copy(rows[0].id).expect(404)
+    const list = await asUserA(request(app).get('/api/setlists')).expect(200)
+    expect(list.body).toEqual([])
+  })
+})

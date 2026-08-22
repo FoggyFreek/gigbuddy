@@ -277,11 +277,17 @@
     "description": "Connect Resend for email delivery from your own domain from GigBuddy. The key is stored securely and never shown in full after saving.",
     "label": "Resend API key",
     "placeholder": "re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-    "helper": "Use a sending-access key from Resend, restricted to your verified sending domain when possible.",
+    "helper": "Use a Sending access key restricted to your verified sending domain.",
     "invalidFormat": "Invalid key format. Resend API keys start with re_.",
     "saveFailed": "Failed to save key. Please try again.",
     "replace": "Replace key",
-    "remove": "Remove key"
+    "remove": "Remove key",
+    "sender": {
+      "title": "Sender identity",
+      "description": "Save an address from your verified Resend domain. Resend validates the domain when each email is sent.",
+      "fromName": "From name", "fromEmail": "From email", "replyTo": "Reply-to email (optional)",
+      "saved": "Sender configuration saved", "save": "Save sender"
+    }
   },
   "accounting": {
     "title": "Accounting Settings",

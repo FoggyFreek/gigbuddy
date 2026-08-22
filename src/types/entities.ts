@@ -28,6 +28,9 @@ export interface Venue {
   postal_code?: string
   country?: string
   primary_contact_name?: string
+  primary_contact_id?: Id | null
+    primary_contact_email?: string | null
+    email?: string | null
   years?: number[]
   is_primary?: boolean
   latitude?: number | null
@@ -479,8 +482,9 @@ export interface NotificationPrefs {
 }
 
 export interface Contact {
-  id?: Id
-  name?: string
+    id?: Id
+    name?: string
+    first_name?: string | null
   email?: string | null
   phone?: string | null
   category?: string

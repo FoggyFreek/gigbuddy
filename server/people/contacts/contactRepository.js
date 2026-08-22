@@ -106,6 +106,7 @@ export async function contactExistsInTenant(executor, contactId, tenantId) {
 
 export async function insertContact(executor, tenantId, {
   name,
+  firstName = null,
   email,
   phone,
   category,
@@ -114,10 +115,10 @@ export async function insertContact(executor, tenantId, {
   taxId = null,
 }) {
   const { rows } = await executor.query(
-    `INSERT INTO contacts (tenant_id, name, email, phone, category, iban, kvk_number, tax_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO contacts (tenant_id, name, first_name, email, phone, category, iban, kvk_number, tax_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [tenantId, name, email, phone, category, iban, kvkNumber, taxId],
+    [tenantId, name, firstName, email, phone, category, iban, kvkNumber, taxId],
   )
   return rows[0]
 }

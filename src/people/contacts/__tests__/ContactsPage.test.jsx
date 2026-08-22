@@ -103,12 +103,13 @@ describe('ContactsPage — split-view list refresh', () => {
     await screen.findByText(/no suppliers yet/i)
     await user.click(screen.getByRole('button', { name: /^add$/i }))
     const dialog = await screen.findByRole('dialog')
-    await user.type(within(dialog).getByLabelText(/name/i), 'Studio X')
+    await user.type(within(dialog).getByLabelText(/^name/i), 'Studio X')
     await user.click(within(dialog).getByRole('button', { name: /^add supplier$/i }))
 
     await waitFor(() => {
       expect(createContact).toHaveBeenCalledWith({
         name: 'Studio X',
+        first_name: null,
         email: null,
         phone: null,
         category: 'supplier',

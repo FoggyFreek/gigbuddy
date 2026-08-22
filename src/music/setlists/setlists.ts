@@ -12,6 +12,9 @@ export const searchSetlists = (q: string) =>
 export const getSetlist = (id: Id) => api<Setlist>(`/${id}`)
 export const createSetlist = (body: Partial<Setlist>) =>
   api<Setlist>('/', { method: 'POST', body: JSON.stringify(body) })
+// Duplicates the setlist with all of its sets and items; the server names the
+// copy ("{name} Copy", then "{name} Copy(1)", …).
+export const copySetlist = (id: Id) => api<Setlist>(`/${id}/copy`, { method: 'POST' })
 export const updateSetlist = (id: Id, body: Partial<Setlist>) =>
   api<Setlist>(`/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 export const deleteSetlist = (id: Id) => api<void>(`/${id}`, { method: 'DELETE' })

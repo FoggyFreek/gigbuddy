@@ -28,6 +28,16 @@ export async function listVenues(executor, tenantId) {
                JOIN contacts c ON c.id = vc.contact_id AND c.tenant_id = vc.tenant_id
               WHERE vc.venue_id = v.id AND vc.tenant_id = v.tenant_id AND vc.is_primary
               LIMIT 1) AS primary_contact_name,
+            (SELECT c.id
+               FROM venue_contacts vc
+               JOIN contacts c ON c.id = vc.contact_id AND c.tenant_id = vc.tenant_id
+              WHERE vc.venue_id = v.id AND vc.tenant_id = v.tenant_id AND vc.is_primary
+              LIMIT 1) AS primary_contact_id,
+            (SELECT c.email
+               FROM venue_contacts vc
+               JOIN contacts c ON c.id = vc.contact_id AND c.tenant_id = vc.tenant_id
+              WHERE vc.venue_id = v.id AND vc.tenant_id = v.tenant_id AND vc.is_primary
+              LIMIT 1) AS primary_contact_email,
             COALESCE(
               (SELECT ARRAY_AGG(year ORDER BY year)
                  FROM (

@@ -5,7 +5,14 @@
     "setCount_one": "{{count}} set",
     "setCount_other": "{{count}} sets",
     "songCount_one": "{{count}} song",
-    "songCount_other": "{{count}} songs"
+    "songCount_other": "{{count}} songs",
+    "copy": "Kopiëren",
+    "copyAria": "setlijst {{name}} kopiëren"
+  },
+  "copyConfirm": {
+    "title": "Deze setlijst kopiëren?",
+    "body": "Een kopie van “{{name}}” met alle sets en songs wordt aan je setlijsten toegevoegd.",
+    "confirm": "Kopiëren"
   },
   "create": {
     "title": "Nieuwe setlijst",
@@ -115,6 +122,7 @@
     "addItem": "Item toevoegen mislukt",
     "deleteItem": "Item verwijderen mislukt",
     "saveChanges": "Wijzigingen opslaan mislukt",
-    "saveNote": "Notitie opslaan mislukt"
+    "saveNote": "Notitie opslaan mislukt",
+    "copySetlist": "Setlijst kopiëren mislukt"
   }
 }

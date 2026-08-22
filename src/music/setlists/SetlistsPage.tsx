@@ -12,19 +12,25 @@ import Grid from '@mui/material/Grid'
 import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 import AddIcon from '@mui/icons-material/Add'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import QueueMusicIcon from '@mui/icons-material/QueueMusic'
-import { createSetlist, listSetlists } from './setlists.ts'
+import { copySetlist, createSetlist, listSetlists } from './setlists.ts'
 import { formatDuration } from '../../utils/formatDuration.ts'
 import { usePermissions } from '../../hooks/usePermissions.ts'
+import { useToast } from '../../contexts/toastContext.ts'
+import { useDialog } from '../../contexts/dialogContext.ts'
 import type { Setlist } from '../../types/entities.ts'
 
 interface SetlistCardProps {
   setlist: Setlist
   onClick: () => void
+  onCopy?: () => void
 }
 
-function SetlistCard({ setlist, onClick }: Readonly<SetlistCardProps>) {
+function SetlistCard({ setlist, onClick, onCopy }: Readonly<SetlistCardProps>) {
   const { t } = useTranslation('setlists')
   const parts = [
     t($ => $.list.setCount, { count: setlist.set_count ?? 0 }),
@@ -45,14 +51,25 @@ function SetlistCard({ setlist, onClick }: Readonly<SetlistCardProps>) {
       }}
     >
       <QueueMusicIcon color="primary" />
-      <Box sx={{ minWidth: 0 }}>
+      <Box sx={{ minWidth: 0, flexGrow: 1 }}>
         <Typography variant="subtitle1" sx={{ fontWeight: 600 }} noWrap>
           {setlist.name}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
           {parts.join(' · ')}
         </Typography>
       </Box>
+      {onCopy && (
+        <Tooltip title={t($ => $.list.copy)}>
+          <IconButton
+            size="small"
+            aria-label={t($ => $.list.copyAria, { name: setlist.name })}
+            onClick={(e) => { e.stopPropagation(); onCopy() }}
+          >
+            <ContentCopyIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      )}
     </Paper>
   )
 }
@@ -61,6 +78,8 @@ export default function SetlistsPage() {
   const { t } = useTranslation(['setlists', 'common'])
   const { canWritePlanning } = usePermissions()
   const navigate = useNavigate()
+  const showToast = useToast()
+  const { confirm } = useDialog()
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
 
@@ -94,6 +113,23 @@ export default function SetlistsPage() {
     navigate(`/setlists/${setlist.id}`)
   }
 
+  // The copy lands under a server-chosen name ("{name} Copy"), so the list is
+  // reloaded rather than patched — that also refreshes its aggregates.
+  async function handleCopy(setlist: Setlist) {
+    const confirmed = await confirm({
+      title: t($ => $.copyConfirm.title),
+      body: t($ => $.copyConfirm.body, { name: setlist.name }),
+      confirmLabel: t($ => $.copyConfirm.confirm),
+    })
+    if (!confirmed) return
+    try {
+      await copySetlist(setlist.id!)
+      setSetlistsState({ setlists: await listSetlists() as Setlist[], error: null })
+    } catch {
+      showToast?.(t($ => $.toast.copySetlist), 'error')
+    }
+  }
+
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1 }}>
@@ -124,7 +160,11 @@ export default function SetlistsPage() {
         <Grid container spacing={2}>
           {setlists.map((s) => (
             <Grid size={{ xs: 12, sm: 6, md: 4 }} key={String(s.id)}>
-              <SetlistCard setlist={s} onClick={() => navigate(`/setlists/${s.id}`)} />
+              <SetlistCard
+                setlist={s}
+                onClick={() => navigate(`/setlists/${s.id}`)}
+                onCopy={canWritePlanning ? () => handleCopy(s) : undefined}
+              />
             </Grid>
           ))}
         </Grid>

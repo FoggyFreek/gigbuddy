@@ -86,7 +86,7 @@ type NavGroupKey = 'overview' | 'planning' | 'repertoire' | 'network' | 'financi
 type NavItemKey =
   | 'dashboard' | 'financial' | 'profile' | 'availability' | 'gigs' | 'rehearsals'
   | 'bandEvents' | 'tasks' | 'songs' | 'setlists' | 'contacts' | 'suppliers'
-  | 'venues' | 'myBands' | 'emailTemplates' | 'invoices' | 'purchases' | 'merch' | 'reimbursements'
+  | 'venues' | 'myBands' | 'outreachTemplates' | 'invoices' | 'purchases' | 'merch' | 'reimbursements'
   | 'journal' | 'ledger' | 'ledgerEntries' | 'vatReturns' | 'reports'
 
 interface NavChildEntry {
@@ -153,7 +153,7 @@ const NAV_GROUPS: NavGroupEntry[] = [
       { to: '/contacts', i18nKey: 'contacts', icon: ContactsOutlined },
       { to: '/suppliers', i18nKey: 'suppliers', icon: StorefrontOutlined },
       { to: '/venues', i18nKey: 'venues', icon: LocationOnOutlined },
-      { to: '/email-templates', i18nKey: 'emailTemplates', icon: EmailOutlined },
+      { to: '/outreach/templates', i18nKey: 'outreachTemplates', icon: EmailOutlined, feature: FEATURES.OUTREACH },
     ],
   },
   {
