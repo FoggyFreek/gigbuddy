@@ -17,6 +17,16 @@
 -- deployment drops the trigger and the old column (see the contract note below).
 ALTER TABLE gigs ADD COLUMN guaranteed_fee_cents INTEGER;
 
+-- Migration 175 deliberately left legacy overnight gigs unvalidated while
+-- introducing the end-date constraint. Any UPDATE rechecks it, so repair
+-- those rows before the fee backfill below updates every gig.
+UPDATE gigs
+   SET end_date = event_date + 1
+ WHERE end_date = event_date
+   AND start_time IS NOT NULL
+   AND end_time IS NOT NULL
+   AND end_time < start_time;
+
 UPDATE gigs SET guaranteed_fee_cents = booking_fee_cents;
 
 CREATE OR REPLACE FUNCTION gigs_sync_guaranteed_fee() RETURNS TRIGGER AS $$
