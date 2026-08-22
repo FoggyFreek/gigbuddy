@@ -19,7 +19,7 @@
     "test": "npm run build:gig-deal-phase-a-golden && vitest --exclude src/tests/server",
     "test:server": "vitest run --config vitest.server.config.js src/tests/server",
     "test:ui": "vitest --ui",
-    "coverage": "vitest run --exclude src/tests/server --coverage",
+    "coverage": "vitest run --exclude src/tests/server --exclude src/planning/gigs/__tests__/gigDealPhaseAGolden.test.js --coverage",
     "coverage:server": "vitest run --config vitest.server.config.js src/tests/server --coverage",
     "build:schematron": "node scripts/build-schematron.mjs",
     "build:ubl-goldens": "node scripts/build-ubl-goldens.mjs",

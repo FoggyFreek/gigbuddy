@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import pool from './db/index.js'
 import routes from './app/apiRouter.js'
+import { staticAssets } from './app/staticAssets.js'
 import { initOidc } from './oidc.js'
 import { securityHeaders } from './middleware/securityHeaders.js'
 import { validateIntegrationSecretsConfig } from './security/integrationSecrets.js'
@@ -48,7 +49,7 @@ app.use(cors({
   exposedHeaders: ['X-CSRF-Token', 'X-Request-Id'],
 }))
 app.use(express.json())
-app.use(express.static(join(__dirname, '../dist')))
+app.use(staticAssets(join(__dirname, '../dist')))
 app.use(
   session({
     store: new PgSession({ pool, tableName: 'session', createTableIfMissing: false }),

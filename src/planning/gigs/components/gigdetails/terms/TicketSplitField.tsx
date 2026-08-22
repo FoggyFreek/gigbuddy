@@ -30,6 +30,16 @@ function complementOf(share: string): string {
   return Math.min(100, Math.max(0, 100 - parsed)).toFixed(1)
 }
 
+// While the complement box is being typed in, echo back the plain remainder —
+// forcing a decimal here would fight every keystroke (typing "40" would report
+// "96", then "60.0" instead of "60"). onBlur settles it to one decimal.
+function complementWhileTyping(typed: string): string {
+  if (typed.trim() === '') return ''
+  const parsed = Number.parseFloat(typed)
+  if (Number.isNaN(parsed)) return ''
+  return String(Math.min(100, Math.max(0, 100 - parsed)))
+}
+
 // The stored share keeps whatever the user typed while they're typing, but
 // always settles back to one decimal once they move on — same pattern as the
 // money fields' onBlur rounding.
@@ -77,7 +87,8 @@ export default function TicketSplitField({
                 <InputBase
                   type="number"
                   value={complementOf(value)}
-                  onChange={(event) => onChange(complementOf(event.target.value))}
+                  onChange={(event) => onChange(complementWhileTyping(event.target.value))}
+                  onBlur={(event) => onChange(complementOf(event.target.value))}
                   placeholder="0"
                   sx={{ ...NO_NUMBER_SPINNER_SX, width: '5ch', '& input': { p: 0, textAlign: 'right' } }}
                   slotProps={{
