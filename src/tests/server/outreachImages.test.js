@@ -116,6 +116,16 @@ describe('outreach image library', () => {
     })
     expect(first.body).toBeInstanceOf(Buffer)
 
+    const revalidated = await request(app)
+      .get(`${avatarUrl.pathname}${avatarUrl.search}`)
+      .set('If-None-Match', first.headers.etag)
+      .expect(304)
+    expect(revalidated.headers).toMatchObject({
+      'cache-control': 'public, no-cache',
+      etag: first.headers.etag,
+      'cross-origin-resource-policy': 'cross-origin',
+    })
+
     await pool.query('UPDATE tenants SET avatar_path = $2 WHERE id = $1', [seed.tenantA.id, secondKey])
     const second = await request(app).get(`${avatarUrl.pathname}${avatarUrl.search}`).expect(200)
     expect(second.body.equals(first.body)).toBe(false)

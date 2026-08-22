@@ -10,17 +10,17 @@ router.get('/image/:slot', async (req, res) => {
   const result = await loadPublicOutreachImage(pool, req.query.t, req.params.slot)
   if (result.error) return sendError(res, result.error)
 
+  res.setHeader('Cache-Control', 'public, no-cache')
+  res.setHeader('ETag', result.etag)
+  if (result.lastModified) res.setHeader('Last-Modified', result.lastModified.toUTCString())
+  res.setHeader('Content-Security-Policy', "default-src 'none'")
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
   if (req.get('if-none-match') === result.etag) {
     res.status(304).end()
     return
   }
   res.setHeader('Content-Type', result.contentType)
   res.setHeader('Content-Length', result.contentLength)
-  res.setHeader('Cache-Control', 'public, no-cache')
-  res.setHeader('ETag', result.etag)
-  if (result.lastModified) res.setHeader('Last-Modified', result.lastModified.toUTCString())
-  res.setHeader('Content-Security-Policy', "default-src 'none'")
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin')
   if (result.buffer) {
     res.send(result.buffer)
     return
