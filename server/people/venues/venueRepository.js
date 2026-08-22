@@ -47,7 +47,13 @@ export async function listVenues(executor, tenantId) {
                       AND (g.venue_id = v.id OR g.festival_id = v.id)
                  ) gy),
               '{}'
-            ) AS years
+            ) AS years,
+            COALESCE(
+              (SELECT ARRAY_AGG(vgm.group_id ORDER BY vgm.group_id)
+                 FROM venue_group_memberships vgm
+                WHERE vgm.venue_id = v.id AND vgm.tenant_id = v.tenant_id),
+              '{}'
+            ) AS group_ids
        FROM venues v
       WHERE v.tenant_id = $1
       ORDER BY v.name ASC`,

@@ -66,6 +66,21 @@ export default function VenuesPage() {
     setVenuesState((prev) => (prev ? { ...prev, venues: prev.venues.filter((v) => v.id !== id) } : prev))
   }, [])
 
+  const handleMembershipsChanged = useCallback((groupId: Id, venueIds: Id[] | null, action: 'add' | 'remove' | 'delete') => {
+    const affected = venueIds === null ? null : new Set(venueIds.map(String))
+    setVenuesState((prev) => prev ? {
+      ...prev,
+      venues: prev.venues.map((venue) => {
+        if (action !== 'delete' && (venue.id === undefined || !affected?.has(String(venue.id)))) return venue
+        const current = venue.group_ids ?? []
+        if (action === 'add' && !current.some((id) => String(id) === String(groupId))) {
+          return { ...venue, group_ids: [...current, groupId] }
+        }
+        return { ...venue, group_ids: current.filter((id) => String(id) !== String(groupId)) }
+      }),
+    } : prev)
+  }, [])
+
   function handleClose() {
     setModal(null)
     reload()
@@ -122,6 +137,7 @@ export default function VenuesPage() {
           onRowClick={(v) => navigate(`/venues/${v.id}`)}
           selectedId={selectedId}
           onEmailSelected={emailSelected}
+          onMembershipsChanged={handleMembershipsChanged}
         />
       )}
 

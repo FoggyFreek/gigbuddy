@@ -15,6 +15,11 @@ import { COST_PAID_BY, DEAL_TYPES, FEE_BASES, GUARANTEE_VARIANTS } from '../../s
 
 export type Id = number | string
 
+export interface VenueGroup {
+  id: Id
+  name: string
+}
+
 export interface Venue {
   id?: Id
   name?: string
@@ -32,6 +37,7 @@ export interface Venue {
     primary_contact_email?: string | null
     email?: string | null
   years?: number[]
+  group_ids?: Id[]
   is_primary?: boolean
   latitude?: number | null
   longitude?: number | null

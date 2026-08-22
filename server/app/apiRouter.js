@@ -10,6 +10,7 @@ import achievementsRouter from '../user/achievements/achievements.js'
 import bandEventsRouter from '../planning/events/bandEvents.js'
 import outreachRouter from '../promotion/outreach/outreach.js'
 import venuesRouter from '../people/venues/venues.js'
+import venueGroupsRouter from '../people/venues/venueGroups.js'
 import contactsRouter from '../people/contacts/contacts.js'
 import songsRouter from '../music/songs/songs.js'
 import setlistsRouter from '../music/setlists/setlists.js'
@@ -305,6 +306,7 @@ router.use('/my-bands', tenantMember, myBands, myBandsRouter)
 router.use('/band-profile-claims', tenantManage, bandProfileClaim, bandProfileClaimsRouter)
 router.use('/outreach', tenantMember, outreachRouter)
 router.use('/venues', tenantMember, venuesRouter)
+router.use('/venue-groups', tenantMember, venueGroupsRouter)
 router.use('/contacts', tenantMember, contactsRouter)
 router.use('/songs', tenantMember, songsRouter)
 router.use('/setlists', tenantMember, setlists, setlistsRouter)
