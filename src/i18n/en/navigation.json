@@ -41,9 +41,6 @@
     "pricingRules": "Pricing rules",
     "complimentaryAccess": "Complimentary access",
     "operations": "Operations dashboard",
-    "billingOperations": "Billing operations",
-    "webhookFailures": "Webhook failures",
-    "statusDrift": "Status drift",
     "members": "Members",
     "bandSettings": "Band Settings"
   },

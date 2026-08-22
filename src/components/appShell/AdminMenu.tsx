@@ -12,9 +12,6 @@ import ViewListOutlined from '@mui/icons-material/ViewListOutlined'
 import PercentOutlined from '@mui/icons-material/PercentOutlined'
 import CardGiftcardOutlined from '@mui/icons-material/CardGiftcardOutlined'
 import MonitorHeartOutlined from '@mui/icons-material/MonitorHeartOutlined'
-import SyncProblemOutlined from '@mui/icons-material/SyncProblemOutlined'
-import WebhookOutlined from '@mui/icons-material/WebhookOutlined'
-import CompareArrowsOutlined from '@mui/icons-material/CompareArrowsOutlined'
 import type { SvgIconComponent } from '@mui/icons-material'
 
 interface AdminMenuProps {
@@ -43,9 +40,6 @@ export default function AdminMenu({ anchorEl, open, onClose }: Readonly<AdminMen
   const { t } = useTranslation('navigation')
   const operations: AdminMenuItem[] = [
     { to: '/admin/operations', label: t($ => $.admin.operations), icon: MonitorHeartOutlined },
-    { to: '/admin/operations/billing', label: t($ => $.admin.billingOperations), icon: SyncProblemOutlined },
-    { to: '/admin/operations/webhooks', label: t($ => $.admin.webhookFailures), icon: WebhookOutlined },
-    { to: '/admin/operations/status', label: t($ => $.admin.statusDrift), icon: CompareArrowsOutlined },
   ]
   const management: AdminMenuItem[] = [
     { to: '/admin/tenants', label: t($ => $.admin.tenants), icon: ApartmentOutlined },

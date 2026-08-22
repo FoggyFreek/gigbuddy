@@ -10,6 +10,7 @@ import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import AttachFileIcon from '@mui/icons-material/AttachFile'
 import DeleteIcon from '@mui/icons-material/Delete'
+import FilePresentIcon from '@mui/icons-material/FilePresent'
 import { deleteGigAttachment, uploadGigAttachment } from '../../gigs.ts'
 import { formatBytes } from '../../../../utils/formatBytes.ts'
 import { useDialog } from '../../../../contexts/dialogContext.ts'
@@ -97,7 +98,7 @@ export default function GigAttachments({ gigId, initialAttachments = [], canWrit
             bgcolor: 'action.hover',
           }}
         >
-          <AttachFileIcon fontSize="small" color="action" />
+          <FilePresentIcon fontSize="small" color="action" />
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             {plainText ? (
               <Typography sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 14 }}>

@@ -41,9 +41,6 @@
     "pricingRules": "Prijsregels",
     "complimentaryAccess": "Gratis toegang",
     "operations": "Operationeel dashboard",
-    "billingOperations": "Factureringsbewerkingen",
-    "webhookFailures": "Webhookfouten",
-    "statusDrift": "Statusafwijkingen",
     "members": "Leden",
     "bandSettings": "Bandinstellingen"
   },

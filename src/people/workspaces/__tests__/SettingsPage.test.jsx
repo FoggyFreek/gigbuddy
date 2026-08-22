@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { ThemeProvider } from '@mui/material/styles'
@@ -6,7 +6,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthContext } from '../../../contexts/authContext.ts'
 import SettingsPage from '../SettingsPage.tsx'
 import theme from '../../../theme.ts'
-import { clearResendKey, getBandsintownKey, setResendKey } from '../../profiles/profile.ts'
+import {
+  clearResendKey,
+  getBandsintownKey,
+  setBandsintownArtistId,
+  setMollieKey,
+  setResendKey,
+  setShopifyClientId,
+  setShopifyDomain,
+  setShopifySecret,
+} from '../../profiles/profile.ts'
 import { getOutreachSender } from '../../../promotion/outreach/outreachSender.ts'
 import { updateActiveTenantSlug } from '../tenants.ts'
 
@@ -316,6 +325,89 @@ describe('SettingsPage — plan gating', () => {
     expect(within(card).queryByDisplayValue(`re_${'a'.repeat(32)}`)).not.toBeInTheDocument()
     await user.click(within(card).getByRole('button', { name: 'Remove key' }))
     expect(clearResendKey).toHaveBeenCalledOnce()
+  })
+
+  it('cancels a Resend key edit and surfaces an invalid key response', async () => {
+    setResendKey.mockRejectedValueOnce(new Error('invalid_resend_key'))
+    const user = userEvent.setup()
+    wrap('/settings/integrations', { entitlements: integrationsEntitlements })
+
+    const card = (await screen.findByAltText('Resend')).closest('.MuiPaper-outlined')
+    await user.click(within(card).getByRole('button', { name: 'Add integration' }))
+    await user.click(within(card).getByRole('button', { name: 'Configure' }))
+    const keyInput = within(card).getByLabelText('Resend API key')
+    await user.type(keyInput, 'not-a-resend-key')
+    await user.click(within(card).getByRole('button', { name: 'Show key' }))
+    expect(keyInput).toHaveAttribute('type', 'text')
+    await user.click(within(card).getByRole('button', { name: 'Save' }))
+
+    expect(await within(card).findByText('Invalid key format. Resend API keys start with re_.')).toBeInTheDocument()
+    await user.click(within(card).getByRole('button', { name: 'Cancel' }))
+    await user.click(within(card).getByRole('button', { name: 'Configure' }))
+    expect(within(card).getByLabelText('Resend API key')).toHaveValue('')
+  })
+
+  it('saves a trimmed Mollie key and reports an unexpected save failure', async () => {
+    setMollieKey
+      .mockResolvedValueOnce({ isSet: true })
+      .mockRejectedValueOnce(new Error('network_failure'))
+    const user = userEvent.setup()
+    wrap('/settings/integrations', { entitlements: integrationsEntitlements })
+
+    const card = (await screen.findByAltText('Mollie')).closest('.MuiPaper-outlined')
+    await user.click(within(card).getByRole('button', { name: 'Add integration' }))
+    await user.click(within(card).getByRole('button', { name: 'Configure' }))
+    await user.type(within(card).getByLabelText('Mollie API key'), '  test_123  ')
+    await user.click(within(card).getByRole('button', { name: 'Save' }))
+    expect(setMollieKey).toHaveBeenCalledWith('test_123')
+
+    await user.click(within(card).getByRole('button', { name: 'Replace key' }))
+    await user.type(within(card).getByLabelText('Mollie API key'), 'test_456')
+    await user.click(within(card).getByRole('button', { name: 'Save' }))
+    expect(await within(card).findByText('Failed to save key. Please try again.')).toBeInTheDocument()
+  })
+
+  it('edits Shopify client credentials and domain independently', async () => {
+    setShopifyClientId.mockResolvedValue({ clientId: 'client-123' })
+    setShopifySecret.mockResolvedValue({ isSet: true })
+    setShopifyDomain.mockResolvedValue({ domain: 'testers.myshopify.com' })
+    const user = userEvent.setup()
+    wrap('/settings/integrations', { entitlements: integrationsEntitlements })
+
+    const card = (await screen.findByAltText('Shopify')).closest('.MuiPaper-outlined')
+    await user.click(within(card).getByRole('button', { name: 'Add integration' }))
+    await user.click(within(card).getAllByRole('button', { name: 'Configure' })[0])
+    const clientId = within(card).getByLabelText('Client ID')
+    await user.type(clientId, 'will-be-cancelled')
+    await user.click(within(card).getByRole('button', { name: 'Cancel' }))
+    await user.click(within(card).getAllByRole('button', { name: 'Configure' })[0])
+    await user.type(within(card).getByLabelText('Client ID'), '  client-123  ')
+    await user.click(within(within(card).getByLabelText('Client ID').closest('.MuiStack-root')).getByRole('button', { name: 'Save' }))
+    expect(setShopifyClientId).toHaveBeenCalledWith('client-123')
+
+    await user.click(within(card).getByRole('button', { name: 'Configure' }))
+    await user.type(within(card).getByLabelText('App secret'), ' shpss_secret ')
+    await user.click(within(within(card).getByLabelText('App secret').closest('.MuiStack-root')).getByRole('button', { name: 'Save' }))
+    expect(setShopifySecret).toHaveBeenCalledWith('shpss_secret')
+
+    const domain = within(card).getByPlaceholderText('yourband.myshopify.com')
+    await user.type(domain, ' testers.myshopify.com ')
+    await user.click(within(domain.closest('.MuiStack-root')).getByRole('button', { name: 'Save' }))
+    expect(setShopifyDomain).toHaveBeenCalledWith('testers.myshopify.com')
+  })
+
+  it('saves a trimmed Bandsintown artist ID after the card is expanded', async () => {
+    setBandsintownArtistId.mockResolvedValue({ artistId: '12345678' })
+    const user = userEvent.setup()
+    wrap('/settings/integrations', { entitlements: integrationsEntitlements })
+
+    const card = (await screen.findByAltText('Bandsintown')).closest('.MuiPaper-outlined')
+    await user.click(within(card).getByRole('button', { name: 'Add integration' }))
+    const artistId = within(card).getByPlaceholderText('12345678')
+    await user.type(artistId, ' 12345678 ')
+    await user.click(within(artistId.closest('.MuiStack-root')).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(setBandsintownArtistId).toHaveBeenCalledWith('12345678'))
   })
 
   it.each([

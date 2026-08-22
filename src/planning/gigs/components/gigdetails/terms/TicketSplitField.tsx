@@ -22,15 +22,24 @@ interface Props {
 
 // The second share is never stored — it is 100 minus the first, derived on every
 // render. Editing either box therefore keeps the pair at 100 by construction
-// rather than by a syncing effect.
+// rather than by a syncing effect. Both sides always show one decimal.
 function complementOf(share: string): string {
   if (share.trim() === '') return ''
   const parsed = Number.parseFloat(share)
   if (Number.isNaN(parsed)) return ''
-  return String(Math.min(100, Math.max(0, 100 - parsed)))
+  return Math.min(100, Math.max(0, 100 - parsed)).toFixed(1)
 }
 
-const PERCENT_BOUNDS = { min: 0, max: 100, step: 0.5 }
+// The stored share keeps whatever the user typed while they're typing, but
+// always settles back to one decimal once they move on — same pattern as the
+// money fields' onBlur rounding.
+function roundToOneDecimal(share: string): string {
+  if (share.trim() === '') return ''
+  const parsed = Number.parseFloat(share)
+  return Number.isNaN(parsed) ? share : parsed.toFixed(1)
+}
+
+const PERCENT_BOUNDS = { min: 0, max: 100, step: 0.1 }
 
 // Two shares of the same 100%, presented as one field: `70 / 30` inside a
 // single outline under a single label. Splitting it into two labelled fields
@@ -56,6 +65,7 @@ export default function TicketSplitField({
         focused={focusedInside || undefined}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={(event) => onChange(roundToOneDecimal(event.target.value))}
         placeholder="0"
         sx={{ ...NO_NUMBER_SPINNER_SX, '& input': { textAlign: 'right' } }}
         slotProps={{

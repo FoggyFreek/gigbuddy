@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation } from 'react-router'
 import AppBar from '@mui/material/AppBar'
@@ -187,11 +187,14 @@ export default function AppShell() {
   const { user, logout, switchTenant, refreshUser } = useAuth()
   const { mode, toggleTheme } = useThemeMode()
   const theme = useTheme()
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
+  const isBelowLarge = useMediaQuery(theme.breakpoints.down('lg'))
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
   const [navCollapsed, setNavCollapsed] = useState(false)
+  const navCollapsedRef = useRef(navCollapsed)
+  const restoreExpandedNavRef = useRef(false)
   const [userMenuAnchor, setUserMenuAnchor] = useState<HTMLElement | null>(null)
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false)
   const [createBandOpen, setCreateBandOpen] = useState(false)
@@ -202,10 +205,37 @@ export default function AppShell() {
   const [wideContent, setWideContent] = useState(false)
   const requestWideContent = useCallback((wide: boolean) => setWideContent(wide), [])
 
+  useEffect(() => {
+    if (isBelowLarge) {
+      restoreExpandedNavRef.current = !navCollapsedRef.current
+      if (!navCollapsedRef.current) {
+        navCollapsedRef.current = true
+        setNavCollapsed(true)
+      }
+      return
+    }
+
+    if (restoreExpandedNavRef.current) {
+      restoreExpandedNavRef.current = false
+      if (navCollapsedRef.current) {
+        navCollapsedRef.current = false
+        setNavCollapsed(false)
+      }
+    }
+  }, [isBelowLarge])
+
   useTenantQuerySync()
 
   const handleNavClick = () => {
     if (isMobile) setMobileOpen(false)
+  }
+
+  const handleToggleNavCollapsed = () => {
+    setNavCollapsed((collapsed) => {
+      const nextCollapsed = !collapsed
+      navCollapsedRef.current = nextCollapsed
+      return nextCollapsed
+    })
   }
 
   const isSuperAdmin = !!user?.isSuperAdmin
@@ -336,7 +366,7 @@ export default function AppShell() {
         <Box sx={{ display: 'flex', justifyContent: isNavCollapsed ? 'center' : 'flex-end', px: 1, py: 0.5 }}>
           <Tooltip title={isNavCollapsed ? t($ => $.shell.expandNav) : t($ => $.shell.collapseNav)}>
             <IconButton
-              onClick={() => setNavCollapsed((collapsed) => !collapsed)}
+              onClick={handleToggleNavCollapsed}
               aria-label={isNavCollapsed ? t($ => $.shell.expandNavAria) : t($ => $.shell.collapseNavAria)}
               size="small"
             >

@@ -44,6 +44,10 @@ const amountFieldSx = {
 
 const euroAdornment = <InputAdornment position="start">€</InputAdornment>
 
+// Muted like a disabled field's text, since "paid by" is a default the cost
+// inherits rather than a value the user is expected to change every row.
+const paidByFieldSx = { ...lineFieldSx, '& .MuiSelect-select': { color: 'text.primary' } } as const
+
 interface Props {
   editable: boolean
   costs: GigCost[]
@@ -200,7 +204,7 @@ export default function GigCostsEditor({ editable, costs, onAdd, onUpdate, onDel
                 fullWidth
                 value={draftPaidBy}
                 onChange={(event) => setDraftPaidBy(event.target.value as CostPaidBy)}
-                sx={lineFieldSx}
+                sx={paidByFieldSx}
                 slotProps={{
                   input: { disableUnderline: true },
                   htmlInput: { 'aria-label': t($ => $.detail.deal.costs.paidBy) },
@@ -355,7 +359,7 @@ function CostRow({ cost, editable, onUpdate, onError, onDelete }: Readonly<CostR
           fullWidth
           value={paidBy}
           onChange={(event) => handlePaidByChange(event.target.value as CostPaidBy)}
-          sx={lineFieldSx}
+          sx={paidByFieldSx}
           slotProps={{
             input: { disableUnderline: true },
             htmlInput: { 'aria-label': t($ => $.detail.deal.costs.paidBy) },

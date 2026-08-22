@@ -17,9 +17,6 @@ describe('AdminMenu', () => {
 
     const expected = {
       'Operations dashboard': '/admin/operations',
-      'Billing operations': '/admin/operations/billing',
-      'Webhook failures': '/admin/operations/webhooks',
-      'Status drift': '/admin/operations/status',
       'Organisations': '/admin/tenants',
       'All users': '/admin/users',
       'Band profiles (claims)': '/admin/band-profile-claims',
